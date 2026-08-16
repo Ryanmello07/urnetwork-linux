@@ -24,6 +24,11 @@ class Tray {
 
   // Reflects VPN state in the icon + the Connect/Disconnect menu label.
   void SetConnected(bool connected);
+  // The menu item's LABEL, which is not the same question as the icon: during a
+  // connect that is still in flight the icon is honestly "not connected" while
+  // the action on offer is Disconnect. Feeding both from one bool made the tray
+  // item promise one thing and do the other in 42% of renderable frames.
+  void SetConnectAction(bool actionIsDisconnect);
 
   std::function<void()> on_activate;         // left-click the tray icon
   std::function<void()> on_toggle_connect;   // menu: Connect/Disconnect
@@ -32,6 +37,11 @@ class Tray {
 
   // Read by the D-Bus vtable callbacks (free functions in the .cpp).
   bool connectedForIcon() const { return connected_; }
+  // The label/action predicate, distinct from the icon's. Defaults to the icon's
+  // answer until the window says otherwise, so an unwired tray behaves as before.
+  bool actionIsDisconnect() const { return actionIsDisconnectSet_ ? actionIsDisconnect_ : connected_; }
+  bool actionIsDisconnect_ = false;
+  bool actionIsDisconnectSet_ = false;
   guint menuRevision() const { return menu_revision_; }
 
  private:

@@ -38,8 +38,28 @@ class MainWindow : public Gtk::ApplicationWindow {
  public:
   explicit MainWindow(SdkHost& host);
 
-  void ToggleConnect();  // driven by the tray too
+  // The tray press has no button in front of it, so it asks the page what the
+  // action currently is. The IN-APP press does not ask: ConnectPage hands the
+  // action along WITH the press (on_connect_action), because it is the surface
+  // that wrote the label the user actually clicked.
+  void ToggleConnect();                  // tray: derive the action
+  void ToggleConnect(bool disconnect);   // in-app: the action came with the press
   bool connected() const { return connected_; }
+  // What the connect action IN FRONT OF THE USER does — the question every
+  // press has to be answered from, and the ONLY one this window may ask. It is
+  // NOT `connected_`: the page renders the aggregate health reading (Health.hpp)
+  // that writes the button's own label, and `connected_` disagrees with it
+  // through the whole connecting phase and through every teardown. See the
+  // definition for why the last relayed answer is held beside the live one.
+  bool ConnectActionIsDisconnect() const;
+  // The honest tunnel state, for the tray ICON (connected art vs not). It is
+  // deliberately NOT the action above: Tray::SetConnected takes one bool for
+  // both the icon and its Connect/Disconnect menu label, so handing it the
+  // action would paint a "connected" tray icon over a connect that is still in
+  // flight — the fabricated-connected-state class of lie this branch exists to
+  // kill. The menu LABEL is the half that is still derived from this bool, and
+  // it stays a second answer until Tray takes the two separately (see the note
+  // on ToggleConnect).
   std::function<void(bool connected)> on_connected_change;
 
  private:
@@ -102,6 +122,11 @@ class MainWindow : public Gtk::ApplicationWindow {
   void NavigateVerify(const std::string& userAuth);
   void ApplyAuthState(bool loggedIn);
   void SetConnected(bool connected);
+  // THE ONE WRITER of every connect surface this WINDOW owns (the status
+  // strip's state field + dot, the legacy column's headline and its button
+  // label), fed from the reading ConnectPage already rendered. Nothing here
+  // derives a status word, a dot colour or a button label of its own.
+  void ApplyConnectReading();
   void ApplyStats(const LiveStats& stats);  // live provider count / throughput / provide
   void OpenProviderLocations();             // the "Connected to N providers" entry point
   // Keep the device-location override pointed at the oldest connected provider
@@ -218,7 +243,25 @@ class MainWindow : public Gtk::ApplicationWindow {
   // tray app: skip window-widget updates while hidden (resynced on show) so a
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;
-  std::string lastStatus_ = "Disconnected";
+  // The action the last relayed reading put ON THE BUTTON. Held because
+  // ConnectPage CONSUMES a press before relaying it (OnConnectToggle records the
+  // disconnect intent and re-renders in the same frame), so the page's live
+  // answer at the instant ToggleConnect runs is already the POST-press one —
+  // reading only that would let a press on "Disconnect" start a tunnel, the
+  // defect this branch exists to kill. See ConnectActionIsDisconnect().
+  // (removed) connectActionIsDisconnect_ — a HELD copy of the action, latched at
+  // relay points. It existed only because the press arrived carrying nothing, so
+  // the window had to guess which frame the label came from. Two adversarial
+  // sweeps then disagreed about whether the guess was safe in either direction:
+  // stale-true swallows a Connect press, stale-false starts a tunnel from a
+  // Disconnect label. Neither is acceptable and neither needed to exist — the
+  // press now carries its own answer.
+  // NOTE: the raw SDK status token is no longer cached here. It was the source
+  // of the window status strip's own status word (a fifth channel, free to read
+  // "DESTINATION_SET"/green under a page row saying "Disconnecting…"/yellow);
+  // the strip now shows the page's rendered line. The raw token still has ONE
+  // home, the Advanced strip's field literally captioned "Raw", written from
+  // LiveStats in ApplyStats.
   LiveStats lastStats_;  // resynced into the widgets when the window is shown
 
   // Device-location override (GeoClue static source). Owned here rather than by

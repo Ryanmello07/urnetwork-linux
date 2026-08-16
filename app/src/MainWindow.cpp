@@ -77,7 +77,10 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (connectPage_) connectPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
     if (windowVisible_) {
-      status_.set_text(lastStatus_);
+      // SetConnected relays the tunnel to the page and then re-renders every
+      // window surface from the page's reading (ApplyConnectReading), so the
+      // strip and the legacy headline resync with it — there is no second
+      // status token to restore here.
       SetConnected(host_.Connected());
       ApplyStats(lastStats_);
       if (drawer_) drawer_->RefreshAll();  // drawer events are dropped while hidden
@@ -146,12 +149,15 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   });
   host_.SetConnectionStatusHandler([this](std::string status) {
     PostToMain([this, status] {
-      lastStatus_ = status;
+      // THE RAW TOKEN GOES TO THE PAGE AND NOWHERE ELSE. It is an input to the
+      // one reading (health::ParseSdkStatus), never a thing to render: the
+      // window used to paint "DESTINATION_SET"/"CONNECTING" straight onto its
+      // own surfaces, which is how the strip could read connected/green in the
+      // same frame as a page row reading "Disconnecting…"/yellow.
       if (connectPage_) connectPage_->SetConnectionStatus(status);
-      // the tray must reflect state even while hidden; the window label only
-      // when visible (resynced on show)
+      // the tray must reflect state even while hidden; SetConnected re-renders
+      // the window's surfaces from the page's reading (visible ones only)
       SetConnected(host_.Connected());
-      if (windowVisible_) status_.set_text(status);
     });
   });
   // Live stats (provider count / throughput / provide). Same visibility gate:
@@ -171,7 +177,14 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       // this, they only ever refresh on a stats push: block actions, block
       // stats, overrides, contracts, DNS settings, blocker, routeLocal and
       // location changes would never reach the page at all.
-      if (windowVisible_ && connectPage_) connectPage_->OnHostEvent(event);
+      if (windowVisible_ && connectPage_) {
+        connectPage_->OnHostEvent(event);
+        // The drawer feed moves the inputs the reading is taken from (the kill
+        // switch / routeLocal / device lifecycle above all), and the page
+        // re-renders on it. The window's surfaces have to move with it or the
+        // strip holds the previous reading.
+        ApplyConnectReading();
+      }
       if (event == DrawerEvent::Peers || event == DrawerEvent::DeviceLifecycle) {
         RefreshPeersStatus();
       }
@@ -652,6 +665,13 @@ void MainWindow::size_allocate_vfunc(int width, int height, int baseline) {
 // A user sitting idle would keep a green "Connected" while the daemon had
 // already stopped the session and possibly armed the kill switch.
 bool MainWindow::PollDaemonHealth() {
+  // The page re-renders on its own clock too (the disconnect intent expiring at
+  // 8 s, the provider grace at 3 s, a kill-switch read-back landing), and none
+  // of those pass through this window. This tick bounds how long the strip, the
+  // legacy headline and — the one that matters — the action held for the next
+  // press can lag the button the user is looking at. It is the timer that
+  // already exists; no new wakeup.
+  ApplyConnectReading();
   if (!connected_) return true;  // nothing claimed; nothing to contradict
   const auto status = host_.Control().Status();
   if (!status) return true;      // unreachable is StartTunnelUi's business
@@ -1090,7 +1110,9 @@ void MainWindow::BuildHome() {
 
   connectBtn_.add_css_class("suggested-action");
   connectBtn_.add_css_class("pill");
-  connectBtn_.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::ToggleConnect));
+  // The legacy column's own button: no page reading is attached to it, so it
+  // takes the tray path (ask the page) rather than carrying an action.
+  connectBtn_.signal_clicked().connect([this] { ToggleConnect(); });
   box->append(connectBtn_);
 
   // network peers status line, right under the connect button: a dot (green when
@@ -1210,7 +1232,9 @@ void MainWindow::BuildHome() {
   // legacy single-column drawer stays in the tree under "connect-legacy"
   // until every drawer surface has been relocated into panes B/C.
   connectPage_ = Gtk::make_managed<ConnectPage>(host_);
-  connectPage_->on_toggle_connect = [this] { ToggleConnect(); };
+  // on_connect_action, NOT on_toggle_connect: the press carries the action that
+  // wrote the label the user clicked.
+  connectPage_->on_connect_action = [this](bool disconnect) { ToggleConnect(disconnect); };
   connectPage_->on_open_locations = [this] {
     if (drawer_) drawer_->OpenLocationChooser();
   };
@@ -1652,11 +1676,54 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
   }
 }
 
-void MainWindow::ToggleConnect() {
-  g_message("connect: toggle pressed (connected=%s, hasDevice=%s)",
-            connected_ ? "yes" : "no", host_.hasDevice() ? "yes" : "no");
-  if (connected_) {
+// THE ONE ANSWER TO "WHAT DOES THIS PRESS DO".
+//
+// It used to be `connected_` (= SdkHost::Connected()), which is a SECOND answer
+// to a question ConnectPage already answers from the reading that wrote the
+// button's own label — and the two disagree in exactly the states this branch
+// exists to render. Through the whole connecting phase, and through a teardown,
+// `connected_` is false while the button in front of the user reads
+// "Disconnect", so every press in that window ran StartTunnelUi() +
+// ConnectBestAvailable(): a button labelled Disconnect ESTABLISHED A TUNNEL, and
+// the page then held "Disconnecting…" over the connect it had just started.
+//
+// Two things make this correct rather than merely relocated:
+//
+//  * THE LABEL AT PRESS TIME, not after. ConnectPage consumes the press before
+//    relaying it (OnConnectToggle records the disconnect intent and re-renders
+//    in the SAME frame), so the page's live answer here is already the
+//    post-press one — and on a press taken while the machine is not yet captured
+//    that post-press reading flips to Connect. Deciding on it would start a
+//    tunnel on a Disconnect press through the front door. `connectActionIsDisconnect_`
+//    is the action as of the last relay: the one that was on the button.
+//  * OR, deliberately one-directional. The failure being guarded is "a button
+//    labelled Disconnect starts a tunnel", so a START requires BOTH the label at
+//    press time AND the live reading to say Connect. The residual — a Connect
+//    press answered by a disconnect while the held answer is one relay stale —
+//    cannot start a tunnel and cannot take down a session that is carrying (a
+//    carrying session reads Disconnect live, so the OR agrees with the label).
+bool MainWindow::ConnectActionIsDisconnect() const {
+  // The page's LIVE answer, with no held copy ORed into it. Used by the tray,
+  // which has no button in front of the user and must therefore ask.
+  return connectPage_ ? connectPage_->ConnectActionIsDisconnect() : connected_;
+}
+
+void MainWindow::ToggleConnect() { ToggleConnect(ConnectActionIsDisconnect()); }
+
+// The action is a PARAMETER, not a re-derivation. ConnectPage consumes the press
+// and re-renders BEFORE relaying it, so anything this function asked afterwards
+// would be the POST-press reading — a different answer to the question the user
+// already answered by clicking a labelled button. That gap is what let a button
+// reading "Disconnect" start a tunnel; a held copy of the answer only moved the
+// staleness, and two exhaustive sweeps disagreed about which direction it broke.
+// Carrying the action with the press removes the question.
+void MainWindow::ToggleConnect(bool disconnect) {
+  g_message("connect: toggle pressed (action=%s, connected=%s, hasDevice=%s)",
+            disconnect ? "disconnect" : "connect", connected_ ? "yes" : "no",
+            host_.hasDevice() ? "yes" : "no");
+  if (disconnect) {
     host_.Disconnect();
+    ApplyConnectReading();
     return;
   }
   // ALWAYS run the start path and let SdkHost decide whether the existing
@@ -1666,19 +1733,62 @@ void MainWindow::ToggleConnect() {
   // the press into a device with nothing behind it. StartTunnel is cheap when
   // the session is genuinely live (one status read) and self-heals when it is
   // not; the caller is not the right place to guess.
-  if (StartTunnelUi() != TunnelStartResult::Started) return;
+  if (StartTunnelUi() != TunnelStartResult::Started) {
+    ApplyConnectReading();  // the daemon notice moved the page's reading
+    return;
+  }
   host_.ConnectBestAvailable();
+  ApplyConnectReading();
   // status handler + SetConnected reflect the real state as it changes
+}
+
+// THE WINDOW'S CONNECT SURFACES, ALL FROM THE PAGE'S ONE READING.
+//
+// The status strip's state field was the FIFTH channel in the frame the page
+// renders four of: it was written from the RAW SDK token with a two-colour
+// connected/not dot, so it could read "DESTINATION_SET" in green under a page
+// row saying "Disconnecting…" in yellow. It now shows the line the page
+// rendered and the dot colour THAT line resolved (ConnectPage::ConnectStatusText
+// / ConnectStatusDot hand back the rendered strings, not a second derivation),
+// so it cannot describe a different session from the row above it.
+//
+// The legacy single-column home is relayed here too — it has no nav item and the
+// user cannot reach it, but its headline was the raw token and its button label
+// was `connected_`, i.e. two more second opinions wired to the same ToggleConnect.
+//
+// Called from every point at which this window hands the page a feed. What it
+// does NOT catch is the page re-rendering on its own clock (the disconnect
+// intent expiring, the provider grace, a kill-switch read-back landing); the 5 s
+// daemon-health timer re-syncs those. The exact fix is one line in
+// ConnectPage::ApplyConnectStatus — `if (on_reading_changed) on_reading_changed();`
+// — which this window would bind to ApplyConnectReading; it cannot be made here.
+void MainWindow::ApplyConnectReading() {
+  // The legacy column's button. It carries Connect/Disconnect only: the page's
+  // third label (Retry, on a settled failure) is the same ACTION as Connect, and
+  // the page is the surface that says so.
+  connectBtn_.set_label(ConnectActionIsDisconnect() ? T_("disconnect", "Disconnect")
+                                                    : T_("connect", "Connect"));
+  if (!connectPage_) return;
+  const Glib::ustring text = connectPage_->ConnectStatusText();
+  // §8.1's four connect dots, resolved ONCE on the page for this reading
+  if (shell_) shell_->SetStatusState(text, connectPage_->ConnectStatusDot());
+  if (windowVisible_) status_.set_text(text);
 }
 
 void MainWindow::SetConnected(bool connected) {
   connected_ = connected;
-  connectBtn_.set_label(connected ? T_("disconnect", "Disconnect") : T_("connect", "Connect"));
-  // the status strip's state field: dot color per state (§8.1 connect dots)
-  if (shell_) {
-    shell_->SetStatusState(lastStatus_, connected ? "#87FB67" : "#2A60FF");
-  }
+  // ORDER IS LOAD-BEARING: the page takes the new tunnel state and re-renders
+  // its reading, and only then does the window render ITS surfaces from that
+  // reading. Reversed, the strip and the button would show the previous frame.
   if (connectPage_) connectPage_->SetConnected(connected);
+  ApplyConnectReading();
+  // The tray icon takes the honest tunnel, never the action (see the
+  // on_connected_change note in the header): a tray icon that goes "connected"
+  // while a connect is still in flight is the fabricated state this branch is
+  // about. Its menu LABEL still follows this same bool inside Tray, which is the
+  // one place a label and its action can still disagree — closing that needs
+  // Tray::SetConnected to take (iconConnected, actionIsDisconnect) and main.cpp
+  // to pass ConnectActionIsDisconnect() as the second, both outside this file.
   if (on_connected_change) on_connected_change(connected);
 }
 
@@ -1727,6 +1837,10 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
   // the drawer surfaces the insufficient-balance banner (upgrade flow CTA)
   if (drawer_) drawer_->SetInsufficientBalance(stats.insufficientBalance);
   if (connectPage_) connectPage_->ApplyStats(stats);
+  // A stats push is the reading's fastest-moving input (the provider grid, the
+  // connected flag, the balance gate), and the page has just re-rendered on it:
+  // the window's surfaces move in the SAME frame, never one push behind.
+  ApplyConnectReading();
   // the status strip: provider + traffic (+ the Advanced raw field)
   if (shell_) {
     shell_->SetStatusProvider(T_("best_available_provider", "Best available provider"));

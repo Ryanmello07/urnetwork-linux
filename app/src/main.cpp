@@ -120,7 +120,12 @@ int main(int argc, char** argv) {
       app->quit();
     };
     window->on_connected_change = [&](bool connected) {
-      if (tray) tray->SetConnected(connected);
+      if (tray) {
+        tray->SetConnected(connected);
+        // The icon says "am I connected"; the menu item says "what will this
+        // press do". They differ mid-connect, so they are fed separately.
+        tray->SetConnectAction(window->ConnectActionIsDisconnect());
+      }
     };
 
     // Close = hide to tray (tunnel keeps running); Quit from the tray truly exits.

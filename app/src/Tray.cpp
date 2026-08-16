@@ -150,7 +150,7 @@ static void MenuMethod(GDBusConnection*, const gchar*, const gchar*, const gchar
   if (g_strcmp0(method, "GetLayout") == 0) {
     GVariantBuilder kids;
     g_variant_builder_init(&kids, G_VARIANT_TYPE("av"));
-    g_variant_builder_add(&kids, "v", BuildItem(kIdConnect, ConnectLabel(self->connectedForIcon()), false));
+    g_variant_builder_add(&kids, "v", BuildItem(kIdConnect, ConnectLabel(self->actionIsDisconnect()), false));
     g_variant_builder_add(&kids, "v", BuildItem(kIdSep, "", true));
     g_variant_builder_add(&kids, "v",
                           BuildItem(kIdShow, T_("show_urnetwork", "Show URnetwork"), false));
@@ -257,6 +257,21 @@ void Tray::RegisterWithWatcher() {
                          "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem",
                          g_variant_new("(s)", service_name_.c_str()), nullptr,
                          G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+}
+
+// The action the menu item offers. Kept separate from SetConnected because the
+// icon and the label answer different questions: mid-connect the icon is
+// honestly "not connected" while the item on offer is Disconnect.
+void Tray::SetConnectAction(bool actionIsDisconnect) {
+  if (actionIsDisconnectSet_ && actionIsDisconnect_ == actionIsDisconnect) return;
+  actionIsDisconnect_ = actionIsDisconnect;
+  actionIsDisconnectSet_ = true;
+  menu_revision_++;
+  if (conn_) {
+    g_dbus_connection_emit_signal(conn_, nullptr, "/MenuBar", "com.canonical.dbusmenu",
+                                  "LayoutUpdated",
+                                  g_variant_new("(ui)", menu_revision_, 0), nullptr);
+  }
 }
 
 void Tray::SetConnected(bool connected) {
