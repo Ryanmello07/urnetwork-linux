@@ -17,6 +17,14 @@
 // the window status strip from ONE reading, so the hero can never lag the
 // line above it.
 //
+// That reading is `urnw::health::Reading` (Health.hpp — the state table lives
+// there). ApplyConnectStatus takes it ONCE per application and renders it;
+// nothing on this page derives a status, a dot, a hero pose or a button label
+// from anything else. The defect that motivated it: the headline "Connecting
+// to providers" with a yellow dot and the connecting hero, beside a button
+// reading "Disconnect", at the instant the owner pressed Disconnect — four
+// channels taken from four different readings of the raw SDK status.
+//
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -32,6 +40,7 @@
 #include "ConnectCanvas.hpp"
 #include "ContractsSheet.hpp"
 #include "DnsSheet.hpp"
+#include "Health.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
@@ -64,6 +73,36 @@ class ConnectPage : public Gtk::Box {
   // Re-seed every pane B/C cache from the Current* getters (login, tab entry,
   // window re-show). Idempotent.
   void Resync();
+
+  // What the connect action IN FRONT OF THE USER does, from the same reading
+  // that wrote the button's label (health::ActionIsDisconnect — the shared
+  // predicate the tray item uses too).
+  //
+  // TODO(wiring): MainWindow::ToggleConnect still decides with its own
+  // `connected_` ("if (connected_) host_.Disconnect(); else …connect"), which is
+  // a SECOND answer to the question this button already answers. They disagree
+  // in exactly the states this page exists to render: while Connecting, and
+  // while the machine is captured with the SDK idle, the button says Disconnect
+  // and the press starts a connect. The fix is one line there —
+  // `if (connectPage_ && connectPage_->ConnectActionIsDisconnect())
+  // host_.Disconnect();` — and it cannot be made here: this page does not own
+  // the SDK calls.
+  bool ConnectActionIsDisconnect() const {
+    return reading_.action == health::Action::Disconnect;
+  }
+
+  // The rendered status line and its dot colour, for the window status strip.
+  //
+  // TODO(wiring): §2.1 ends "The same text+dot is relayed to the window status
+  // strip via w_.ApplyStatusStripConnection(text, dot) — one derivation, two
+  // surfaces." On this port MainWindow::SetConnected still writes the strip
+  // itself, from the RAW SDK status string and a two-colour connected/not dot
+  // (`shell_->SetStatusState(lastStatus_, connected ? "#87FB67" : "#2A60FF")`),
+  // so the strip can read "CONNECTING" in blue under a status row that says
+  // "Disconnecting…" in yellow. The fix is to push these two values from
+  // MainWindow wherever it currently derives its own.
+  Glib::ustring ConnectStatusText() const;
+  const char* ConnectStatusDot() const { return statusDotColor_; }
 
   void SetAdvancedMode(bool on);   // structural: Simple <-> Advanced
   void ApplyBreakpoint(int widthDip);
@@ -100,6 +139,30 @@ class ConnectPage : public Gtk::Box {
   DnsStatusRow MakeDnsStatusRow(const Glib::ustring& title);
 
   void ApplyConnectStatus();       // THE one writer
+  // Everything ApplyConnectStatus reads, gathered in one place: the SDK status,
+  // the honest tunnel, the provider window and urnetworkd's own facts. Pure
+  // reads — nothing here may take SdkHost's mutex or touch the daemon.
+  health::Inputs ReadHealthInputs() const;
+  // The provider grid re-push. Called from ApplyConnectStatus AFTER the hero
+  // state is applied, because ConnectCanvas::SetGrid drops every push unless
+  // the canvas is already Connecting (ConnectCanvas.cpp: "if (state_ !=
+  // State::Connecting) return;" — correct iOS/Windows parity, never relaxed).
+  // Pushing from here instead of from ApplyStats is what stops the entry-edge
+  // push from being dropped no matter which feed applied the status.
+  void PushGrid();
+  // The connect toggle, shared by the hero and the button. Takes the current
+  // reading BEFORE handing off, so a Disconnect press is recorded as a local
+  // intent and the row can say "Disconnecting…" in the same frame.
+  void OnConnectToggle();
+  // Re-read urnetworkd's tunnel/floor facts (read-only). Called on a tunnel
+  // edge and while a Disconnect press is in flight: nothing pushes them, and
+  // the captured-machine reading is only honest against a fresh status.
+  void RefreshServiceFacts();
+  // the dev-only hero preview (connect-canvas.md §15); no-ops unless
+  // URNETWORK_PREVIEW_HERO is set
+  void SetupPreviewHero();
+  void ApplyPreviewStep(size_t index);
+  void PreviewTick();
   void ApplyMoreOptionsVisibility();
   void SyncProvideControlMode();
   void ApplyProvideControlMode();
@@ -209,6 +272,39 @@ class ConnectPage : public Gtk::Box {
   LiveStats stats_;
   Glib::ustring daemonNotice_;
   std::string selectedConnectionId_;
+
+  // ---- the aggregate health (Health.hpp) -------------------------------------
+  // The last reading ApplyConnectStatus rendered. Kept so the toggle can ask
+  // what the button in front of the user actually says before it acts, instead
+  // of re-deriving it (a second derivation is a second answer).
+  health::Reading reading_;
+  // the dot colour ApplyConnectStatus resolved for `reading_` — resolved ONCE,
+  // so the strip accessor cannot re-derive a different one
+  const char* statusDotColor_ = "#2A60FF";
+  // The Disconnect press, held locally until the session settles. An explicit
+  // intent outranks the SDK's stale CONNECTING/DESTINATION_SET status — that
+  // stale status beside a Disconnect press is the contradiction the owner
+  // screenshotted. Bounded, never a latch: kDisconnectIntentUs after the press
+  // the reading goes back to whatever the feeds say, so a press that the daemon
+  // never acted on cannot leave the page stuck on "Disconnecting…".
+  bool disconnectRequested_ = false;
+  gint64 disconnectRequestedAtUs_ = 0;
+  // When the "tunnel up, nothing carrying" reading began. The grace that stops
+  // a single grid push from taking a working connection off Connected; 0 = the
+  // reading is not standing.
+  gint64 noProviderSinceUs_ = 0;
+
+  // ---- the hero preview walk (connect-canvas.md §15) --------------------------
+  // URNETWORK_PREVIEW_HERO=<state|walk>: the real status/grid writes are
+  // SUPPRESSED and the reading is driven from here instead, so every row of the
+  // state table can be rendered and screenshotted without a session, a daemon
+  // or a tunnel. Env-gated once at construction; off in every real session.
+  bool previewHero_ = false;
+  bool previewWalk_ = false;
+  size_t previewStep_ = 0;
+  health::Inputs previewInputs_;
+  std::vector<urnet::ProviderGridPoint> previewGrid_;
+  int64_t previewCols_ = 14;
 
   // ---- the feed caches (§5) --------------------------------------------------
   // Every one is an optional/absent-capable read: with no session the getters

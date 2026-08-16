@@ -51,16 +51,17 @@ button.ur-btn {
   border-radius: 12px; min-height: 48px; padding: 8px 16px;
   font-family: "PP NeueBit"; font-size: 24px; font-weight: bold;
   border: none; box-shadow: none; background-image: none;
-  transition: background-color 150ms ease;
 }
 button.ur-btn label { font-family: "PP NeueBit"; font-size: 24px; font-weight: bold; }
 button.ur-btn-primary { background-color: #638BFC; color: #ffffff; }
 button.ur-btn-primary:hover { background-color: mix(#638BFC, #ffffff, 0.08); }
-button.ur-btn-primary:active { background-color: mix(#638BFC, #ffffff, 0.12); }
+button.ur-btn-primary:active, button.ur-btn-primary.pressed,
+button.ur-btn-primary.keyboard-activating { background-color: mix(#638BFC, #ffffff, 0.12); }
 button.ur-btn-primary:disabled { background-color: #638BFC; color: #ffffff; opacity: 0.38; }
 button.ur-btn-secondary { background-color: #ffffff; color: #000000; }
 button.ur-btn-secondary:hover { background-color: mix(#ffffff, #000000, 0.08); }
-button.ur-btn-secondary:active { background-color: mix(#ffffff, #000000, 0.12); }
+button.ur-btn-secondary:active, button.ur-btn-secondary.pressed,
+button.ur-btn-secondary.keyboard-activating { background-color: mix(#ffffff, #000000, 0.12); }
 button.ur-btn-secondary:disabled { background-color: #ffffff; color: #000000; opacity: 0.38; }
 button.ur-btn-secondary image { color: #000000; }
 
@@ -210,20 +211,116 @@ button.ur-pane-primary {
   border: none; border-radius: 4px; box-shadow: none; background-image: none;
   min-height: 40px; margin: 12px; padding: 0 12px;
   font-family: "PP Neue Montreal"; font-size: 14px; font-weight: 600;
-  transition: background-color 150ms ease;
 }
 button.ur-pane-primary:hover { background-color: mix(#638BFC, #101010, 0.08); }
-button.ur-pane-primary:active { background-color: mix(#638BFC, #101010, 0.12); }
+button.ur-pane-primary:active, button.ur-pane-primary.pressed,
+button.ur-pane-primary.keyboard-activating { background-color: mix(#638BFC, #101010, 0.12); }
 button.ur-pane-primary:disabled { opacity: 0.38; }
 button.ur-pane-secondary {
   background-color: transparent; color: #F8F8F8;
   border: 1px solid alpha(#ffffff, .22); border-radius: 4px; box-shadow: none;
   min-height: 40px; margin: 12px; padding: 0 12px;
   font-family: "PP Neue Montreal"; font-size: 14px; font-weight: 600;
-  transition: background-color 150ms ease;
 }
-button.ur-pane-secondary:hover { background-color: alpha(#ffffff, .04); }
-button.ur-pane-secondary:active { background-color: alpha(#ffffff, .08); }
+/* THE STATE LAYER IS THE CONTENT COLOUR, NOT WHITE, AND IT IS 8/12 — NOT 4/8.
+   windows App.xaml paints one <Grid x:Name="StateLayer"
+   Background="{TemplateBinding Foreground}"> at Opacity .08 hover / .12
+   pressed over the container, for every style BasedOn UrButtonBaseStyle.
+   The outlined twin's Foreground is UrTextBrush #F8F8F8, so its layer is
+   #F8F8F8 at those two opacities. This side had #ffffff at HALF the windows
+   opacities, which put the Disconnect button's whole pointer range inside
+   9 levels of #101010 — measured hover #191919, pressed #232323. */
+button.ur-pane-secondary:hover { background-color: alpha(#F8F8F8, .08); }
+button.ur-pane-secondary:active, button.ur-pane-secondary.pressed,
+button.ur-pane-secondary.keyboard-activating { background-color: alpha(#F8F8F8, .12); }
+/* ==== THE PRESS POSE ======================================================
+   Shared by every button built on windows' UrButtonBaseStyle — the URButton
+   pair and the pane action pair, which is where the Connect/Disconnect
+   control lives. Rows and nav items are a different template and keep their
+   fill-only feedback; a full-bleed row that shrinks reads as a glitch.
+
+   WHAT WAS MEASURED, BEFORE (headless weston, GTK 4.14.5, the real
+   kBrandCss, fill sampled off the label, box measured by scanning the
+   painted pixels):
+     primary   rest #638BFC -> hover #5C81EA -> pressed #597CE0
+     secondary rest #101010 -> hover #191919 -> pressed #232323
+     painted box 396x40 in EVERY state, at every delay.
+   Two things follow. (a) The pointer is already hovering when it presses, so
+   the press step is hover->pressed, which was 10 levels of blue and 10 of
+   grey — one channel, at the edge of what the eye resolves on a flat slab.
+   (b) There was no geometry channel at all. And it was worse in flight than
+   at rest: `150ms ease` is barely a third done at 70ms, so a real tap only
+   ever rendered #5A7EE4 — SIX levels off hover — before GTK dropped :active
+   on the pointer lift. Hence "I can barely tell I clicked it".
+
+   Both fixes come out of the existing tokens; no new timing is invented.
+
+   1. THE CURVE. kStandard (0.10,0.90 / 0.20,1.00) is a hard ease-out: the
+      pose is 87% landed at 40ms and 96% at 70ms where `ease` was at ~72%.
+      Press-in takes kFastMs (150 — the token is documented "hover/press").
+      The release takes kMicroMs (90) on kExit, because exits run one step
+      faster than entrances. CSS gives the asymmetry for free: the rule that
+      names a state owns the transition INTO it.
+
+   2. THE DIP. kPressScale = 0.97 has sat in UrMotion.hpp (and windows'
+      UrMotion.h, "RESERVED for a later pass") applied to nothing. This is
+      that pass. transform-origin 50% 50% is not optional — GTK's default
+      origin is the top-left corner, which reads as a slide, not a press.
+      Verified RENDERING, not just parsing: 396x40 -> 384x39 centred.
+
+   A CSS transform moves drawing, not the hit region. That is correct here
+   and only here: the pointer is already down and inside the button, so the
+   press pose can never move the target out from under it. Anything that has
+   to move input as well still needs motion::MotionBin.
+
+   REDUCE MOTION. GTK already collapses the transitions below to 0ms when
+   gtk-enable-animations is false, so the fill step degrades to an instant
+   swap on its own. .ur-no-motion (applied by urnw::WireButtonPressFeedback
+   from motion::ShouldAnimate — the one choke point) additionally drops the
+   geometry, so nothing scales for a user who asked for no motion; the fill
+   step still lands, instantly, and the button is never left un-feedbacked.
+
+   THREE SELECTORS, NOT ONE, because GTK4 presses a button three ways:
+     :active                the pointer is down on it. GTK DOES set this on a
+                            real button (unlike a plain box — see Ui.cpp); it
+                            just clears it on the lift, too early to see.
+     .pressed               urnw::WireButtonPressFeedback's minimum hold, so
+                            the pose survives the lift. Same pose exactly.
+     .keyboard-activating   Space/Enter. MEASURED, and it was the surprise of
+                            this pass: gtk_widget_activate() leaves the state
+                            flags at 0x80 (DIR_LTR — no ACTIVE bit anywhere)
+                            and adds this class instead. So a keyboard user
+                            pressing Connect got NO feedback at all, under the
+                            old rules or the new ones, until this line. */
+button.ur-btn, button.ur-pane-primary, button.ur-pane-secondary {
+  transform-origin: 50% 50%;
+  transition: background-color 90ms cubic-bezier(0.70, 0.00, 1.00, 0.50),
+              transform 90ms cubic-bezier(0.70, 0.00, 1.00, 0.50);
+}
+button.ur-btn:active, button.ur-btn.pressed, button.ur-btn.keyboard-activating,
+button.ur-pane-primary:active, button.ur-pane-primary.pressed,
+button.ur-pane-primary.keyboard-activating,
+button.ur-pane-secondary:active, button.ur-pane-secondary.pressed,
+button.ur-pane-secondary.keyboard-activating {
+  transform: scale(0.97);
+  transition: background-color 150ms cubic-bezier(0.10, 0.90, 0.20, 1.00),
+              transform 150ms cubic-bezier(0.10, 0.90, 0.20, 1.00);
+}
+button.ur-btn.ur-no-motion,
+button.ur-pane-primary.ur-no-motion,
+button.ur-pane-secondary.ur-no-motion { transition: none; }
+button.ur-btn.ur-no-motion:active, button.ur-btn.ur-no-motion.pressed,
+button.ur-btn.ur-no-motion.keyboard-activating,
+button.ur-pane-primary.ur-no-motion:active, button.ur-pane-primary.ur-no-motion.pressed,
+button.ur-pane-primary.ur-no-motion.keyboard-activating,
+button.ur-pane-secondary.ur-no-motion:active, button.ur-pane-secondary.ur-no-motion.pressed,
+button.ur-pane-secondary.ur-no-motion.keyboard-activating {
+  transform: none; transition: none;
+}
+/* a disabled control must not answer the pointer at all */
+button.ur-btn:disabled, button.ur-pane-primary:disabled,
+button.ur-pane-secondary:disabled { transform: none; }
+
 /* the vertical rule BETWEEN two panes; the horizontal one between rows */
 .ur-vrule { background-color: alpha(#ffffff, .12); }
 /* the search field at the top of a list pane: squared off, transparent, on

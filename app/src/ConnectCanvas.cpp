@@ -50,6 +50,19 @@ Rgb Lift(Rgb c, int amt) {
 struct Argb {
   double a, r, g, b;
 };
+// ConnectCanvasConnectingStateViewModel.colorForState, exactly (windows
+// ColorForPointState). Indexed by PointState — the enum's order IS this
+// table's order. What each colour is SAYING about a provider:
+//
+//   pale yellow #EFF7BB  kAccent/urLightYellow  offered, not yet ruled on
+//   coral       #FF6C58  kUrCoral               not carrying traffic (both the
+//                                               failed evaluation and the
+//                                               never-added cell: iOS uses one
+//                                               colour because the grid says
+//                                               "not carrying traffic", not why)
+//   green       #87FB67  kUrGreen               in the provider window, carrying
+//   transparent #101010 @ alpha 0               left the grid; the RGB matters
+//                                               because the blend runs through it
 constexpr Argb kDotColors[] = {
     {1.0, 0xEF / 255.0, 0xF7 / 255.0, 0xBB / 255.0},  // InEvaluation  kAccent
     {1.0, 0xFF / 255.0, 0x6C / 255.0, 0x58 / 255.0},  // EvaluationFailed  coral
@@ -57,6 +70,8 @@ constexpr Argb kDotColors[] = {
     {1.0, 0x87 / 255.0, 0xFB / 255.0, 0x67 / 255.0},  // Added  green
     {0.0, 0x10 / 255.0, 0x10 / 255.0, 0x10 / 255.0},  // Removed  urBlack @ 0
 };
+static_assert(sizeof(kDotColors) / sizeof(kDotColors[0]) == 5,
+              "kDotColors is indexed by PointState — one entry per case, in order");
 
 // the five blob colors (index-stable; the shuffle permutes ORDER)
 constexpr Rgb kBlobColors[] = {
@@ -115,11 +130,13 @@ void ConnectCanvas::SetState(State state) {
   const bool enteringLive = (state == State::Connecting || state == State::Connected);
   if (leavingLive && !enteringLive) ClearPoints();
   state_ = state;
-  // Connected FREEZES the grid (§7.1): SetGrid stops taking pushes, so settle
-  // what is on the canvas — the connected state then costs nothing per tick,
-  // and the last frame before the circles slide over it is a complete grid
-  // rather than one caught half grown-in.
-  if (state == State::Connected) SettleDots();
+  // Connected FREEZES the grid (§7.1): SetGrid stops taking pushes. It does
+  // NOT settle what is already in flight — windows:ApplyStateVisuals touches
+  // no point, so the last dots keep growing in and re-blending under the
+  // circles as they slide over (kBlobMs 1000 vs at most ~670 ms of dot
+  // transition left, so the grid is complete well before the circles land).
+  // Connected still settles to zero per-tick work, just when the transitions
+  // run out rather than by snapping them.
 
   // fade targets (500ms ease-in-out crossfade)
   idleFadeFrom_ = idleOpacity_;
@@ -174,55 +191,63 @@ void ConnectCanvas::SetGrid(const std::vector<urnet::ProviderGridPoint>& points,
   // — and Tick() is the page's shared ~10 fps clock, which runs under EXACTLY
   // the condition below (ConnectPage::UpdateClock drives Tick() and
   // SetPresentationActive from one boolean). So off that condition the
-  // grow-in has nothing to advance it, and a fully populated grid draws as the
-  // BARE LATTICE, indefinitely — the reported "no provider dots at all".
+  // grow-in has nothing to advance it, and a fully populated grid would draw
+  // as the BARE LATTICE indefinitely — dots held, none of them visible.
   // Snapping is also what motion-off means: an instant, fully correct state.
   const bool animate = presenting_ && AnimationsEnabled();
 
-  // the diff: key by ClientId else "x,y"
-  std::map<std::string, const urnet::ProviderGridPoint*> incoming;
+  // The diff, walked exactly as windows:ConnectCanvas::SetGrid walks it — a
+  // `seen` flag over the live map rather than a per-push index of the payload.
+  // Two things ride on that, both of them parity:
+  //   * kMaxPoints caps CREATION, it does not truncate the push. An already
+  //     live dot is refreshed no matter how deep in the list it appears, so a
+  //     grid over the cap cannot churn its own dots in and out as the SDK
+  //     reorders the payload between pushes.
+  //   * a duplicate key is created from its first appearance and then updated
+  //     by the later ones (a colour change on the birth frame), instead of the
+  //     last one silently winning.
+  // It also keeps this — the ~10 fps feed path — free of a per-push map and a
+  // heap-allocated key string for every point in the payload.
+  for (auto& entry : dots_) entry.second.seen = false;
+
   for (const auto& p : points) {
-    if (incoming.size() >= kMaxPoints) break;  // malformed-push guard
-    std::string key = (p.ClientId && !p.ClientId->empty())
-                          ? *p.ClientId
-                          : std::to_string(p.X) + "," + std::to_string(p.Y);
-    incoming[std::move(key)] = &p;
-  }
-  auto parseState = [](const std::string& s) {
-    if (s == "InEvaluation") return PointState::InEvaluation;
-    if (s == "EvaluationFailed") return PointState::EvaluationFailed;
-    if (s == "NotAdded") return PointState::NotAdded;
-    if (s == "Added") return PointState::Added;
-    if (s == "Removed") return PointState::Removed;
-    return PointState::InEvaluation;  // unknown must not render as accepted
-  };
-  for (const auto& [key, p] : incoming) {
+    // a point with no client id is still a cell: key it by position so it is
+    // diffed as one point rather than churning in and out every push
+    const std::string key = (p.ClientId && !p.ClientId->empty())
+                                ? *p.ClientId
+                                : std::to_string(p.X) + "," + std::to_string(p.Y);
+    const PointState next = ParsePointState(p.State);
     auto it = dots_.find(key);
     if (it == dots_.end()) {
+      if (dots_.size() >= kMaxPoints) continue;  // malformed-push guard
       Dot dot;
-      dot.x = p->X;
-      dot.y = p->Y;
-      dot.state = dot.previous = parseState(p->State);
+      dot.x = p.X;
+      dot.y = p.Y;
+      dot.state = dot.previous = next;
       dot.colorProgress = 1.0;
       dot.sizeProgress = animate ? 0.0 : 1.0;  // grow-in, or born settled
+      dot.seen = true;
       dots_.emplace(key, dot);
-    } else {
-      it->second.x = p->X;
-      it->second.y = p->Y;
-      const PointState next = parseState(p->State);
-      if (next != it->second.state) {
-        // unanimated, the blend has no frames to run through: land on the new
-        // colour outright rather than leaving a stranded previous state
-        it->second.previous = animate ? it->second.state : next;
-        it->second.state = next;
-        it->second.colorProgress = animate ? 0.0 : 1.0;
-      }
+      continue;
+    }
+    Dot& dot = it->second;
+    dot.seen = true;
+    dot.x = p.X;
+    dot.y = p.Y;
+    if (next != dot.state) {
+      // unanimated, the blend has no frames to run through: land on the new
+      // colour outright rather than leaving a stranded previous state
+      dot.previous = animate ? dot.state : next;
+      dot.state = next;
+      dot.colorProgress = animate ? 0.0 : 1.0;
     }
   }
-  // missing keys fade out through Removed rather than vanishing between frames
+
+  // points the SDK stopped reporting fade out through Removed rather than
+  // vanishing between frames
   for (auto it = dots_.begin(); it != dots_.end();) {
     Dot& dot = it->second;
-    if (incoming.find(it->first) != incoming.end()) {
+    if (dot.seen) {
       ++it;
       continue;
     }
@@ -247,7 +272,7 @@ void ConnectCanvas::SetGrid(const std::vector<urnet::ProviderGridPoint>& points,
   }
   dotsAnimating_ = false;
   for (const auto& [key, dot] : dots_) {
-    if (dot.colorProgress < 1.0 || dot.sizeProgress < 1.0) {
+    if (dot.Animating()) {
       dotsAnimating_ = true;
       break;
     }
@@ -255,19 +280,34 @@ void ConnectCanvas::SetGrid(const std::vector<urnet::ProviderGridPoint>& points,
   queue_draw();
 }
 
+// The SDK's own ProviderState* strings, compared against the SDK's own
+// constants: a rename upstream then breaks the build instead of quietly
+// turning the whole grid pale yellow.
+ConnectCanvas::PointState ConnectCanvas::ParsePointState(const std::string& value) {
+  if (value == urnet::ProviderStateAdded) return PointState::Added;
+  if (value == urnet::ProviderStateInEvaluation) return PointState::InEvaluation;
+  if (value == urnet::ProviderStateEvaluationFailed) return PointState::EvaluationFailed;
+  if (value == urnet::ProviderStateNotAdded) return PointState::NotAdded;
+  if (value == urnet::ProviderStateRemoved) return PointState::Removed;
+  // an unrecognised state is a provider the SDK has not accepted; it must not
+  // render as one that it has
+  return PointState::InEvaluation;
+}
+
 void ConnectCanvas::Tick() {
   if (!dotsAnimating_ || !presenting_) return;
   bool still = false;
   for (auto it = dots_.begin(); it != dots_.end();) {
     Dot& dot = it->second;
-    dot.colorProgress = std::min(1.0, dot.colorProgress + kPointStep);
-    dot.sizeProgress = std::min(1.0, dot.sizeProgress + kPointStep);
-    if (dot.state == PointState::Removed && dot.colorProgress >= 1.0 &&
-        dot.sizeProgress >= 1.0) {
+    if (dot.colorProgress < 1.0) dot.colorProgress = std::min(1.0, dot.colorProgress + kPointStep);
+    if (dot.sizeProgress < 1.0) dot.sizeProgress = std::min(1.0, dot.sizeProgress + kPointStep);
+    // a Removed dot whose transition has run out IS gone: its whole life after
+    // the SDK dropped it was that one fade
+    if (dot.state == PointState::Removed && !dot.Animating()) {
       it = dots_.erase(it);
       continue;
     }
-    if (dot.colorProgress < 1.0 || dot.sizeProgress < 1.0) still = true;
+    if (dot.Animating()) still = true;
     ++it;
   }
   dotsAnimating_ = still;
@@ -572,7 +612,18 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
     cr->restore();
     cr->set_line_width(2 * s);
     cr->stroke();
-    // 2d the live provider dots
+    // 2d the live provider dots.
+    // cols is max(gridWidth, gridHeight), not gridWidth: iOS scales by the
+    // width alone, and windows:Layout() takes the larger so a non-square grid
+    // still lands entirely inside the globe instead of running off the bottom.
+    // cell IS the dot diameter, so neighbouring dots touch; nothing is culled
+    // at the rim, the globe clip does that.
+    // TODO(parity): a push with gridWidth == gridHeight == 0 but a non-empty
+    // point list draws nothing (cell would be 0) — windows behaves the same
+    // way, so this matches, but if the linux SDK ever reports 0/0 with live
+    // points the dots vanish silently. point_count()/grid_cols() exist so the
+    // page can tell that apart from "no grid was ever pushed"; wire a dev-page
+    // readout to them before guessing at a fallback divisor here.
     const int64_t cols = std::max<int64_t>(std::max(gridWidth_, gridHeight_), 0);
     if (cols > 0 && !dots_.empty()) {
       const double cell = side / static_cast<double>(cols);

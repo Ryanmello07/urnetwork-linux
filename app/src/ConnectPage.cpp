@@ -305,6 +305,7 @@ ConnectPage::ConnectPage(SdkHost& host)
   paneCRule_ = kit::MakePaneVRule();
   append(*paneCRule_);
   BuildPaneC();
+  SetupPreviewHero();  // env-gated; a no-op in every real session
   ApplyConnectStatus();
   ApplyMoreOptionsVisibility();
   // Seed every pane B/C surface at build time: a page that has never had a
@@ -417,9 +418,7 @@ void ConnectPage::BuildPaneA() {
   adw_clamp_set_tightening_threshold(ADW_CLAMP(heroClamp_), kHeroAdvanced);
   adw_clamp_set_child(ADW_CLAMP(heroClamp_), GTK_WIDGET(canvas_->gobj()));
   hero_->set_child(*Glib::wrap(heroClamp_));
-  hero_->signal_clicked().connect([this] {
-    if (on_toggle_connect) on_toggle_connect();
-  });
+  hero_->signal_clicked().connect([this] { OnConnectToggle(); });
   {  // hover + keyboard focus ring (desktop affordances the phones lack)
     auto motion = Gtk::EventControllerMotion::create();
     motion->signal_enter().connect([this](double, double) { canvas_->SetHovered(true); });
@@ -483,9 +482,7 @@ void ConnectPage::BuildPaneA() {
   // you are fine (the fill IS a status channel)
   connectBtn_ = Gtk::make_managed<Gtk::Button>(T_("connect", "Connect"));
   connectBtn_->add_css_class("ur-pane-primary");
-  connectBtn_->signal_clicked().connect([this] {
-    if (on_toggle_connect) on_toggle_connect();
-  });
+  connectBtn_->signal_clicked().connect([this] { OnConnectToggle(); });
   paneAContent_->append(*connectBtn_);
 
   // "More options" disclosure (Simple only) gating provide/options/peers
@@ -1013,42 +1010,178 @@ void ConnectPage::BuildDnsGroup() {
 }
 
 // ---- the one status writer ----------------------------------------------------
+//
+// THE STATE TABLE IS IN Health.hpp, beside the decision that produces it. This
+// function does not decide anything: it takes ONE health::Reading and renders
+// it to the five channels that used to disagree — the headline, the dot, the
+// supporting lines, the hero pose and the button (label + fill).
+//
+// Everything below is `r.something`. That is the point: there is no path on
+// which the headline and the button can come from different readings, so
+// "Connecting to providers" beside a "Disconnect" button — the owner's
+// screenshot — is no longer representable.
+
+// Gather every input in one place. Pure reads: CurrentKillSwitchStatus() is the
+// last published snapshot and takes no daemon round trip (SdkHost.hpp), and
+// nothing here may take SdkHost's mutex — ApplyConnectStatus rides every stats
+// push.
+health::Inputs ConnectPage::ReadHealthInputs() const {
+  // The dev preview drives the reading directly (connect-canvas.md §15: "the
+  // real status/grid writes to the canvas are suppressed").
+  if (previewHero_) return previewInputs_;
+
+  health::Inputs in;
+  in.sdk = health::ParseSdkStatus(connectStatus_);
+  // The HONEST tunnel, both halves: SdkHost::Connected() (SDK connected AND a
+  // DeviceRemote bound over the current control session) and LiveStats.connected.
+  in.tunnelUp = connected_ && stats_.connected;
+  in.disconnectRequested = disconnectRequested_;
+
+  // urnetworkd's own facts, off the kill-switch snapshot. `installed_known`
+  // is what separates a fact from a default: with no status reply the floor and
+  // the tunnel state are UNKNOWN, and a machine whose nftables floor outlived a
+  // dead daemon is still captured.
+  const KillSwitchStatus ks = host_.CurrentKillSwitchStatus();
+  in.facts.known = ks.installed_known;
+  // Permissive until proven otherwise: a page that has never probed must not
+  // claim "no service". (NoService and Disconnected render identically anyway —
+  // the daemon notice under the headline is what says which.)
+  in.facts.pipeUp = !ks.installed_known || ks.session == DaemonSessionState::Ok;
+  if (ks.installed_known) {
+    // Routes installed = this machine's traffic is STILL going through the
+    // tunnel. Stopping counts: that is exactly the window in which the
+    // Disconnect press has to say so.
+    in.facts.routesInstalled = ks.tunnel_state == ctl::TunnelState::Up ||
+                               ks.tunnel_state == ctl::TunnelState::Stopping;
+    in.facts.killSwitchArmed = ks.installed == ctl::KillSwitchState::Armed;
+    in.facts.killSwitchInForce = ks.in_force;
+  }
+  // While a disconnect is in flight and the tunnel is still carrying, the
+  // machine is captured on OUR OWN evidence — connected_ is SdkHost::Connected(),
+  // which is true only while a DeviceRemote is bound over the current control
+  // session. Without this, a daemon snapshot that is merely STALE could render
+  // "Disconnected" over a tunnel that is still carrying the user's traffic,
+  // which is the same class of lie as the one being fixed, pointing the other
+  // way.
+  if (in.disconnectRequested && in.tunnelUp) in.facts.routesInstalled = true;
+
+  // The provider window, derived from the grid the canvas already rides.
+  //
+  // TODO(sdk-wiring): the SDK carries this reading directly —
+  // `Device::getWindowStatus()` returns WindowStatus{TargetSize, MinSatisfied,
+  // ProviderState{InEvaluation,EvaluationFailed,NotAdded,Added,Removed},
+  // StallReason, Failed}. It is a device rpc, so it belongs in
+  // SdkHost::ReadStats beside the grid read (one lock hold, one snapshot), on
+  // LiveStats. Until it is there, health::Window is counted off gridPoints and
+  // `failed`/`stallReason` are never set, which costs the page the Failed
+  // window state and the whole StatusReasonText line (§2.1) — the mapping for
+  // both is already written in Health.hpp and turns on the moment the field
+  // arrives. This page must NOT read the device itself: ApplyConnectStatus is
+  // the single writer and it may not acquire a status source behind its back.
+  in.window.known = !stats_.gridPoints.empty();
+  for (const urnet::ProviderGridPoint& p : stats_.gridPoints) {
+    if (p.State == urnet::ProviderStateAdded) {
+      ++in.window.added;
+    } else if (p.State == urnet::ProviderStateEvaluationFailed) {
+      ++in.window.evaluationFailed;
+    } else if (p.State == urnet::ProviderStateNotAdded) {
+      ++in.window.notAdded;
+    } else if (p.State == urnet::ProviderStateRemoved) {
+      ++in.window.removed;
+    } else {
+      // unknown strings count as in-evaluation, exactly as the canvas parses
+      // them: a provider the SDK has not accepted must not read as one it has
+      ++in.window.inEvaluation;
+    }
+  }
+
+  // TODO(wiring): MainWindow owns the balance poll (`balance_`), so the
+  // post-checkout "confirming" phase never reaches this page and the hero's
+  // Processing pose (canvas §5: processing WINS over out-of-balance) is
+  // unreachable. LiveStats carries only insufficientBalance. The fix is a
+  // ConnectPage::SetBalanceState(blocked, confirming) relayed from
+  // MainWindow::UpdateBalanceWarning, which already re-runs the status render
+  // on Windows for exactly this reason.
+  in.balanceBlocked = stats_.insufficientBalance;
+  in.balanceConfirming = false;
+  return in;
+}
 
 void ConnectPage::ApplyConnectStatus() {
-  // RenderHealth reconciliation: the button label and the status line must
-  // derive from ONE reading, so the hero can never lag the line above it.
-  const std::string status = UpperCopy(connectStatus_);
-  const bool connecting = (status == "CONNECTING" || status == "DESTINATION_SET");
-  const bool failed = (status == "CONNECT_FAILED");
+  health::Inputs in = ReadHealthInputs();
 
-  Glib::ustring text;
-  const char* dot = kDotIdle;
-  ConnectCanvas::State heroState = ConnectCanvas::State::Disconnected;
-  bool showNotProtected = false;
+  // The Disconnect intent is BOUNDED, and it is NOT cleared by the session it
+  // is waiting on: at the instant of the press the tunnel is still up and the
+  // SDK still says CONNECTED — that is why the button said Disconnect — so
+  // clearing on those would clear it in the same frame it was set and the
+  // press would once again produce no visible change.
+  //
+  // It ends when it has been answered or when it has waited long enough:
+  //   * the session settled (idle status, nothing carrying, the machine no
+  //     longer captured) — the reading is plain "Disconnected" from here on
+  //     with or without the intent, so this is hygiene, not rendering;
+  //   * kDisconnectIntentUs elapsed — a press the daemon never acted on must
+  //     not strand the page on "Disconnecting…" forever. Past the bound the
+  //     feeds win again, and if the routes really are still installed the
+  //     captured row keeps saying so on the strength of the FACT.
+  // (A press on a button that says Connect clears it in OnConnectToggle.)
+  constexpr gint64 kDisconnectIntentUs = 8 * G_USEC_PER_SEC;
+  if (disconnectRequested_) {
+    const bool settled = !in.tunnelUp && in.sdk == health::SdkStatus::Disconnected &&
+                         !health::MachineIsCaptured(in.facts);
+    if (settled || g_get_monotonic_time() - disconnectRequestedAtUs_ > kDisconnectIntentUs) {
+      disconnectRequested_ = false;
+      in.disconnectRequested = false;
+    }
+  }
 
-  if (stats_.insufficientBalance) {
-    // balance overrides the connection reading (processing wins over blocked)
-    text = T_("insufficient_balance_add_balance_or_plan",
-              "Insufficient balance — add balance or a plan");
-    dot = kDotCoral;
-    heroState = ConnectCanvas::State::Error;
-  } else if (connected_ && stats_.connected) {
-    text = T_("connected", "Connected");
-    dot = kDotGreen;
-    heroState = ConnectCanvas::State::Connected;
-  } else if (connecting) {
-    text = T_("connecting_status_indicator", "Connecting to providers");
-    dot = kDotConnecting;
-    heroState = ConnectCanvas::State::Connecting;
-  } else if (failed) {
-    text = T_("conn_failed", "Couldn't connect");
-    dot = kDotCoral;
-    heroState = ConnectCanvas::State::Error;
+  health::Signals signals;
+  signals.sdk = in.sdk;
+  signals.tunnelUp = in.tunnelUp;
+  signals.window = in.window;
+  signals.facts = in.facts;
+  signals.disconnectRequested = in.disconnectRequested;
+  health::State aggregate = previewHero_ ? previewInputs_.health : health::Aggregate(signals);
+
+  // ONE SAMPLE IS NOT A VERDICT. A connection that WAS carrying is not
+  // announced as degraded because one grid push arrived with nothing in the
+  // Added state — the window rebuilds, and a headline that flips to "Finding
+  // providers…" for a second on a working tunnel is a lie with a green
+  // shape. The downgrade has to hold for kProviderGraceUs first. It applies
+  // ONLY to the Connected -> Evaluating/Degraded direction: on a fresh connect
+  // the previous reading is Connecting, and Evaluating must land immediately —
+  // that is the state whose whole job is to show the dots being evaluated.
+  constexpr gint64 kProviderGraceUs = 3 * G_USEC_PER_SEC;
+  if (in.tunnelUp && reading_.state == health::State::Connected &&
+      (aggregate == health::State::Evaluating || aggregate == health::State::Degraded)) {
+    const gint64 now = g_get_monotonic_time();
+    if (noProviderSinceUs_ == 0) noProviderSinceUs_ = now;
+    if (now - noProviderSinceUs_ < kProviderGraceUs) aggregate = health::State::Connected;
   } else {
-    text = T_("disconnected", "Disconnected");
-    dot = kDotIdle;
-    heroState = ConnectCanvas::State::Disconnected;
-    showNotProtected = true;
+    noProviderSinceUs_ = 0;
+  }
+  in.health = aggregate;
+
+  // ONE reading. Everything from here down renders it.
+  const health::Reading r = health::Render(in);
+  reading_ = r;
+
+  const Glib::ustring text = T_(r.textKey, r.textEnglish);
+  const char* dot = kDotIdle;
+  switch (r.dot) {
+    case health::Dot::Green: dot = kDotGreen; break;
+    case health::Dot::Connecting: dot = kDotConnecting; break;
+    case health::Dot::Coral: dot = kDotCoral; break;
+    case health::Dot::Idle: dot = kDotIdle; break;
+  }
+  statusDotColor_ = dot;  // the strip reads the SAME resolution, never its own
+  ConnectCanvas::State heroState = ConnectCanvas::State::Disconnected;
+  switch (r.hero) {
+    case health::Hero::Disconnected: heroState = ConnectCanvas::State::Disconnected; break;
+    case health::Hero::Connecting: heroState = ConnectCanvas::State::Connecting; break;
+    case health::Hero::Connected: heroState = ConnectCanvas::State::Connected; break;
+    case health::Hero::Error: heroState = ConnectCanvas::State::Error; break;
+    case health::Hero::Processing: heroState = ConnectCanvas::State::Processing; break;
   }
 
   statusText_->set_text(text);
@@ -1056,24 +1189,233 @@ void ConnectPage::ApplyConnectStatus() {
                          "' foreground='" + dot + "'>●</span>");
   // Simple only: Advanced omits the restatement deliberately
   kit::SetTextOrCollapse(*protectionText_,
-                         (!advanced_ && showNotProtected)
+                         (!advanced_ && r.showNotProtected)
                              ? T_("conn_not_protected",
                                   "Your internet traffic is not protected.")
                              : "");
+  // the soft-kill-switch honesty line and the stall diagnosis: null = collapsed
+  kit::SetTextOrCollapse(*trafficHeldText_,
+                         r.heldKey ? Glib::ustring(T_(r.heldKey, r.heldEnglish))
+                                   : Glib::ustring());
+  kit::SetTextOrCollapse(*statusReasonText_,
+                         r.reasonKey ? Glib::ustring(T_(r.reasonKey, r.reasonEnglish))
+                                     : Glib::ustring());
   kit::SetTextOrCollapse(*daemonNoticeText_, daemonNotice_);
 
   canvas_->SetState(heroState);
+  // ORDERING, load-bearing: the grid is pushed AFTER the hero state, from
+  // inside the one writer. SetGrid is dropped unless the canvas is already
+  // Connecting, so a push made before the entry-edge status was applied is
+  // lost — which is exactly why a real connect showed the bare lattice with no
+  // provider dots at all. See PushGrid.
+  PushGrid();
   // the hero's accessible name IS the current status text (its content is a
   // decorative canvas, so it gets no automatic name)
   kit::SetAccessibleLabel(*hero_, text);
 
-  // the action: filled Connect vs outlined Disconnect (four channels — word,
-  // fill, dot, status line)
-  const bool isDisconnect = connected_ || stats_.connected || connecting;
-  connectBtn_->set_label(isDisconnect ? T_("disconnect", "Disconnect")
-                                      : T_("connect", "Connect"));
+  // the action: filled Connect/Retry vs outlined Disconnect (four channels —
+  // word, fill, dot, status line), from the SAME reading as the line above it
+  const bool isDisconnect = r.action == health::Action::Disconnect;
+  connectBtn_->set_label(r.action == health::Action::Retry ? T_("retry", "Retry")
+                         : isDisconnect                    ? T_("disconnect", "Disconnect")
+                                                           : T_("connect", "Connect"));
   connectBtn_->remove_css_class(isDisconnect ? "ur-pane-primary" : "ur-pane-secondary");
   connectBtn_->add_css_class(isDisconnect ? "ur-pane-secondary" : "ur-pane-primary");
+  // TODO(parity §2.4): the watchdog-disable (kConnectWatchdog 8s, plus the
+  // balance gate) is deliberately NOT implemented. Windows desensitizes both
+  // the button and the hero while connectStatus_ == Connecting and re-enables
+  // after 8s; on this port the owner's session is live and a disabled
+  // Disconnect is a trapped user, so the action stays pressable in every state
+  // until the watchdog can be tested against a real connect.
+}
+
+// The provider grid re-push (connect-canvas.md §7.1/§13). The canvas ignores
+// every push unless it is in Connecting — the iOS freeze, which is correct
+// parity and is NOT relaxed here. What was missing is that the push has to
+// happen after the state, on the SAME reading: the old code called SetGrid from
+// ApplyStats BEFORE ApplyConnectStatus ran, so the very push that first carried
+// providers was thrown away on the entry edge, and the hero sat on the bare
+// lattice.
+//
+// Pushing from the one writer also means every entry point is covered
+// (SetConnectionStatus and SetConnected apply a status without a stats push of
+// their own), and a repeated identical push is free: the diff finds the same
+// keys in the same states and changes nothing.
+void ConnectPage::PushGrid() {
+  if (!canvas_) return;
+  if (previewHero_) {
+    canvas_->SetGrid(previewGrid_, previewCols_, previewCols_);
+    return;
+  }
+  // Fed unconditionally, empty list included — an empty grid is a NORMAL
+  // reading (no session, rpc-only session, a connection carrying no traffic
+  // yet) and the canvas renders it as the bare lattice.
+  canvas_->SetGrid(stats_.gridPoints, stats_.gridWidth, stats_.gridHeight);
+}
+
+// The connect toggle (§2.4 OnConnectToggle). MainWindow owns the SDK calls; what
+// belongs here is the OPTIMISTIC LOCAL WRITE — a press that produces no visible
+// change is indistinguishable from a hang, and on the disconnect side it is the
+// whole fix for the reported contradiction: the SDK keeps reporting
+// CONNECTING/DESTINATION_SET for a while after Disconnect, and without a local
+// intent the row goes on saying "Connecting to providers" at a user who just
+// asked to stop.
+void ConnectPage::OnConnectToggle() {
+  // The reading the user is looking at decides what the press MEANS — the
+  // button's own label, not a second derivation of it.
+  if (reading_.action == health::Action::Disconnect) {
+    disconnectRequested_ = true;
+    disconnectRequestedAtUs_ = g_get_monotonic_time();
+  } else {
+    disconnectRequested_ = false;
+  }
+  ApplyConnectStatus();  // in this frame, before the SDK has said anything
+  if (on_toggle_connect) on_toggle_connect();
+  // TODO(parity §2.4 step 4): the CONNECT half of the optimistic write
+  // (`connectStatus_ = Connecting; health_ = Connecting`) is deliberately not
+  // taken here. Written without §2.4's 8 s watchdog it is a trap: a press that
+  // never reaches the daemon (StartTunnelUi fails) would leave "Connecting to
+  // providers" standing with no push coming to correct it. The disconnect
+  // intent above is safe because it is bounded in time and because the FACTS
+  // (routes installed) keep the captured row true on their own. Land the
+  // watchdog and this becomes a two-line change.
+}
+
+// ---- the hero preview walk (connect-canvas.md §15) -----------------------------
+//
+// "Dev/preview harness (port it — it is how the motion gets verified)."
+// URNETWORK_PREVIEW_HERO suppresses the real status and grid writes and drives
+// the reading from the table below instead.
+//
+// DELIBERATE DEVIATION from §15, which walks the five CANVAS states: this walks
+// the ELEVEN rows of the health state table, because the health reading is what
+// this page renders and the canvas state is a projection of it. All five canvas
+// states appear in the walk (Disconnected, Connecting ×4, Connected, Error ×2,
+// Processing). Naming a row pins it, which is what makes a screenshot of one
+// row of the table reproducible; anything else walks at §15's 4 s cadence.
+namespace {
+
+struct PreviewStep {
+  const char* name;
+  urnw::health::State health;
+  urnw::health::SdkStatus sdk;
+  bool tunnelUp;
+  bool routesInstalled;
+  bool killSwitchArmed;
+  bool killSwitchInForce;
+  bool balanceBlocked;
+  bool balanceConfirming;
+  bool disconnectRequested;
+  const char* stallReason;
+};
+
+using PS = urnw::health::State;
+using PK = urnw::health::SdkStatus;
+constexpr PreviewStep kPreviewSteps[] = {
+    {"disconnected", PS::Disconnected, PK::Disconnected, false, false, false, false, false, false,
+     false, ""},
+    {"connecting", PS::Connecting, PK::Connecting, false, false, false, false, false, false, false,
+     "platform-unreachable"},
+    {"evaluating", PS::Evaluating, PK::Connected, true, true, false, true, false, false, false, ""},
+    {"degraded", PS::Degraded, PK::Connected, true, true, false, false, false, false, false,
+     "providers-unresponsive"},
+    {"connected", PS::Connected, PK::Connected, true, true, false, true, false, false, false, ""},
+    {"failed", PS::Failed, PK::Failed, false, false, false, false, false, false, false, ""},
+    // the reported defect's own frame: the SDK still says CONNECTING, the user
+    // has pressed Disconnect, the machine is still captured
+    {"disconnecting", PS::Disconnected, PK::Connecting, false, true, false, true, false, false,
+     true, ""},
+    {"killswitch", PS::Disconnected, PK::Disconnected, false, false, true, true, false, false,
+     false, ""},
+    {"noservice", PS::NoService, PK::Disconnected, false, false, false, false, false, false, false,
+     ""},
+    {"blocked", PS::Disconnected, PK::Connecting, false, false, false, false, true, false, false,
+     ""},
+    {"processing", PS::Connecting, PK::Connecting, false, false, false, false, true, true, false,
+     ""},
+};
+
+}  // namespace
+
+void ConnectPage::SetupPreviewHero() {
+  const char* want = g_getenv("URNETWORK_PREVIEW_HERO");
+  if (!want || !*want) return;
+  previewHero_ = true;
+  previewWalk_ = true;
+  const std::string tag = LowerCopy(want);
+  for (size_t i = 0; i < G_N_ELEMENTS(kPreviewSteps); ++i) {
+    if (tag == kPreviewSteps[i].name) {
+      previewStep_ = i;
+      previewWalk_ = false;
+      break;
+    }
+  }
+  g_message("preview-hero: %s (step '%s')", previewWalk_ ? "walk" : "pinned",
+            kPreviewSteps[previewStep_].name);
+  ApplyPreviewStep(previewStep_);
+}
+
+void ConnectPage::ApplyPreviewStep(size_t index) {
+  const PreviewStep& step = kPreviewSteps[index % G_N_ELEMENTS(kPreviewSteps)];
+  health::Inputs in;
+  in.health = step.health;
+  in.sdk = step.sdk;
+  in.tunnelUp = step.tunnelUp;
+  in.facts.known = true;
+  in.facts.pipeUp = step.health != health::State::NoService;
+  in.facts.routesInstalled = step.routesInstalled;
+  in.facts.killSwitchArmed = step.killSwitchArmed;
+  in.facts.killSwitchInForce = step.killSwitchInForce;
+  in.balanceBlocked = step.balanceBlocked;
+  in.balanceConfirming = step.balanceConfirming;
+  in.disconnectRequested = step.disconnectRequested;
+  in.stallReason = step.stallReason;
+  previewInputs_ = in;
+  ApplyConnectStatus();
+  g_message("preview-hero: step '%s' -> \"%s\"", step.name, statusText_->get_text().c_str());
+}
+
+void ConnectPage::PreviewTick() {
+  // §15's synthetic 14x14 grid, pushed once per second (and on the very first
+  // tick, so a screenshot taken as soon as the window is laid out has a grid in
+  // it). The per-second seed moves point states around so the colour blend and
+  // the grow-in are exercised rather than assumed.
+  if (tickCount_ == 1 || tickCount_ % 10 == 0) {
+    const unsigned seed = static_cast<unsigned>(tickCount_ / 10);
+    const int cols = static_cast<int>(previewCols_);
+    previewGrid_.clear();
+    for (int y = 0; y < cols; ++y) {
+      for (int x = 0; x < cols; ++x) {
+        const unsigned h =
+            static_cast<unsigned>(x * 131 + y * 17 + static_cast<int>(seed)) * 2654435761u;
+        if ((h >> 8) % 100 < 42) continue;
+        urnet::ProviderGridPoint p;
+        p.X = x;
+        p.Y = y;
+        p.ClientId = "preview-" + std::to_string(x) + "-" + std::to_string(y);
+        switch ((h >> 3) % 8) {
+          case 0: p.State = urnet::ProviderStateInEvaluation; break;
+          case 1: p.State = urnet::ProviderStateEvaluationFailed; break;
+          case 2: p.State = urnet::ProviderStateNotAdded; break;
+          default: p.State = urnet::ProviderStateAdded; break;
+        }
+        p.Active = true;
+        previewGrid_.push_back(std::move(p));
+      }
+    }
+    PushGrid();
+    g_message("preview-hero: pushed %zu points (%dx%d), hero=%d", previewGrid_.size(), cols, cols,
+              static_cast<int>(canvas_->state()));
+  }
+  // §15's 4 s cadence (40 ticks per state)
+  if (previewWalk_ && tickCount_ % 40 == 0) {
+    previewStep_ = (previewStep_ + 1) % G_N_ELEMENTS(kPreviewSteps);
+    ApplyPreviewStep(previewStep_);
+  }
+}
+
+Glib::ustring ConnectPage::ConnectStatusText() const {
+  return statusText_ ? statusText_->get_text() : Glib::ustring();
 }
 
 void ConnectPage::SetDaemonNotice(const Glib::ustring& notice) {
@@ -1082,8 +1424,32 @@ void ConnectPage::SetDaemonNotice(const Glib::ustring& notice) {
 }
 
 void ConnectPage::SetConnected(bool connected) {
+  const bool changed = connected_ != connected;
   connected_ = connected;
   ApplyConnectStatus();
+  if (!changed) return;
+  // The tunnel moved, so urnetworkd's tunnel state and floor moved with it —
+  // and nothing pushes that. Every "the machine is still captured" reading
+  // (§2.1's "Disconnecting — your traffic is still going through the tunnel")
+  // is only honest against a FRESH status, so ask for one. Read-back only: no
+  // write, no daemon state change, on the host's own worker.
+  RefreshServiceFacts();
+}
+
+// The one place that asks urnetworkd what it is really doing. Read-only, and
+// deliberately rare: on a tunnel edge, and once a second only while a
+// Disconnect press is still in flight.
+void ConnectPage::RefreshServiceFacts() {
+  auto alive = alive_;
+  auto epoch = epoch_;
+  const uint64_t gen = *epoch_;
+  host_.RefreshKillSwitchStatus([this, alive, epoch, gen](KillSwitchStatus) {
+    // alive_ FIRST: reading the epoch means dereferencing a member of a page
+    // that may already be gone (CONTRACT.md rule 3).
+    if (!*alive || *epoch != gen) return;
+    ApplyKillSwitchUi();
+    ApplyConnectStatus();
+  });
 }
 
 void ConnectPage::SetConnectionStatus(const std::string& status) {
@@ -1093,9 +1459,13 @@ void ConnectPage::SetConnectionStatus(const std::string& status) {
 
 void ConnectPage::ApplyStats(const LiveStats& stats) {
   stats_ = stats;
-  // the hero's grid feed — fed unconditionally, empty list included (the
-  // canvas renders it as the bare lattice; an empty grid is a NORMAL state)
-  canvas_->SetGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
+  // THE STATUS FIRST, THEN THE GRID. ApplyConnectStatus applies the hero state
+  // and then pushes the grid itself (PushGrid), because ConnectCanvas::SetGrid
+  // drops every push unless the canvas is already Connecting. The old order —
+  // SetGrid here, ApplyConnectStatus at the end of this function — threw away
+  // the first push of every connect, the one that carries the providers being
+  // evaluated, and left the hero on the bare lattice.
+  ApplyConnectStatus();
 
   // 3.1 pane B header carries the live throughput; with no session the line
   // COLLAPSES entirely rather than reading "0 bps"
@@ -1161,7 +1531,8 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
 
   ApplySessionRows();
   ApplySessionCardsVisibility();
-  ApplyConnectStatus();
+  // (the status was applied at the TOP of this function — see the note there;
+  // applying it twice per push would only re-render the same reading)
 }
 
 // ---- pane B: the routing-decision list ----------------------------------------
@@ -2404,6 +2775,18 @@ void ConnectPage::Tick() {
   if (!presenting_ || !pageVisible_) return;
   canvas_->Tick();
   ++tickCount_;
+  if (previewHero_) {
+    PreviewTick();
+    return;  // the preview owns the page's feeds while it runs
+  }
+  // A Disconnect press is in flight: re-take the reading each second so the
+  // "still going through the tunnel" line clears the moment the daemon says the
+  // routes are gone, and so the 8 s bound on the intent actually expires
+  // without waiting for an SDK push that may never come.
+  if (disconnectRequested_ && tickCount_ % 10 == 0) {
+    RefreshServiceFacts();
+    ApplyConnectStatus();
+  }
   // the charts ride the throughput feed; at 2fps the 60s window still reads
   // live and the read stays off the per-frame path
   if (tickCount_ % 5 == 0) PullThroughput();

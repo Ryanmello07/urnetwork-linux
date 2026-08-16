@@ -71,6 +71,14 @@ void SetPointerCursor(Gtk::Widget& widget);
 // "pressed" CSS class from a capture-phase click gesture, since GTK4 never
 // sets :active on a plain box. Pair with SetPointerCursor.
 void WireCardPressFeedback(Gtk::Widget& widget);
+// Pressed-state feedback for a REAL button wearing the UrTheme button skin
+// (.ur-btn / .ur-pane-primary / .ur-pane-secondary). GTK4 does set :active on
+// a button, but it clears it on the pointer lift — a normal click is far too
+// short to see the pose land. This holds UrTheme's .pressed pose (identical to
+// :active) for at least motion::kFastMs from the press, and applies the
+// reduce-motion class. Optional: without it the button still presses, just
+// only for as long as the pointer is down.
+void WireButtonPressFeedback(Gtk::Widget& widget);
 // Pop a toast on the nearest enclosing AdwToastOverlay (MainWindow wraps its
 // page stack in one; the detail sheets carry their own). No-op without one.
 void ShowToast(Gtk::Widget& context, const std::string& message);

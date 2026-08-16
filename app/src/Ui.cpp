@@ -10,6 +10,8 @@
 #include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
 
+#include "UrMotion.hpp"  // kFastMs + the one ShouldAnimate choke point
+
 namespace urnw {
 namespace {
 
@@ -234,6 +236,85 @@ void WireCardPressFeedback(Gtk::Widget& widget) {
   gesture->signal_cancel().connect(
       [&widget](Gdk::EventSequence*) { widget.remove_css_class("pressed"); });
   widget.add_controller(gesture);
+}
+
+void WireButtonPressFeedback(Gtk::Widget& widget) {
+  // THE MINIMUM HOLD. Unlike a card, a real GtkButton DOES get :active — but
+  // GTK clears it on the pointer lift, and a click is short. Measured on the
+  // pane action pair (headless weston, GTK 4.14.5): with the old `150ms ease`
+  // ramp a 70ms press rendered #5A7EE4 against a hover of #5C81EA — six levels
+  // of blue, then gone. UrTheme's kStandard curve now puts the pose 96% in at
+  // 70ms, and this holds it for motion::kFastMs from the press so the landed
+  // pose is actually SEEN whatever the tap length. Anything past the hold
+  // releases immediately, so a deliberate press-and-hold still feels direct.
+  //
+  // .pressed is UrTheme's press pose, identical to :active, so this composes
+  // with GTK's own state instead of fighting it.
+  //
+  // Capture phase and claims nothing: the button's own click gesture — the one
+  // that actually toggles the tunnel — still fires, unchanged.
+  struct PressState {
+    bool alive = true;
+    gint64 pressedAtUs = 0;
+    sigc::connection release;
+  };
+  auto state = std::make_shared<PressState>();
+
+  // The hold outlives the pointer, so it can outlive the widget. The gesture
+  // dies with the widget; a pending timeout does not.
+  widget.signal_destroy().connect([state] {
+    state->alive = false;
+    state->release.disconnect();
+  });
+
+  auto engage = [&widget, state] {
+    state->release.disconnect();
+    state->pressedAtUs = g_get_monotonic_time();
+    // The one reduce-motion choke point, read per press so a mid-session
+    // settings change is honoured. Motion off = the fill step still lands,
+    // instantly, and UrTheme drops the scale entirely.
+    if (motion::ShouldAnimate()) {
+      widget.remove_css_class("ur-no-motion");
+    } else {
+      widget.add_css_class("ur-no-motion");
+    }
+    widget.add_css_class("pressed");
+  };
+
+  auto disengage = [&widget, state] {
+    if (!state->alive) return;
+    const int elapsedMs =
+        static_cast<int>((g_get_monotonic_time() - state->pressedAtUs) / 1000);
+    const int remainMs = motion::kFastMs - elapsedMs;
+    state->release.disconnect();
+    if (remainMs <= 0) {
+      widget.remove_css_class("pressed");
+      return;
+    }
+    state->release = Glib::signal_timeout().connect(
+        [&widget, state]() -> bool {
+          if (state->alive) widget.remove_css_class("pressed");
+          return false;
+        },
+        remainMs);
+  };
+
+  auto gesture = Gtk::GestureClick::create();
+  gesture->set_propagation_phase(Gtk::PropagationPhase::CAPTURE);
+  // Primary button only. A GestureClick defaults to "any button", which would
+  // pose the control for a right-press that activates nothing.
+  gesture->set_button(GDK_BUTTON_PRIMARY);
+  gesture->signal_pressed().connect([engage](int, double, double) { engage(); });
+  gesture->signal_released().connect([disengage](int, double, double) { disengage(); });
+  gesture->signal_cancel().connect([disengage](Gdk::EventSequence*) { disengage(); });
+  widget.add_controller(gesture);
+  // Keyboard activation (Space/Enter) produces no click gesture, so none of
+  // the above runs for it — and it must not have to, because a keyboard user
+  // may never wire this helper at all. Measured: gtk_widget_activate() on a
+  // GtkButton leaves the state flags at 0x80 (DIR_LTR — no ACTIVE bit) and
+  // adds a `keyboard-activating` class for its own timeout instead. UrTheme
+  // pins the press pose to that class as well, so the keyboard path carries
+  // the same feedback with no wiring.
 }
 
 void ShowToast(Gtk::Widget& context, const std::string& message) {

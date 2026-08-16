@@ -17,6 +17,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <random>
 #include <map>
@@ -43,7 +44,19 @@ class ConnectCanvas : public Gtk::Widget {
   // The dots are REAL SDK data or nothing: this is the only way a dot is ever
   // created, and the empty push is a normal reading (no session, rpc-only
   // session, a connection not carrying traffic yet) that renders as the bare
-  // lattice. Nothing here invents a point.
+  // lattice. Nothing here invents a point. A preview/demo feed belongs in the
+  // PAGE (docs/parity/connect-canvas.md §15), pushed through this same entry
+  // point, so the shipped canvas has exactly one source of dots.
+  //
+  // What the colours MEAN (ProviderGridPoint::State → the dot's fill; the
+  // whole legend, in SDK terms — see the table in the .cpp for the hex):
+  //   "InEvaluation"     pale yellow  — offered, the SDK has not ruled on it
+  //   "EvaluationFailed" coral        — evaluated and rejected
+  //   "NotAdded"         coral        — not in the window, not carrying traffic
+  //   "Added"            green        — in the provider window, carrying traffic
+  //   "Removed"          transparent  — iOS's own extra case: it left the grid
+  //   anything else      pale yellow  — never render an unaccepted provider as
+  //                                     one the SDK has accepted
   //
   // Grow-in/colour-blend transitions are only armed when this canvas is
   // presenting AND OS animations are on — the page's shared ~10 fps clock,
@@ -54,6 +67,15 @@ class ConnectCanvas : public Gtk::Widget {
   // of sitting at scale 0 forever.
   void SetGrid(const std::vector<urnet::ProviderGridPoint>& points, int64_t gridWidth,
                int64_t gridHeight);
+
+  // Diagnostics for the page (a dot layer that renders nothing looks exactly
+  // like a grid that was never pushed — these two tell those apart from
+  // outside, without the canvas ever inventing a point to prove it is alive).
+  // point_count() is live dots held; grid_cols() is the divisor the cells are
+  // laid out on, max(gridWidth, gridHeight) — 0 means "no layout, nothing can
+  // be drawn no matter how many points are held".
+  size_t point_count() const { return dots_.size(); }
+  int64_t grid_cols() const { return std::max<int64_t>(std::max(gridWidth_, gridHeight_), 0); }
   void SetHovered(bool hovered);
   void SetFocusRingVisible(bool visible);
   void SetPresentationActive(bool active);
@@ -66,13 +88,19 @@ class ConnectCanvas : public Gtk::Widget {
   void snapshot_vfunc(const Glib::RefPtr<Gtk::Snapshot>& snapshot) override;
 
  private:
+  // ProviderGridPoint::State, parsed. `Removed` is iOS's own extra case: a
+  // point that has left the grid fades out over one transition rather than
+  // vanishing between frames. Order is load-bearing — it indexes the colour
+  // table in the .cpp.
   enum class PointState { InEvaluation, EvaluationFailed, NotAdded, Added, Removed };
   struct Dot {
-    double x = 0, y = 0;          // grid cell coords
+    int32_t x = 0, y = 0;         // grid cell coords, as the SDK reports them
     PointState state = PointState::InEvaluation;
     PointState previous = PointState::InEvaluation;
     double colorProgress = 1.0;   // previous -> state blend
     double sizeProgress = 0.0;    // grow-in
+    bool seen = false;            // marked during a SetGrid diff
+    bool Animating() const { return colorProgress < 1.0 || sizeProgress < 1.0; }
   };
 
   // ---- animation clock ------------------------------------------------------
@@ -84,6 +112,7 @@ class ConnectCanvas : public Gtk::Widget {
   void RunBlobs(bool in);
   void ShuffleBlobs();
   void ClearPoints();
+  static PointState ParsePointState(const std::string& value);
   // Every dot at its settled pose with nothing left to animate (Removed dots
   // are dropped — their whole transition WAS the fade-out). The dot layer's
   // half of the reduce-motion rule, and the "frozen" half of Connected.
