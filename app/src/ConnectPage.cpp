@@ -305,7 +305,12 @@ ConnectPage::ConnectPage(SdkHost& host)
   paneCRule_ = kit::MakePaneVRule();
   append(*paneCRule_);
   BuildPaneC();
-  SetupPreviewHero();  // env-gated; a no-op in every real session
+  // Gated on URNETWORK_PREVIEW_UI *and* URNETWORK_PREVIEW_HERO, and then on
+  // PreviewOwnsTheReading() at every render — so it cannot paint over a real
+  // session even if both are set. (It used to be gated on PREVIEW_HERO alone,
+  // and this comment used to claim "a no-op in every real session" while one
+  // stray env var was enough to fabricate a connected hero.)
+  SetupPreviewHero();
   ApplyConnectStatus();
   ApplyMoreOptionsVisibility();
   // Seed every pane B/C surface at build time: a page that has never had a
@@ -1027,11 +1032,41 @@ void ConnectPage::BuildDnsGroup() {
 // push.
 health::Inputs ConnectPage::ReadHealthInputs() const {
   // The dev preview drives the reading directly (connect-canvas.md §15: "the
-  // real status/grid writes to the canvas are suppressed").
-  if (previewHero_) return previewInputs_;
+  // real status/grid writes to the canvas are suppressed") — but only while
+  // there is nothing real for it to paint over. See PreviewOwnsTheReading.
+  if (PreviewOwnsTheReading()) return previewInputs_;
 
   health::Inputs in;
-  in.sdk = health::ParseSdkStatus(connectStatus_);
+  // WHICH FEED IS THE SDK'S CONNECTION STATUS, ON THIS PLATFORM.
+  //
+  // Two different things arrive here under that name, and only one of them is
+  // the connect controller's status alphabet:
+  //
+  //   stats_.connectionStatus  = connectVc_->getConnectionStatus()
+  //     (SdkHost::ReadStats, SdkHost.cpp:1443). THE alphabet:
+  //     DISCONNECTED / CONNECTING / DESTINATION_SET / CONNECTED /
+  //     CONNECT_FAILED. With no connect controller open it falls back
+  //     (SdkHost.cpp:1455) to the same two-valued location proxy as the feed
+  //     below, so it is never LESS informative than it.
+  //
+  //   connectStatus_           = SdkHost's ConnectionStatusHandler, relayed by
+  //     MainWindow. NOT that alphabet: every call site (SdkHost.cpp:1114,
+  //     :1351, :1357-1358, :2207, :2410) emits one of exactly two strings, off
+  //     addConnectLocationChangeListener / getConnectLocation() —
+  //     "DESTINATION_SET" (a connect location is selected) or "DISCONNECTED"
+  //     (none is). It can never say CONNECTING, CONNECTED or CONNECT_FAILED.
+  //
+  // Reading the second as if it were the first is what made DESTINATION_SET —
+  // which stands for the WHOLE LIFE of a carrying session here, because the
+  // destination stays selected — look like an in-flight status, so Render()
+  // promoted every Connected aggregate back to Connecting and the owner's
+  // carrying tunnel would have read "Connecting to providers" forever.
+  //
+  // So: the controller feed whenever it has said anything; the location feed as
+  // the seed until the first stats push lands (it arrives on device bind, well
+  // before the first throughput sample).
+  in.sdk = health::ParseSdkStatus(stats_.connectionStatus.empty() ? connectStatus_
+                                                                 : stats_.connectionStatus);
   // The HONEST tunnel, both halves: SdkHost::Connected() (SDK connected AND a
   // DeviceRemote bound over the current control session) and LiveStats.connected.
   in.tunnelUp = connected_ && stats_.connected;
@@ -1056,14 +1091,15 @@ health::Inputs ConnectPage::ReadHealthInputs() const {
     in.facts.killSwitchArmed = ks.installed == ctl::KillSwitchState::Armed;
     in.facts.killSwitchInForce = ks.in_force;
   }
-  // While a disconnect is in flight and the tunnel is still carrying, the
-  // machine is captured on OUR OWN evidence — connected_ is SdkHost::Connected(),
-  // which is true only while a DeviceRemote is bound over the current control
-  // session. Without this, a daemon snapshot that is merely STALE could render
-  // "Disconnected" over a tunnel that is still carrying the user's traffic,
-  // which is the same class of lie as the one being fixed, pointing the other
-  // way.
-  if (in.disconnectRequested && in.tunnelUp) in.facts.routesInstalled = true;
+  // NOTE: this used to FABRICATE `routesInstalled = true` whenever a disconnect
+  // was in flight over a carrying tunnel, so that a stale daemon snapshot could
+  // not render "Disconnected" over traffic still going through the tunnel. The
+  // reasoning was right and the mechanism was wrong — it wrote a claim about the
+  // DAEMON that the daemon had not made, and it only covered the intent case.
+  // health::TrafficStillInTunnel now takes `tunnelUp` (our own evidence:
+  // SdkHost::Connected() AND LiveStats.connected) beside the daemon's routes, so
+  // every channel gets the same protection in every state and ServiceFacts stays
+  // a record of what the SERVICE actually said.
 
   // The provider window, derived from the grid the canvas already rides.
   //
@@ -1117,18 +1153,27 @@ void ConnectPage::ApplyConnectStatus() {
   // press would once again produce no visible change.
   //
   // It ends when it has been answered or when it has waited long enough:
-  //   * the session settled (idle status, nothing carrying, the machine no
-  //     longer captured) — the reading is plain "Disconnected" from here on
-  //     with or without the intent, so this is hygiene, not rendering;
+  //   * THE PRESSED-ON SESSION IS GONE — nothing carrying and the machine no
+  //     longer captured. That is the disconnect, complete, as a matter of FACT:
+  //     no tunnel, no routes, no floor. From that instant the press has nothing
+  //     left to describe, and anything the feeds report afterwards belongs to a
+  //     NEW session which this press may not narrate.
   //   * kDisconnectIntentUs elapsed — a press the daemon never acted on must
   //     not strand the page on "Disconnecting…" forever. Past the bound the
   //     feeds win again, and if the routes really are still installed the
   //     captured row keeps saying so on the strength of the FACT.
   // (A press on a button that says Connect clears it in OnConnectToggle.)
+  //
+  // The settle test used to ALSO require in.sdk == Disconnected, and that was
+  // the hole: while a connect was in flight the status is CONNECTING, so the
+  // intent never settled, and when the new tunnel's routes landed the page
+  // narrated somebody else's connect as "Disconnecting — your traffic is still
+  // going through the tunnel". Facts settle it now, not tokens. (health::
+  // IntentHolds is the second half of the same bound: even inside the window,
+  // the intent may not claim Disconnected over a session that is coming up.)
   constexpr gint64 kDisconnectIntentUs = 8 * G_USEC_PER_SEC;
   if (disconnectRequested_) {
-    const bool settled = !in.tunnelUp && in.sdk == health::SdkStatus::Disconnected &&
-                         !health::MachineIsCaptured(in.facts);
+    const bool settled = !health::MachineIsCaptured(in.facts, in.tunnelUp);
     if (settled || g_get_monotonic_time() - disconnectRequestedAtUs_ > kDisconnectIntentUs) {
       disconnectRequested_ = false;
       in.disconnectRequested = false;
@@ -1141,7 +1186,8 @@ void ConnectPage::ApplyConnectStatus() {
   signals.window = in.window;
   signals.facts = in.facts;
   signals.disconnectRequested = in.disconnectRequested;
-  health::State aggregate = previewHero_ ? previewInputs_.health : health::Aggregate(signals);
+  health::State aggregate =
+      PreviewOwnsTheReading() ? previewInputs_.health : health::Aggregate(signals);
 
   // ONE SAMPLE IS NOT A VERDICT. A connection that WAS carrying is not
   // announced as degraded because one grid push arrived with nothing in the
@@ -1243,9 +1289,36 @@ void ConnectPage::ApplyConnectStatus() {
 // keys in the same states and changes nothing.
 void ConnectPage::PushGrid() {
   if (!canvas_) return;
-  if (previewHero_) {
+  if (PreviewOwnsTheReading()) {
     canvas_->SetGrid(previewGrid_, previewCols_, previewCols_);
     return;
+  }
+  // THE OBSERVATION THE MISSING-DOTS BUG NEVER HAD. Two different failures put
+  // the same bare lattice on screen and nothing in this tree could tell them
+  // apart — not on screen, not in the journal:
+  //   (a) the SDK sent no points at all;
+  //   (b) the SDK sent points with a 0x0 grid — getWidth/getHeight and
+  //       getProviderGridPointList are three separate locked reads of one grid
+  //       (SdkHost.cpp:1443-1452), and on a DeviceRemote getGrid() can return a
+  //       null handle at all (SdkHost.cpp:1445-1446).
+  // ConnectCanvas lays a torn side out on the points' own extent, so (b) is
+  // survivable there — but only this side of the wire can say what the SDK
+  // ACTUALLY reported, which is the reading that tells the two modes apart.
+  // Logged on CHANGE only, so a live session writes a line per grid move rather
+  // than one per throughput sample.
+  const size_t points = stats_.gridPoints.size();
+  if (points != gridLogPoints_ || stats_.gridWidth != gridLogWidth_ ||
+      stats_.gridHeight != gridLogHeight_) {
+    gridLogPoints_ = points;
+    gridLogWidth_ = stats_.gridWidth;
+    gridLogHeight_ = stats_.gridHeight;
+    g_message("grid: sdk reported %zu points, side %" G_GINT64_FORMAT "x%" G_GINT64_FORMAT
+              ", window=%" G_GINT64_FORMAT " (hero=%d)%s",
+              points, stats_.gridWidth, stats_.gridHeight, stats_.providerCount,
+              static_cast<int>(canvas_->state()),
+              (points > 0 && stats_.gridWidth <= 0 && stats_.gridHeight <= 0)
+                  ? " — POINTS WITH NO SIDE (torn read)"
+                  : "");
   }
   // Fed unconditionally, empty list included — an empty grid is a NORMAL
   // reading (no session, rpc-only session, a connection carrying no traffic
@@ -1263,14 +1336,25 @@ void ConnectPage::PushGrid() {
 void ConnectPage::OnConnectToggle() {
   // The reading the user is looking at decides what the press MEANS — the
   // button's own label, not a second derivation of it.
-  if (reading_.action == health::Action::Disconnect) {
+  const bool wantDisconnect = reading_.action == health::Action::Disconnect;
+  if (wantDisconnect) {
     disconnectRequested_ = true;
     disconnectRequestedAtUs_ = g_get_monotonic_time();
   } else {
     disconnectRequested_ = false;
   }
   ApplyConnectStatus();  // in this frame, before the SDK has said anything
-  if (on_toggle_connect) on_toggle_connect();
+  // THE PRESS CARRIES ITS OWN ANSWER. `on_connect_action` hands the callee the
+  // decision that wrote the label the user pressed; `on_toggle_connect` is the
+  // legacy void hook, and a callee on that hook has to re-derive the action from
+  // its own state — a second answer to a question this page has already
+  // answered, and the reason a button reading "Disconnect" can start a tunnel.
+  // Preferred whenever it is assigned; never both.
+  if (on_connect_action) {
+    on_connect_action(wantDisconnect);
+  } else if (on_toggle_connect) {
+    on_toggle_connect();
+  }
   // TODO(parity §2.4 step 4): the CONNECT half of the optimistic write
   // (`connectStatus_ = Connecting; health_ = Connecting`) is deliberately not
   // taken here. Written without §2.4's 8 s watchdog it is a trap: a press that
@@ -1284,8 +1368,9 @@ void ConnectPage::OnConnectToggle() {
 // ---- the hero preview walk (connect-canvas.md §15) -----------------------------
 //
 // "Dev/preview harness (port it — it is how the motion gets verified)."
-// URNETWORK_PREVIEW_HERO suppresses the real status and grid writes and drives
-// the reading from the table below instead.
+// URNETWORK_PREVIEW_UI + URNETWORK_PREVIEW_HERO (BOTH — see
+// PreviewOwnsTheReading) suppress the real status and grid writes and drive the
+// reading from the table below instead.
 //
 // DELIBERATE DEVIATION from §15, which walks the five CANVAS states: this walks
 // the ELEVEN rows of the health state table, because the health reading is what
@@ -1337,9 +1422,52 @@ constexpr PreviewStep kPreviewSteps[] = {
 
 }  // namespace
 
+// THE PREVIEW MAY NEVER PAINT OVER A REAL SESSION. Two gates, in two different
+// places, because one is not enough for a surface that can fabricate a green
+// "Connected" hero with invented provider dots:
+//
+//   1. SetupPreviewHero requires BOTH env vars. Every other preview path in
+//      this tree is gated on --preview-ui / URNETWORK_PREVIEW_UI
+//      (MainWindow.cpp:225; EarningsPage's sample is "URNETWORK_PREVIEW_SAMPLE
+//      on top of --preview-ui", EarningsPage.cpp:2379). This one was gated on
+//      URNETWORK_PREVIEW_HERO ALONE, so one stray env var in a real user's
+//      environment produced exactly the failure this project already shipped
+//      once: a hero that looks connected while nothing is carried.
+//
+//   2. This predicate, checked on EVERY render. The env gate is taken once at
+//      construction and cannot know what happens afterwards; a build launched
+//      under --preview-ui by a signed-in user still adopts the daemon's
+//      session at startup (MainWindow.cpp:214-216 StartTunnelUi). The instant
+//      there is any real evidence — a carried tunnel, a bound device, routes,
+//      or a floor in force — the preview yields and the page renders the truth.
+//
+// So the preview can only ever paint a machine on which nothing is happening.
+bool ConnectPage::PreviewOwnsTheReading() const {
+  if (!previewHero_) return false;
+  // our own evidence first: SdkHost::Connected() AND LiveStats.connected
+  if (connected_ || stats_.connected) return false;
+  if (host_.hasDevice()) return false;
+  const KillSwitchStatus ks = host_.CurrentKillSwitchStatus();
+  if (ks.installed_known && (ks.in_force || ks.tunnel_state == ctl::TunnelState::Up ||
+                             ks.tunnel_state == ctl::TunnelState::Stopping ||
+                             ks.tunnel_state == ctl::TunnelState::Starting)) {
+    return false;
+  }
+  return true;
+}
+
 void ConnectPage::SetupPreviewHero() {
   const char* want = g_getenv("URNETWORK_PREVIEW_HERO");
   if (!want || !*want) return;
+  // Gate 1 (see PreviewOwnsTheReading): the SAME gate every other preview path
+  // in this tree requires. URNETWORK_PREVIEW_HERO on its own does nothing.
+  const char* previewUi = g_getenv("URNETWORK_PREVIEW_UI");
+  if (!previewUi || !*previewUi) {
+    g_warning("preview-hero: URNETWORK_PREVIEW_HERO ignored — it also requires "
+              "URNETWORK_PREVIEW_UI. A preview that can fabricate a connected hero must "
+              "never be one env var away from a real session.");
+    return;
+  }
   previewHero_ = true;
   previewWalk_ = true;
   const std::string tag = LowerCopy(want);
@@ -2775,7 +2903,7 @@ void ConnectPage::Tick() {
   if (!presenting_ || !pageVisible_) return;
   canvas_->Tick();
   ++tickCount_;
-  if (previewHero_) {
+  if (PreviewOwnsTheReading()) {
     PreviewTick();
     return;  // the preview owns the page's feeds while it runs
   }

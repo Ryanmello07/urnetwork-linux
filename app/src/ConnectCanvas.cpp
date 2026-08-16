@@ -126,6 +126,7 @@ void ConnectCanvas::measure_vfunc(Gtk::Orientation orientation, int for_size, in
 
 void ConnectCanvas::SetState(State state) {
   if (state_ == state) return;
+  freezeDropLogged_ = false;  // a new state gets one line if it drops pushes
   const bool leavingLive = (state_ == State::Connecting || state_ == State::Connected);
   const bool enteringLive = (state == State::Connecting || state == State::Connected);
   if (leavingLive && !enteringLive) ClearPoints();
@@ -182,9 +183,56 @@ void ConnectCanvas::SetState(State state) {
 void ConnectCanvas::SetGrid(const std::vector<urnet::ProviderGridPoint>& points,
                             int64_t gridWidth, int64_t gridHeight) {
   // iOS freezes the grid the instant the connection lands
-  if (state_ != State::Connecting) return;
-  gridWidth_ = gridWidth;
-  gridHeight_ = gridHeight;
+  if (state_ != State::Connecting) {
+    // A push the freeze dropped is otherwise indistinguishable from a push that
+    // drew nothing — the whole reason the missing-dots defect was ambiguous.
+    // Once per frozen spell, not once per push: this is the ~10 fps feed path
+    // and the freeze drops EVERY push for as long as it holds.
+    if (!freezeDropLogged_) {
+      freezeDropLogged_ = true;
+      g_debug("canvas: grid pushes now dropped by the freeze (state=%d, first drop carried "
+              "%zu points)",
+              static_cast<int>(state_), points.size());
+    }
+    return;
+  }
+
+  // ---- the grid side is a HIGH-WATER MARK, and it is widened by the points --
+  //
+  // Established against the SDK itself (sdk/connect_view_controller.go), not
+  // assumed:
+  //   * ConnectGrid::GetWidth() and GetHeight() both return the SAME field,
+  //     `sideLength` — the SDK's grid is always square, so max() below is a
+  //     no-op on real data and pure belt-and-braces.
+  //   * `sideLength` is 0 until the first provider is placed and >= 16
+  //     (settings.MinSideLength) forever after: resize() takes
+  //     max(MinSideLength, sideLength, ceil(sqrt(...))), so IT NEVER CONTRACTS.
+  //   * a point is only ever placed after resize(), and the placement helper
+  //     refuses to place anything while sideLength == 0. So in a CONSISTENT
+  //     snapshot "points non-empty" implies "side >= 16", and every point
+  //     satisfies 0 <= X,Y < side.
+  //   * but getWidth(), getHeight() and getProviderGridPointList() each take
+  //     and release ConnectGrid's state lock SEPARATELY, and SdkHost::ReadStats
+  //     calls them as three separate calls. So the snapshot the page pushes
+  //     here CAN TEAR: a side read before the first resize beside a point list
+  //     read after it (side 0 with live points), or a side read at 16 beside a
+  //     list read after a grow to 25 (points at cells the reported side cannot
+  //     hold).
+  //
+  // Honouring such a push literally is what makes real dots invisible: cells
+  // are laid out on side/cols, so a torn 0 draws nothing at all and a torn
+  // stale side both oversizes the dots and throws every point past the old side
+  // outside the globe clip. Neither is a reading of the network — both are
+  // artefacts of reading one grid through three locks.
+  //
+  // So: take the largest side the SDK has reported this session (its own
+  // no-contract rule, mirrored), and widen it to whatever the points it
+  // actually sent require. Both inputs are real SDK data. No point is created,
+  // no provider state is invented, and a side that was never reported at all is
+  // NOT fabricated — that case still renders the honest bare lattice below.
+  //
+  // The side is resolved AFTER the diff, once it is known whether any dot
+  // survived this push — see the assignment further down.
 
   // The reduce-motion / not-presenting rule (§5's fade-helper semantics) as it
   // applies to the dot layer. A dot is born at scale 0 and grown in by Tick()
@@ -263,6 +311,66 @@ void ConnectCanvas::SetGrid(const std::vector<urnet::ProviderGridPoint>& points,
     }
     ++it;
   }
+
+  // The side, resolved now that the diff has run (see the note above SetGrid's
+  // point walk for why it is a high-water mark at all).
+  //
+  // An EMPTY live set is the seam between two grids: the SDK builds a fresh
+  // ConnectGrid, side back to 0, for every new connection, and the high-water
+  // belongs to the grid that reported it. ClearPoints covers the ordinary case
+  // (the canvas left the live states), but a reconnect fast enough that the
+  // hero never left Connecting would otherwise lay the new session's dots out
+  // on the old session's side. With nothing held there is nothing to protect,
+  // so the reported side is adopted outright.
+  if (dots_.empty()) {
+    gridWidth_ = std::max<int64_t>(gridWidth, 0);
+    gridHeight_ = std::max<int64_t>(gridHeight, 0);
+  } else {
+    gridWidth_ = std::max(gridWidth_, gridWidth);
+    gridHeight_ = std::max(gridHeight_, gridHeight);
+  }
+
+  // The layout floor the REAL points require. Recomputed from the live dots on
+  // every push so it tracks the grid as points come and go, and bounded by the
+  // same malformed-push cap that guards dot creation — one absurd coordinate
+  // must not shrink every genuine dot to a sub-pixel. A negative coordinate
+  // (the SDK never emits one) contributes nothing and is left to the clip.
+  pointExtent_ = 0;
+  for (const auto& [key, dot] : dots_) {
+    const int64_t need = static_cast<int64_t>(std::max(dot.x, dot.y)) + 1;
+    if (need > pointExtent_ && need <= static_cast<int64_t>(kMaxPoints)) pointExtent_ = need;
+  }
+
+  // The one state the canvas genuinely cannot draw: points to show and no side
+  // ever reported to lay them out on. It renders the honest bare lattice (dots
+  // held, none drawn) rather than inventing a scale — but it says so, once per
+  // session, so it is never again mistaken for "the SDK sent no providers".
+  // Reachable only as the first push of a session, and only torn: the
+  // high-water side above carries every later push.
+  if (!dots_.empty() && LayoutCols() <= 0) {
+    if (!noLayoutWarned_) {
+      noLayoutWarned_ = true;
+      g_warning(
+          "canvas: %zu provider points but no grid side was ever reported "
+          "(width=%" G_GINT64_FORMAT " height=%" G_GINT64_FORMAT
+          ") — drawing the bare lattice; dots are held, not lost",
+          dots_.size(), gridWidth, gridHeight);
+    }
+  } else {
+    noLayoutWarned_ = false;
+  }
+  // The routine readout, on CHANGE only. The shape (how many dots are held, on
+  // what divisor) is what tells a bare lattice apart from a lost feed, and it
+  // changes rarely; the states behind it churn every push, and this is the
+  // ~10 fps feed path.
+  if (dots_.size() != loggedHeld_ || LayoutCols() != loggedCols_) {
+    loggedHeld_ = dots_.size();
+    loggedCols_ = LayoutCols();
+    g_debug("canvas: grid points=%zu held=%zu reported=%" G_GINT64_FORMAT "x%" G_GINT64_FORMAT
+            " extent=%" G_GINT64_FORMAT " cols=%" G_GINT64_FORMAT,
+            points.size(), dots_.size(), gridWidth, gridHeight, pointExtent_, LayoutCols());
+  }
+
   if (!animate) {
     // the whole layer is already at its pose (and any transition left over
     // from a presenting spell earlier is not going to be advanced either)
@@ -314,9 +422,34 @@ void ConnectCanvas::Tick() {
   queue_draw();
 }
 
+// The cell divisor, in one place so the draw and the grid_cols() readout can
+// never disagree. cols is max(width, height) — the SDK reports one square side
+// through both getters, and windows:Layout() takes the larger so a non-square
+// grid would still land inside the globe — then widened to hold the points the
+// SDK actually placed (SetGrid's high-water note). 0 only when no side has ever
+// been reported this session, which is the honest "nothing to lay out" state.
+int64_t ConnectCanvas::LayoutCols() const {
+  const int64_t reported = std::max<int64_t>(std::max(gridWidth_, gridHeight_), 0);
+  if (reported <= 0) return 0;  // never fabricate a scale out of nothing
+  return std::max(reported, pointExtent_);
+}
+
+int64_t ConnectCanvas::grid_cols() const { return LayoutCols(); }
+
 void ConnectCanvas::ClearPoints() {
   dots_.clear();
   dotsAnimating_ = false;
+  drawnCount_ = 0;
+  // The layout belongs to the session that reported it. The SDK builds a fresh
+  // ConnectGrid per connection (side back to 0), so carrying a high-water side
+  // across a disconnect would lay the next session's dots out on the previous
+  // one's grid — and unlike the old per-push assignment, a high-water mark
+  // would never correct itself downward.
+  gridWidth_ = gridHeight_ = 0;
+  pointExtent_ = 0;
+  noLayoutWarned_ = false;
+  loggedHeld_ = static_cast<size_t>(-1);
+  loggedCols_ = -1;
 }
 
 // Every dot at its settled pose, nothing left to animate. Used wherever a dot
@@ -565,6 +698,10 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
 
   const Rgb base = Lift(kGround, hovered_ ? 0x14 : 0x0C);
   const Rgb restingBase = Lift(kGround, 0x0C);  // coreGap keeps the resting base
+  // Per FRAME, not per grid layer: a state whose grid layer is faded out has
+  // painted no dots, and the readout must say so rather than keep the count
+  // from the last frame that did.
+  drawnCount_ = 0;
 
   // keyboard focus ring: OUTSIDE the clip, the silhouette at side+8
   if (focusRing_) {
@@ -612,19 +749,18 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
     cr->restore();
     cr->set_line_width(2 * s);
     cr->stroke();
-    // 2d the live provider dots.
-    // cols is max(gridWidth, gridHeight), not gridWidth: iOS scales by the
-    // width alone, and windows:Layout() takes the larger so a non-square grid
-    // still lands entirely inside the globe instead of running off the bottom.
-    // cell IS the dot diameter, so neighbouring dots touch; nothing is culled
-    // at the rim, the globe clip does that.
-    // TODO(parity): a push with gridWidth == gridHeight == 0 but a non-empty
-    // point list draws nothing (cell would be 0) — windows behaves the same
-    // way, so this matches, but if the linux SDK ever reports 0/0 with live
-    // points the dots vanish silently. point_count()/grid_cols() exist so the
-    // page can tell that apart from "no grid was ever pushed"; wire a dev-page
-    // readout to them before guessing at a fallback divisor here.
-    const int64_t cols = std::max<int64_t>(std::max(gridWidth_, gridHeight_), 0);
+    // 2d the live provider dots, on the ONE divisor LayoutCols() resolves (see
+    // it, and SetGrid's high-water note, for why the pushed side is not used
+    // raw). cell IS the dot diameter, so neighbouring dots touch; nothing is
+    // culled at the rim, the globe clip does that.
+    //
+    // cols == 0 means no grid side has ever been reported this session, so
+    // there is no honest scale to draw on: the layer renders as the bare
+    // lattice — wash, equator and meridian above, zero dots — which is also the
+    // NORMAL reading for a session with no providers plotted yet. SetGrid warns
+    // when that state holds points, so the two are distinguishable off-screen.
+    // The canvas does not manufacture a divisor to make dots appear.
+    const int64_t cols = LayoutCols();
     if (cols > 0 && !dots_.empty()) {
       const double cell = side / static_cast<double>(cols);
       for (const auto& [key, dot] : dots_) {
@@ -640,6 +776,7 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
         cr->arc(ox + dot.x * cell + cell / 2.0, oy + dot.y * cell + cell / 2.0,
                 (cell / 2.0) * scale, 0, 2 * G_PI);
         cr->fill();
+        ++drawnCount_;
       }
     }
     cr->pop_group_to_source();

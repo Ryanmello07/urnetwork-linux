@@ -78,15 +78,21 @@ class ConnectPage : public Gtk::Box {
   // that wrote the button's label (health::ActionIsDisconnect — the shared
   // predicate the tray item uses too).
   //
-  // TODO(wiring): MainWindow::ToggleConnect still decides with its own
-  // `connected_` ("if (connected_) host_.Disconnect(); else …connect"), which is
-  // a SECOND answer to the question this button already answers. They disagree
-  // in exactly the states this page exists to render: while Connecting, and
-  // while the machine is captured with the SDK idle, the button says Disconnect
-  // and the press starts a connect. The fix is one line there —
-  // `if (connectPage_ && connectPage_->ConnectActionIsDisconnect())
-  // host_.Disconnect();` — and it cannot be made here: this page does not own
-  // the SDK calls.
+  // TODO(wiring): MainWindow::ToggleConnect (MainWindow.cpp:1655-1671) still
+  // decides with its own `connected_` ("if (connected_) host_.Disconnect(); else
+  // …connect"), which is a SECOND answer to the question this button already
+  // answers. They disagree in exactly the states this page exists to render:
+  // while Connecting, and while the machine is captured with the SDK idle, the
+  // button says Disconnect and the press starts a tunnel. The fix is in
+  // MainWindow and cannot be made here — this page does not own the SDK calls —
+  // and it is now a one-line wiring either way:
+  //     connectPage_->on_connect_action = [this](bool wantDisconnect) {
+  //       if (wantDisconnect) { host_.Disconnect(); return; }
+  //       if (StartTunnelUi() != TunnelStartResult::Started) return;
+  //       host_.ConnectBestAvailable();
+  //     };
+  // (or, keeping the existing void hook, guard ToggleConnect's branch with
+  // `connectPage_ && connectPage_->ConnectActionIsDisconnect()`).
   bool ConnectActionIsDisconnect() const {
     return reading_.action == health::Action::Disconnect;
   }
@@ -109,7 +115,21 @@ class ConnectPage : public Gtk::Box {
   void SetPresentationActive(bool active);
   void Tick();  // the shared ~10fps clock: canvas dot transitions
 
-  // the connect toggle, shared by the hero, the button and the tray
+  // The connect toggle, shared by the hero, the button and the tray.
+  //
+  // PREFER on_connect_action. It carries the decision that wrote the label the
+  // user actually pressed, so the press cannot mean one thing on this page and
+  // another in the callee. `on_toggle_connect` carries nothing, which forces the
+  // callee to re-derive the action from its own state — and that is how a button
+  // reading "Disconnect" comes to start a tunnel (MainWindow::ToggleConnect
+  // still branches on its own `connected_`, so a press during the connecting
+  // phase or during teardown, when this page's reading says Disconnect and
+  // `connected_` is false, runs StartTunnelUi() + ConnectBestAvailable()).
+  //
+  // `wantDisconnect` is `reading_.action == Disconnect` — the same value
+  // ConnectActionIsDisconnect() returns, taken at the instant of the press.
+  // When both are assigned only this one is called.
+  std::function<void(bool wantDisconnect)> on_connect_action;
   std::function<void()> on_toggle_connect;
   // the selected-provider row opens the chooser (owned by MainWindow)
   std::function<void()> on_open_locations;
@@ -158,9 +178,15 @@ class ConnectPage : public Gtk::Box {
   // edge and while a Disconnect press is in flight: nothing pushes them, and
   // the captured-machine reading is only honest against a fresh status.
   void RefreshServiceFacts();
-  // the dev-only hero preview (connect-canvas.md §15); no-ops unless
-  // URNETWORK_PREVIEW_HERO is set
+  // the dev-only hero preview (connect-canvas.md §15); no-ops unless BOTH
+  // URNETWORK_PREVIEW_UI and URNETWORK_PREVIEW_HERO are set
   void SetupPreviewHero();
+  // Whether the preview — and not the SDK — is driving this page right now.
+  // The env gate alone is not enough: it is taken once at construction, and a
+  // preview that can fabricate a Connected hero with green provider dots must
+  // never be able to paint over a session that is really carrying. Re-checked
+  // on EVERY render; see the comment on the definition.
+  bool PreviewOwnsTheReading() const;
   void ApplyPreviewStep(size_t index);
   void PreviewTick();
   void ApplyMoreOptionsVisibility();
@@ -284,21 +310,42 @@ class ConnectPage : public Gtk::Box {
   // The Disconnect press, held locally until the session settles. An explicit
   // intent outranks the SDK's stale CONNECTING/DESTINATION_SET status — that
   // stale status beside a Disconnect press is the contradiction the owner
-  // screenshotted. Bounded, never a latch: kDisconnectIntentUs after the press
-  // the reading goes back to whatever the feeds say, so a press that the daemon
-  // never acted on cannot leave the page stuck on "Disconnecting…".
+  // screenshotted.
+  //
+  // BOUNDED AT BOTH ENDS, and never a latch:
+  //   * it is dropped the instant the pressed-on session is gone as a matter of
+  //     FACT (nothing carrying, no routes, no floor — health::MachineIsCaptured
+  //     is false), so it can never go on to narrate a session that started
+  //     after it;
+  //   * kDisconnectIntentUs after the press the feeds win again regardless, so a
+  //     press the daemon never acted on cannot strand the page on
+  //     "Disconnecting…";
+  //   * and while it stands, health::IntentHolds stops it claiming Disconnected
+  //     over a session that is coming up.
   bool disconnectRequested_ = false;
   gint64 disconnectRequestedAtUs_ = 0;
   // When the "tunnel up, nothing carrying" reading began. The grace that stops
   // a single grid push from taking a working connection off Connected; 0 = the
   // reading is not standing.
   gint64 noProviderSinceUs_ = 0;
+  // The last grid shape PushGrid logged. "No dots on the hero" had two
+  // indistinguishable causes — no points, or points with a 0x0 grid — and
+  // nothing in this tree ever logged either. ~0 = nothing logged yet, so the
+  // first push always writes a line.
+  size_t gridLogPoints_ = ~size_t{0};
+  int64_t gridLogWidth_ = -1;
+  int64_t gridLogHeight_ = -1;
 
   // ---- the hero preview walk (connect-canvas.md §15) --------------------------
-  // URNETWORK_PREVIEW_HERO=<state|walk>: the real status/grid writes are
-  // SUPPRESSED and the reading is driven from here instead, so every row of the
-  // state table can be rendered and screenshotted without a session, a daemon
-  // or a tunnel. Env-gated once at construction; off in every real session.
+  // URNETWORK_PREVIEW_UI=<tag> AND URNETWORK_PREVIEW_HERO=<state|walk>: the
+  // real status/grid writes are SUPPRESSED and the reading is driven from here
+  // instead, so every row of the state table can be rendered and screenshotted
+  // without a session, a daemon or a tunnel.
+  //
+  // BOTH env vars, and then PreviewOwnsTheReading() on every render. This flag
+  // alone is NOT the gate: it says the preview was ASKED for, not that it may
+  // paint. A preview that can fabricate a Connected hero with green provider
+  // dots must be impossible to get in front of a session that is carrying.
   bool previewHero_ = false;
   bool previewWalk_ = false;
   size_t previewStep_ = 0;

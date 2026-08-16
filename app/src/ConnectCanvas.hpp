@@ -49,12 +49,19 @@ class ConnectCanvas : public Gtk::Widget {
   // point, so the shipped canvas has exactly one source of dots.
   //
   // What the colours MEAN (ProviderGridPoint::State → the dot's fill; the
-  // whole legend, in SDK terms — see the table in the .cpp for the hex):
+  // whole legend, in SDK terms — see the table in the .cpp for the hex).
+  // Checked against the provider state machine itself, not just the parity
+  // doc: connect/ip_remote_multi_client_monitor.go declares the five states
+  // with IsTerminal()/IsActive(), and the SDK counts the provider window as
+  // exactly the IsActive() points — which are exactly the Added ones. So green
+  // means carrying, and nothing else does.
   //   "InEvaluation"     pale yellow  — offered, the SDK has not ruled on it
-  //   "EvaluationFailed" coral        — evaluated and rejected
-  //   "NotAdded"         coral        — not in the window, not carrying traffic
-  //   "Added"            green        — in the provider window, carrying traffic
-  //   "Removed"          transparent  — iOS's own extra case: it left the grid
+  //   "EvaluationFailed" coral        — evaluated and rejected (terminal)
+  //   "NotAdded"         coral        — not in the window, not carrying (terminal)
+  //   "Added"            green        — in the provider window, carrying traffic;
+  //                                     the only state the SDK calls Active, and
+  //                                     the only one it counts into the window
+  //   "Removed"          transparent  — was Added, then left the window (terminal)
   //   anything else      pale yellow  — never render an unaccepted provider as
   //                                     one the SDK has accepted
   //
@@ -65,17 +72,32 @@ class ConnectCanvas : public Gtk::Widget {
   // SetPresentationActive from ONE boolean; do not split them). Off that
   // condition a pushed grid is drawn settled on the very next frame instead
   // of sitting at scale 0 forever.
+  //
+  // THE DIMENSIONS ARE A HIGH-WATER MARK, not a per-push value — see the long
+  // note over the definition. In one sentence: the SDK's grid side never
+  // contracts, but SdkHost reads the side and the point list through separate
+  // locks, so a snapshot can carry a stale/zero side beside fresh points, and
+  // honouring such a push literally would hide dots the SDK really reported.
   void SetGrid(const std::vector<urnet::ProviderGridPoint>& points, int64_t gridWidth,
                int64_t gridHeight);
 
   // Diagnostics for the page (a dot layer that renders nothing looks exactly
-  // like a grid that was never pushed — these two tell those apart from
-  // outside, without the canvas ever inventing a point to prove it is alive).
-  // point_count() is live dots held; grid_cols() is the divisor the cells are
-  // laid out on, max(gridWidth, gridHeight) — 0 means "no layout, nothing can
-  // be drawn no matter how many points are held".
+  // like a grid that was never pushed — these tell those apart from outside,
+  // without the canvas ever inventing a point to prove it is alive).
+  //   point_count() live dots held.
+  //   grid_cols()   the divisor the cells are actually laid out on — THE ONE
+  //                 the draw uses, so the readout cannot disagree with the
+  //                 pixels. 0 means "no layout: nothing can be drawn no matter
+  //                 how many points are held".
+  //   drawn_count() dots the layer issued on the last frame (the globe clip may
+  //                 still trim one that sits past the rim). held > 0 &&
+  //                 drawn == 0 IS the "held but invisible" state, readable from
+  //                 outside without guessing: with cols == 0 there is no layout
+  //                 to draw on, and with cols > 0 the dots are still growing in
+  //                 and the tick clock has not reached them yet.
   size_t point_count() const { return dots_.size(); }
-  int64_t grid_cols() const { return std::max<int64_t>(std::max(gridWidth_, gridHeight_), 0); }
+  int64_t grid_cols() const;
+  size_t drawn_count() const { return drawnCount_; }
   void SetHovered(bool hovered);
   void SetFocusRingVisible(bool visible);
   void SetPresentationActive(bool active);
@@ -113,6 +135,10 @@ class ConnectCanvas : public Gtk::Widget {
   void ShuffleBlobs();
   void ClearPoints();
   static PointState ParsePointState(const std::string& value);
+  // The cell divisor the dot layer lays out on: the session's high-water grid
+  // side, widened to cover any point the SDK actually placed beyond it. 0 only
+  // when no side has ever been reported this session.
+  int64_t LayoutCols() const;
   // Every dot at its settled pose with nothing left to animate (Removed dots
   // are dropped — their whole transition WAS the fade-out). The dot layer's
   // half of the reduce-motion rule, and the "frozen" half of Connected.
@@ -160,8 +186,22 @@ class ConnectCanvas : public Gtk::Widget {
 
   // the provider grid
   std::map<std::string, Dot> dots_;
+  // The grid side as the SDK has reported it SO FAR THIS SESSION (high-water:
+  // the SDK's own side never contracts), reset with the points.
   int64_t gridWidth_ = 0, gridHeight_ = 0;
+  // The largest cell index the SDK has actually placed a point on, +1. A point
+  // at X proves the side is at least X+1, so this widens a stale reported side
+  // to one that can hold the real points. Derived only from pushed points;
+  // never a stand-in for a side that was never reported.
+  int64_t pointExtent_ = 0;
   bool dotsAnimating_ = false;
+  size_t drawnCount_ = 0;  // dots issued on the last frame (diagnostic)
+  // Diagnostics are latched, never per-push: SetGrid is the ~10 fps feed path
+  // and the conditions worth reporting persist across whole spells of it.
+  bool noLayoutWarned_ = false;   // one warning per session
+  bool freezeDropLogged_ = false;  // one line per frozen spell
+  size_t loggedHeld_ = static_cast<size_t>(-1);  // last reported shape
+  int64_t loggedCols_ = -1;
 };
 
 }  // namespace urnw

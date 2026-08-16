@@ -5,9 +5,10 @@
 // so the whole destination is one row species per list.
 //
 //   Pane A "General" — what the app DOES: the General group (product updates,
-//     automatic update checks) then the Connections group (kill switch + its
-//     two honesty disclosures, blocked locations, app split rules, the VPN
-//     service row).
+//     automatic update checks), the Connections group (kill switch + its two
+//     honesty disclosures, blocked locations, app split rules, the VPN
+//     service row), then the Service updates group (where the service is
+//     downloaded FROM: channel, pinned release, the two version readouts).
 //   Pane B "Device" — what this machine IS: the Device group (name, spec),
 //     Post Quantum Identity, then Advanced (the advanced-mode toggle and
 //     Save logs).
@@ -45,6 +46,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <gtkmm.h>
 
@@ -61,6 +63,59 @@ class ProviderIdentitiesSheet;
 // Built for this destination, file-local to SettingsPage.cpp (spec §6.1/§6.2).
 class SettingsDeviceNameSheet;
 class SettingsBlockedLocationsSheet;
+// The release picker behind the "Release" row (this file's own addition).
+class SettingsReleaseTagSheet;
+
+// ---- where the VPN SERVICE comes from ---------------------------------------
+// The Flatpak and the AppImage ship the INTERFACE ONLY: urnetworkd is not in
+// either bundle, it is downloaded from GitHub Releases and installed with one
+// polkit prompt. "Which releases" is therefore a user-visible choice, not a
+// build constant — and GitHub Releases is the source of truth for "is the
+// service up to date".
+enum class ServiceChannel {
+  Beta,          // this fork's prereleases (beta/custom-server) — the default
+  UpstreamMain,  // the upstream project's main — NO BUILDS PUBLISHED YET, so
+                 // the row renders visibly DISABLED with that reason on it,
+                 // never hidden and never silently inert
+};
+
+// What Settings SHOWS about the service. Pushed in by the shell from
+// ServiceSetup + the release check; this page never polls GitHub, never
+// downloads, never elevates. Until something is pushed (`valid == false`) the
+// installed row falls back to the daemon_version the control session's hello
+// already carries, which is real evidence and free.
+struct ServiceReleaseView {
+  // TWO INDEPENDENT PIECES OF EVIDENCE, deliberately not one "valid" flag.
+  //
+  // `classified` says the classifier RAN and `installed`/`installedVersion`
+  // below are its answer — which is the only thing that can distinguish
+  // "registered but stopped" from "not installed at all". It is windows
+  // ServiceSetup::State::Unknown inverted: leave it false and the page falls
+  // back to the daemon_version the control hello carried, and says "Not
+  // detected" rather than claiming an absence it cannot see.
+  //
+  // The check fields below stand on their own and are rendered whatever
+  // `classified` says: a release check can succeed on a machine whose service
+  // state is unknown, and vice versa.
+  bool classified = false;
+
+  // ServiceSetup::Classify's answer, flattened to what the rows render.
+  bool installed = false;         // a urnetworkd is registered in any form
+  std::string installedVersion;   // "" = registered but the version is unread
+
+  // The release check against the CURRENT channel/tag.
+  bool checking = false;          // a check is in flight
+  bool checkFailed = false;       // the last check could not reach GitHub
+  std::string availableVersion;   // "" = unknown (never checked / failed)
+  std::string availableTag;       // the tag that version came from, as minted
+
+  // Newest-first tags the last check parsed. Feeds the pin picker so a user
+  // does not have to type a tag from memory; empty is fine (the picker then
+  // takes free text and validates it).
+  std::vector<std::string> knownTags;
+
+  bool busy = false;  // an elevated verb is in flight: every action disabled
+};
 
 // §2.1 — the six terminal states of every async field on this destination and
 // its sheets. NoDevice is NOT a nicety: "signed in but the service is not up"
@@ -112,10 +167,63 @@ class SettingsPage : public Gtk::Box {
   // persistent treatment (Warning/Error stay until dismissed).
   std::function<void(const Glib::ustring& message, bool error)> on_snackbar;
 
+  // ---- the release-source choice (owner ask) --------------------------------
+  // Hand the page everything it renders about the service. Call it whenever
+  // ServiceSetup republishes (classify, check started/finished, elevated verb
+  // started/ended); it is idempotent and cheap, and it REPLACES the previous
+  // view rather than merging into it — send a whole snapshot every time.
+  // Marshal to the GTK loop first: this page never leaves the main thread.
+  void ApplyServiceRelease(ServiceReleaseView view);
+
+  // The user changed the channel or the pinned tag. The shell hands this to
+  // ServiceSetup/the release checker so the NEXT check and the NEXT install
+  // follow the new source. `tag` is "" for "follow the newest release on this
+  // channel"; when non-empty it has already been shape-validated here, but
+  // ServiceSetup must re-validate before it ever reaches a URL.
+  std::function<void(ServiceChannel channel, const std::string& tag)>
+      on_service_source_changed;
+  // "Check" — re-run the GitHub release check against the current source.
+  // Unprivileged: a plain HTTPS GET of the releases JSON.
+  std::function<void()> on_service_check_now;
+  // "Install" / "Update" — the whole download-verify-elevate flow, which lives
+  // in ServiceSetup and NOT here. Unbound leaves the button disabled rather
+  // than clickable-and-inert.
+  std::function<void()> on_service_install;
+
+  // ---- the standing choice, readable with no view ---------------------------
+  // ServiceSetup reads these to know WHAT to fetch. They are plain
+  // app_prefs.json reads (AppPrefs.hpp), valid before any window exists — the
+  // same standing-value contract advanced_mode follows.
+  //
+  // The two keys, documented here because AppPrefs.hpp's known-key list is not
+  // this file's to edit:
+  //   "service_release_channel"  string  "beta" | "upstream"   default "beta"
+  //   "service_release_tag"      string  ""=newest, else the tag AS MINTED
+  //                                      (with the leading v, e.g.
+  //                                      "v2026.8.15-101076420-beta")
+  static constexpr const char* kChannelPrefKey = "service_release_channel";
+  static constexpr const char* kTagPrefKey = "service_release_tag";
+
+  // The stored channel, exactly as persisted — it may name a channel that has
+  // no builds (only a hand-edited prefs file can get there today, because the
+  // row for it is disabled). The page renders that truthfully rather than
+  // silently substituting; a caller that is about to FETCH must check
+  // ChannelHasBuilds() first and report "unavailable" instead of querying.
+  static ServiceChannel StoredChannel();
+  static bool ChannelHasBuilds(ServiceChannel channel);
+  // "owner/repo" for the GitHub releases API. One constant per channel — if
+  // this fork's repo is renamed, that is the only edit (windows keeps its twin
+  // as config::kUpdateRepo in App/Config.h; lift both into Config.hpp when
+  // ServiceSetup lands and this returns from there instead).
+  static const char* ChannelRepo(ServiceChannel channel);
+  // The pinned tag, or "" for "follow the newest release on the channel".
+  static std::string PinnedTag();
+
  private:
   // ---- construction --------------------------------------------------------
   void BuildGeneralSection(Gtk::Box& host);
   void BuildConnectionsSection(Gtk::Box& host);
+  void BuildServiceUpdatesSection(Gtk::Box& host);
   void BuildDeviceSection(Gtk::Box& host);
   void BuildIdentitySection(Gtk::Box& host);
   void BuildAdvancedSection(Gtk::Box& host);
@@ -138,12 +246,25 @@ class SettingsPage : public Gtk::Box {
   void OnAdvancedModeToggled();
   void SaveLogsToFile();
   void ConfirmUninstallService();
+  // A channel radio became ACTIVE. Only the newly-active half of a radio pair
+  // calls this — reading "which one is on" from inside a toggled handler races
+  // the group's own deactivate/activate order and would write the pref twice.
+  void OnChannelSelected(ServiceChannel channel);
+  // ONE writer for every Service-updates row: it reads serviceView_ (what the
+  // shell pushed) and the two prefs, and renders. Never called from a row
+  // handler's own branch — the handler persists, then calls this.
+  void RenderServiceRelease();
+  // Persist-then-publish, the shape SetAdvancedMode uses: the pref is written
+  // first (it is the standing truth a late-built ServiceSetup will read), then
+  // the change is announced.
+  void PublishReleaseSource();
 
   // ---- sheets --------------------------------------------------------------
   Gtk::Window* RootWindow();  // the transient parent, resolved lazily
   void ShowDeviceNameSheet();
   void ShowAppSplitRulesSheet();
   void ShowIdentitySheet();
+  void ShowReleaseTagSheet();
 
   // ---- helpers -------------------------------------------------------------
   void Snack(const Glib::ustring& message, bool error);
@@ -184,6 +305,22 @@ class SettingsPage : public Gtk::Box {
   Gtk::Box* serviceRowHost_ = nullptr;
   Gtk::Button* serviceUninstall_ = nullptr;
 
+  // ---- Pane A: Service updates ---------------------------------------------
+  Gtk::Label* installedVersionValue_ = nullptr;
+  Gtk::Label* availableVersionValue_ = nullptr;
+  Gtk::Button* checkReleasesNow_ = nullptr;
+  Gtk::CheckButton* channelBeta_ = nullptr;
+  Gtk::CheckButton* channelUpstream_ = nullptr;
+  bool applyingChannel_ = false;  // echo guard: RenderServiceRelease writes them
+  // Shown ONLY when the stored channel has no builds (a hand-edited prefs
+  // file): the page says so instead of quietly querying a different repo.
+  Gtk::Widget* channelStrandedRow_ = nullptr;
+  Gtk::Label* channelStranded_ = nullptr;
+  kit::PaneTwoLineRowButton releaseRow_;  // value = "Latest" or the pinned tag
+  Gtk::Label* installNote_ = nullptr;     // "up to date" vs the standing note
+  Gtk::Button* serviceInstall_ = nullptr;
+  ServiceReleaseView serviceView_;  // the last thing the shell pushed
+
   // ---- Pane B: Device ------------------------------------------------------
   kit::PaneTwoLineRowButton deviceNameRow_;
   Gtk::Label* deviceSpecValue_ = nullptr;
@@ -199,6 +336,7 @@ class SettingsPage : public Gtk::Box {
   std::unique_ptr<SettingsBlockedLocationsSheet> blockedSheet_;
   std::unique_ptr<SplitRulesSheet> splitRulesSheet_;
   std::unique_ptr<ProviderIdentitiesSheet> identitiesSheet_;
+  std::unique_ptr<SettingsReleaseTagSheet> releaseTagSheet_;
   std::unique_ptr<Gtk::Window> confirmDialog_;  // the uninstall confirmation
 };
 

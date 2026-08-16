@@ -36,11 +36,17 @@
 //                        |   "Connecting to providers"                   |            |              |
 //  Failed                | conn_failed / "Couldn't connect"             | Coral      | Error        | Retry
 //  NoService/Disconnected| conn_disconnecting / "Disconnecting — your    | Connecting | Connecting   | Disconnect
-//    routes still installed |  traffic is still going through the tunnel"|            |              |
+//    TrafficStillInTunnel|  traffic is still going through the tunnel"   |            |              |
 //  NoService/Disconnected| conn_blocked_kill_switch /                    | Coral      | Disconnected | Connect
-//    kill switch armed   |   "Blocked — kill switch on"                  |            |              |
+//    BlockedByKillSwitch |   "Blocked — kill switch on"                  |            |              |
 //  NoService/Disconnected| disconnected / "Disconnected"                | Idle       | Disconnected | Connect
 //    plain               |   (+ showNotProtected)                        |            |              |
+//
+// The three settled-idle rows are selected by the SAME predicates that select
+// the button (TrafficStillInTunnel, then BlockedByKillSwitch, then neither), so
+// the table's last column is a consequence of its first, not a second opinion
+// about it. That is what makes the reported four-channel contradiction
+// unrepresentable rather than merely absent today.
 //
 //  balance overrides (they replace the canvas, never the button — an
 //  out-of-balance session still has to be disconnectable):
@@ -83,6 +89,33 @@ enum class State {
 
 // The SDK connect controller's own status (connect-page.md §2.1: parsed
 // case-insensitively from getConnectionStatus(); anything else ⇒ Disconnected).
+//
+// WHAT THESE TOKENS MEAN ON *THIS* PLATFORM — established from the feeds in
+// this tree, not from Windows:
+//
+//   * The SDK's alphabet is DISCONNECTED / CONNECTING / DESTINATION_SET /
+//     CONNECTED / CONNECT_FAILED (urnetwork_sdk.hpp:153-163). It reaches the
+//     page on LiveStats::connectionStatus, which SdkHost fills from
+//     connectVc_->getConnectionStatus() (SdkHost.cpp:1443).
+//   * The OTHER feed named "connection status" on Linux —
+//     SdkHost's ConnectionStatusHandler, relayed to
+//     ConnectPage::SetConnectionStatus — is NOT that alphabet. Every one of
+//     its call sites (SdkHost.cpp:1114, :1351, :1357-1358, :2207, :2410) emits
+//     one of exactly TWO strings, and it is driven by
+//     addConnectLocationChangeListener / getConnectLocation():
+//         "DESTINATION_SET" = a connect location is SELECTED
+//         "DISCONNECTED"    = none is
+//     It never emits CONNECTING, CONNECTED or CONNECT_FAILED at all.
+//
+// So on Linux DESTINATION_SET is a STEADY-STATE token: it stands for the whole
+// life of a carrying session, because the destination stays selected while the
+// tunnel carries. It is NOT evidence that anything is in flight. Treating it as
+// in-flight (the Windows reading, where CONNECTED does arrive to end it) makes
+// Render() promote every Connected aggregate back to Connecting, and a tunnel
+// that is carrying the user's traffic renders "Connecting to providers" with a
+// yellow dot forever. Hence: DestinationSet may lift a settled-idle reading to
+// Connecting when NOTHING is carrying, and may never touch a reading that rests
+// on a live tunnel. See Render() rule 1b.
 enum class SdkStatus { Disconnected, Connecting, DestinationSet, Connected, Failed };
 
 // The hero pose. Mirrors ConnectCanvas::State one-for-one; a separate enum so
@@ -134,25 +167,61 @@ struct Window {
 };
 
 // ---- the shared predicates (connect-page.md §2.4) ---------------------------
-// The machine is captured when this app has taken its traffic: routes are
-// installed, or a floor is in force. Both mean pressing Connect is not what the
-// user wants next.
-inline bool MachineIsCaptured(const ServiceFacts& f) {
-  return f.routesInstalled || f.killSwitchInForce;
+//
+// ONE PREDICATE PER QUESTION, AND EVERY CHANNEL ASKS THE SAME ONE. The defect
+// this replaces: the settled-idle TEXT branch tested `routesInstalled` while
+// the BUTTON tested `routesInstalled || killSwitchInForce`, so a floor in force
+// with the tunnel down (kill_switch == Connected while tunnel_state is
+// Starting/Stopped/Error — two fields of one status reply) rendered
+// "Disconnected" + idle dot + Disconnected hero + "Your internet traffic is not
+// protected." beside a button reading "Disconnect". Four channels, two
+// predicates, and a leak-safety lie while a stuck floor was blocking the
+// machine.
+//
+// `tunnelUp` is OUR OWN evidence (SdkHost::Connected() AND LiveStats.connected)
+// and is a first-class part of every one of these: the daemon snapshot can be
+// stale or absent (installed_known == false), and a page that reads "not
+// protected" over traffic it is itself carrying is the same class of lie as the
+// one this file exists to kill, pointing the other way.
+
+// Traffic is still going into the tunnel: it is carrying, or the daemon still
+// has the routes installed (Up or Stopping). This is the ONLY thing that makes
+// the connect action a Disconnect once the SDK has gone quiet, and it is the
+// same test that writes "Disconnecting — your traffic is still going through
+// the tunnel".
+inline bool TrafficStillInTunnel(const ServiceFacts& f, bool tunnelUp) {
+  return tunnelUp || f.routesInstalled;
 }
-// An ARMED floor with no tunnel deliberately offers Connect, not Disconnect:
+// The machine is captured when this app has taken its traffic: it is carrying,
+// routes are installed, or a floor is in force. All three mean pressing Connect
+// is not what the user wants next.
+inline bool MachineIsCaptured(const ServiceFacts& f, bool tunnelUp) {
+  return TrafficStillInTunnel(f, tunnelUp) || f.killSwitchInForce || f.killSwitchArmed;
+}
+// A floor with NO tunnel behind it deliberately offers Connect, not Disconnect:
 // there is nothing to disconnect from, and the way out is to connect (or to
 // turn the switch off in options).
-inline bool BlockedByKillSwitch(const ServiceFacts& f) {
-  return !f.routesInstalled && f.killSwitchArmed;
+//
+// It tests `killSwitchInForce || killSwitchArmed`, not `killSwitchArmed` alone.
+// in_force is (installed == Armed || installed == Connected) (SdkHost.cpp:1842),
+// and `Connected` with no tunnel state to match it is a REAL, durable reading —
+// a teardown that failed leaves exactly that. Reading it as "no floor" put the
+// blocked machine on the plain Disconnected row.
+inline bool BlockedByKillSwitch(const ServiceFacts& f, bool tunnelUp) {
+  return !TrafficStillInTunnel(f, tunnelUp) && (f.killSwitchInForce || f.killSwitchArmed);
 }
 inline bool SdkActive(State s) {
   return s != State::Disconnected && s != State::NoService;
 }
 // The SAME predicate the tray item uses. The button label is never computed
 // from anything else.
-inline bool ActionIsDisconnect(const ServiceFacts& f, State s) {
-  return SdkActive(s) || (MachineIsCaptured(f) && !BlockedByKillSwitch(f));
+//
+// Note it reduces to `SdkActive(s) || TrafficStillInTunnel(f, tunnelUp)`:
+// MachineIsCaptured && !BlockedByKillSwitch is exactly TrafficStillInTunnel.
+// Written out of the two shared predicates so that stays true by construction
+// rather than by a comment.
+inline bool ActionIsDisconnect(const ServiceFacts& f, State s, bool tunnelUp) {
+  return SdkActive(s) || (MachineIsCaptured(f, tunnelUp) && !BlockedByKillSwitch(f, tunnelUp));
 }
 
 // ---- parsing ---------------------------------------------------------------
@@ -178,13 +247,41 @@ struct Signals {
   // The user pressed Disconnect. An explicit local intent outranks a stale SDK
   // status — the press is the newest fact on the machine (the mirror image of
   // the optimistic Connecting write on the connect press, connect-page.md
-  // §2.4 step 4).
+  // §2.4 step 4). BOUNDED by IntentHolds below: it outranks a STALE status, not
+  // a live one, and never a session that is coming up.
   bool disconnectRequested = false;
 };
 
+// ---- the bound on the disconnect intent -------------------------------------
+// The press is the newest fact about the session it was pressed ON. It is not a
+// fact about a session that is COMING UP, and that is the one direction in
+// which it must never be believed: "Disconnected — your internet traffic is not
+// protected." over a tunnel the app is in the middle of establishing is a lie
+// that reads as a safety claim.
+//
+// So the intent holds while anything of the pressed-on session is still on this
+// machine — a carrying tunnel, installed routes, a floor — and yields the moment
+// the machine is clear AND the connect controller says it is dialling. Nothing
+// is left for the press to be describing then; what the row must say is
+// "Connecting".
+//
+// DESTINATION_SET does not count as dialling: on this platform it only means a
+// destination is selected (see SdkStatus above), which is exactly what a
+// just-disconnected session still looks like for a moment.
+inline bool IntentHolds(const ServiceFacts& f, SdkStatus sdk, bool tunnelUp,
+                        bool disconnectRequested) {
+  if (!disconnectRequested) return false;
+  if (sdk != SdkStatus::Connecting) return true;
+  return MachineIsCaptured(f, tunnelUp);
+}
+
 inline State Aggregate(const Signals& s) {
-  if (s.disconnectRequested) return State::Disconnected;
-  if (!s.facts.pipeUp) return State::NoService;
+  if (IntentHolds(s.facts, s.sdk, s.tunnelUp, s.disconnectRequested)) return State::Disconnected;
+  // A machine that is CARRYING is not "no service", whatever the control
+  // channel says: NoService's copy is "nothing can be carried", and the honest
+  // tunnel flag is direct evidence to the contrary. (The daemon notice under
+  // the headline is what reports the broken pipe.)
+  if (!s.facts.pipeUp && !s.tunnelUp) return State::NoService;
   if (s.sdk == SdkStatus::Failed) return State::Failed;
   if (s.window.known && s.window.failed) return State::Failed;
   if (s.tunnelUp) {
@@ -246,26 +343,42 @@ struct Reading {
 inline Reading Render(const Inputs& in) {
   // 1. RECONCILIATION (§2.1 RenderHealth). The SDK status and the aggregate can
   // describe different instants; this settles which one the whole row obeys.
+  //
+  // ONE RULE RUNS THE WHOLE BLOCK: a status TOKEN never outranks carried
+  // traffic. `tunnelUp` is SdkHost::Connected() AND LiveStats.connected — the
+  // app's own evidence that packets are going through the tunnel — and every
+  // promotion and demotion below is gated on it. A token is a report about a
+  // controller; the tunnel is the thing the user actually has.
   State render = in.health;
-  // The intent is authoritative HERE too, not only in Aggregate(): the whole
-  // point of the invariant is that no caller — and no future one — can arrange
-  // a reading in which the user has asked to stop and the row says the app is
-  // connecting. Belt and braces on the one defect this file exists to kill.
-  if (in.disconnectRequested) render = State::Disconnected;
-  if (!in.disconnectRequested) {
-    // A connect in flight outranks a stale idle/connected aggregate. It must
-    // NOT override Evaluating/Degraded/Failed — those are newer, more specific
-    // readings of the same session. And it is skipped outright once the user
-    // has pressed Disconnect: promoting a stale CONNECTING status over an
-    // explicit disconnect is precisely the reported defect.
-    if ((in.sdk == SdkStatus::Connecting || in.sdk == SdkStatus::DestinationSet) &&
-        (render == State::Disconnected || render == State::NoService ||
-         render == State::Connected)) {
+  // 1a. The intent is authoritative HERE too, not only in Aggregate(): no
+  // caller — and no future one — can arrange a reading in which the user has
+  // asked to stop and the row says the app is connecting. Bounded by
+  // IntentHolds so it cannot claim the opposite either (see there).
+  const bool intentHeld =
+      IntentHolds(in.facts, in.sdk, in.tunnelUp, in.disconnectRequested);
+  if (intentHeld) {
+    render = State::Disconnected;
+  } else {
+    // 1b. A connect in flight outranks a STALE IDLE aggregate. Three bounds:
+    //   * never over Evaluating/Degraded/Failed/Connected — those are newer,
+    //     more specific readings of the same session;
+    //   * never while the tunnel is carrying. This is the DESTINATION_SET fix:
+    //     on Linux that token stands for the whole life of a connected session
+    //     (see SdkStatus), so promoting on it demoted every carrying tunnel to
+    //     "Connecting to providers" + yellow dot + Connecting hero, forever,
+    //     and made the Connected row unreachable;
+    //   * never once the user has pressed Disconnect and the press still holds.
+    if (!in.tunnelUp &&
+        (in.sdk == SdkStatus::Connecting || in.sdk == SdkStatus::DestinationSet) &&
+        (render == State::Disconnected || render == State::NoService)) {
       render = State::Connecting;
     }
   }
-  // A settled idle status outranks stale ACTIVE health.
-  if (in.sdk == SdkStatus::Disconnected && render != State::NoService &&
+  // 1c. A settled idle status outranks stale ACTIVE health — but not carried
+  // traffic. A controller that reports DISCONNECTED while packets are still
+  // going through the tunnel is describing the controller, not the machine, and
+  // acting on it would put "Disconnected" over a live session.
+  if (in.sdk == SdkStatus::Disconnected && !in.tunnelUp && render != State::NoService &&
       render != State::Disconnected) {
     render = State::Disconnected;
   }
@@ -305,7 +418,14 @@ inline Reading Render(const Inputs& in) {
       break;
     case State::NoService:
     case State::Disconnected:
-      if (in.facts.routesInstalled) {
+      // THE SAME TWO PREDICATES THE BUTTON USES, IN THE SAME ORDER. The three
+      // branches below partition the settled-idle reading exactly as
+      // ActionIsDisconnect does, so the headline, the dot, the hero, the
+      // protection line and the button cannot disagree: branch 1 is precisely
+      // the case in which the action is Disconnect, branches 2 and 3 are
+      // precisely the cases in which it is Connect. (Proved by exhaustive
+      // sweep — see the invariant list in the commit.)
+      if (TrafficStillInTunnel(in.facts, in.tunnelUp)) {
         // The machine is still captured. This is the honest reading of the
         // moment AFTER the Disconnect press: the tunnel is coming down and the
         // traffic on it has not moved yet. It is not "Connecting".
@@ -313,7 +433,7 @@ inline Reading Render(const Inputs& in) {
         r.textEnglish = "Disconnecting — your traffic is still going through the tunnel";
         r.dot = Dot::Connecting;
         r.hero = Hero::Connecting;
-      } else if (BlockedByKillSwitch(in.facts)) {
+      } else if (BlockedByKillSwitch(in.facts, in.tunnelUp)) {
         r.textKey = "conn_blocked_kill_switch";
         r.textEnglish = "Blocked — kill switch on";
         r.dot = Dot::Coral;
@@ -336,7 +456,8 @@ inline Reading Render(const Inputs& in) {
   if (render == State::Failed) {
     r.action = Action::Retry;  // Retry stays FILLED (§2.4)
   } else {
-    r.action = ActionIsDisconnect(in.facts, render) ? Action::Disconnect : Action::Connect;
+    r.action =
+        ActionIsDisconnect(in.facts, render, in.tunnelUp) ? Action::Disconnect : Action::Connect;
   }
 
   // 3. THE SUPPORTING LINES.

@@ -41,7 +41,9 @@ constexpr int kProsePadY = 10;    // supporting prose: padding 12,10
 constexpr int kStatePadY = 8;     // a state line under a control: padding 12,8
 constexpr int kSheetDeviceName = 360;
 constexpr int kSheetBlocked = 420;
+constexpr int kSheetReleaseTag = 420;
 constexpr int kCountryScrollMax = 240;
+constexpr int kTagScrollMax = 200;
 // The two canonical destinations behind the Stay-in-touch sentences. They are
 // duplicated inside the localized markdown, so keep the pair in step.
 constexpr const char* kDiscordUrl = "https://discord.com/invite/RUNZXMwPRK";
@@ -50,6 +52,43 @@ constexpr const char* kProtocolUrl = "https://ur.xyz";
 // The local preference the auto-update toggle owns (windows UpdateChecker:
 // key "check_updates_automatically" in app_prefs.json, default true).
 constexpr const char* kAutoCheckKey = "check_updates_automatically";
+
+// ---- the release source (SettingsPage.hpp's ServiceChannel) -----------------
+// The persisted VALUES behind kChannelPrefKey. Strings rather than an int:
+// a prefs file is a thing humans read, and "beta" survives an enum reorder
+// that 0 would not.
+constexpr const char* kChannelBetaValue = "beta";
+constexpr const char* kChannelUpstreamValue = "upstream";
+// "owner/repo" for api.github.com/repos/<slug>/releases. The windows twin is
+// config::kUpdateRepo (App/Config.h) = "Ryanmello07/urnetwork-windows"; these
+// follow the same convention. IF THE FORK'S REPO IS NAMED DIFFERENTLY THIS IS
+// THE ONE LINE TO CHANGE.
+constexpr const char* kRepoBeta = "Ryanmello07/urnetwork-linux";
+// Listed, never queried: upstream publishes no Linux service build yet. The
+// slug is written down anyway so the day it does, one bool flips and this
+// already points at the right place.
+constexpr const char* kRepoUpstream = "urnetwork/urnetwork-linux";
+// Flip to true the day upstream publishes a Linux service release. Nothing
+// else in this file needs to change: the row's sensitivity, its note and the
+// "stored channel has no builds" line all read this.
+constexpr bool kUpstreamHasBuilds = false;
+// A tag is about to become part of a URL and part of a filesystem path in
+// ServiceSetup, so it is shape-checked HERE as well as there. Deliberately
+// strict: the release grammar this CI mints is "v<date>-<code>-beta", which
+// needs no slash, no space and no dot-dot.
+constexpr size_t kMaxTagLength = 64;
+
+bool LooksLikeReleaseTag(const std::string& tag) {
+  if (tag.empty() || tag.size() > kMaxTagLength) return false;
+  if (tag.find("..") != std::string::npos) return false;   // no path escape
+  if (tag.front() == '.' || tag.front() == '-') return false;
+  for (const unsigned char c : tag) {
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_';
+    if (!ok) return false;
+  }
+  return true;
+}
 
 // ---- tone -------------------------------------------------------------------
 // A line's colour is written as a pango attribute, not as a swapped CSS class.
@@ -155,6 +194,66 @@ Gtk::Label* AddValueRow(Gtk::Box& host, const Glib::ustring& label,
   row.trailing->append(*value);
   host.append(*row.root);
   return value;
+}
+
+// ValueActionRow (spec §2): value AND a verb on the right, spacing 8. The
+// value is narrower than a plain ValueRow's (windows MaxWidth 220 vs 260) —
+// the button has to fit beside it without pushing the title's ellipsis.
+struct ValueActionRow {
+  Gtk::Label* value = nullptr;
+  Gtk::Button* button = nullptr;
+};
+
+ValueActionRow AddValueActionRow(Gtk::Box& host, const Glib::ustring& label,
+                                 const Glib::ustring& note,
+                                 const Glib::ustring& action) {
+  ValueActionRow out;
+  auto row = kit::MakePaneTwoLineRow(label, note, kRowTall);
+  auto* pair = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  pair->set_valign(Gtk::Align::CENTER);
+  out.value = Gtk::make_managed<Gtk::Label>();
+  out.value->add_css_class("ur-value");
+  out.value->set_xalign(1.f);
+  out.value->set_valign(Gtk::Align::CENTER);
+  out.value->set_ellipsize(Pango::EllipsizeMode::END);
+  out.value->set_max_width_chars(26);  // windows MaxWidth 220
+  pair->append(*out.value);
+  out.button = Gtk::make_managed<Gtk::Button>(action);
+  out.button->set_valign(Gtk::Align::CENTER);
+  kit::SetAccessibleLabel(*out.button, action + ". " + label);
+  pair->append(*out.button);
+  row.trailing->append(*pair);
+  host.append(*row.root);
+  return out;
+}
+
+// RadioRow: the two-line row with a grouped CheckButton on the right — the
+// species for "pick exactly one of these". Its accessible name is the row
+// label (a bare radio announces nothing).
+//
+// The ROOT comes back as well as the control, and that is the point. Making
+// only the CheckButton insensitive dims a 20px circle and leaves the title and
+// its reason at full brightness — measured, and it reads as an available
+// option with a stray note. Insensitivity on the row root carries GTK's 0.38
+// disabled treatment across title, note and control together, which is what
+// "visibly disabled" has to mean.
+struct RadioRow {
+  Gtk::Widget* root = nullptr;
+  Gtk::CheckButton* radio = nullptr;
+};
+
+RadioRow AddRadioRow(Gtk::Box& host, const Glib::ustring& label,
+                     const Glib::ustring& note, Gtk::CheckButton* group = nullptr) {
+  RadioRow out;
+  auto row = kit::MakePaneTwoLineRow(label, note, kRowTall);
+  out.radio = Gtk::make_managed<Gtk::CheckButton>();
+  out.radio->set_valign(Gtk::Align::CENTER);
+  if (group != nullptr) out.radio->set_group(*group);
+  kit::SetAccessibleLabel(*out.radio, label);
+  row.trailing->append(*out.radio);
+  host.append(*row.root);
+  out.root = row.root;
+  return out;
 }
 
 // ButtonRow: the same row with an action verb on the right. GTK carries no
@@ -690,6 +789,161 @@ class SettingsBlockedLocationsSheet : public Gtk::Window {
 };
 
 // =============================================================================
+// ReleaseTagSheet — pin the service to one release, or follow the newest
+// =============================================================================
+// The owner's ask: "let the user pick a release TAG". A pin is a deliberate,
+// sticky choice — it stays pinned when newer releases appear, which is exactly
+// what makes it useful for testing and exactly what makes it dangerous to set
+// by accident. So it gets a sheet rather than an inline field: room to say what
+// pinning MEANS, a one-click way back to Latest, and a validated commit.
+//
+// Two ways in, because the tags are long: click one the last check found, or
+// type one. Free text is shape-checked here (LooksLikeReleaseTag) so a typo
+// lands on a sentence in this sheet instead of a 404 three layers down — and
+// ServiceSetup must STILL re-validate, because a prefs file can be edited by
+// hand and this sheet is not the only door to that key.
+class SettingsReleaseTagSheet : public Gtk::Window {
+ public:
+  explicit SettingsReleaseTagSheet(Gtk::Window& parent) {
+    set_transient_for(parent);
+    set_modal(true);
+    set_title(T_("svc_release_pick_title", "Choose a release"));
+    set_default_size(kSheetReleaseTag, -1);
+    set_resizable(false);
+    set_hide_on_close(true);
+    add_css_class("ur-sheet");
+    AddEscapeToClose(*this);
+
+    auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+    box->set_margin(24);
+
+    auto* heading =
+        Gtk::make_managed<Gtk::Label>(T_("svc_release_pick_title", "Choose a release"));
+    heading->add_css_class("ur-step-heading");
+    heading->set_xalign(0);
+    box->append(*heading);
+
+    auto* help = Gtk::make_managed<Gtk::Label>(
+        T_("svc_release_pick_help",
+           "Latest follows the channel and picks up new releases as they are "
+           "published. A pinned tag stays pinned - including when a newer release "
+           "appears - until you come back here and change it."));
+    help->add_css_class("ur-caption");
+    help->set_xalign(0);
+    help->set_wrap(true);
+    box->append(*help);
+
+    // The tags the last check parsed. HIDDEN rather than shown empty: an empty
+    // list under a "Recent releases" caption reads as "there are none", which
+    // is a claim this sheet has no evidence for (nobody may have checked yet).
+    knownWrap_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
+    auto* knownLabel =
+        Gtk::make_managed<Gtk::Label>(T_("svc_release_recent", "Recent releases"));
+    knownLabel->add_css_class("ur-caption");
+    knownLabel->set_xalign(0);
+    knownWrap_->append(*knownLabel);
+    auto* knownScroll = Gtk::make_managed<Gtk::ScrolledWindow>();
+    knownScroll->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+    knownScroll->set_max_content_height(kTagScrollMax);
+    knownScroll->set_propagate_natural_height(true);
+    known_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+    knownScroll->set_child(*known_);
+    knownWrap_->append(*knownScroll);
+    knownWrap_->set_visible(false);
+    box->append(*knownWrap_);
+
+    auto* fieldLabel = Gtk::make_managed<Gtk::Label>(T_("svc_release_tag_field", "Tag"));
+    fieldLabel->add_css_class("ur-input-label");
+    fieldLabel->set_xalign(0);
+    box->append(*fieldLabel);
+
+    entry_ = Gtk::make_managed<Gtk::Entry>();
+    entry_->add_css_class("ur-input");
+    // The placeholder IS the default: an empty field means "follow the newest
+    // release", so the field never has to be cleared to a magic word.
+    entry_->set_placeholder_text(T_("svc_release_latest", "Latest"));
+    kit::SetAccessibleLabel(*entry_, T_("svc_release_tag_field", "Tag"));
+    entry_->signal_activate().connect([this] { Submit(); });
+    box->append(*entry_);
+
+    error_ = Gtk::make_managed<Gtk::Label>();
+    error_->add_css_class("ur-caption");
+    error_->set_xalign(0);
+    error_->set_wrap(true);
+    error_->set_visible(false);
+    box->append(*error_);
+
+    auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    actions->set_margin_top(8);
+    // Left-aligned and away from the commit pair: "Use latest" is the way OUT
+    // of a pin, not a third confirm button.
+    auto* latest =
+        Gtk::make_managed<Gtk::Button>(T_("svc_release_use_latest", "Use latest"));
+    latest->signal_clicked().connect([this] { Commit(std::string()); });
+    actions->append(*latest);
+    auto* spacer = Gtk::make_managed<Gtk::Box>();
+    spacer->set_hexpand(true);
+    actions->append(*spacer);
+    auto* cancel = Gtk::make_managed<Gtk::Button>(T_("cancel", "Cancel"));
+    cancel->signal_clicked().connect([this] { set_visible(false); });
+    actions->append(*cancel);
+    save_ = Gtk::make_managed<Gtk::Button>(T_("save", "Save"));
+    save_->add_css_class("suggested-action");
+    save_->signal_clicked().connect([this] { Submit(); });
+    actions->append(*save_);
+    box->append(*actions);
+
+    set_child(*box);
+    save_->set_receives_default(true);
+    set_default_widget(*save_);
+  }
+
+  // "" == follow the newest release on the channel.
+  std::function<void(const std::string& tag)> on_chosen;
+
+  void Open(const std::string& currentTag, const std::vector<std::string>& knownTags) {
+    error_->set_visible(false);
+    entry_->set_text(currentTag);
+
+    while (Gtk::Widget* child = known_->get_first_child()) known_->remove(*child);
+    for (const std::string& tag : knownTags) {
+      if (!LooksLikeReleaseTag(tag)) continue;  // never render an unusable tag
+      auto* pick = Gtk::make_managed<Gtk::Button>(tag);
+      pick->add_css_class("ur-pane-row");  // the full-width list-row button
+      if (auto* label = dynamic_cast<Gtk::Label*>(pick->get_child())) label->set_xalign(0);
+      pick->signal_clicked().connect([this, tag] { Commit(tag); });
+      known_->append(*pick);
+    }
+    knownWrap_->set_visible(known_->get_first_child() != nullptr);
+    present();
+  }
+
+ private:
+  void Submit() { Commit(TrimSpace(entry_->get_text().raw())); }
+
+  void Commit(const std::string& tag) {
+    // Empty is the LATEST case and is always valid; anything else has to look
+    // like a tag before it is allowed to become part of a URL.
+    if (!tag.empty() && !LooksLikeReleaseTag(tag)) {
+      SetToned(*error_, kUrDanger,
+               T_("svc_release_tag_invalid",
+                  "That doesn't look like a release tag. Use it exactly as it appears "
+                  "on the release, for example v2026.8.15-101076420-beta."));
+      error_->set_visible(true);
+      return;
+    }
+    if (on_chosen) on_chosen(tag);
+    set_visible(false);
+  }
+
+  Gtk::Box* knownWrap_ = nullptr;
+  Gtk::Box* known_ = nullptr;
+  Gtk::Entry* entry_ = nullptr;
+  Gtk::Label* error_ = nullptr;
+  Gtk::Button* save_ = nullptr;
+};
+
+// =============================================================================
 // SettingsPage
 // =============================================================================
 
@@ -712,6 +966,10 @@ SettingsPage::SettingsPage(SdkHost& host)
   kit::SetAccessibleLabel(*paneA_.root, T_("general", "General"));
   BuildGeneralSection(*paneA_.content);
   BuildConnectionsSection(*paneA_.content);
+  // Pane A, not B or C, deliberately: at widths under 900 dip every other pane
+  // folds away and this one is what is left. The rows that decide whether the
+  // machine can carry traffic at all have to survive that fold.
+  BuildServiceUpdatesSection(*paneA_.content);
   paneSizes_->add_widget(*paneA_.root);
   append(*paneA_.root);
 
@@ -759,6 +1017,12 @@ void SettingsPage::Load() {
 
   // 1. Local state first: no round trips, correct with no session at all.
   ApplyLocalDeviceState();
+  // The service rows are session-independent (a signed-out user still has to
+  // be able to install the service — that is how they get to sign in with a
+  // working tunnel), so they are refreshed BEFORE the no-session return.
+  // This is also where the shell's callbacks first become visible to the page,
+  // so it is where the action buttons stop being disabled.
+  RenderServiceRelease();
 
   // 2. No session: EVERY server-backed field lands on NoSession and we return.
   //    Nothing may sit on a dash or an unresolving spinner. This branch is the
@@ -1065,6 +1329,365 @@ void SettingsPage::BuildConnectionsSection(Gtk::Box& host) {
   // noise) and of the button's sensitivity while an elevated verb runs. With
   // no classifier the row renders unconditionally rather than guessing.
   host.append(*serviceRowHost_);
+}
+
+// ---- Pane A: Service updates (owner ask) ------------------------------------
+// WHY THIS GROUP EXISTS. The Flatpak and the AppImage carry the INTERFACE
+// ONLY: urnetworkd is downloaded from GitHub Releases, verified against the
+// sha256 GitHub itself computed on upload, and installed behind one polkit
+// prompt. That makes three things user-visible facts rather than build
+// constants — which releases we follow, which release specifically, and what
+// is installed against what is available. This group is those three facts and
+// nothing else: no download, no elevation, no GitHub traffic happens in this
+// file. Every action here is a std::function the shell fills in from
+// ServiceSetup.
+
+void SettingsPage::BuildServiceUpdatesSection(Gtk::Box& host) {
+  host.append(*kit::MakePaneGroupHeader(T_("svc_updates", "Service updates")).root);
+
+  host.append(*MakeProseRow(
+                   T_("svc_updates_note",
+                      "This app ships the interface only. The VPN service is downloaded "
+                      "from GitHub Releases, checked against the SHA-256 GitHub "
+                      "published for it, and installed behind one administrator prompt."),
+                   kProsePadY)
+                   .root);
+
+  // Row 1 — what is on this machine. Read-only: a version is reported, never
+  // chosen.
+  installedVersionValue_ = AddValueRow(host, T_("svc_installed_version", "Installed"));
+
+  // Row 2 — what the channel is offering, with the manual re-check beside it.
+  // The check is UNPRIVILEGED (an HTTPS GET of the releases JSON), which is
+  // why it can sit next to a value instead of behind a confirmation.
+  auto available = AddValueActionRow(host, T_("svc_available_version", "Available"), {},
+                                     T_("svc_check_action", "Check"));
+  availableVersionValue_ = available.value;
+  checkReleasesNow_ = available.button;
+  checkReleasesNow_->set_sensitive(false);  // until the shell binds a checker
+  // TODO(service-setup): bind on_service_check_now to the GitHub release check
+  // — GET https://api.github.com/repos/<SettingsPage::ChannelRepo(channel)>/
+  // releases?per_page=15, newest-first, prereleases INCLUDED (the beta channel
+  // publishes prereleases), then push the result back through
+  // ApplyServiceRelease with checking/checkFailed/availableVersion/
+  // availableTag/knownTags filled in. Unprivileged; no elevation on this path.
+  checkReleasesNow_->signal_clicked().connect([this] {
+    if (!on_service_check_now) {
+      // Cannot normally happen — the button is insensitive without a handler —
+      // but a silent no-op here is exactly the failure this row is meant to
+      // make impossible, so it is logged rather than swallowed.
+      g_warning("settings: release check requested with no checker bound");
+      return;
+    }
+    on_service_check_now();
+  });
+
+  // Rows 3-4 — the channel. TWO ROWS, NOT A DROPDOWN: the owner's requirement
+  // is that Upstream be VISIBLY DISABLED with an honest reason, and a disabled
+  // dropdown item is neither visible (it is behind a click) nor able to carry
+  // its own reason. A radio row is disabled in place, at 0.38 opacity, with
+  // the reason sitting on its note line where the reader already is.
+  channelBeta_ =
+      AddRadioRow(
+          host, T_("svc_channel_beta", "Beta (this fork)"),
+          T_("svc_channel_beta_note",
+             "Releases published by this fork - the builds this app is tested against."))
+          .radio;
+  const RadioRow upstream =
+      AddRadioRow(host, T_("svc_channel_upstream", "Upstream main"),
+                  // The reason travels WITH the disabled control.
+                  T_("svc_channel_upstream_note", "No builds published yet."),
+                  channelBeta_);
+  channelUpstream_ = upstream.radio;
+  // The WHOLE row goes insensitive, not just the radio (see AddRadioRow).
+  upstream.root->set_sensitive(kUpstreamHasBuilds);
+  // Only the newly-ACTIVE half acts. A grouped CheckButton emits `toggled` on
+  // both members of the pair, and reading "which is on" from inside either
+  // handler depends on the group's deactivate/activate order — which would
+  // persist the losing channel first and publish twice.
+  channelBeta_->signal_toggled().connect([this] {
+    if (channelBeta_->get_active()) OnChannelSelected(ServiceChannel::Beta);
+  });
+  channelUpstream_->signal_toggled().connect([this] {
+    if (channelUpstream_->get_active()) OnChannelSelected(ServiceChannel::UpstreamMain);
+  });
+
+  host.append(*MakeProseRow(
+                   T_("svc_channel_upstream_why",
+                      "Upstream main is listed rather than hidden so the choice is "
+                      "visible: the upstream project publishes no Linux service build "
+                      "yet, so there would be nothing to install from it. It becomes "
+                      "selectable the day one is published."),
+                   kProsePadY)
+                   .root);
+
+  // The stored channel can name a channel with no builds — only by hand-editing
+  // app_prefs.json today, but a preference that is silently ignored is how a
+  // machine ends up "checking for updates" against nothing forever. Hidden
+  // unless it is true.
+  auto stranded = MakeProseRow({}, kStatePadY);
+  channelStranded_ = stranded.line;
+  channelStrandedRow_ = stranded.root;
+  channelStrandedRow_->set_visible(false);
+  host.append(*stranded.root);
+
+  // Row 5 — which release. A NavRow into the picker: the pin is sticky and
+  // long, so it gets a sheet with room to say what pinning means (§6.5).
+  releaseRow_ = kit::MakePaneTwoLineRowButton(
+      T_("svc_release_label", "Release"),
+      T_("svc_release_note",
+         "Latest follows the channel; a pinned tag stays pinned."),
+      kRowTall);
+  releaseRow_.root->signal_clicked().connect([this] { ShowReleaseTagSheet(); });
+  host.append(*releaseRow_.root);
+
+  // Row 6 — the one action. Built by hand rather than with AddButtonRow
+  // because BOTH the verb and the note change with what is installed, and a
+  // row that says "Install" over an up-to-date service is the same class of
+  // lie as a banner that cries wolf.
+  {
+    auto row = kit::MakePaneTwoLineRow(T_("svc_install_label", "Install or update"), {},
+                                       kRowTall);
+    installNote_ = row.note;
+    serviceInstall_ = Gtk::make_managed<Gtk::Button>(T_("svc_install_action", "Install"));
+    serviceInstall_->set_valign(Gtk::Align::CENTER);
+    serviceInstall_->set_sensitive(false);  // until the shell binds the installer
+    // TODO(service-setup): bind on_service_install to ServiceSetup's
+    // download-verify-elevate flow, and republish through ApplyServiceRelease
+    // with busy=true for its whole duration so this row and the Uninstall row
+    // cannot both raise a prompt. A DECLINED elevation is SILENCE, not an
+    // error (the user changed their mind); every other outcome is a failure
+    // that has to reach the snackbar.
+    serviceInstall_->signal_clicked().connect([this] {
+      if (!on_service_install) {
+        g_warning("settings: service install requested with no installer bound");
+        return;
+      }
+      // EVERYTHING past this point is ServiceSetup's: fetch the asset for this
+      // channel/tag as the unprivileged app user into $XDG_CACHE_HOME (the
+      // sandbox's /tmp is private and the host cannot see it), verify its
+      // sha256 against the digest the releases JSON carried, and only THEN
+      // hand an already-verified path to pkexec — flatpak-spawn --host pkexec
+      // inside the sandbox, plain pkexec outside it. This page must never
+      // learn how any of that works.
+      on_service_install();
+    });
+    row.trailing->append(*serviceInstall_);
+    host.append(*row.root);
+  }
+
+  RenderServiceRelease();
+}
+
+// ---- the release source: read, render, publish -------------------------------
+
+ServiceChannel SettingsPage::StoredChannel() {
+  const std::string stored =
+      prefs::Get<std::string>(kChannelPrefKey, kChannelBetaValue);
+  if (stored == kChannelUpstreamValue) return ServiceChannel::UpstreamMain;
+  // Anything unrecognised is the DEFAULT, not an error: a prefs file is
+  // hand-editable and a typo must not strand the app on no channel at all.
+  return ServiceChannel::Beta;
+}
+
+bool SettingsPage::ChannelHasBuilds(ServiceChannel channel) {
+  return channel == ServiceChannel::Beta ? true : kUpstreamHasBuilds;
+}
+
+const char* SettingsPage::ChannelRepo(ServiceChannel channel) {
+  return channel == ServiceChannel::UpstreamMain ? kRepoUpstream : kRepoBeta;
+}
+
+std::string SettingsPage::PinnedTag() {
+  const std::string tag = TrimSpace(prefs::Get<std::string>(kTagPrefKey, std::string()));
+  // A stored tag that does not survive validation is treated as NO PIN. The
+  // alternative is handing a hand-edited string to a URL builder, and "follow
+  // the newest release" is the safe reading of a broken pin.
+  if (!tag.empty() && !LooksLikeReleaseTag(tag)) {
+    g_warning("settings: stored release tag is not a usable tag; following latest");
+    return {};
+  }
+  return tag;
+}
+
+void SettingsPage::ApplyServiceRelease(ServiceReleaseView view) {
+  // Whole-snapshot replacement, never a merge: a half-updated view is how a
+  // "checking..." spinner survives the check that finished.
+  serviceView_ = std::move(view);
+  RenderServiceRelease();
+}
+
+void SettingsPage::OnChannelSelected(ServiceChannel channel) {
+  if (applyingChannel_) return;  // echo guard: RenderServiceRelease writes these
+  if (StoredChannel() == channel) return;  // nothing changed; do not churn
+  // PERSIST FIRST, PUBLISH SECOND — the same order SetAdvancedMode uses. The
+  // recorded value is what a ServiceSetup built later reads; the publish is an
+  // optimisation for the one already running.
+  prefs::Set<std::string>(kChannelPrefKey, channel == ServiceChannel::UpstreamMain
+                                               ? kChannelUpstreamValue
+                                               : kChannelBetaValue);
+  PublishReleaseSource();
+}
+
+void SettingsPage::PublishReleaseSource() {
+  const ServiceChannel channel = StoredChannel();
+  const std::string tag = PinnedTag();
+  if (on_service_source_changed) {
+    on_service_source_changed(channel, tag);
+  } else {
+    // Not fatal: the pref is written and a checker that starts later reads it.
+    g_message("settings: release source changed with no listener (channel=%s tag=%s)",
+              ChannelRepo(channel), tag.empty() ? "(latest)" : tag.c_str());
+  }
+  RenderServiceRelease();
+}
+
+// ONE writer for every row in the group. It reads the two prefs and whatever
+// the shell last pushed — never the reverse — so a row can never disagree with
+// the stored choice.
+void SettingsPage::RenderServiceRelease() {
+  if (installedVersionValue_ == nullptr) return;  // not built yet
+
+  const ServiceChannel channel = StoredChannel();
+  const std::string tag = PinnedTag();
+
+  // ---- the channel radios --------------------------------------------------
+  applyingChannel_ = true;
+  if (channel == ServiceChannel::UpstreamMain && channelUpstream_ != nullptr) {
+    // Rendered as selected even though the control is insensitive: the page
+    // shows what is STORED. Substituting Beta here would make the radios lie
+    // about which repo a check is going to be aimed at.
+    channelUpstream_->set_active(true);
+  } else if (channelBeta_ != nullptr) {
+    channelBeta_->set_active(true);
+  }
+  applyingChannel_ = false;
+
+  if (channelStrandedRow_ != nullptr && channelStranded_ != nullptr) {
+    const bool stranded = !ChannelHasBuilds(channel);
+    channelStrandedRow_->set_visible(stranded);
+    if (stranded) {
+      SetToned(*channelStranded_, kUrDanger,
+               T_("svc_channel_stranded",
+                  "This channel is the stored choice but publishes no builds, so no "
+                  "release will ever be found. Switch to Beta to get updates again."));
+    }
+  }
+
+  // ---- the pinned release --------------------------------------------------
+  if (releaseRow_.value != nullptr) {
+    ApplyFieldState(*releaseRow_.value, SettingsFieldState::Loaded,
+                    tag.empty() ? Glib::ustring(T_("svc_release_latest", "Latest"))
+                                : Glib::ustring(tag));
+  }
+
+  // ---- installed ------------------------------------------------------------
+  // Two sources, in order of authority. ServiceSetup's classifier can tell
+  // "registered but stopped" from "not installed at all"; the control
+  // session's hello can only report a version while the daemon is REACHABLE.
+  // Neither is allowed to invent the other's answer.
+  if (serviceView_.classified) {
+    if (!serviceView_.installedVersion.empty()) {
+      ApplyFieldState(*installedVersionValue_, SettingsFieldState::Loaded,
+                      serviceView_.installedVersion);
+    } else if (serviceView_.installed) {
+      // Registered, version unread — say exactly that.
+      SetToned(*installedVersionValue_, kUrTextFaint,
+               T_("svc_version_unread", "Installed, version unknown"));
+    } else {
+      SetToned(*installedVersionValue_, kUrTextFaint,
+               T_("svc_not_installed", "Not installed"));
+    }
+  } else {
+    // TODO(service-setup): ServiceSetup::Classify — the systemd twin of the
+    // windows classifier {Running, Stopped, VersionMismatch, NotInstalled,
+    // ConsoleMode, Unknown}. Until it exists nothing can tell "registered but
+    // stopped" from "never installed", so this row reports only what the wire
+    // proves and says "Not detected" for everything else.
+    //
+    // FALLBACK, and it is real evidence rather than a guess: daemon_version is
+    // what the running urnetworkd reported in the control hello.
+    const std::string daemonVersion = host_.Control().DaemonVersion();
+    if (!daemonVersion.empty()) {
+      ApplyFieldState(*installedVersionValue_, SettingsFieldState::Loaded, daemonVersion);
+    } else {
+      // "Not detected", NOT "not installed": an unreachable socket is three
+      // different problems (absent, stopped, or this user is not in the
+      // urnetwork group) and this row has no evidence to pick between them.
+      SetToned(*installedVersionValue_, kUrTextFaint,
+               T_("svc_version_undetected", "Not detected"));
+    }
+  }
+
+  // ---- available ------------------------------------------------------------
+  if (availableVersionValue_ != nullptr) {
+    if (serviceView_.checking) {
+      ApplyFieldState(*availableVersionValue_, SettingsFieldState::Loading);
+    } else if (serviceView_.checkFailed) {
+      SetToned(*availableVersionValue_, kUrDanger,
+               T_("svc_check_failed", "Couldn't reach GitHub"));
+    } else if (!serviceView_.availableVersion.empty()) {
+      ApplyFieldState(*availableVersionValue_, SettingsFieldState::Loaded,
+                      serviceView_.availableVersion);
+    } else if (!ChannelHasBuilds(channel)) {
+      SetToned(*availableVersionValue_, kUrTextFaint,
+               T_("svc_channel_no_builds", "No builds on this channel"));
+    } else {
+      SetToned(*availableVersionValue_, kUrTextFaint,
+               T_("svc_never_checked", "Not checked yet"));
+    }
+  }
+
+  // ---- the two actions ------------------------------------------------------
+  // Both go insensitive while an elevated verb is in flight, so two elevation
+  // prompts can never be in flight at once (the spec's busy rule for the
+  // uninstall row, applied to its siblings).
+  const bool busy = serviceView_.busy;
+  if (checkReleasesNow_ != nullptr) {
+    checkReleasesNow_->set_sensitive(static_cast<bool>(on_service_check_now) && !busy &&
+                                     !serviceView_.checking && ChannelHasBuilds(channel));
+  }
+  if (serviceUninstall_ != nullptr) serviceUninstall_->set_sensitive(!busy);
+
+  if (serviceInstall_ != nullptr) {
+    const bool known = !serviceView_.availableVersion.empty();
+    const std::string installedVersion = serviceView_.classified
+                                             ? serviceView_.installedVersion
+                                             : host_.Control().DaemonVersion();
+    const bool installedKnown = !installedVersion.empty();
+    const bool upToDate =
+        known && installedKnown && installedVersion == serviceView_.availableVersion;
+    // Unclassified: a version on the wire is the only proof of an install we
+    // have. Classified: the classifier's own answer, which can be "registered
+    // but its version was unreadable".
+    const bool anythingInstalled =
+        serviceView_.classified ? serviceView_.installed : installedKnown;
+
+    // The verb names what the click WILL DO. Three cases, not two: reinstall
+    // is not an update, and calling it one is how a banner earns distrust.
+    const char* verb = !anythingInstalled ? T_("svc_install_action", "Install")
+                       : upToDate         ? T_("svc_reinstall_action", "Reinstall")
+                                          : T_("svc_update_action", "Update");
+    serviceInstall_->set_label(verb);
+    kit::SetAccessibleLabel(*serviceInstall_,
+                            Glib::ustring(verb) + ". " +
+                                T_("svc_install_label", "Install or update"));
+    serviceInstall_->set_sensitive(static_cast<bool>(on_service_install) && !busy &&
+                                   ChannelHasBuilds(channel));
+
+    if (installNote_ != nullptr) {
+      kit::SetTextOrCollapse(
+          *installNote_,
+          busy ? Glib::ustring(T_("svc_busy_note", "Waiting for the administrator prompt."))
+          : upToDate
+              ? Glib::ustring(T_("svc_up_to_date_note",
+                                 "The installed service already matches this release."))
+              : Glib::ustring(
+                    T_("svc_install_note",
+                       "Downloads the release above and installs it with one "
+                       "administrator prompt.")));
+    }
+  }
 }
 
 // ---- Pane B: Device (§4.1) --------------------------------------------------
@@ -1516,6 +2139,22 @@ void SettingsPage::ShowAppSplitRulesSheet() {
     splitRulesSheet_ = std::make_unique<SplitRulesSheet>(*root, host_);
   }
   splitRulesSheet_->Open();
+}
+
+void SettingsPage::ShowReleaseTagSheet() {
+  Gtk::Window* root = RootWindow();
+  if (root == nullptr) return;
+  if (!releaseTagSheet_) {
+    releaseTagSheet_ = std::make_unique<SettingsReleaseTagSheet>(*root);
+    releaseTagSheet_->on_chosen = [this](const std::string& tag) {
+      // The sheet decides; the PAGE persists and publishes. One writer for the
+      // pref, the same way the device-name sheet hands its result back rather
+      // than writing the row itself.
+      prefs::Set<std::string>(kTagPrefKey, tag);
+      PublishReleaseSource();
+    };
+  }
+  releaseTagSheet_->Open(PinnedTag(), serviceView_.knownTags);
 }
 
 void SettingsPage::ShowIdentitySheet() {

@@ -13,12 +13,18 @@
 # --filesystem=/run/urnetwork:ro. Read-only is correct AND sufficient:
 # connect(2) on a unix socket is not a filesystem write, and Linux exempts
 # sockets from the read-only-mount EROFS check (only REG/DIR/LNK are covered).
-# The daemon itself comes from the host's native .deb/.rpm.
+# The daemon itself is a host package — a native .deb/.rpm, or the release
+# tarball the app can fetch and install for the user (see below).
 #
 # The app already renders the missing-daemon case as a distinct, actionable
 # state (MainWindow::StartTunnelUi: "service not running" / "service out of
 # date" / "app out of date" / "builds differ"), so a Flatpak with no host
-# daemon explains itself instead of failing blank.
+# daemon explains itself instead of failing blank. The Connect page's setup
+# card turns that state into a BUTTON: the app downloads the daemon from
+# GitHub Releases into its own cache, verifies the sha256 GitHub published for
+# that asset, and hands the already-verified path to one privileged step. See
+# the HOST SERVICE INSTALL block in finish-args below for how that step is
+# permitted, and why it is the narrowest shape available.
 #
 # LOCAL INSTALL (the current target — Flathub submission comes later):
 #   flatpak install -y flathub org.gnome.Platform//49 org.gnome.Sdk//49
@@ -26,12 +32,17 @@
 #     build-flatpak packaging/flatpak/network.ur.urnetwork.yml
 #   flatpak run network.ur.urnetwork
 #
-# FOR FLATHUB, two changes are required and are deliberately NOT made here:
+# FOR FLATHUB, three changes are required and are deliberately NOT made here:
 #   1. `sources: [{type: dir, path: ../..}]` must become a git/archive source
 #      with a commit or sha256 — Flathub forbids local directory sources.
 #   2. The four commercial brand faces under app/assets/fonts are NOT MPL-2.0.
 #      Flathub requires the licenses of every bundled binary asset to permit
 #      redistribution; that audit (§7.17) must land before submission.
+#   3. `--talk-name=org.freedesktop.Flatpak` and `--socket=session-bus` are
+#      BOTH flagged by flatpak-builder-lint and need a justification PR against
+#      flathub/flatpak-builder-lint's exception list. This is a KNOWN
+#      submission blocker, not a surprise — the justification is written out in
+#      the HOST SERVICE INSTALL block below so it can be pasted into that PR.
 #
 # SPDX-License-Identifier: MPL-2.0
 id: network.ur.urnetwork
@@ -57,6 +68,76 @@ finish-args:
   # login screen, and reports "service not running" — it never silently fails.
   - --filesystem=/run/urnetwork:ro
 
+  # ---- HOST SERVICE INSTALL / UPDATE ------------------------------------
+  # WHY: the Connect page's setup card ("service not installed" / "stopped" /
+  # "out of date") carries a button that installs or updates the HOST daemon.
+  # The sandbox cannot do that itself — it has no /dev/net/tun, no
+  # CAP_NET_ADMIN and no way to write a system unit — so the button asks the
+  # host to run the installer once, under polkit:
+  #
+  #     flatpak-spawn --host pkexec <already-verified installer path>
+  #
+  # That is ONE native polkit prompt, the same prompt a .deb install shows.
+  # flatpak-spawn reaches the host through org.freedesktop.Flatpak's
+  # Development.HostCommand method on the SESSION bus, which is what these two
+  # options permit and the only reason either is here.
+  #
+  # SCOPE — and scope is the whole argument for granting the exception:
+  #   * The spawn is used for the INSTALLER ONLY. Nothing else in the app
+  #     shells out to the host: connect/disconnect, status, provider selection
+  #     and every other privileged operation go over the daemon's control
+  #     socket above, which is a read-only bind mount and a closed protocol.
+  #   * The privileged step is DUMB by construction: install files, systemctl
+  #     daemon-reload, enable --now. It is handed a path, never a URL.
+  #   * Download and verification happen UNPRIVILEGED, in the sandbox, as the
+  #     app user: the release asset is fetched into the app's own cache and
+  #     checked against the sha256 GitHub computed at upload time and serves in
+  #     the same releases JSON the checker already reads. Nothing is ever
+  #     piped into root, and root is only ever shown a path that already
+  #     passed that check.
+  #
+  # FLATHUB: flatpak-builder-lint flags BOTH of these. Verified against
+  # org.flatpak.Builder's bundled linter on this manifest — adding these two
+  # lines, and nothing else, turns two lint errors on:
+  #     finish-args-flatpak-spawn-access   (--talk-name=org.freedesktop.Flatpak)
+  #     finish-args-arbitrary-dbus-access  (--socket=session-bus)
+  # Reproduce with:
+  #   flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+  #     manifest packaging/flatpak/network.ur.urnetwork.yml
+  # Shipping them means a justification PR against the linter's exception list
+  # — a known blocker on the submission path, called out in the header above.
+  # Precedent for the exact pattern (host command from a GTK app, talk-name
+  # only): Gear Lever, Warehouse and LACT all ship
+  # `org.freedesktop.Flatpak=talk` on Flathub.
+  #
+  # TIGHTENING, if the exception PR meets resistance: --talk-name alone is
+  # what those three ship, and it is the strictly narrower half — it keeps the
+  # D-Bus proxy filtering every other name on the session bus. --socket=session-bus
+  # is the belt-and-braces half (unfiltered bus, so the HostCommandExited
+  # signal and fd passing cannot be lost to a proxy quirk on an older flatpak
+  # or an unusual session). Drop --socket=session-bus FIRST and re-test the
+  # button; do not drop --talk-name, which is the one that actually carries
+  # the spawn.
+  #
+  # DEGRADES, NEVER BREAKS: if the exception is refused, a user override
+  # revokes the permission, or the spawn fails or is declined, the app falls
+  # back to showing a copyable one-line command for a terminal. The permission
+  # buys a nicer path, not the only path — so a denied exception costs
+  # convenience, not the product.
+  - --talk-name=org.freedesktop.Flatpak
+  - --socket=session-bus
+
+  # NO extra filesystem permission is needed for the download, and none must
+  # be added. $XDG_CACHE_HOME inside the sandbox is
+  # $HOME/.var/app/network.ur.urnetwork/cache, which flatpak bind-mounts from
+  # the host at the IDENTICAL path string — so the path the app writes is the
+  # path the host's pkexec opens, with no --filesystem=host, no
+  # --filesystem=xdg-cache (that would map the host's ~/.cache, which is both
+  # broader and not where the app writes) and no portal round trip.
+  # DO NOT "fix" this by using /tmp: the sandbox's /tmp is PRIVATE (verified:
+  # it holds only .X11-unix), so a file staged there is invisible to the host
+  # and the elevated step would fail on a path that does not exist.
+
   # The SNI tray (Tray.cpp speaks StatusNotifier over raw GDBus). Only the
   # WATCHER is declared: flatpak's name policy can grant a dotted subtree but
   # not the hyphenated org.kde.StatusNotifierItem-<pid>-<id>, so no --own-name
@@ -64,6 +145,16 @@ finish-args:
   # handles this by falling back to registering under the connection's unique
   # bus name, which the SNI spec allows and which needs no ownership.
   - --talk-name=org.kde.StatusNotifierWatcher
+
+  # TODO(flathub-lint): the two portal talk-names below are flagged
+  # `finish-args-portal-talk-name` by flatpak-builder-lint — every app can
+  # reach org.freedesktop.portal.* with no declared permission, so both lines
+  # are redundant and spend two lint errors on a submission that already needs
+  # an exception PR for the spawn above. Left in place only because removing
+  # them cannot be runtime-tested here (it needs a live sign-in click and an
+  # autostart toggle). Delete both once someone confirms OpenURI and Background
+  # still work without them; this is a pre-existing finding, unrelated to the
+  # HOST SERVICE INSTALL block.
 
   # Opening sign-in / wallet-connect / support links in the user's browser.
   - --talk-name=org.freedesktop.portal.OpenURI
