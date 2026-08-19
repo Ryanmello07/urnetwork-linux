@@ -88,7 +88,7 @@ name: Beta Build - Linux
 #          `flatpak install` than run an AppImage. GUI ONLY -- a Flatpak
 #          sandbox has no /dev/net/tun and no way to install a system unit, so
 #          this asset still needs the daemon from the .deb/.rpm/tarball (see
-#          packaging/flatpak/network.ur.urnetwork.yml).
+#          packaging/flatpak/com.bringyour.network.yml).
 #
 #          THE ONLY OPTIONAL ASSET, and the only one attached AFTER the
 #          release is created -- see the build-flatpak job header for why. If
@@ -189,7 +189,7 @@ env:
   # in repo settings to skip that job entirely, with no edit to this file.
   # The GNOME runtime this manifest targets; only used to pre-warm the runner's
   # flatpak installation, and it MUST equal runtime-version in
-  # packaging/flatpak/network.ur.urnetwork.yml (and RUNTIME_VERSION's default
+  # packaging/flatpak/com.bringyour.network.yml (and RUNTIME_VERSION's default
   # in packaging/make-flatpak.sh). The build asserts that rather than trusting
   # it.
   UR_FLATPAK_RUNTIME: "49"
@@ -635,11 +635,11 @@ jobs:
             urnetwork-daemon/payload/usr/lib/urnetwork/libURnetworkSdk.so \
             urnetwork-daemon/payload/usr/bin/urnetwork \
             urnetwork-daemon/payload/lib/systemd/system/urnetworkd.service \
-            urnetwork-daemon/payload/usr/share/applications/network.ur.urnetwork.desktop \
+            urnetwork-daemon/payload/usr/share/applications/com.bringyour.network.desktop \
             urnetwork-daemon/payload/usr/share/urnetwork/world-110m.json \
             urnetwork-daemon/payload/etc/NetworkManager/conf.d/95-urnetwork.conf \
             urnetwork-daemon/payload/etc/udev/rules.d/85-urnetwork-unmanaged.rules \
-            urnetwork-daemon/payload/etc/urnetwork/autostart/network.ur.urnetwork.desktop ; do
+            urnetwork-daemon/payload/etc/urnetwork/autostart/com.bringyour.network.desktop ; do
             grep -qx "$want" "$listing" || { echo "::error::$tarball is missing $want"; fail=1; }
           done
           # tray art and the gettext catalogs are globs, not fixed names
@@ -1042,7 +1042,7 @@ jobs:
           fail=0
           for want in \
             AppRun \
-            network.ur.urnetwork.desktop \
+            com.bringyour.network.desktop \
             usr/bin/urnetwork-gui \
             usr/bin/gdk-pixbuf-query-loaders \
             usr/lib/urnetwork/libURnetworkSdk.so \
@@ -1087,7 +1087,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # THE FLATPAK BUNDLE: the GUI a third time, for hosts that would rather
   # `flatpak install` than chmod +x an AppImage. GUI ONLY, for the reasons
-  # packaging/flatpak/network.ur.urnetwork.yml sets out at length -- a sandbox
+  # packaging/flatpak/com.bringyour.network.yml sets out at length -- a sandbox
   # has no /dev/net/tun and cannot install a system unit, so this artifact
   # needs the daemon from the .rpm/.deb/tarball and says so when it is missing.
   #
@@ -1246,7 +1246,7 @@ jobs:
       # placeholder the script substitutes) would delete this step.
       - name: Stamp the version into the manifest (CI-only)
         run: |
-          manifest=packaging/flatpak/network.ur.urnetwork.yml
+          manifest=packaging/flatpak/com.bringyour.network.yml
           if ! grep -qx "runtime-version: '${UR_FLATPAK_RUNTIME}'" "$manifest"; then
             echo "::error::$manifest does not declare runtime-version '${UR_FLATPAK_RUNTIME}'. UR_FLATPAK_RUNTIME (this workflow) and the manifest must name the same GNOME runtime -- the pre-warm step installed the wrong one."
             grep -n 'runtime-version' "$manifest" || true
@@ -1323,13 +1323,13 @@ jobs:
         run: |
           bundle="$PWD/dist/URnetwork-${VERSION}-${ARCH}.flatpak"
           sudo flatpak install -y --noninteractive --bundle "$bundle"
-          loc=$(flatpak info -l network.ur.urnetwork)
+          loc=$(flatpak info -l com.bringyour.network)
           echo "deployed at: $loc"
           fail=0
           for want in \
             files/bin/urnetwork-gui \
             files/share/urnetwork/world-110m.json \
-            files/share/applications/network.ur.urnetwork.desktop \
+            files/share/applications/com.bringyour.network.desktop \
             metadata ; do
             [ -e "$loc/$want" ] || { echo "::error::the bundle is missing $want"; fail=1; }
           done
@@ -1367,7 +1367,7 @@ jobs:
           # package's /usr/bin/urnetwork launcher, which does not exist in a
           # sandbox. (Check the module's own copy, not export/: flatpak
           # rewrites Exec in the exported entry to `flatpak run ...`.)
-          grep -q '^Exec=urnetwork-gui' "$loc/files/share/applications/network.ur.urnetwork.desktop" \
+          grep -q '^Exec=urnetwork-gui' "$loc/files/share/applications/com.bringyour.network.desktop" \
             || { echo "::error::the bundled .desktop still points Exec at the host launcher -- the manifest's post-install desktop-file-edit did not run"; fail=1; }
 
           # the version actually compiled in -- this is what the CI-only
@@ -1377,7 +1377,7 @@ jobs:
             echo "::error::the bundled urnetwork-gui does not contain the string ${VERSION} -- -Dapp_version did not reach the build, so this Flatpak would report 0.0.0 and sit in the GUI's version-skew error state"
             fail=1
           fi
-          sudo flatpak uninstall -y --noninteractive network.ur.urnetwork >/dev/null 2>&1 || true
+          sudo flatpak uninstall -y --noninteractive com.bringyour.network >/dev/null 2>&1 || true
           exit $fail
 
       - name: Upload the Flatpak bundle

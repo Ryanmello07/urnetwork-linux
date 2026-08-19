@@ -13,7 +13,7 @@ Terminal=false
 Categories=Network;Security;
 Keywords=VPN;URnetwork;proxy;privacy;
 StartupNotify=true
-StartupWMClass=network.ur.urnetwork
+StartupWMClass=com.bringyour.network
 # Register the urnetwork:// scheme so OAuth/SSO callbacks and wallet deep
 # links route back to the app. Shipped as a plain dpkg file so the
 # desktop-file-utils dpkg trigger refreshes mimeinfo.cache automatically

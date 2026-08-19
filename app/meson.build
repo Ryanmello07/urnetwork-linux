@@ -302,30 +302,35 @@ endif
 # host_integration=false (Flatpak) drops it with the rest: the GUI never calls
 # polkit — the daemon does, against a subject the GUI cannot influence.
 if host_integration
-install_data('..' / 'packaging' / 'polkit' / 'network.ur.urnetwork.policy',
+install_data('..' / 'packaging' / 'polkit' / 'com.bringyour.network.policy',
              install_dir : get_option('datadir') / 'polkit-1' / 'actions')
 endif
 
-# desktop file: the filename MUST match main.cpp's app id network.ur.urnetwork
+# desktop file: the filename MUST match main.cpp's app id com.bringyour.network
 # (D-Bus activation requires it; APPIMAGE.md §11d)
-install_data('packaging/network.ur.urnetwork.desktop',
+install_data('packaging/com.bringyour.network.desktop',
              install_dir : get_option('datadir') / 'applications')
 
 # AppStream metadata — required by Flathub, read by GNOME Software / Discover
 # for the .deb and .rpm too. The component id matches the .desktop basename.
-install_data('packaging/network.ur.urnetwork.metainfo.xml',
+install_data('packaging/com.bringyour.network.metainfo.xml',
              install_dir : get_option('datadir') / 'metainfo')
 
 # hicolor icons (Icon=urnetwork in the desktop file)
-install_data('packaging/icons/hicolor/48x48/apps/urnetwork.png',
-             install_dir : get_option('datadir') / 'icons' / 'hicolor' / '48x48' / 'apps')
-install_data('packaging/icons/hicolor/256x256/apps/urnetwork.png',
-             install_dir : get_option('datadir') / 'icons' / 'hicolor' / '256x256' / 'apps')
+# Sourced from the 1024x1024 master in the apple repo's AppIcon.appiconset, so
+# every size is a downscale of one artwork rather than separately-drawn assets
+# that drift. Flathub renders the store page at up to 512 and HiDPI desktops
+# ask for 128/256, so shipping only 48 and 256 left both looking soft.
+foreach size : ['48', '64', '128', '256', '512', '1024']
+  install_data('packaging/icons/hicolor/' + size + 'x' + size + '/apps/urnetwork.png',
+               install_dir : get_option('datadir') / 'icons' / 'hicolor' /
+                             (size + 'x' + size) / 'apps')
+endforeach
 
 # autostart INERT TEMPLATE: root-owned under /etc/urnetwork/autostart/, where
 # no desktop reads it; the GUI symlinks it into ~/.config/autostart atomically
 if host_integration
-install_data('packaging/autostart/network.ur.urnetwork.desktop',
+install_data('packaging/autostart/com.bringyour.network.desktop',
              install_dir : '/etc/urnetwork/autostart')
 endif
 

@@ -12,7 +12,7 @@ namespace {
 
 constexpr int kSecretPayloadVersion = 1;
 constexpr size_t kMaxSecretPayloadBytes = 256 * 1024;
-constexpr const char* kApplicationAttribute = "network.ur.urnetwork";
+constexpr const char* kApplicationAttribute = "com.bringyour.network";
 
 const SecretSchema kRpcSessionSchema = [] {
   // Zero-initialize libsecret's reserved ABI fields explicitly. A short C
