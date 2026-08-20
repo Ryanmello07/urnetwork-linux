@@ -193,6 +193,17 @@ env:
   # in packaging/make-flatpak.sh). The build asserts that rather than trusting
   # it.
   UR_FLATPAK_RUNTIME: "49"
+  # Layer 2 of the anti-hang fix (layer 1 is timeout-minutes on every job).
+  # apt's DEFAULT is to wait forever on a stalled mirror connection: two runs
+  # died that way -- one an hour on `apt-get install zip`, one six hours split
+  # across the AppImage and Flatpak dependency steps. Different packages, same
+  # cause, so this is bounded at the transport rather than per call site.
+  # Retries covers the transient 503s the azure mirrors serve under load.
+  UR_APT_OPTS: >-
+    -o Acquire::Retries=3
+    -o Acquire::http::Timeout=30
+    -o Acquire::https::Timeout=30
+    -o Acquire::http::No-Cache=true
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -210,6 +221,9 @@ jobs:
   build-sdk:
     name: Build SDK .so (linux/amd64 + arm64) + derive version
     runs-on: ubuntu-latest
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 45
     outputs:
       version: ${{ steps.version.outputs.version }}
       version_code: ${{ steps.version.outputs.version_code }}
@@ -282,7 +296,7 @@ jobs:
           go-version: stable
 
       - name: Install zip
-        run: sudo apt-get update && sudo apt-get install -y zip
+        run: sudo apt-get $UR_APT_OPTS update && sudo apt-get $UR_APT_OPTS install -y zip
 
       # The Makefile's LINUX_AMD64_CC/LINUX_ARM64_CC default to `zig cc -target
       # <arch>-linux-gnu.2.35`. Putting a `zig` shim on PATH means the recipe
@@ -412,6 +426,9 @@ jobs:
     name: Build daemon + install tarball + deb + rpm (${{ matrix.arch }})
     needs: build-sdk
     runs-on: ${{ matrix.runner }}
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 60
     container: ubuntu:22.04
     strategy:
       fail-fast: false
@@ -435,8 +452,8 @@ jobs:
       # download without it, and the packaging scripts want a real tree.
       - name: Install build dependencies
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
+          apt-get $UR_APT_OPTS update
+          apt-get $UR_APT_OPTS install -y --no-install-recommends \
             build-essential meson ninja-build pkg-config gettext \
             libglib2.0-dev nlohmann-json3-dev \
             git curl ca-certificates unzip xz-utils binutils file python3
@@ -549,7 +566,7 @@ jobs:
           # the jammy debs) but in **policycoreutils** on Fedora (measured with
           # rpm -qf on a Bazzite host). This runner is Ubuntu, so it needs
           # semodule-utils; installing policycoreutils here would NOT provide it.
-          apt-get install -y --no-install-recommends rpm checkpolicy semodule-utils
+          apt-get $UR_APT_OPTS install -y --no-install-recommends rpm checkpolicy semodule-utils
           rpm --version
           rpmbuild --version || true
           # Fail here, with a legible message, rather than 40 lines later inside
@@ -670,7 +687,7 @@ jobs:
           # assertion above already covers the shared payload (both packages go
           # through assemble_daemon_root), so this is a secondary check.
           if ! command -v dpkg-deb >/dev/null 2>&1; then
-            apt-get install -y --no-install-recommends dpkg-dev >/dev/null 2>&1 || true
+            apt-get $UR_APT_OPTS install -y --no-install-recommends dpkg-dev >/dev/null 2>&1 || true
           fi
           if command -v dpkg-deb >/dev/null 2>&1; then
             dpkg-deb --info "$deb"
@@ -886,6 +903,9 @@ jobs:
     name: Build GUI AppImage (${{ matrix.arch }})
     needs: build-sdk
     runs-on: ${{ matrix.runner }}
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -916,8 +936,8 @@ jobs:
       # so they are build deps even though nothing links against them.
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get $UR_APT_OPTS update
+          sudo apt-get $UR_APT_OPTS install -y --no-install-recommends \
             build-essential meson ninja-build pkg-config gettext \
             libglib2.0-dev libglib2.0-bin nlohmann-json3-dev \
             libgtkmm-4.0-dev libadwaita-1-dev libfontconfig1-dev libsecret-1-dev \
@@ -1147,6 +1167,9 @@ jobs:
     # commit. Unset means build (the intended state).
     if: vars.UR_BUILD_FLATPAK != 'false'
     runs-on: ${{ matrix.runner }}
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -1178,7 +1201,7 @@ jobs:
       # that is the entire point of building in a runtime.
       - name: Install flatpak + flatpak-builder
         run: |
-          sudo apt-get update
+          sudo apt-get $UR_APT_OPTS update
           # elfutils is NOT optional despite nothing naming it: flatpak-builder
           # strips every module it builds by shelling out to `eu-strip`, which
           # ships in elfutils and is NOT pulled in by the flatpak-builder
@@ -1187,7 +1210,7 @@ jobs:
           # eu-strip (No such file or directory)" -- after several minutes of
           # apparently healthy compiling, which reads like a compiler problem
           # rather than a missing tool. binutils alone does not provide it.
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get $UR_APT_OPTS install -y --no-install-recommends \
             flatpak flatpak-builder binutils elfutils
           flatpak --version
           flatpak-builder --version
@@ -1404,6 +1427,9 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [build-sdk, build-daemon, build-appimage]
     runs-on: ubuntu-latest
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 25
     permissions:
       contents: write
     env:
@@ -1585,6 +1611,9 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [build-sdk, build-flatpak, release]
     runs-on: ubuntu-latest
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 25
     permissions:
       contents: write
     env:
