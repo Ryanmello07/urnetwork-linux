@@ -51,6 +51,19 @@
 
   <launchable type="desktop-id">com.bringyour.network.desktop</launchable>
 
+  <!-- Flathub mirrors these at build time, so the URL must be reachable from a
+       build host; a repo-relative path does NOT work. It points at the fork
+       today because that is where the file lives. REPOINT IT AT
+       raw.githubusercontent.com/urnetwork/linux/ before the Flathub submission,
+       or the mirror step fetches a file the official repo does not have.
+       width and height must match the file exactly; Flathub's linter checks. -->
+  <screenshots>
+    <screenshot type="default">
+      <caption>Connected, showing live per-host activity and transport health</caption>
+      <image type="source" width="1600" height="970">https://raw.githubusercontent.com/Ryanmello07/urnetwork-linux/beta/custom-server/app/packaging/screenshots/connected.png</image>
+    </screenshot>
+  </screenshots>
+
   <url type="homepage">https://ur.io</url>
   <url type="bugtracker">https://github.com/urnetwork/linux/issues</url>
   <url type="vcs-browser">https://github.com/urnetwork/linux</url>
