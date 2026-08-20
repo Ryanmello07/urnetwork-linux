@@ -17,6 +17,16 @@
 // A build that is newer than its own channel's latest release simply has no
 // update to report and stays silent.
 //
+// THE CHANNELS ARE INTERCHANGEABLE, and that is deliberate. Both repositories
+// publish the same artifacts under the same naming, so the channel decides
+// only WHERE releases are read from -- never whether a given release may be
+// installed. Switching to Upstream from a beta build and installing an
+// upstream release is a supported move, and so is the reverse. There is
+// therefore no "tag belongs to this stream" check: a version's "-beta" suffix
+// records its origin, not its eligibility, and UpdateRelease.hpp deliberately
+// excludes that suffix from version ordering so the same release compares
+// identically from either side.
+//
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -65,15 +75,6 @@ inline Channel FromName(const std::string& name, Channel fallback) {
   if (name == "beta") return Channel::Beta;
   if (name == "upstream") return Channel::Upstream;
   return fallback;
-}
-
-// A release on the beta channel carries the suffix; upstream's does not. Used
-// to reject a tag that belongs to the other stream if a repo ever mixes them.
-inline bool TagBelongsTo(const std::string& tag, Channel c) {
-  const std::string suffix = kBetaSuffix;
-  const bool isBeta = tag.size() >= suffix.size() &&
-                      tag.compare(tag.size() - suffix.size(), suffix.size(), suffix) == 0;
-  return isBeta == (c == Channel::Beta);
 }
 
 // CAN THIS INSTALL REPLACE ITS OWN APP BINARY? Inside a Flatpak the answer is
