@@ -381,7 +381,7 @@ endif
 # that drift. Flathub renders the store page at up to 512 and HiDPI desktops
 # ask for 128/256, so shipping only 48 and 256 left both looking soft.
 foreach size : ['48', '64', '128', '256', '512', '1024']
-  install_data('packaging/icons/hicolor/' + size + 'x' + size + '/apps/urnetwork.png',
+  install_data('packaging/icons/hicolor/' + size + 'x' + size + '/apps/com.bringyour.network.png',
                install_dir : get_option('datadir') / 'icons' / 'hicolor' /
                              (size + 'x' + size) / 'apps')
 endforeach

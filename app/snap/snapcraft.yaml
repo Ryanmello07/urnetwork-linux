@@ -110,4 +110,4 @@ parts:
     source: packaging
     organize:
       urnetwork.desktop: usr/share/applications/urnetwork.desktop
-      urnetwork.png: usr/share/icons/hicolor/256x256/apps/urnetwork.png
+      com.bringyour.network.png: usr/share/icons/hicolor/256x256/apps/com.bringyour.network.png

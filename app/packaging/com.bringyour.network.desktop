@@ -2,7 +2,7 @@
 Type=Application
 Name=URnetwork
 Comment=URnetwork VPN
-Icon=urnetwork
+Icon=com.bringyour.network
 # /usr/bin/urnetwork is the launcher script the daemon package installs; it
 # finds the user's AppImage (search order in MIGRATION.md) and execs it with
 # the same arguments. Keeping Exec= on a stable, package-managed path is what

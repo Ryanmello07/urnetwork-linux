@@ -198,12 +198,12 @@ printf 'X-AppImage-Version=%s\n' "${VERSION}" >> "${APPDIR}/usr/share/applicatio
 cp "${APPDIR}/usr/share/applications/com.bringyour.network.desktop" "${APPDIR}/com.bringyour.network.desktop"
 
 install -d "${APPDIR}/usr/share/icons/hicolor/256x256/apps" "${APPDIR}/usr/share/icons/hicolor/48x48/apps"
-install -m 0644 "${APP_PACKAGING_DIR}/icons/hicolor/256x256/apps/urnetwork.png" \
-    "${APPDIR}/usr/share/icons/hicolor/256x256/apps/urnetwork.png"
-install -m 0644 "${APP_PACKAGING_DIR}/icons/hicolor/48x48/apps/urnetwork.png" \
-    "${APPDIR}/usr/share/icons/hicolor/48x48/apps/urnetwork.png"
-install -m 0644 "${APP_PACKAGING_DIR}/icons/hicolor/256x256/apps/urnetwork.png" "${APPDIR}/urnetwork.png"
-cp "${APPDIR}/urnetwork.png" "${APPDIR}/.DirIcon"
+install -m 0644 "${APP_PACKAGING_DIR}/icons/hicolor/256x256/apps/com.bringyour.network.png" \
+    "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.bringyour.network.png"
+install -m 0644 "${APP_PACKAGING_DIR}/icons/hicolor/48x48/apps/com.bringyour.network.png" \
+    "${APPDIR}/usr/share/icons/hicolor/48x48/apps/com.bringyour.network.png"
+install -m 0644 "${APP_PACKAGING_DIR}/icons/hicolor/256x256/apps/com.bringyour.network.png" "${APPDIR}/com.bringyour.network.png"
+cp "${APPDIR}/com.bringyour.network.png" "${APPDIR}/.DirIcon"
 
 install -m 0755 "${SCRIPT_DIR}/appimage/AppRun" "${APPDIR}/AppRun"
 
