@@ -380,7 +380,13 @@ endif
 # every size is a downscale of one artwork rather than separately-drawn assets
 # that drift. Flathub renders the store page at up to 512 and HiDPI desktops
 # ask for 128/256, so shipping only 48 and 256 left both looking soft.
-foreach size : ['48', '64', '128', '256', '512', '1024']
+# 512 is the ceiling ON PURPOSE: flatpak refuses to export an icon larger
+# than 512x512 ("Image too large (1024x1024). Max. size 512x512") and fails
+# the whole build at export time. The 1024 master lives at
+# packaging/icons/com.bringyour.network-master-1024.png for regenerating
+# these, and is deliberately not installed. Flathub renders the store page
+# at up to 512, so nothing downstream wants a larger one.
+foreach size : ['48', '64', '128', '256', '512']
   install_data('packaging/icons/hicolor/' + size + 'x' + size + '/apps/com.bringyour.network.png',
                install_dir : get_option('datadir') / 'icons' / 'hicolor' /
                              (size + 'x' + size) / 'apps')

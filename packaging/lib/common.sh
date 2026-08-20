@@ -131,8 +131,7 @@ assemble_daemon_root() {
              icons/hicolor/64x64/apps/com.bringyour.network.png \
              icons/hicolor/128x128/apps/com.bringyour.network.png \
              icons/hicolor/256x256/apps/com.bringyour.network.png \
-             icons/hicolor/512x512/apps/com.bringyour.network.png \
-             icons/hicolor/1024x1024/apps/com.bringyour.network.png; do
+             icons/hicolor/512x512/apps/com.bringyour.network.png; do
         [ -f "${src}/${f}" ] || die "packaging source missing: ${src}/${f}"
     done
 
@@ -151,7 +150,7 @@ assemble_daemon_root() {
     # window titlebar, which is exactly the softness that showed up on a HiDPI
     # desktop. meson installs the same six for the Flatpak; keep them in step.
     local icon_size
-    for icon_size in 48 64 128 256 512 1024; do
+    for icon_size in 48 64 128 256 512; do
         install -d "${root}/usr/share/icons/hicolor/${icon_size}x${icon_size}/apps"
         cp "${src}/icons/hicolor/${icon_size}x${icon_size}/apps/com.bringyour.network.png" \
             "${root}/usr/share/icons/hicolor/${icon_size}x${icon_size}/apps/com.bringyour.network.png"

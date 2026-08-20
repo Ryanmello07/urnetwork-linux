@@ -159,7 +159,6 @@ ${SHARE_DIR}/icons/hicolor/64x64/apps/com.bringyour.network.png
 ${SHARE_DIR}/icons/hicolor/128x128/apps/com.bringyour.network.png
 ${SHARE_DIR}/icons/hicolor/256x256/apps/com.bringyour.network.png
 ${SHARE_DIR}/icons/hicolor/512x512/apps/com.bringyour.network.png
-${SHARE_DIR}/icons/hicolor/1024x1024/apps/com.bringyour.network.png
 ${SHARE_DIR}/polkit-1/actions/com.bringyour.network.policy
 /etc/urnetwork/autostart/com.bringyour.network.desktop
 /etc/NetworkManager/conf.d/95-urnetwork.conf
