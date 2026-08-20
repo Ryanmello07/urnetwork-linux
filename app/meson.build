@@ -173,6 +173,12 @@ executable('urnetwork-gui',
     'src/SupportPage.cpp',
     'src/NetworkPage.cpp',
     'src/SettingsPage.cpp',
+    # NEVER COMPILED UNTIL NOW. ServiceInstall.{hpp,cpp} landed with the distro
+    # detection for the service-install notice but was left out of every target,
+    # so it was not merely uncalled -- it was unbuilt, and a compile error in it
+    # would not have been noticed. Listed here as the update flow's first real
+    # consumer; see UpdateDialog.
+    'src/ServiceInstall.cpp',
     'src/DeveloperPage.cpp',
     'src/EarningsPage.cpp',
     'src/AccountPage.cpp',
