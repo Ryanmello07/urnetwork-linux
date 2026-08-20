@@ -944,7 +944,8 @@ jobs:
             adwaita-icon-theme gtk-update-icon-cache librsvg2-common \
             libgdk-pixbuf2.0-bin glib-networking \
             squashfs-tools zsync patchelf binutils desktop-file-utils file \
-            git curl unzip
+            git curl unzip \
+            appstream
           meson --version
 
       # make-appimage.sh REFUSES to package a GUI with a webkitgtk NEEDED entry
@@ -990,8 +991,13 @@ jobs:
       # binary built here is a byproduct that is never shipped, and running the
       # gate against it would either produce a false red or, worse, tempt
       # someone to weaken the gate that protects the real daemon.
-      - name: Test (unit suite)
-        run: meson test -C build --print-errorlogs unit
+      # Both are NAMES, not suites -- this project declares no suites, and
+      # meson test takes test names positionally. Naming appstream-metainfo
+      # explicitly is the point: the test only registers when appstreamcli is
+      # found, so if that package ever falls out of the deps above, this step
+      # fails with "no tests matching" instead of silently validating nothing.
+      - name: Test (unit + appstream metainfo)
+        run: meson test -C build --print-errorlogs unit appstream-metainfo
 
       - name: Upload the meson logs
         if: always()
@@ -1263,11 +1269,17 @@ jobs:
       #    installed a runtime this build will not use, and quietly patching
       #    the manifest to match CI would be the wrong half to move.
       #
-      # TODO(packaging): both of these belong upstream -- make-flatpak.sh
-      # already reads VERSION for the bundle filename, so threading it into the
-      # meson config-opts (or adding -Dapp_version to the manifest with a
-      # placeholder the script substitutes) would delete this step.
-      - name: Stamp the version into the manifest (CI-only)
+      # The -Dapp_version stamping that used to live here now lives in
+      # packaging/make-flatpak.sh, which this job calls -- so a local
+      # `make-flatpak.sh --install` gets the real version too, instead of
+      # shipping the 0.0.0 sentinel while only CI shipped the right one. This
+      # job's own `env: VERSION` is what the script reads.
+      #
+      # The runtime-version assertion stays: it is not about the version stamp
+      # at all. UR_FLATPAK_RUNTIME drives the pre-warm step above, and if the
+      # manifest names a different GNOME runtime then the pre-warm installed one
+      # this build will not use.
+      - name: Assert the manifest's runtime matches UR_FLATPAK_RUNTIME
         run: |
           manifest=packaging/flatpak/com.bringyour.network.yml
           if ! grep -qx "runtime-version: '${UR_FLATPAK_RUNTIME}'" "$manifest"; then
@@ -1275,16 +1287,6 @@ jobs:
             grep -n 'runtime-version' "$manifest" || true
             exit 1
           fi
-          anchor='      - -Dhost_integration=false'
-          if ! grep -qxF "$anchor" "$manifest"; then
-            echo "::error::the app module's config-opts anchor ('-Dhost_integration=false') is gone from $manifest, so this step cannot stamp -Dapp_version and the bundle would ship reporting 0.0.0. Add -Dapp_version to the manifest (or to make-flatpak.sh) and delete this step."
-            exit 1
-          fi
-          sed -i "s|^${anchor}\$|${anchor}\n      - -Dapp_version=${VERSION}|" "$manifest"
-          grep -qxF "      - -Dapp_version=${VERSION}" "$manifest" \
-            || { echo "::error::failed to stamp -Dapp_version=${VERSION} into $manifest"; exit 1; }
-          echo "stamped -Dapp_version=${VERSION}"
-          sed -n '/name: urnetwork/,$p' "$manifest"
 
       # BUILD_DIR is moved OUT of the repo, which contradicts make-flatpak.sh's
       # own comment -- deliberately, and only because this job is the case that

@@ -28,6 +28,9 @@ RUNTIME_VERSION="${RUNTIME_VERSION:-49}"
 # stages ("Build directory not initialized, use flatpak build-init").
 BUILD_DIR="${BUILD_DIR:-$REPO_ROOT/build-flatpak}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/out}"
+# Read here, not just in the --bundle branch: the version has to be stamped into
+# the manifest BEFORE the build, not after it.
+VERSION="${VERSION:-}"
 
 DO_INSTALL=0
 DO_RUN=0
@@ -70,11 +73,47 @@ if [[ "$DO_BUNDLE" == 1 ]]; then
   BUILD_ARGS+=(--repo="$BUILD_DIR-repo")
 fi
 
+# The committed manifest carries NO -Dapp_version, so meson falls back to its
+# 0.0.0 dev sentinel unless something supplies one. That matters more than it
+# looks: the Flatpak is the ONLY artifact that installs the AppStream metainfo
+# (packaging/lib/common.sh's assemble_daemon_root() whitelist excludes
+# usr/share/metainfo, and make-appimage.sh does not package it), and that file
+# is what GNOME Software, KDE Discover and the Flathub page read. A 0.0.0 in
+# there is valid AppStream, so no validator catches it -- it just shows up on
+# the store page.
+#
+# This used to live in .github/workflows/beta-build.yml as a CI-only sed, which
+# meant a local `make-flatpak.sh --install` shipped 0.0.0 while CI shipped the
+# real version. Doing it here covers both, since CI calls this script.
+BUILD_MANIFEST="$MANIFEST"
+if [[ -n "$VERSION" ]]; then
+  anchor='      - -Dhost_integration=false'
+  if ! grep -qxF "$anchor" "$MANIFEST"; then
+    echo "the app module's config-opts anchor ('-Dhost_integration=false') is gone from $MANIFEST, so -Dapp_version cannot be stamped and the build would report 0.0.0. Add -Dapp_version to the manifest directly and drop this block." >&2
+    exit 1
+  fi
+  # Same directory as the original ON PURPOSE: the app module is `path: ../..`,
+  # which flatpak-builder resolves relative to the manifest, so a copy anywhere
+  # else would not find the repo. Written as a copy rather than an in-place edit
+  # so a developer's working tree is never left modified.
+  BUILD_MANIFEST="$(dirname "$MANIFEST")/.stamped-$(basename "$MANIFEST")"
+  trap 'rm -f "$BUILD_MANIFEST"' EXIT
+  sed "s|^${anchor}\$|${anchor}\n      - -Dapp_version=${VERSION}|" "$MANIFEST" > "$BUILD_MANIFEST"
+  if ! grep -qxF "      - -Dapp_version=${VERSION}" "$BUILD_MANIFEST"; then
+    echo "failed to stamp -Dapp_version=${VERSION} into $BUILD_MANIFEST" >&2
+    exit 1
+  fi
+  echo "==> stamped -Dapp_version=${VERSION}"
+else
+  echo "==> WARNING: VERSION is unset, so this build reports the 0.0.0 dev sentinel." >&2
+  echo "==>          Set VERSION=<release version> for anything you intend to ship." >&2
+fi
+
 echo "==> building $APP_ID"
-( cd "$REPO_ROOT" && "${BUILDER[@]}" "${BUILD_ARGS[@]}" "$BUILD_DIR" "$MANIFEST" )
+( cd "$REPO_ROOT" && "${BUILDER[@]}" "${BUILD_ARGS[@]}" "$BUILD_DIR" "$BUILD_MANIFEST" )
 
 if [[ "$DO_BUNDLE" == 1 ]]; then
-  VERSION="${VERSION:-0.0.0-dev}"
+  VERSION="${VERSION:-0.0.0-dev}"  # filename only; the stamp happened above
   BUNDLE="$OUT_DIR/URnetwork-${VERSION}.flatpak"
   echo "==> exporting $BUNDLE"
   flatpak build-bundle "$BUILD_DIR-repo" "$BUNDLE" "$APP_ID" \

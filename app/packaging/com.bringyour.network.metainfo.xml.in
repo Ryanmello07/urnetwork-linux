@@ -91,8 +91,13 @@
     <content_attribute id="social-info">mild</content_attribute>
   </content_rating>
 
+  <!-- STAMPED AT BUILD TIME. app/meson.build configure_file()s this
+       template, deriving both attributes from -Dapp_version. Do not
+       hardcode a version here: the file used to say 2026.8.19 while the
+       pipeline shipped 2026.8.20, and this is what GNOME Software, KDE
+       Discover and the Flathub page read. -->
   <releases>
-    <release version="2026.8.19" date="2026-08-19">
+    <release version="@APPSTREAM_VERSION@" date="@APPSTREAM_DATE@">
       <description>
         <p>First public release of the URnetwork desktop client for Linux.</p>
         <ul>
