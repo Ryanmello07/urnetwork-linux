@@ -31,6 +31,16 @@ OUT_DIR="${OUT_DIR:-$REPO_ROOT/out}"
 # Read here, not just in the --bundle branch: the version has to be stamped into
 # the manifest BEFORE the build, not after it.
 VERSION="${VERSION:-}"
+# Debian arch spelling, to match -Dsdk_arch and every other artifact name in
+# this pipeline. Defaults to THIS host: flatpak-builder builds for the machine
+# it runs on, so a cross-arch value here would only mislabel the bundle.
+if [[ -z "${ARCH:-}" ]]; then
+  case "$(uname -m)" in
+    x86_64)          ARCH=amd64 ;;
+    aarch64|arm64)   ARCH=arm64 ;;
+    *) echo "unsupported machine $(uname -m); set ARCH=amd64|arm64" >&2; exit 1 ;;
+  esac
+fi
 
 DO_INSTALL=0
 DO_RUN=0
@@ -98,12 +108,15 @@ if [[ -n "$VERSION" ]]; then
   # so a developer's working tree is never left modified.
   BUILD_MANIFEST="$(dirname "$MANIFEST")/.stamped-$(basename "$MANIFEST")"
   trap 'rm -f "$BUILD_MANIFEST"' EXIT
-  sed "s|^${anchor}\$|${anchor}\n      - -Dapp_version=${VERSION}|" "$MANIFEST" > "$BUILD_MANIFEST"
-  if ! grep -qxF "      - -Dapp_version=${VERSION}" "$BUILD_MANIFEST"; then
-    echo "failed to stamp -Dapp_version=${VERSION} into $BUILD_MANIFEST" >&2
-    exit 1
-  fi
-  echo "==> stamped -Dapp_version=${VERSION}"
+  sed "s|^${anchor}\$|${anchor}\n      - -Dapp_version=${VERSION}\n      - -Dsdk_arch=${ARCH}|" \
+      "$MANIFEST" > "$BUILD_MANIFEST"
+  for opt in "-Dapp_version=${VERSION}" "-Dsdk_arch=${ARCH}"; do
+    if ! grep -qxF "      - ${opt}" "$BUILD_MANIFEST"; then
+      echo "failed to stamp ${opt} into $BUILD_MANIFEST" >&2
+      exit 1
+    fi
+  done
+  echo "==> stamped -Dapp_version=${VERSION} -Dsdk_arch=${ARCH}"
 else
   echo "==> WARNING: VERSION is unset, so this build reports the 0.0.0 dev sentinel." >&2
   echo "==>          Set VERSION=<release version> for anything you intend to ship." >&2
@@ -114,7 +127,11 @@ echo "==> building $APP_ID"
 
 if [[ "$DO_BUNDLE" == 1 ]]; then
   VERSION="${VERSION:-0.0.0-dev}"  # filename only; the stamp happened above
-  BUNDLE="$OUT_DIR/URnetwork-${VERSION}.flatpak"
+  # ARCH IS PART OF THE NAME. Without it the amd64 and arm64 legs write the same
+  # file and one silently overwrites the other wherever the artifacts are merged.
+  # This used to be a rename step in beta-build.yml; the rule everywhere else is
+  # that the script names its own artifact, so it lives here now.
+  BUNDLE="$OUT_DIR/URnetwork-${VERSION}-${ARCH}.flatpak"
   echo "==> exporting $BUNDLE"
   flatpak build-bundle "$BUILD_DIR-repo" "$BUNDLE" "$APP_ID" \
     --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo

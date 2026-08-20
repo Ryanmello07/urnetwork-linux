@@ -1303,6 +1303,7 @@ jobs:
         run: |
           sudo env \
             "VERSION=${VERSION}" \
+            "ARCH=${ARCH}" \
             "OUT_DIR=${PWD}/dist" \
             "BUILD_DIR=${RUNNER_TEMP}/build-flatpak" \
             "RUNTIME_VERSION=${UR_FLATPAK_RUNTIME}" \
@@ -1310,27 +1311,20 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" dist
           ls -la dist
 
-      # make-flatpak.sh writes URnetwork-<version>.flatpak with NO arch in the
-      # name -- the one asset name in this pipeline that does not carry one.
-      # Renamed here so it matches its four siblings, and because the moment
-      # the arm64 legs are uncommented the two jobs would produce the SAME
-      # filename and `merge-multiple: true` would have one silently overwrite
-      # the other in the release.
-      #
-      # TODO(packaging): this rename belongs in make-flatpak.sh, which already
-      # knows VERSION and would only need ARCH. The rule everywhere else in
-      # this file is that the script names the artifact and the workflow only
-      # asserts; this step is a knowing, temporary exception, so move it and
-      # delete this step rather than letting the two drift.
-      - name: Name the bundle for the release
+        # make-flatpak.sh names the bundle itself now, arch included, so the
+        # rename that used to live here is gone. Its TODO(packaging) said the
+        # script "already knows VERSION and would only need ARCH" -- it now takes
+        # both, and it also stamps -Dsdk_arch, which the manifest never passed:
+        # meson defaults that option to amd64, so an arm64 bundle would have
+        # linked the amd64 SDK slice. This step only ASSERTS, which is the rule
+        # everywhere else in this file.
+      - name: Assert the bundle
         env:
           ARCH: ${{ matrix.arch }}
         working-directory: dist
         run: |
-          built="URnetwork-${VERSION}.flatpak"
           final="URnetwork-${VERSION}-${ARCH}.flatpak"
-          [ -f "$built" ] || { echo "::error::make-flatpak.sh --bundle did not produce $built"; ls -la; exit 1; }
-          mv "$built" "$final"
+          [ -f "$final" ] || { echo "::error::make-flatpak.sh --bundle did not produce $final"; ls -la; exit 1; }
           # a bundle carrying only metadata would still be a file; the gtkmm
           # stack plus the app is tens of MB even compressed
           size=$(stat -c %s "$final")
