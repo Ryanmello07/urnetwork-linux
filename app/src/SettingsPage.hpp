@@ -171,6 +171,9 @@ class SettingsPage : public Gtk::Box {
   bool applyingPreference_ = false;  // echo guard: the load writes IsOn
   bool preferencesLoaded_ = false;   // the toggle is inert until the value is known
   Gtk::Switch* autoCheckUpdates_ = nullptr;
+  // Which release stream update checks follow, for the app and the service.
+  // Defaults from the build's version string; only an explicit pick is stored.
+  Gtk::DropDown* updateChannel_ = nullptr;
 
   // ---- Pane A: Connections -------------------------------------------------
   // Local preference (prefs::kConnectOnLaunchKey), no echo guard: sole writer.

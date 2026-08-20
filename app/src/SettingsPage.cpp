@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "AppPrefs.hpp"
+#include "UpdateChannel.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
 #include "PaneKit.hpp"
@@ -50,6 +51,10 @@ constexpr const char* kProtocolUrl = "https://ur.xyz";
 // The local preference the auto-update toggle owns (windows UpdateChecker:
 // key "check_updates_automatically" in app_prefs.json, default true).
 constexpr const char* kAutoCheckKey = "check_updates_automatically";
+// Which release stream update checks follow. Absent until the user chooses,
+// so the default comes from the build's own version string — see
+// UpdateChannel.hpp: our CI appends "-beta", upstream's does not.
+constexpr const char* kUpdateChannelKey = "update_channel";
 
 // ---- tone -------------------------------------------------------------------
 // A line's colour is written as a pango attribute, not as a swapped CSS class.
@@ -980,6 +985,52 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
     // hours"); the checker itself (30s launch delay, 6h cadence) does not
     // exist in this tree yet, so the preference is recorded and nothing is
     // scheduled.
+  });
+
+  // Row 3 — WHICH STREAM those checks follow, for the app AND for the system
+  // service. Two streams only, and the app reports updates for the SELECTED
+  // one and nothing else: an upstream user is never told a beta exists, and a
+  // beta user is never told they are ahead of upstream. A build with no update
+  // on its own channel simply stays quiet.
+  //
+  // The default is not stored — it is READ OFF THIS BINARY. Our CI appends
+  // "-beta" to the version it stamps and upstream's build repo does not, so a
+  // beta install defaults to Beta and an upstream install to Upstream with
+  // nothing to keep in sync. The row below only ever records an EXPLICIT
+  // choice, and an explicit choice wins: someone running a beta build who
+  // picks Upstream is asking to hear about upstream releases.
+  const channel::Channel builtIn = channel::BuiltChannel();
+  const channel::Channel current = channel::FromName(
+      prefs::Get<std::string>(kUpdateChannelKey, std::string()), builtIn);
+
+  updateChannel_ = Gtk::make_managed<Gtk::DropDown>();
+  {
+    auto model = Gtk::StringList::create({});
+    model->append(T_("upd_channel_upstream", "Stable"));
+    model->append(T_("upd_channel_beta", "Beta"));
+    updateChannel_->set_model(model);
+    updateChannel_->set_selected(current == channel::Channel::Beta ? 1 : 0);
+    updateChannel_->set_valign(Gtk::Align::CENTER);
+  }
+  {
+    auto row = kit::MakePaneTwoLineRow(
+        T_("upd_channel", "Update channel"),
+        T_("upd_channel_note",
+           "Which releases this app and the URnetwork system service check for. "
+           "Beta builds arrive sooner and are less tested."),
+        kRowTall);
+    kit::SetAccessibleLabel(*updateChannel_, T_("upd_channel", "Update channel"));
+    row.trailing->append(*updateChannel_);
+    host.append(*row.root);
+  }
+  updateChannel_->property_selected().signal_changed().connect([this] {
+    const channel::Channel picked = updateChannel_->get_selected() == 1
+                                        ? channel::Channel::Beta
+                                        : channel::Channel::Upstream;
+    prefs::Set(kUpdateChannelKey, std::string(channel::NameFor(picked)));
+    // TODO(sdk-wiring): re-run the service check against the newly selected
+    // channel so the notice under Connect stops describing the old stream.
+    // The checker does not exist in this tree yet (see the row above).
   });
 }
 
