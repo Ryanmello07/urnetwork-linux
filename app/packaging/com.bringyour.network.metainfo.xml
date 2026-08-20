@@ -36,12 +36,16 @@
       what you have provided, what you are owed, and where your network ranks.
     </p>
     <p>
-      This Flatpak ships the graphical client only. Connecting requires the
-      URnetwork system service, which must be installed from your
-      distribution's native package: a sandboxed application cannot create a
-      tunnel device or enforce a kill switch. The app talks to that service
-      over a local socket and tells you plainly when it is missing or out of
-      date.
+      A kill switch blocks traffic if the tunnel drops, IPv6 is closed off
+      rather than leaked, and DNS is pinned to the tunnel so lookups cannot
+      escape it.
+    </p>
+    <p>
+      Setup takes one extra step: URnetwork installs a small system service
+      that owns the network tunnel. The app detects your distribution and
+      shows you the exact command — a package for Debian, Ubuntu, Fedora and
+      other RPM distributions, or a portable installer that works anywhere
+      else, including immutable systems such as Silverblue and SteamOS.
     </p>
   </description>
 
@@ -88,9 +92,15 @@
   </content_rating>
 
   <releases>
-    <release version="0.0.1" date="2026-08-14">
+    <release version="2026.8.19" date="2026-08-19">
       <description>
-        <p>First Linux release of the GTK4 client.</p>
+        <p>First public release of the URnetwork desktop client for Linux.</p>
+        <ul>
+          <li>Connect through the peer network, with provider selection and live status</li>
+          <li>Kill switch, IPv6 leak protection and DNS pinned to the tunnel</li>
+          <li>Provide bandwidth back to the network and track earnings</li>
+          <li>Authorization through polkit, so no group membership or re-login is needed</li>
+        </ul>
       </description>
     </release>
   </releases>
