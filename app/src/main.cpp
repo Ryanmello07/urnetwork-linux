@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
     // missing face fails silently to the fallback font (windows parity).
     urnw::LoadBrandFonts();
     urnw::EnsureBrandCss();
-    // the icon NAME "urnetwork" must resolve for the window icon and the
+    // the icon NAME "com.bringyour.network" must resolve for the window icon and the
     // tray, wherever the app runs from
     urnw::RegisterBrandIcons();
 
