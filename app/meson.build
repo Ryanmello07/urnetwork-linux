@@ -473,6 +473,13 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/TransportBarGeometryTest.cpp',
     'tests/UpdateReleaseTest.cpp',
     'tests/TransportStatusPresentationTest.cpp',
+    # The install-offer matrix. ServiceInstall.cpp is pure logic over
+    # os-release text and a list of asset names -- no GTK, no SDK -- so it
+    # belongs in this target, and the Arch package's immutable carve-out
+    # (SteamOS takes the tarball while immutable Fedora still takes its rpm)
+    # is exactly the kind of two-fact rule a refactor flattens silently.
+    'tests/ServiceInstallTest.cpp',
+    'src/ServiceInstall.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',

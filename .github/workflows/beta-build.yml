@@ -75,6 +75,27 @@ name: Beta Build - Linux
 #          TODO(packaging): MIGRATION.md's normative filename table has no rpm
 #          row. Add one once make-rpm.sh has settled the mangling, and tighten
 #          this assertion to the exact name at the same time.
+#      urnetwork-daemon-<version>-<pacmanarch>.pkg.tar.zst
+#          The SAME daemon payload again, for the Arch family (Arch, CachyOS,
+#          EndeavourOS, Manjaro) -- built in the same job, from the same
+#          `meson install --destdir` staging tree, through the same
+#          packaging/lib/common.sh assemble_daemon_root. Not parsed by the
+#          in-app checker; the GUI's ServiceInstall offer matches it on the
+#          "-x86_64.pkg.tar.zst" suffix.
+#
+#          Its name carries the FULL version string, unlike the rpm's, because
+#          pacman's restriction lands in a different place: pkgver may not
+#          contain '-' (it is the pkgver/pkgrel separator), but the FILENAME is
+#          not parsed by pacman at all -- `pacman -U ./file` reads .PKGINFO,
+#          exactly as rpm reads its header. So the file is free to be named for
+#          the release and the metadata is free to be correct, and they say the
+#          same thing in different punctuation:
+#              file:  urnetwork-daemon-2026.8.16-1020679030-beta-x86_64.pkg.tar.zst
+#              meta:  pkgver = 2026.8.16.1020679030.beta-1
+#          make-arch.sh prints the canonical pacman name (what repo-add would
+#          expect) on every build, and UR_ARCH_CANONICAL_NAME=1 emits it
+#          instead. The assertion below checks the version TOKENS, like the
+#          rpm's, so either naming passes.
 #      URnetwork-<version>-<arch>.AppImage
 #          The GUI. What the GUI's own updater offers.
 #      URnetwork-<version>-<arch>.AppImage.zsync
@@ -87,21 +108,24 @@ name: Beta Build - Linux
 #          The GUI as a single-file Flatpak bundle, for hosts that would rather
 #          `flatpak install` than run an AppImage. GUI ONLY -- a Flatpak
 #          sandbox has no /dev/net/tun and no way to install a system unit, so
-#          this asset still needs the daemon from the .deb/.rpm/tarball (see
-#          packaging/flatpak/com.bringyour.network.yml).
+#          this asset still needs the daemon from the .deb/.rpm/.pkg.tar.zst
+#          or the tarball (see packaging/flatpak/com.bringyour.network.yml).
 #
-#          THE ONLY OPTIONAL ASSET, and the only one attached AFTER the
-#          release is created -- see the build-flatpak job header for why. If
-#          that job fails, the release still publishes with the other five.
+#          THE ONLY ASSET ATTACHED AFTER THE RELEASE IS CREATED -- see the
+#          build-flatpak job header for why. If that job fails, the release
+#          still publishes everything else. (It is no longer the only OPTIONAL
+#          asset: the .pkg.tar.zst is optional too while UR_REQUIRE_ARCH_PKG is
+#          not "true" -- but that one is optional at BUILD time and is attached
+#          in the normal upload, not afterwards.)
 #
 #    arch is the DEBIAN spelling -- amd64 / arm64 -- never x86_64/aarch64,
 #    even though the AppImage's internal ARCH is x86_64. Keep it stable: a
 #    renamed asset is an in-app updater that silently stops finding updates.
-#    THE RPM IS THE ONE EXCEPTION: rpm names its own packages with the rpm
-#    arch spelling (x86_64/aarch64), and fighting that would produce a package
-#    whose filename disagrees with its own %{ARCH}. The assertion accepts
-#    either spelling but rejects the WRONG arch (an aarch64 rpm out of the
-#    amd64 leg).
+#    THE TWO NATIVE PACKAGES ARE THE EXCEPTIONS: rpm and pacman both name their
+#    own packages with their own arch spelling (x86_64/aarch64), and fighting
+#    that would produce a package whose filename disagrees with its own
+#    %{ARCH} / .PKGINFO arch. Both assertions accept either spelling but reject
+#    the WRONG arch (an aarch64 artifact out of the amd64 leg).
 #
 #    NO SHA256SUMS ASSET, and no .sha256 sidecars are attached. The packaging
 #    scripts still write sidecars next to their output (they are the local /
@@ -183,6 +207,23 @@ env:
   # move again if the rpm ever breaks: a new package that cannot build must not
   # take the four already-contracted assets off the release with it.
   UR_REQUIRE_RPM: "true"
+  # THE PACMAN PACKAGE IS NOT REQUIRED YET, and this starts "false" ON PURPOSE
+  # -- it is the same window the rpm went through, taken deliberately this time
+  # instead of after a red push. packaging/make-arch.sh has never run in CI: it
+  # has been exercised against a real pacman locally (install, upgrade,
+  # downgrade, reinstall, remove, and `pacman -Qkk`), but not from this
+  # container, on arm64, or with this job's staging tree.
+  #
+  # While it is "false" the daemon job WARNS instead of failing and the release
+  # publishes the other five assets. That is the property that matters: a
+  # sixth, brand-new package must never be able to take the five
+  # already-contracted ones off a release with it.
+  #
+  # FLIP IT TO "true" once one release has actually published a
+  # .pkg.tar.zst for BOTH arches and the CachyOS tester has installed one --
+  # and then leave it there, because a silent-missing-package mode left on
+  # permanently is exactly how the .deb would quietly stop shipping.
+  UR_REQUIRE_ARCH_PKG: "false"
   # The Flatpak has NO equivalent knob here on purpose: a job-level `if:`
   # cannot read the `env` context (only github/needs/vars/inputs), so its kill
   # switch is the repository VARIABLE `UR_BUILD_FLATPAK` -- set it to "false"
@@ -397,15 +438,15 @@ jobs:
   # ---------------------------------------------------------------------------
   # THE DAEMON: the artifact the app downloads and installs behind pkexec.
   #
-  # THE .RPM IS BUILT HERE, NOT IN A JOB OF ITS OWN, and that is the whole
-  # point of it: the rpm, the .deb and the install tarball are three wrappers
-  # around ONE `meson install --destdir` staging tree, assembled by ONE
-  # function (packaging/lib/common.sh assemble_daemon_root). A separate rpm job
-  # would have to rebuild the daemon to get a staging tree, and the moment it
-  # did, "the rpm and the deb ship the same daemon" would stop being a fact and
-  # become a hope. It also inherits the glibc floor and the meson gate below
-  # for free -- an rpm built on a 24.04 image would carry GLIBC_2.38 symbols
-  # under a Fedora dependency set that never mentions them.
+  # EVERY NATIVE PACKAGE IS BUILT HERE, NOT IN A JOB OF ITS OWN, and that is the
+  # whole point of them: the .deb, the .rpm, the .pkg.tar.zst and the install
+  # tarball are FOUR wrappers around ONE `meson install --destdir` staging tree,
+  # assembled by ONE function (packaging/lib/common.sh assemble_daemon_root). A
+  # separate job per format would have to rebuild the daemon to get a staging
+  # tree, and the moment it did, "all the packages ship the same daemon" would
+  # stop being a fact and become a hope. They also inherit the glibc floor and
+  # the meson gate below for free -- a package built on a 24.04 image would
+  # carry GLIBC_2.38 symbols under a dependency set that never mentions them.
   #
   # Built INSIDE an ubuntu:22.04 container rather than on a `runs-on:
   # ubuntu-22.04` hosted image. Both are "build on Ubuntu 22.04"; the container
@@ -423,7 +464,7 @@ jobs:
   # configure under -- do not "modernize" this to a pip meson without checking.
   # ---------------------------------------------------------------------------
   build-daemon:
-    name: Build daemon + install tarball + deb + rpm (${{ matrix.arch }})
+    name: Build daemon + install tarball + deb + rpm + pkg (${{ matrix.arch }})
     needs: build-sdk
     runs-on: ${{ matrix.runner }}
     # Bounded on purpose: an apt mirror stall used to hang this job
@@ -575,6 +616,29 @@ jobs:
             command -v "$t" >/dev/null 2>&1 || { echo "::error::${t} is missing after installing checkpolicy + semodule-utils; make-rpm.sh cannot build the SELinux policy module"; exit 1; }
           done
 
+      # A step of its own, for the same reason the rpm tooling is: if this
+      # fails, the message should name the pacman package rather than look like
+      # the daemon failing to compile.
+      #
+      # nfpm needs NONE of this -- its zstd is pure Go, so make-arch.sh BUILDS
+      # the .pkg.tar.zst on a bare container. zstd is what lets the script READ
+      # its own output back: a .pkg.tar.zst is a zstd-compressed tar, and GNU
+      # tar shells out to /usr/bin/zstd for it. Without zstd here make-arch.sh
+      # still produces a package and still exits 0, but it SKIPS every payload,
+      # dependency, hook and .MTREE assertion and says so loudly. There is no
+      # value in a green build that verified nothing, and unlike the rpm case
+      # (where only a Fedora VM can run the scriptlets) everything this package
+      # can be checked for is checkable right here.
+      - name: Install zstd (to verify the pacman package)
+        run: |
+          apt-get $UR_APT_OPTS install -y --no-install-recommends zstd
+          zstd --version
+          # Prove the pairing, not just the binary: `tar --zstd` is a GNU tar
+          # feature that silently degrades if the helper is not found.
+          printf 'x' > /tmp/z.probe
+          tar --zstd -cf /tmp/z.probe.tar.zst -C /tmp z.probe
+          tar --zstd -tf /tmp/z.probe.tar.zst >/dev/null || { echo "::error::GNU tar cannot read zstd archives even with zstd installed; make-arch.sh would skip all of its assertions"; exit 1; }
+
       - name: Package the install tarball
         env:
           ARCH: ${{ matrix.arch }}
@@ -626,6 +690,42 @@ jobs:
             exit 1
           else
             echo "::warning::packaging/make-rpm.sh failed and UR_REQUIRE_RPM is not \"true\" -- publishing without the .rpm."
+          fi
+
+      # THE PACMAN PACKAGE. Same four-variable contract as every other packaging
+      # script -- VERSION / ARCH / STAGING_DIR / OUT_DIR in, one artifact into
+      # $OUT_DIR -- and ARCH stays the DEBIAN spelling on the way IN even though
+      # pacman names its output x86_64, exactly as for the rpm. make-arch.sh
+      # owns both spellings.
+      #
+      # The absent-script / failing-script escape hatch is copied from the rpm
+      # step deliberately, INCLUDING the lesson that cost a release there: the
+      # hatch has to cover the script FAILING, not just the script being
+      # missing. When it did not, a non-zero exit failed build-daemon, which
+      # skipped `release`, which stopped the tarball, the .deb, the AppImage and
+      # the .zsync from publishing -- a missing new asset turned into a release
+      # of nothing.
+      - name: Package the pacman package
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          if [ ! -f packaging/make-arch.sh ]; then
+            if [ "${UR_REQUIRE_ARCH_PKG}" = "true" ]; then
+              echo "::error::packaging/make-arch.sh does not exist and UR_REQUIRE_ARCH_PKG is \"true\". Either land the script or set UR_REQUIRE_ARCH_PKG to \"false\" for the window in between."
+              exit 1
+            fi
+            echo "::warning::packaging/make-arch.sh is missing and UR_REQUIRE_ARCH_PKG is not \"true\" -- skipping the pacman package. The release will publish without it."
+            exit 0
+          fi
+          chmod +x packaging/make-arch.sh
+          export STAGING_DIR="$PWD/staging" OUT_DIR="$PWD/dist"
+          if packaging/make-arch.sh; then
+            :
+          elif [ "${UR_REQUIRE_ARCH_PKG}" = "true" ]; then
+            echo "::error::packaging/make-arch.sh failed and UR_REQUIRE_ARCH_PKG is \"true\". Fix the package, or set UR_REQUIRE_ARCH_PKG to \"false\" to publish the other assets while it is broken."
+            exit 1
+          else
+            echo "::warning::packaging/make-arch.sh failed and UR_REQUIRE_ARCH_PKG is not \"true\" -- publishing without the pacman package."
           fi
 
       # A compile-proof says nothing about what landed inside the package, and
@@ -855,6 +955,161 @@ jobs:
           fi
           exit $fail
 
+      # The pacman package gets the SAME treatment as the other three, for the
+      # same reason (a compile-proof says nothing about what landed inside), and
+      # this one can be a FULL assertion where the rpm's cannot: a .pkg.tar.zst
+      # is a zstd-compressed tar whose first members are .PKGINFO, .MTREE and
+      # .INSTALL, so tar reads every fact pacman would read. No pacman needed,
+      # and none available on an Ubuntu runner.
+      #
+      # make-arch.sh checks most of this itself. This step is not redundant with
+      # it: it checks the ARTIFACT THAT REACHED $OUT_DIR is the one this leg was
+      # supposed to produce -- right version, right architecture, exactly one of
+      # them -- which is the class of failure a build script cannot catch about
+      # itself, and it is the same division of labour the .deb and .rpm steps
+      # already follow.
+      - name: Verify the pacman package payload
+        working-directory: dist
+        # REQUIRED: this job runs in `container: ubuntu:22.04`, where the
+        # default shell is `sh -e` (dash) rather than bash, and the array and
+        # `shopt` syntax below is bash-only. The .rpm step carries the same line
+        # for the same reason -- it was learned the hard way there, with
+        # "shopt: not found" taking the whole daemon job down.
+        shell: bash
+        run: |
+          shopt -s nullglob
+          pkgs=(urnetwork-daemon-*.pkg.tar.zst)
+          if [ "${#pkgs[@]}" -eq 0 ]; then
+            if [ "${UR_REQUIRE_ARCH_PKG}" = "true" ]; then
+              echo "::error::packaging/make-arch.sh produced no urnetwork-daemon-*.pkg.tar.zst in \$OUT_DIR"
+              exit 1
+            fi
+            echo "::warning::no pacman package produced and UR_REQUIRE_ARCH_PKG is not \"true\" -- skipping its assertions"
+            exit 0
+          fi
+          if [ "${#pkgs[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one .pkg.tar.zst from this arch leg, found ${#pkgs[@]}: ${pkgs[*]}"
+            exit 1
+          fi
+          pkg="${pkgs[0]}"
+          echo "pacman package: $pkg"
+          fail=0
+
+          # Version TOKENS, not the literal ${VERSION}: make-arch.sh may be
+          # asked (UR_ARCH_CANONICAL_NAME=1) to emit the canonical pacman name,
+          # in which case the hyphens are dots. The date and the beta code
+          # survive both namings, and the beta code is what makes an artifact
+          # unique to THIS run -- the property this check exists to protect.
+          ver_date="${VERSION%%-*}"
+          ver_rest="${VERSION#*-}"
+          ver_code="${ver_rest%%-*}"
+          for tok in "$ver_date" "$ver_code"; do
+            case "$pkg" in
+              *"$tok"*) ;;
+              *) echo "::error::$pkg does not carry version token '$tok' from ${VERSION}"; fail=1 ;;
+            esac
+          done
+
+          # The arch tag: either spelling in the filename, but never the other
+          # arch. The staging tree is arch-specific and a script that hardcoded
+          # an arch would produce exactly that failure.
+          case "${{ matrix.arch }}" in
+            amd64) want_pkg_arch=x86_64;  other_pkg_arch=aarch64; other_deb_arch=arm64 ;;
+            arm64) want_pkg_arch=aarch64; other_pkg_arch=x86_64;  other_deb_arch=amd64 ;;
+            *) echo "::error::no pacman arch mapping for '${{ matrix.arch }}'"; exit 1 ;;
+          esac
+          case "$pkg" in
+            *"$other_pkg_arch"*|*"$other_deb_arch"*)
+              echo "::error::$pkg names the wrong architecture -- this is the ${{ matrix.arch }} leg"
+              fail=1 ;;
+            *"$want_pkg_arch"*) ;;
+            *) echo "::error::$pkg carries no architecture tag ($want_pkg_arch)"; fail=1 ;;
+          esac
+
+          meta=$(mktemp -d)
+          tar --zstd -xf "$pkg" -C "$meta" .PKGINFO .INSTALL || {
+            echo "::error::$pkg is not a readable zstd tar -- it is not a valid pacman package"; exit 1; }
+          echo "--- .PKGINFO ---"
+          grep -vE '^pkgdesc' "$meta/.PKGINFO"
+
+          pkg_ver=$(sed -n 's/^pkgver = //p' "$meta/.PKGINFO")
+          echo "pkgver: $pkg_ver"
+          # pacman REJECTS a pkgver containing '-' at install time ("package
+          # version contains invalid characters"), and nfpm writes one through
+          # without complaining. Catch it here rather than in a user's terminal.
+          case "$pkg_ver" in
+            *-*-*) echo "::error::pkgver '$pkg_ver' contains more than one '-'; pacman splits at the last one and rejects the rest"; fail=1 ;;
+          esac
+          for tok in "$ver_date" "$ver_code"; do
+            case "$pkg_ver" in
+              *"$tok"*) ;;
+              *) echo "::error::pkgver '$pkg_ver' does not carry version token '$tok' -- nfpm silently drops a non-integer pkgrel, which collapses every build of a day onto one version"; fail=1 ;;
+            esac
+          done
+          pkg_arch=$(sed -n 's/^arch = //p' "$meta/.PKGINFO")
+          echo ".PKGINFO arch: $pkg_arch"
+          [ "$pkg_arch" = "$want_pkg_arch" ] || { echo "::error::$pkg has arch=$pkg_arch, expected $want_pkg_arch"; fail=1; }
+          grep -q '^packager = URnetwork' "$meta/.PKGINFO" || echo "::warning::$pkg says 'Unknown Packager' -- archlinux.packager is not set (the top-level maintainer: does not feed it)"
+
+          # ALL SIX HOOKS. This is the headline risk of the format and it fails
+          # SILENTLY: nfpm's generic scripts: block emits only the four
+          # install/remove functions, and a package without pre_upgrade /
+          # post_upgrade runs NOTHING AT ALL on `pacman -U` of a newer build,
+          # on a downgrade, or on a reinstall -- while pacman reports success.
+          # The binary would be swapped under a still-running daemon with no
+          # daemon-reload and no restart.
+          echo "--- .INSTALL hooks ---"
+          for fn in pre_install post_install pre_upgrade post_upgrade pre_remove post_remove; do
+            if grep -qE "^[[:space:]]*(function[[:space:]]+)?${fn}[[:space:]]*\(\)" "$meta/.INSTALL"; then
+              echo "  $fn: present"
+            else
+              echo "::error::$pkg has no $fn() in its .INSTALL"
+              case "$fn" in
+                pre_upgrade|post_upgrade) echo "::error::  declare it under archlinux.scripts in packaging/arch/nfpm.yaml -- the top-level scripts: block cannot emit it" ;;
+              esac
+              fail=1
+            fi
+          done
+
+          listing=$(mktemp)
+          tar --zstd -tf "$pkg" > "$listing"
+          for want in \
+            usr/lib/urnetwork/urnetworkd \
+            usr/lib/urnetwork/libURnetworkSdk.so \
+            usr/bin/urnetwork \
+            usr/lib/systemd/system/urnetworkd.service \
+            usr/share/polkit-1/actions/com.bringyour.network.policy \
+            usr/share/urnetwork/world-110m.json ; do
+            grep -qx "$want" "$listing" || { echo "::error::$pkg is missing $want"; fail=1; }
+          done
+          # NOTHING UNDER A FILESYSTEM-OWNED SYMLINK. On Arch /bin, /sbin, /lib
+          # and /lib64 are all symlinks into /usr owned by the `filesystem`
+          # package, and pacman ABORTS the entire transaction on any member
+          # under one: "urnetwork-daemon: /lib exists in filesystem (owned by
+          # filesystem)" -- nothing installed at all. assemble_daemon_root
+          # stages the unit at /lib/systemd/system (right for dpkg), so
+          # make-arch.sh relocates it; this is the assertion that the relocation
+          # held. An ERROR, not a warning: unlike the rpm's equivalent, this is
+          # not a guideline, it is an install that cannot happen.
+          if grep -Eq '^(bin|sbin|lib|lib64)/' "$listing"; then
+            echo "::error::$pkg ships members under a filesystem-owned symlink; pacman will refuse to install it:"
+            grep -E '^(bin|sbin|lib|lib64)/' "$listing"
+            fail=1
+          else
+            echo "unit: usr/lib/systemd/system/urnetworkd.service, nothing under /lib (correct for pacman)"
+          fi
+          # The conffiles must be pacman `backup =` entries or an admin's edits
+          # are overwritten on every upgrade instead of landing as .pacnew.
+          for want in etc/urnetwork/autostart/com.bringyour.network.desktop \
+                      etc/NetworkManager/conf.d/95-urnetwork.conf \
+                      etc/udev/rules.d/85-urnetwork-unmanaged.rules ; do
+            grep -qx "backup = $want" "$meta/.PKGINFO" || { echo "::error::$want is not marked 'backup =' in $pkg"; fail=1; }
+          done
+          entries=$(grep -cv '/$' "$listing" || true)
+          echo "pacman package file entries: $entries"
+          [ "${entries:-0}" -ge 40 ] || { echo "::error::$pkg has only ${entries:-0} file entries -- expected at least 40"; fail=1; }
+          exit $fail
+
       # The .sha256 sidecars the packaging scripts write are deliberately NOT
       # carried forward: the release verifies through GitHub's per-asset digest
       # (see the contract at the top of this file). The globs end in the exact
@@ -873,6 +1128,7 @@ jobs:
             dist/urnetwork-daemon_*.deb
             dist/urnetwork-daemon-*.rpm
             dist/urnetwork-daemon_*.rpm
+            dist/urnetwork-daemon-*.pkg.tar.zst
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -1115,7 +1371,7 @@ jobs:
   # `flatpak install` than chmod +x an AppImage. GUI ONLY, for the reasons
   # packaging/flatpak/com.bringyour.network.yml sets out at length -- a sandbox
   # has no /dev/net/tun and cannot install a system unit, so this artifact
-  # needs the daemon from the .rpm/.deb/tarball and says so when it is missing.
+  # needs the daemon from the .rpm/.deb/.pkg.tar.zst/tarball and says so when it is missing.
   #
   # WHY THIS JOB IS OPTIONAL AND DOES NOT BLOCK THE RELEASE
   #   The owner asked whether flatpak-builder is viable in Actions and to make
@@ -1464,6 +1720,7 @@ jobs:
             case "$f" in *.src.rpm) continue ;; esac
             rpms+=("$f")
           done
+          pkgs=(urnetwork-daemon-*.pkg.tar.zst)
           appimages=(URnetwork-*.AppImage)
           zsyncs=(URnetwork-*.AppImage.zsync)
           fail=0
@@ -1477,6 +1734,14 @@ jobs:
               fail=1
             else
               echo "::warning::no .rpm in this release and UR_REQUIRE_RPM is not \"true\""
+            fi
+          fi
+          if [ "${#pkgs[@]}" -lt 1 ]; then
+            if [ "${UR_REQUIRE_ARCH_PKG}" = "true" ]; then
+              echo "::error::no urnetwork-daemon-*.pkg.tar.zst -- the pacman package is the Arch/CachyOS half of the native-package channel and this release requires it (UR_REQUIRE_ARCH_PKG)"
+              fail=1
+            else
+              echo "::warning::no .pkg.tar.zst in this release and UR_REQUIRE_ARCH_PKG is not \"true\" -- Arch-family users get the install tarball"
             fi
           fi
           # every asset must carry THIS run's version, or the in-app checker
@@ -1497,7 +1762,12 @@ jobs:
           ver_date="${VERSION%%-*}"
           ver_rest="${VERSION#*-}"
           ver_code="${ver_rest%%-*}"
-          for f in "${rpms[@]}"; do
+          # The pacman package is checked the same way, and for a related but
+          # not identical reason: its FILENAME could carry ${VERSION} verbatim
+          # (pacman does not parse filenames), but UR_ARCH_CANONICAL_NAME=1
+          # legitimately produces the dotted canonical name instead. Tokens
+          # accept both namings and still pin the artifact to this run.
+          for f in "${rpms[@]}" "${pkgs[@]}"; do
             for tok in "$ver_date" "$ver_code"; do
               case "$f" in
                 *"$tok"*) ;;
@@ -1511,6 +1781,10 @@ jobs:
           [ "${#tarballs[@]}"  -eq "${#debs[@]}" ]   || { echo "::error::tarball/deb count mismatch"; fail=1; }
           if [ "${#rpms[@]}" -ge 1 ] && [ "${#rpms[@]}" -ne "${#debs[@]}" ]; then
             echo "::error::rpm/deb count mismatch (${#rpms[@]} vs ${#debs[@]}) -- an arch produced one native package but not the other"
+            fail=1
+          fi
+          if [ "${#pkgs[@]}" -ge 1 ] && [ "${#pkgs[@]}" -ne "${#debs[@]}" ]; then
+            echo "::error::pacman/deb count mismatch (${#pkgs[@]} vs ${#debs[@]}) -- an arch produced one native package but not the other"
             fail=1
           fi
           # The .flatpak is deliberately absent from every check here: it is
@@ -1539,15 +1813,16 @@ jobs:
             echo "| \`urnetwork-daemon-<version>-<arch>.install.tar.gz\` | the privileged service; \`tar xz && sudo urnetwork-daemon/install.sh\` |"
             echo "| \`urnetwork-daemon_<version>_<arch>.deb\` | the same service as a native package (Debian/Ubuntu) |"
             echo "| \`urnetwork-daemon-<version>.<arch>.rpm\` | the same service as a native package (Fedora/RHEL/openSUSE) |"
+            echo "| \`urnetwork-daemon-<version>-<arch>.pkg.tar.zst\` | the same service as a native package (Arch/CachyOS/EndeavourOS/Manjaro); \`sudo pacman -U ./<file>\` |"
             echo "| \`URnetwork-<version>-<arch>.AppImage\` | the GUI, unprivileged |"
             echo "| \`URnetwork-<version>-<arch>.AppImage.zsync\` | zsync control file (GitHub answers zsync's range requests with HTTP 501 -- the working mirror is get.ur.network) |"
             echo "| \`URnetwork-<version>-<arch>.flatpak\` | the GUI as a Flatpak bundle: \`flatpak install --user <file>\`. Still needs the service from one of the packages above. Built by a separate, slower job -- if it is not attached yet, it is still building, and if it never appears that build failed while this release did not. |"
             echo
-            echo "The three daemon packages are the SAME payload: one \`meson install\` tree, one assembly function, three wrappers. Pick whichever your distro speaks."
+            echo "The daemon packages are the SAME payload: one \`meson install\` tree, one assembly function, one wrapper per format. Pick whichever your distro speaks. On SteamOS use the tarball -- its /usr is read-only, \`pacman -U\` needs \`steamos-readonly disable\`, and the next system update would revert the package."
             echo
             echo "Asset names are a contract: the in-app installer and updater parse them and verify each download against the sha256 digest GitHub publishes for that same asset. There is deliberately no SHA256SUMS file."
             echo
-            echo "Daemon glibc floor: 2.35 (built on Ubuntu 22.04), for the tarball, the .deb and the .rpm alike. AppImage glibc floor: 2.39 (built on Ubuntu 24.04). The Flatpak has no host glibc floor -- it runs against org.gnome.Platform."
+            echo "Daemon glibc floor: 2.35 (built on Ubuntu 22.04), for the tarball, the .deb, the .rpm and the .pkg.tar.zst alike. AppImage glibc floor: 2.39 (built on Ubuntu 24.04). The Flatpak has no host glibc floor -- it runs against org.gnome.Platform."
             echo
             echo "Unsigned. Detached signatures are not produced by CI yet."
           } > notes.md
@@ -1570,6 +1845,12 @@ jobs:
             case "$f" in *.src.rpm) continue ;; esac
             files+=("$f")
           done
+          # The pacman package is appended the same way and for the same
+          # reason: it is allowed to be absent while UR_REQUIRE_ARCH_PKG is not
+          # "true", and an unexpanded glob handed to gh would fail the upload
+          # with the release ALREADY DELETED. nullglob (set above) plus an
+          # explicit append is what keeps an optional asset optional.
+          files+=(urnetwork-daemon-*.pkg.tar.zst)
           # --target pins the tag to the commit this run built; without it a
           # new tag would point wherever the default branch happens to be
           gh release create "$tag" \

@@ -136,6 +136,11 @@ Offer OfferFor(const HostInfo& host, const std::vector<std::string>& available,
   Offer o;
   const bool haveDeb = Has(available, "_amd64.deb");
   const bool haveRpm = Has(available, ".x86_64.rpm");
+  // packaging/make-arch.sh names its output
+  // urnetwork-daemon-<version>-x86_64.pkg.tar.zst -- the PACMAN arch spelling,
+  // for the same reason the rpm keeps rpm's: a package whose filename
+  // disagreed with its own .PKGINFO arch would be the confusing artifact.
+  const bool haveArchPkg = Has(available, "-x86_64.pkg.tar.zst");
   const bool haveTar = Has(available, "-amd64.install.tar.gz");
 
   // The tarball is the fallback for every family, and the FIRST choice on an
@@ -184,8 +189,32 @@ Offer OfferFor(const HostInfo& host, const std::vector<std::string>& available,
       // would 404.
       return tarball();
 
-    case Family::Immutable:
     case Family::Arch:
+      // THE IMMUTABLE CARVE-OUT IS THE WHOLE SUBTLETY HERE, and it is not
+      // symmetric with Fedora's. An immutable Fedora host still gets its .rpm,
+      // because rpm-ostree exists precisely to layer one. Arch's immutable
+      // member is SteamOS, where there is no such mechanism: `pacman -U` needs
+      // `steamos-readonly disable` first and the next SteamOS update reverts
+      // the whole /usr partition, taking the package with it. Offering a
+      // pacman command there would be offering an install that silently
+      // disappears. FamilyFromId maps steamos to Arch (it is Arch-derived) and
+      // DetectHost independently marks it immutable, so this branch is the one
+      // place those two facts have to be read together. The tarball is the
+      // right answer there: it detects the read-only /usr and installs under
+      // /usr/local.
+      if (haveArchPkg && !host.immutable) {
+        o.format = Format::ArchPkg;
+        o.assetSuffix = "-x86_64.pkg.tar.zst";
+        o.command = "sudo pacman -U ./urnetwork-daemon.pkg.tar.zst";
+        return o;
+      }
+      // NO PACMAN PACKAGE ON THIS CHANNEL (urnetwork/build publishes none), or
+      // an immutable Arch host. Either way the tarball genuinely works, so
+      // offer it rather than a pacman line that would 404 or a package that
+      // would not survive the next update.
+      return tarball();
+
+    case Family::Immutable:
     case Family::Unknown:
     default:
       return tarball();

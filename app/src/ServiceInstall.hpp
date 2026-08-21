@@ -33,7 +33,7 @@ enum class Family {
   Debian,     // .deb
   Fedora,     // .rpm, and rpm-ostree on the immutable variants
   Immutable,  // ostree/bootc: rpm-ostree, or the tarball which handles /usr ro
-  Arch,       // no native package: tarball
+  Arch,       // .pkg.tar.zst (pacman), or the tarball on an immutable variant
   Suse,       // .rpm
   Unknown,    // tarball
 };
@@ -52,9 +52,16 @@ HostInfo DetectHost();
 // channel actually publishes. RETURNS AN EMPTY FORMAT when the selected
 // channel has no artifact for this family — the caller must then offer the
 // portable installer rather than print a command that 404s. urnetwork/build
-// publishes no .rpm today, so a Fedora user on the upstream channel takes
-// exactly that path.
-enum class Format { Deb, Rpm, Tarball, None };
+// publishes no .rpm and no .pkg.tar.zst today, so a Fedora or Arch user on the
+// upstream channel takes exactly that path.
+//
+// ArchPkg is the pacman package (packaging/make-arch.sh). It is a separate
+// Format rather than a second spelling of Rpm because the two are offered
+// under different conditions: an immutable Fedora host still gets its .rpm
+// (through rpm-ostree, which layers it), while an immutable Arch host —
+// SteamOS — gets no package at all, because pacman there needs
+// `steamos-readonly disable` and the next system update reverts it.
+enum class Format { Deb, Rpm, ArchPkg, Tarball, None };
 
 struct Offer {
   Format format = Format::None;
