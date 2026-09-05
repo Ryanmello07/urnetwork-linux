@@ -63,6 +63,19 @@ case "$repeat_count" in
   0) echo "--repeat must be at least 1" >&2; exit 2 ;;
 esac
 
+network_test_gate="$root/tests/network-intensive-suite-lock.sh"
+if [ ! -x "$network_test_gate" ]; then
+  echo "Linux acceptance suite gate is missing or not executable: $network_test_gate" >&2
+  exit 127
+fi
+if [ "${URNETWORK_NETWORK_TEST_LOCK_HELD:-}" != 1 ]; then
+  exec "$network_test_gate" linux-acceptance -- "$here/test-main.sh" "$@"
+fi
+if ! "$network_test_gate" --verify-held; then
+  echo "Linux acceptance inherited an invalid network-intensive lock" >&2
+  exit 70
+fi
+
 die() { echo "[linux acceptance] ERROR: $*" >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || die "docker is required"
 command -v timeout >/dev/null 2>&1 || die "GNU timeout is required"
