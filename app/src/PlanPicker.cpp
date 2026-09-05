@@ -161,9 +161,16 @@ class GoldPlanCard : public Gtk::Overlay {
       const double t = ring / (rings - 1.0);
       const double distance = ringWidth * (ring + 0.5);
       const double fade = (1 - t) * (1 - t);
-      cr->set_source_rgba(kProGold.r, kProGold.g, kProGold.b, peak * fade);
       cr->set_line_width(ringWidth + 0.5);
       RoundedRectPath(cr, -distance, -distance, w + 2 * distance, h + 2 * distance, radius + distance);
+      cr->set_source_rgba(kProGold.r, kProGold.g, kProGold.b, peak * fade);
+      if (selected_) {
+        // the selection pink laid over the gold at the same alpha: the glow
+        // reads as gold and purple mixed, so the selection language survives
+        // the gold dress instead of only the dot changing
+        cr->stroke_preserve();
+        cr->set_source_rgba(kUrPink.r, kUrPink.g, kUrPink.b, peak * fade);
+      }
       cr->stroke();
     }
     // opaque ground, then the gold wash brighter at the top left
@@ -177,10 +184,21 @@ class GoldPlanCard : public Gtk::Overlay {
     wash->add_color_stop_rgba(1, kProGold.r, kProGold.g, kProGold.b, 0);
     cr->set_source(wash);
     cr->fill();
+    if (selected_) {
+      // a slight purple tint over the gold ground while selected
+      RoundedRectPath(cr, 0, 0, w, h, radius);
+      cr->set_source_rgba(kUrPink.r, kUrPink.g, kUrPink.b, 0.10);
+      cr->fill();
+    }
     // the border, and the light running around it
     const double inset = 1;
     RoundedRectPath(cr, inset, inset, w - 2 * inset, h - 2 * inset, radius);
-    cr->set_source_rgba(kProGold.r, kProGold.g, kProGold.b, selected_ ? 1 : 0.7);
+    // selected: an even gold-purple mix so the border carries the selection
+    // colour too; unselected: the gold dress alone, dimmed
+    const Rgba border = selected_ ? Rgba{(kProGold.r + kUrPink.r) / 2, (kProGold.g + kUrPink.g) / 2,
+                                         (kProGold.b + kUrPink.b) / 2, 1.0}
+                                  : kProGold;
+    cr->set_source_rgba(border.r, border.g, border.b, selected_ ? 1 : 0.7);
     cr->set_line_width(2);
     cr->stroke_preserve();
     double lx = 0, ly = 0;
