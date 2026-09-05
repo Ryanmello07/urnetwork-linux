@@ -16,7 +16,6 @@ namespace urnw {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
-constexpr int kProgressBarPx = 12;  // the onboarding card's gold bar (android ReferralBar 12dp)
 constexpr int kPanelBarPx = 6;      // the gold panel's bar (android ReferralProgressBar 6dp)
 
 void RoundedRectPath(const Cairo::RefPtr<Cairo::Context>& cr, double x, double y, double w,
@@ -31,15 +30,6 @@ void RoundedRectPath(const Cairo::RefPtr<Cairo::Context>& cr, double x, double y
 }
 
 double Now() { return g_get_monotonic_time() / 1000.0; }  // ms
-
-Gtk::Label* MakeLabel(const Glib::ustring& text, const char* cssClass, bool wrap = true) {
-  auto* label = Gtk::make_managed<Gtk::Label>(text);
-  label->add_css_class(cssClass);
-  label->set_xalign(0);
-  label->set_wrap(wrap);
-  label->set_wrap_mode(Pango::WrapMode::WORD_CHAR);
-  return label;
-}
 
 }  // namespace
 
@@ -81,74 +71,6 @@ button.ur-onb-skip:hover { color: #C8C8C8; background: none; }
 )css");
   Gtk::StyleContext::add_provider_for_display(Gdk::Display::get_default(), css,
                                               GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-}
-
-// ---- the progress card ------------------------------------------------------
-
-ReferralProgressBox::ReferralProgressBox() : Gtk::Box(Gtk::Orientation::VERTICAL, 8) {
-  EnsureOnboardingCss();
-  add_css_class("ur-onb-card");
-  // android IntroductionReferral's card: the header row, 8 above the bar, 4
-  // between the bar and its legend
-  auto* inner = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
-  inner->set_margin(16);
-  auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  auto* title = MakeLabel(T_("refer_friends_header", "Refer friends"), "ur-onb-neuebit", false);
-  title->set_hexpand(true);
-  row->append(*title);
-  count_ = MakeLabel("", "ur-onb-neuebit", false);
-  row->append(*count_);
-  inner->append(*row);
-  bar_ = Gtk::make_managed<Gtk::DrawingArea>();
-  bar_->set_content_height(kProgressBarPx);
-  bar_->set_hexpand(true);
-  bar_->set_margin_top(8);
-  kit::MarkDecorative(*bar_);  // the count beside it carries the figure
-  bar_->set_draw_func([this](const Cairo::RefPtr<Cairo::Context>& cr, int w, int h) {
-    RoundedRectPath(cr, 0, 0, w, h, 6);
-    cr->set_source_rgba(kUrTextFaint.r, kUrTextFaint.g, kUrTextFaint.b, 1);
-    cr->fill();
-    if (0 < fraction_) {
-      RoundedRectPath(cr, 0, 0, std::max(static_cast<double>(kProgressBarPx), w * fraction_), h, 6);
-      cr->set_source_rgba(kReferralGold.r, kReferralGold.g, kReferralGold.b, 1);
-      cr->fill();
-    }
-  });
-  inner->append(*bar_);
-  auto* legend = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
-  legend->set_margin_top(4);
-  auto legendKey = [](const Glib::ustring& text, const Rgba& color) {
-    auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 4);
-    auto* dot = Gtk::make_managed<Gtk::Label>();
-    dot->set_markup("<span foreground='" + HexForMarkup(color) + "'>●</span>");
-    kit::MarkDecorative(*dot);
-    box->append(*dot);
-    auto* label = Gtk::make_managed<Gtk::Label>(text);
-    label->add_css_class("ur-onb-muted");
-    label->add_css_class("caption");
-    box->append(*label);
-    return box;
-  };
-  legend->append(*legendKey(T_("referrals", "Referrals"), kReferralGold));
-  legend->append(*legendKey(T_("available_data_key", "Available"), kUrTextFaint));
-  inner->append(*legend);
-  append(*inner);
-  Update(0, CurrentReferralTerms());
-}
-
-void ReferralProgressBox::Update(int64_t totalReferrals, const ReferralTerms& terms) {
-  const int64_t maxReferrals = std::max<int64_t>(1, terms.maxReferrals);
-  const int64_t paid = terms.PaidReferrals(totalReferrals);
-  fraction_ = std::clamp(paid / static_cast<double>(maxReferrals), 0.0, 1.0);
-  // "n/max", the count the code has earned out of the ones that pay; once the
-  // code is used up the figure says so in words instead
-  const bool capped = 0 < terms.maxReferrals && terms.maxReferrals <= totalReferrals;
-  count_->set_text(capped ? Glib::ustring(T_("referral_code_capped", "This code has been used up"))
-                          : Glib::ustring(std::to_string(totalReferrals) + "/" +
-                                          std::to_string(terms.maxReferrals)));
-  kit::SetAccessibleLabel(*this, Glib::ustring(T_("referrals", "Referrals")) + ", " +
-                                     count_->get_text());
-  bar_->queue_draw();
 }
 
 // ---- the gold panel ---------------------------------------------------------

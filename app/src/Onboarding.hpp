@@ -27,7 +27,6 @@ inline constexpr int kOnboardingSteps = 4;
 class RouteLine;
 class StepBubbles;
 class ReferralPanel;
-class ReferralProgressBox;
 
 class OnboardingWindow : public Gtk::Window {
  public:
@@ -94,7 +93,6 @@ class OnboardingWindow : public Gtk::Window {
 
   Gtk::Box* perkYou_ = nullptr;
   Gtk::Box* perkFriend_ = nullptr;
-  ReferralProgressBox* referralProgress_ = nullptr;
   ReferralPanel* referralPanel_ = nullptr;
 };
 

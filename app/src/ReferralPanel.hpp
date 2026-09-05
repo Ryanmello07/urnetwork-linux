@@ -1,7 +1,6 @@
-// The referral pieces the onboarding "Refer friends" step and the Account
-// "Refer and earn" page share (android ReferralGoldPanel + the referral
-// progress card): ONE implementation, so the two surfaces cannot drift in
-// wording, numbers or the crowned state. Every figure comes from the balance
+// The referral panel the onboarding "Refer friends" step and the Account
+// "Refer and earn" page share (android ReferralGoldPanel): ONE implementation,
+// so the two surfaces cannot drift in wording, numbers or the crowned state. Every figure comes from the balance
 // store's ReferralTerms (the server's cap and bonus); nothing here hardcodes
 // the bonus.
 //
@@ -20,22 +19,6 @@ namespace urnw {
 // The onboarding CSS vocabulary (ur-onb-*) these pieces are styled with.
 // Idempotent; every constructor below calls it.
 void EnsureOnboardingCss();
-
-// The onboarding step's referral progress card (android IntroductionReferral):
-// "Refer friends" and "n/max" over a 12px gold bar with its legend. `max` is
-// the code's cap from the referral terms; the bar reaches the end when the
-// code is used up. The Account "Refer and earn" page does not show it: there
-// the count lives on the bar inside the gold panel, as on android.
-class ReferralProgressBox : public Gtk::Box {
- public:
-  ReferralProgressBox();
-  void Update(int64_t totalReferrals, const ReferralTerms& terms);
-
- private:
-  Gtk::Label* count_ = nullptr;
-  Gtk::DrawingArea* bar_ = nullptr;
-  double fraction_ = 0;
-};
 
 // The referral king-frog panel (android ReferralGoldPanel): a gold-washed
 // surface with a pulsing aura, the frog, the copy, the code pill and share,

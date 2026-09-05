@@ -650,15 +650,11 @@ void OnboardingWindow::BuildReferral() {
   perks->append(*perkFriend_);
   top->append(*perks);
 
-  // the progress box + the gold panel are the SHARED referral pieces (the
-  // Account "Refer and earn" page shows the same two), so the onboarding step
-  // and the page cannot drift
-  referralProgress_ = Gtk::make_managed<ReferralProgressBox>();
-  referralProgress_->set_margin_top(32);
-  top->append(*referralProgress_);
-
+  // the gold panel is the SHARED referral piece (the Account "Refer and earn"
+  // page shows the same one), so the onboarding step and the page cannot
+  // drift; it carries the only referral progress bar on the step
   referralPanel_ = Gtk::make_managed<ReferralPanel>();
-  referralPanel_->set_margin_top(24);
+  referralPanel_->set_margin_top(32);
   top->append(*referralPanel_);
   page->append(*top);
 
@@ -688,7 +684,6 @@ void OnboardingWindow::RefreshReferral() {
                                          "Your friend gets +{} GiB/day for life"),
                                       terms.referredBonusGibPerDay));
   }
-  if (referralProgress_) referralProgress_->Update(balance_.TotalReferrals(), terms);
   if (referralPanel_) referralPanel_->Update(balance_.ReferralCode(), balance_.TotalReferrals(), terms);
 }
 
