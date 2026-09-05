@@ -213,7 +213,7 @@ PostQuantumIdentityPanel::PostQuantumIdentityPanel(SdkHost& host, Gtk::Window& p
   add_css_class("ur-card");
 
   auto* title =
-      Gtk::make_managed<Gtk::Label>(T_("post_quantum_identity", "Post Quantum Identity"));
+      Gtk::make_managed<Gtk::Label>(T_("post_quantum_identity", "Post Quantum Provider Identity"));
   title->add_css_class("dim-label");
   title->set_xalign(0);
   title->set_margin_bottom(12);
@@ -242,7 +242,7 @@ PostQuantumIdentityPanel::PostQuantumIdentityPanel(SdkHost& host, Gtk::Window& p
   // copy always uses the full un-grouped hash, never the display form
   MakeClickable(*hashLabel_, [this] {
     if (!ownRow_.hash.empty()) {
-      Copy(ownRow_.hash, T_("identity_key_hash_copied", "Identity key hash copied"));
+      Copy(ownRow_.hash, T_("identity_key_hash_copied", "Provider identity key hash copied"));
     }
   });
   ownBox_->append(*hashLabel_);
@@ -284,7 +284,7 @@ PostQuantumIdentityPanel::PostQuantumIdentityPanel(SdkHost& host, Gtk::Window& p
 
   auto* explanation = Gtk::make_managed<Gtk::Label>(T_(
       "post_quantum_identity_explanation",
-      "Your identity key is stored locally on this device. If any peer's key appears different "
+      "Your provider identity key is stored locally on this device. If any peer's key appears different "
       "than their locally stored key, it means the network operator cannot be trusted."));
   explanation->add_css_class("dim-label");
   explanation->add_css_class("caption");
@@ -396,7 +396,7 @@ void ProviderIdentitiesSheet::Refresh() {
       get_clipboard()->set_text(value);
       adw_toast_overlay_add_toast(
           toastOverlay_,
-          adw_toast_new(isHash ? T_("identity_key_hash_copied", "Identity key hash copied")
+          adw_toast_new(isHash ? T_("identity_key_hash_copied", "Provider identity key hash copied")
                                : T_("client_id_copied", "Client ID copied")));
     });
   };
@@ -442,7 +442,7 @@ void ProviderIdentitiesSheet::Refresh() {
 
 PostQuantumIdentityShareSheet::PostQuantumIdentityShareSheet(Gtk::Window& parent) {
   EnsureDrawerCss();
-  set_title(T_("post_quantum_identity", "Post Quantum Identity"));
+  set_title(T_("post_quantum_identity", "Post Quantum Provider Identity"));
   set_transient_for(parent);
   set_modal(true);
   set_default_size(420, 560);  // the mac sheet frame
@@ -464,7 +464,7 @@ PostQuantumIdentityShareSheet::PostQuantumIdentityShareSheet(Gtk::Window& parent
   box->set_valign(Gtk::Align::CENTER);
 
   auto* title =
-      Gtk::make_managed<Gtk::Label>(T_("post_quantum_identity", "Post Quantum Identity"));
+      Gtk::make_managed<Gtk::Label>(T_("post_quantum_identity", "Post Quantum Provider Identity"));
   title->add_css_class("dim-label");
   title->set_halign(Gtk::Align::CENTER);
   title->set_margin_top(32);

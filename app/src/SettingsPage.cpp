@@ -1112,7 +1112,7 @@ void SettingsPage::BuildDeviceSection(Gtk::Box& host) {
 
 void SettingsPage::BuildIdentitySection(Gtk::Box& host) {
   host.append(
-      *kit::MakePaneGroupHeader(T_("post_quantum_identity", "Post Quantum Identity")).root);
+      *kit::MakePaneGroupHeader(T_("post_quantum_identity", "Post Quantum Provider Identity")).root);
 
   auto row = kit::MakePaneTwoLineRowButton(T_("provider_identities", "Provider Identities"),
                                            {}, kRowTall);
@@ -1122,7 +1122,7 @@ void SettingsPage::BuildIdentitySection(Gtk::Box& host) {
   host.append(
       *MakeProseRow(
            T_("post_quantum_identity_explanation",
-              "Your identity key is stored locally on this device. If any peer's key "
+              "Your provider identity key is stored locally on this device. If any peer's key "
               "appears different than their locally stored key, it means the network "
               "operator cannot be trusted."),
            kProsePadY)

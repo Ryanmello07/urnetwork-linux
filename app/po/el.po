@@ -2298,8 +2298,8 @@ msgstr "Αποθήκευσα τη φράση ανάκτησης"
 
 #. Post quantum identity: toast after tapping an identity key hash to copy it.
 msgctxt "identity_key_hash_copied"
-msgid "Identity key hash copied"
-msgstr "Το hash του κλειδιού ταυτότητας αντιγράφηκε"
+msgid "Provider identity key hash copied"
+msgstr "Το hash του κλειδιού ταυτότητας παρόχου αντιγράφηκε"
 
 #. Used in Main/MainView.swift.
 msgctxt "if_the_problem_persists_contact_us_at_support_ur"
@@ -3304,13 +3304,13 @@ msgstr "Εφεδρική λειτουργία ενεργή (προσωρινά)"
 
 #. Account tab: post quantum identity panel title.
 msgctxt "post_quantum_identity"
-msgid "Post Quantum Identity"
-msgstr "Μετακβαντική ταυτότητα"
+msgid "Post Quantum Provider Identity"
+msgstr "Μετακβαντική ταυτότητα παρόχου"
 
 #. Account tab: explanation under the post quantum identity panel — what the identity key is and how verifying provider keys detects interception.
 msgctxt "post_quantum_identity_explanation"
-msgid "Your identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
-msgstr "Το κλειδί ταυτότητάς σας αποθηκεύεται τοπικά σε αυτή τη συσκευή. Αν το κλειδί κάποιου κόμβου εμφανίζεται διαφορετικό από το τοπικά αποθηκευμένο κλειδί του, σημαίνει ότι δεν μπορείτε να εμπιστευτείτε τον διαχειριστή του δικτύου."
+msgid "Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
+msgstr "Το κλειδί ταυτότητας παρόχου σας αποθηκεύεται τοπικά σε αυτή τη συσκευή. Αν το κλειδί κάποιου κόμβου εμφανίζεται διαφορετικό από το τοπικά αποθηκευμένο κλειδί του, σημαίνει ότι δεν μπορείτε να εμπιστευτείτε τον διαχειριστή του δικτύου."
 
 #. Network name when privacy is enabled
 msgctxt "private_network"

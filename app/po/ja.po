@@ -2293,8 +2293,8 @@ msgstr "シードフレーズを保存しました"
 
 #. Post quantum identity: toast after tapping an identity key hash to copy it.
 msgctxt "identity_key_hash_copied"
-msgid "Identity key hash copied"
-msgstr "IDキーのハッシュをコピーしました"
+msgid "Provider identity key hash copied"
+msgstr "プロバイダーIDキーのハッシュをコピーしました"
 
 #. Used in Main/MainView.swift.
 msgctxt "if_the_problem_persists_contact_us_at_support_ur"
@@ -3295,13 +3295,13 @@ msgstr "フォールバック有効（一時的）"
 
 #. Account tab: post quantum identity panel title.
 msgctxt "post_quantum_identity"
-msgid "Post Quantum Identity"
-msgstr "ポスト量子ID"
+msgid "Post Quantum Provider Identity"
+msgstr "ポスト量子プロバイダーID"
 
 #. Account tab: explanation under the post quantum identity panel — what the identity key is and how verifying provider keys detects interception.
 msgctxt "post_quantum_identity_explanation"
-msgid "Your identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
-msgstr "あなたのIDキーはこのデバイスにローカル保存されます。いずれかのピアのキーがローカルに保存されたキーと異なって表示される場合、そのネットワーク運営者は信頼できません。"
+msgid "Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
+msgstr "あなたのプロバイダーIDキーはこのデバイスにローカル保存されます。いずれかのピアのキーがローカルに保存されたキーと異なって表示される場合、そのネットワーク運営者は信頼できません。"
 
 #. Network name when privacy is enabled
 msgctxt "private_network"

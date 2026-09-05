@@ -2303,8 +2303,8 @@ msgstr "Seed frázi mám uloženou"
 
 #. Post quantum identity: toast after tapping an identity key hash to copy it.
 msgctxt "identity_key_hash_copied"
-msgid "Identity key hash copied"
-msgstr "Otisk identitního klíče zkopírován"
+msgid "Provider identity key hash copied"
+msgstr "Otisk identitního klíče poskytovatele zkopírován"
 
 #. Used in Main/MainView.swift.
 msgctxt "if_the_problem_persists_contact_us_at_support_ur"
@@ -3313,13 +3313,13 @@ msgstr "Záložní režim zapnut (dočasně)"
 
 #. Account tab: post quantum identity panel title.
 msgctxt "post_quantum_identity"
-msgid "Post Quantum Identity"
-msgstr "Postkvantová identita"
+msgid "Post Quantum Provider Identity"
+msgstr "Postkvantová identita poskytovatele"
 
 #. Account tab: explanation under the post quantum identity panel — what the identity key is and how verifying provider keys detects interception.
 msgctxt "post_quantum_identity_explanation"
-msgid "Your identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
-msgstr "Váš identitní klíč je uložen lokálně v tomto zařízení. Pokud se klíč některého uzlu liší od jeho lokálně uloženého klíče, znamená to, že provozovateli sítě nelze důvěřovat."
+msgid "Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
+msgstr "Váš identitní klíč poskytovatele je uložen lokálně v tomto zařízení. Pokud se klíč některého uzlu liší od jeho lokálně uloženého klíče, znamená to, že provozovateli sítě nelze důvěřovat."
 
 #. Network name when privacy is enabled
 msgctxt "private_network"
