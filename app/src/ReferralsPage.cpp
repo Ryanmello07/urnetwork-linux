@@ -452,14 +452,11 @@ void ReferralsPage::BuildPane() {
 
   auto* content = pane_.content;
 
-  // 1. the shared referral pieces (the onboarding "Refer friends" card + panel)
-  progress_ = Gtk::make_managed<ReferralProgressBox>();
-  progress_->set_margin(kCardPad);
-  content->append(*progress_);
+  // 1. the shared gold panel (the onboarding "Refer friends" step's panel,
+  //    with the referral progress bar inside it, as android's Referrals
+  //    screen shows it: the onboarding-only progress card is not repeated here)
   panel_ = Gtk::make_managed<ReferralPanel>();
-  panel_->set_margin_start(kCardPad);
-  panel_->set_margin_end(kCardPad);
-  panel_->set_margin_bottom(kCardPad);
+  panel_->set_margin(kCardPad);
   content->append(*panel_);
 
   // 2. the figures
@@ -545,7 +542,6 @@ void ReferralsPage::ApplyCard() {
   const bool session = CanCallApi();
   const int64_t total = session ? balance_.TotalReferrals() : 0;
   const std::string code = session ? balance_.ReferralCode() : std::string();
-  if (progress_) progress_->Update(total, terms);
   if (panel_) panel_->Update(code, total, terms);
 }
 

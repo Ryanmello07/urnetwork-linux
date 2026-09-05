@@ -21,9 +21,11 @@ namespace urnw {
 // Idempotent; every constructor below calls it.
 void EnsureOnboardingCss();
 
-// The referral progress card: "Refer friends" and "n/max" over a gold bar with
-// its legend. `max` is the code's cap from the referral terms; the bar reaches
-// the end when the code is used up.
+// The onboarding step's referral progress card (android IntroductionReferral):
+// "Refer friends" and "n/max" over a 12px gold bar with its legend. `max` is
+// the code's cap from the referral terms; the bar reaches the end when the
+// code is used up. The Account "Refer and earn" page does not show it: there
+// the count lives on the bar inside the gold panel, as on android.
 class ReferralProgressBox : public Gtk::Box {
  public:
   ReferralProgressBox();
@@ -36,8 +38,10 @@ class ReferralProgressBox : public Gtk::Box {
 };
 
 // The referral king-frog panel (android ReferralGoldPanel): a gold-washed
-// surface with a pulsing aura, the frog, the copy, the code pill and share.
-// Crowned (heading + congrats) as soon as the network has one referral.
+// surface with a pulsing aura, the frog, the copy, the code pill and share,
+// then the 6px referral progress bar with "joined / cap" under it, then the
+// status line. Crowned (heading + congrats) as soon as the network has one
+// referral. The element order is android's; every platform mirrors it.
 class ReferralPanel : public Gtk::Box {
  public:
   ReferralPanel();
@@ -57,6 +61,9 @@ class ReferralPanel : public Gtk::Box {
   Gtk::Label code_;
   Gtk::Button* copy_ = nullptr;
   Gtk::Button* share_ = nullptr;
+  Gtk::DrawingArea* progressBar_ = nullptr;
+  Gtk::Label progressCount_;
+  double progressFraction_ = 0;
   Gtk::Label status_;
   std::string referralCode_;
   bool crowned_ = false;

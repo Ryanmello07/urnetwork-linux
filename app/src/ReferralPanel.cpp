@@ -16,7 +16,8 @@ namespace urnw {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
-constexpr int kProgressBarPx = 12;  // the gold bar's height (windows Height=12)
+constexpr int kProgressBarPx = 12;  // the onboarding card's gold bar (android ReferralBar 12dp)
+constexpr int kPanelBarPx = 6;      // the gold panel's bar (android ReferralProgressBar 6dp)
 
 void RoundedRectPath(const Cairo::RefPtr<Cairo::Context>& cr, double x, double y, double w,
                      double h, double r) {
@@ -66,6 +67,7 @@ void EnsureOnboardingCss() {
 .ur-onb-kicker { color: #F5B93C; font-size: 11px; font-weight: bold; letter-spacing: 2px; }
 .ur-onb-blue-light { color: alpha(#D6E6F4, 0.85); }
 .ur-onb-blue-faint { color: alpha(#D6E6F4, 0.6); }
+.ur-onb-progress-count { font-size: 12px; }
 .ur-onb-code-pill { border: 1px dashed alpha(#F5B93C, 0.55); border-radius: 100px; background-color: alpha(#000000, 0.35); padding: 6px 6px 6px 18px; }
 .ur-onb-code { color: #FFD76A; font-weight: bold; font-size: 16px; letter-spacing: 1px; }
 button.ur-onb-gold-btn { background: linear-gradient(#FFE38A, #F5B93C); color: #241A05; border-radius: 100px; font-weight: bold; padding: 8px 18px; }
@@ -86,7 +88,9 @@ button.ur-onb-skip:hover { color: #C8C8C8; background: none; }
 ReferralProgressBox::ReferralProgressBox() : Gtk::Box(Gtk::Orientation::VERTICAL, 8) {
   EnsureOnboardingCss();
   add_css_class("ur-onb-card");
-  auto* inner = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
+  // android IntroductionReferral's card: the header row, 8 above the bar, 4
+  // between the bar and its legend
+  auto* inner = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   inner->set_margin(16);
   auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
   auto* title = MakeLabel(T_("refer_friends_header", "Refer friends"), "ur-onb-neuebit", false);
@@ -98,6 +102,7 @@ ReferralProgressBox::ReferralProgressBox() : Gtk::Box(Gtk::Orientation::VERTICAL
   bar_ = Gtk::make_managed<Gtk::DrawingArea>();
   bar_->set_content_height(kProgressBarPx);
   bar_->set_hexpand(true);
+  bar_->set_margin_top(8);
   kit::MarkDecorative(*bar_);  // the count beside it carries the figure
   bar_->set_draw_func([this](const Cairo::RefPtr<Cairo::Context>& cr, int w, int h) {
     RoundedRectPath(cr, 0, 0, w, h, 6);
@@ -111,6 +116,7 @@ ReferralProgressBox::ReferralProgressBox() : Gtk::Box(Gtk::Orientation::VERTICAL
   });
   inner->append(*bar_);
   auto* legend = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+  legend->set_margin_top(4);
   auto legendKey = [](const Glib::ustring& text, const Rgba& color) {
     auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 4);
     auto* dot = Gtk::make_managed<Gtk::Label>();
@@ -206,7 +212,7 @@ ReferralPanel::ReferralPanel() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
 
   share_ = Gtk::make_managed<Gtk::Button>(T_("share", "Share"));
   share_->add_css_class("ur-onb-gold-btn");
-  share_->set_margin_top(10);
+  share_->set_margin_top(6);  // 12 under the pill, with the column's 6
   share_->signal_clicked().connect([this] {
     get_clipboard()->set_text(Format(
         T_("referral_share_message",
@@ -217,10 +223,39 @@ ReferralPanel::ReferralPanel() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   });
   column->append(*share_);
 
+  // android ReferralProgressBar: 16 under the share button, a 6px gold track
+  // that fills per friend, 6 to "joined / cap" under it, 12 to the status line
+  progressBar_ = Gtk::make_managed<Gtk::DrawingArea>();
+  progressBar_->set_content_height(kPanelBarPx);
+  progressBar_->set_hexpand(true);
+  progressBar_->set_margin_top(10);
+  kit::MarkDecorative(*progressBar_);  // the count under it carries the figure
+  progressBar_->set_draw_func([this](const Cairo::RefPtr<Cairo::Context>& cr, int w, int h) {
+    RoundedRectPath(cr, 0, 0, w, h, h / 2.0);
+    cr->set_source_rgba(kReferralGold.r, kReferralGold.g, kReferralGold.b, 0.18);
+    cr->fill();
+    if (0 < progressFraction_) {
+      const double filled = std::max(static_cast<double>(h), w * progressFraction_);
+      RoundedRectPath(cr, 0, 0, filled, h, h / 2.0);
+      auto fill = Cairo::LinearGradient::create(0, 0, filled, 0);
+      fill->add_color_stop_rgba(0, kReferralGold.r, kReferralGold.g, kReferralGold.b, 1);
+      fill->add_color_stop_rgba(1, kReferralGoldLight.r, kReferralGoldLight.g,
+                                kReferralGoldLight.b, 1);
+      cr->set_source(fill);
+      cr->fill();
+    }
+  });
+  column->append(*progressBar_);
+  progressCount_.add_css_class("ur-onb-body");
+  progressCount_.add_css_class("ur-onb-progress-count");
+  progressCount_.add_css_class("ur-onb-blue-faint");
+  progressCount_.set_justify(Gtk::Justification::CENTER);
+  column->append(progressCount_);
+
   status_.add_css_class("ur-onb-body");
   status_.set_wrap(true);
   status_.set_justify(Gtk::Justification::CENTER);
-  status_.set_margin_top(14);
+  status_.set_margin_top(6);
   column->append(status_);
   append(*column);
 
@@ -252,6 +287,22 @@ void ReferralPanel::Update(const std::string& referralCode, int64_t totalReferra
   code_.set_text(referralCode);
   codePill_->set_visible(!referralCode.empty());
   share_->set_visible(!referralCode.empty());
+  // the bar: friends joined out of the code's cap; once the cap is reached the
+  // count says so in words (android ReferralProgressBar)
+  const int64_t cap = std::max<int64_t>(1, terms.maxReferrals);
+  const int64_t joined = std::clamp<int64_t>(totalReferrals, 0, cap);
+  const bool capped = cap <= joined;
+  progressFraction_ = joined / static_cast<double>(cap);
+  progressCount_.set_text(capped ? Glib::ustring(T_("referral_code_capped", "This code has been used up"))
+                                 : Glib::ustring(std::to_string(joined) + " / " + std::to_string(cap)));
+  if (capped) {
+    progressCount_.remove_css_class("ur-onb-blue-faint");
+    progressCount_.add_css_class("ur-onb-ref-gold-light");
+  } else {
+    progressCount_.remove_css_class("ur-onb-ref-gold-light");
+    progressCount_.add_css_class("ur-onb-blue-faint");
+  }
+  progressBar_->queue_draw();
   if (crowned_) {
     const int64_t paid = std::min<int64_t>(totalReferrals, terms.maxReferrals <= 0 ? totalReferrals
                                                                                      : terms.maxReferrals);

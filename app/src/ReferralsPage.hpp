@@ -2,11 +2,12 @@
 // destination's Referrals row (the android/apple Referrals screen; windows
 // ReferralsPage). One pane:
 //
-//   1. the SHARED referral pieces (ReferralPanel.hpp): the referral progress
-//      card and the gold king-frog panel — the same two the onboarding
-//      "Refer friends" step shows, so the wording, the bonus figure and the
-//      crowned state cannot drift between the two surfaces. The code with copy
-//      and share lives in the panel.
+//   1. the SHARED gold king-frog panel (ReferralPanel.hpp) — the one the
+//      onboarding "Refer friends" step shows, so the wording, the bonus figure
+//      and the crowned state cannot drift between the two surfaces. The code
+//      with copy and share, and the referral progress bar with its "joined /
+//      cap" count, live in the panel (android ReferralsScreen shows the panel
+//      alone; only the onboarding step adds the progress card above it).
 //   2. the figures: total referrals and the referral points earned
 //      (payout_linked_account).
 //   3. the referral network: who referred THIS network, set or unlinked in
@@ -38,7 +39,6 @@
 namespace urnw {
 
 class ReferralPanel;
-class ReferralProgressBox;
 class ReferralNetworkSheet;
 
 class ReferralsPage : public Gtk::Box {
@@ -87,7 +87,6 @@ class ReferralsPage : public Gtk::Box {
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 
   kit::Pane pane_;
-  ReferralProgressBox* progress_ = nullptr;
   ReferralPanel* panel_ = nullptr;
   Gtk::Label* totalValue_ = nullptr;
   Gtk::Label* pointsValue_ = nullptr;
