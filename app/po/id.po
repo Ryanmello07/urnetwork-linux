@@ -2686,10 +2686,20 @@ msgctxt "mock_location_disclosure_turn_off_first"
 msgid "Turn this off in URnetwork before you turn off developer options, deselect URnetwork, or uninstall the app — otherwise your device location can stay frozen until you restart."
 msgstr "Nonaktifkan ini di URnetwork sebelum Anda menonaktifkan opsi developer, membatalkan pilihan URnetwork, atau meng-uninstal aplikasi — jika tidak, lokasi perangkat Anda bisa tetap membeku sampai dimulai ulang."
 
-#. Error shown when the app could not remove the simulated location; the user must re-select URnetwork as the mock location app and turn the feature off, or restart.
-msgctxt "mock_location_error_cleanup_required"
-msgid "URnetwork could not remove the simulated location. Re-select URnetwork under developer options and turn this off, or restart your device."
-msgstr "URnetwork tidak dapat menghapus lokasi palsu. Pilih kembali URnetwork di opsi developer lalu nonaktifkan ini, atau mulai ulang perangkat Anda."
+#. Recovery instructions in that card, and the only in-app guidance for restoring the device's real GPS.
+msgctxt "mock_location_error_stuck_detail"
+msgid "URnetwork was deselected while active, so Android locked the simulated GPS. Re-select URnetwork in Developer options to restore your real GPS, or restart your phone."
+msgstr "Pilihan URnetwork dibatalkan saat fitur masih aktif, sehingga Android mengunci GPS palsu. Pilih kembali URnetwork di opsi developer untuk memulihkan GPS asli Anda, atau mulai ulang ponsel Anda."
+
+#. Title of the recovery card shown at the top of the mock location guide when the simulated location is stuck.
+msgctxt "mock_location_error_stuck_title"
+msgid "Simulated location is stuck"
+msgstr "Lokasi palsu membeku"
+
+#. Button on the optional location permission step.
+msgctxt "mock_location_grant_permission"
+msgid "Grant permission"
+msgstr "Berikan izin"
 
 #. Intro of the mock location guide explaining that apps see the longest-connected provider's location instead of the real one.
 msgctxt "mock_location_guide_intro"
@@ -2711,6 +2721,11 @@ msgctxt "mock_location_open_about_phone"
 msgid "Open About phone"
 msgstr "Buka “Tentang ponsel”"
 
+#. Button that replaces Grant permission once Android will no longer show the permission dialog, opening the app's settings page instead.
+msgctxt "mock_location_open_app_settings"
+msgid "Open app settings"
+msgstr "Buka setelan aplikasi"
+
 #. Button that opens the Android developer options settings screen.
 msgctxt "mock_location_open_developer_options"
 msgid "Open developer options"
@@ -2731,10 +2746,25 @@ msgctxt "mock_location_settings_row"
 msgid "Device location sync"
 msgstr "Sinkronisasi lokasi perangkat"
 
+#. Settings row status while the mock location engine retries after a transient failure.
+msgctxt "mock_location_status_retrying"
+msgid "Retrying — simulated location paused"
+msgstr "Mencoba lagi — lokasi palsu dijeda"
+
+#. Settings row status: the simulated location is stuck on because the app was removed from Android's mock-location picker while active.
+msgctxt "mock_location_status_stuck"
+msgid "GPS frozen — action needed"
+msgstr "GPS membeku — perlu tindakan"
+
 #. Mock location setup step: enable Android developer options by tapping the build number in About phone.
 msgctxt "mock_location_step_developer_options"
 msgid "Turn on developer options: open About phone and tap Build number seven times."
 msgstr "Aktifkan opsi developer: buka “Tentang ponsel”, lalu ketuk “Nomor build” tujuh kali."
+
+#. Optional setup step: the approximate location grant that Google Play services needs to mirror the simulated location to its own location provider. The feature works without it.
+msgctxt "mock_location_step_location_permission"
+msgid "Optional: allow approximate location so Chrome and other Google Play apps follow the simulated location too. Everything else works without it."
+msgstr "Opsional: izinkan akses lokasi perkiraan agar Chrome dan aplikasi Google Play lainnya juga mengikuti lokasi palsu. Semua fitur lainnya tetap berfungsi tanpa izin ini."
 
 #. Mock location setup step: turn on the system Location setting so apps receive the simulated location.
 msgctxt "mock_location_step_location_services"

@@ -2247,10 +2247,20 @@ msgctxt "mock_location_disclosure_turn_off_first"
 msgid "Turn this off in URnetwork before you turn off developer options, deselect URnetwork, or uninstall the app — otherwise your device location can stay frozen until you restart."
 msgstr "Desactívalo en URnetwork antes de desactivar las opciones para desarrolladores, quitar la selección de URnetwork o desinstalar la app; de lo contrario, la ubicación de tu dispositivo puede quedar congelada hasta que lo reinicies."
 
-#. Error shown when the app could not remove the simulated location; the user must re-select URnetwork as the mock location app and turn the feature off, or restart.
-msgctxt "mock_location_error_cleanup_required"
-msgid "URnetwork could not remove the simulated location. Re-select URnetwork under developer options and turn this off, or restart your device."
-msgstr "URnetwork no pudo eliminar la ubicación simulada. Vuelve a seleccionar URnetwork en las opciones para desarrolladores y desactívalo, o reinicia tu dispositivo."
+#. Recovery instructions in that card, and the only in-app guidance for restoring the device's real GPS.
+msgctxt "mock_location_error_stuck_detail"
+msgid "URnetwork was deselected while active, so Android locked the simulated GPS. Re-select URnetwork in Developer options to restore your real GPS, or restart your phone."
+msgstr "Se quitó la selección de URnetwork mientras estaba activo, por lo que Android dejó congelado el GPS simulado. Para restaurar tu GPS real, vuelve a seleccionar URnetwork en las opciones para desarrolladores o reinicia tu teléfono."
+
+#. Title of the recovery card shown at the top of the mock location guide when the simulated location is stuck.
+msgctxt "mock_location_error_stuck_title"
+msgid "Simulated location is stuck"
+msgstr "La ubicación simulada está congelada"
+
+#. Button on the optional location permission step.
+msgctxt "mock_location_grant_permission"
+msgid "Grant permission"
+msgstr "Otorgar permiso"
 
 #. Intro of the mock location guide explaining that apps see the longest-connected provider's location instead of the real one.
 msgctxt "mock_location_guide_intro"
@@ -2272,6 +2282,11 @@ msgctxt "mock_location_open_about_phone"
 msgid "Open About phone"
 msgstr "Abrir “Acerca del teléfono”"
 
+#. Button that replaces Grant permission once Android will no longer show the permission dialog, opening the app's settings page instead.
+msgctxt "mock_location_open_app_settings"
+msgid "Open app settings"
+msgstr "Abrir configuración de la app"
+
 #. Button that opens the Android developer options settings screen.
 msgctxt "mock_location_open_developer_options"
 msgid "Open developer options"
@@ -2292,10 +2307,25 @@ msgctxt "mock_location_settings_row"
 msgid "Device location sync"
 msgstr "Sincronización de la ubicación del dispositivo"
 
+#. Settings row status while the mock location engine retries after a transient failure.
+msgctxt "mock_location_status_retrying"
+msgid "Retrying — simulated location paused"
+msgstr "Reintentando — ubicación simulada en pausa"
+
+#. Settings row status: the simulated location is stuck on because the app was removed from Android's mock-location picker while active.
+msgctxt "mock_location_status_stuck"
+msgid "GPS frozen — action needed"
+msgstr "GPS congelado — requiere acción"
+
 #. Mock location setup step: enable Android developer options by tapping the build number in About phone.
 msgctxt "mock_location_step_developer_options"
 msgid "Turn on developer options: open About phone and tap Build number seven times."
 msgstr "Activa las opciones para desarrolladores: abre “Acerca del teléfono” y toca siete veces “Número de compilación”."
+
+#. Optional setup step: the approximate location grant that Google Play services needs to mirror the simulated location to its own location provider. The feature works without it.
+msgctxt "mock_location_step_location_permission"
+msgid "Optional: allow approximate location so Chrome and other Google Play apps follow the simulated location too. Everything else works without it."
+msgstr "Opcional: permite el acceso a la ubicación aproximada para que Chrome y otras apps de Google Play también sigan la ubicación simulada. Todo lo demás funciona sin este permiso."
 
 #. Mock location setup step: turn on the system Location setting so apps receive the simulated location.
 msgctxt "mock_location_step_location_services"

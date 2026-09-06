@@ -2686,10 +2686,20 @@ msgctxt "mock_location_disclosure_turn_off_first"
 msgid "Turn this off in URnetwork before you turn off developer options, deselect URnetwork, or uninstall the app — otherwise your device location can stay frozen until you restart."
 msgstr "在关闭开发者选项、取消选择 URnetwork 或卸载应用之前，请先在 URnetwork 中关闭此功能——否则设备位置可能会一直停留在模拟位置，直到重启。"
 
-#. Error shown when the app could not remove the simulated location; the user must re-select URnetwork as the mock location app and turn the feature off, or restart.
-msgctxt "mock_location_error_cleanup_required"
-msgid "URnetwork could not remove the simulated location. Re-select URnetwork under developer options and turn this off, or restart your device."
-msgstr "URnetwork 无法移除模拟位置。请在开发者选项中重新选择 URnetwork 并关闭此功能，或重启设备。"
+#. Recovery instructions in that card, and the only in-app guidance for restoring the device's real GPS.
+msgctxt "mock_location_error_stuck_detail"
+msgid "URnetwork was deselected while active, so Android locked the simulated GPS. Re-select URnetwork in Developer options to restore your real GPS, or restart your phone."
+msgstr "由于在此功能开启期间取消选择了 URnetwork，Android 锁定了模拟 GPS。请在开发者选项中重新选择 URnetwork 以恢复真实 GPS，或重启手机。"
+
+#. Title of the recovery card shown at the top of the mock location guide when the simulated location is stuck.
+msgctxt "mock_location_error_stuck_title"
+msgid "Simulated location is stuck"
+msgstr "模拟位置已卡住"
+
+#. Button on the optional location permission step.
+msgctxt "mock_location_grant_permission"
+msgid "Grant permission"
+msgstr "授予权限"
 
 #. Intro of the mock location guide explaining that apps see the longest-connected provider's location instead of the real one.
 msgctxt "mock_location_guide_intro"
@@ -2711,6 +2721,11 @@ msgctxt "mock_location_open_about_phone"
 msgid "Open About phone"
 msgstr "打开“关于手机”"
 
+#. Button that replaces Grant permission once Android will no longer show the permission dialog, opening the app's settings page instead.
+msgctxt "mock_location_open_app_settings"
+msgid "Open app settings"
+msgstr "打开应用设置"
+
 #. Button that opens the Android developer options settings screen.
 msgctxt "mock_location_open_developer_options"
 msgid "Open developer options"
@@ -2731,10 +2746,25 @@ msgctxt "mock_location_settings_row"
 msgid "Device location sync"
 msgstr "设备位置同步"
 
+#. Settings row status while the mock location engine retries after a transient failure.
+msgctxt "mock_location_status_retrying"
+msgid "Retrying — simulated location paused"
+msgstr "正在重试，模拟位置已暂停"
+
+#. Settings row status: the simulated location is stuck on because the app was removed from Android's mock-location picker while active.
+msgctxt "mock_location_status_stuck"
+msgid "GPS frozen — action needed"
+msgstr "GPS 已冻结，需要处理"
+
 #. Mock location setup step: enable Android developer options by tapping the build number in About phone.
 msgctxt "mock_location_step_developer_options"
 msgid "Turn on developer options: open About phone and tap Build number seven times."
 msgstr "开启开发者选项：打开“关于手机”，然后连续点按“版本号”七次。"
+
+#. Optional setup step: the approximate location grant that Google Play services needs to mirror the simulated location to its own location provider. The feature works without it.
+msgctxt "mock_location_step_location_permission"
+msgid "Optional: allow approximate location so Chrome and other Google Play apps follow the simulated location too. Everything else works without it."
+msgstr "可选：允许获取大致位置，这样 Chrome 和其他 Google Play 应用也会跟随模拟位置。其他功能无需此权限即可正常使用。"
 
 #. Mock location setup step: turn on the system Location setting so apps receive the simulated location.
 msgctxt "mock_location_step_location_services"
