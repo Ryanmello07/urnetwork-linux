@@ -3338,6 +3338,11 @@ msgctxt "private_network"
 msgid "Private Network"
 msgstr "プライベートネットワーク"
 
+#. Upgrade screen: the one-line Pro benefits prompt under the Get Pro title.
+msgctxt "pro_benefits_simple"
+msgid "The best version of URnetwork."
+msgstr "URnetworkの最高のバージョン。"
+
 #. Call to action
 msgctxt "processing_payment"
 msgid "Processing payment"
