@@ -37,6 +37,7 @@
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
+#include "TapSequenceGate.hpp"
 #include "TransferChart.hpp"
 #include "TransportBar.hpp"
 #include "TransportSheet.hpp"
@@ -114,6 +115,11 @@ class ConnectPage : public Gtk::Box {
   // beside the other two (MainWindow.cpp: on_open_provider_locations ->
   // OpenProviderLocations).
   std::function<void()> on_open_provider_locations;
+  // The easter egg: five taps on the connected dot, each within five seconds
+  // of the previous, play the Pro celebration (the window owns the flight).
+  // Silent: no counter, no toast, no announcement; taps while not connected
+  // are ignored.
+  std::function<void()> on_connected_icon_tap;
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off
@@ -345,6 +351,7 @@ class ConnectPage : public Gtk::Box {
   GtkWidget* paneAClamp_ = nullptr;
   GtkWidget* heroClamp_ = nullptr;  // hero host MaxWidth 190 (Adv) / 320
   Gtk::Label* statusDot_ = nullptr;
+  TapSequenceGate connectedIconTaps_;  // the easter egg's five-tap count on the dot
   Gtk::Label* statusText_ = nullptr;
   Gtk::Label* protectionText_ = nullptr;
   Gtk::Label* trafficHeldText_ = nullptr;

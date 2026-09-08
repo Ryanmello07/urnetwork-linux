@@ -1594,6 +1594,8 @@ void MainWindow::BuildHome() {
   // because the GeoClue location override must keep following the window
   // while the sheet is closed.
   connectPage_->on_open_provider_locations = [this] { OpenProviderLocations(); };
+  // the easter egg: five taps on the connected dot play the Pro celebration
+  connectPage_->on_connected_icon_tap = [this] { LaunchProCelebration(); };
   shell_->SetPage("connect", *connectPage_);
   shell_->SetPage("connect-legacy", *scroller);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {

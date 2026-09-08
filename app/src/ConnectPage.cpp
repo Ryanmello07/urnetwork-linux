@@ -367,6 +367,19 @@ void ConnectPage::BuildPaneA() {
   statusDot_->set_valign(Gtk::Align::START);
   statusDot_->set_margin_top(7);
   kit::MarkDecorative(*statusDot_);
+  // the easter egg: five taps on the dot while connected, each within five
+  // seconds of the previous, play the Pro celebration; silent otherwise
+  auto dotTap = Gtk::GestureClick::create();
+  dotTap->signal_released().connect([this](int, double, double) {
+    if (renderedState_ != health::State::Connected) {
+      connectedIconTaps_.Reset();
+      return;
+    }
+    if (connectedIconTaps_.Tap(g_get_monotonic_time() / 1000) && on_connected_icon_tap) {
+      on_connected_icon_tap();
+    }
+  });
+  statusDot_->add_controller(dotTap);
   statusRow->append(*statusDot_);
   auto* statusColumn = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
   statusColumn->set_hexpand(true);
