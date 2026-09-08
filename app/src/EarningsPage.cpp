@@ -3514,9 +3514,10 @@ void EarningsPage::RebuildPointsRows(size_t fromIndex) {
   const bool byStreak = pointsSort_ == urnet::PointsLeaderboardSortStreak;
   const size_t activeColumn = byBlocks ? 3 : (byStreak ? 4 : 2);
   const Glib::ustring anonymous = T_("anonymous", "Anonymous");
-  // an anonymous row reads "Anonymous" to everyone but its owner, who sees
-  // their own name (the highlight keys on the network id, never the name)
-  const std::string ownName = OwnPointsName();
+  // an anonymous row reads "Anonymous" to everyone, its owner included: the
+  // own row is what the network looks like to others, only highlighted (the
+  // highlight keys on the network id, never the name; the own card carries
+  // the name)
 
   for (size_t i = fromIndex; i < pointsRowsUi_.size(); ++i) {
     const auto& r = pointsRowsUi_[i];
@@ -3529,8 +3530,7 @@ void EarningsPage::RebuildPointsRows(size_t fromIndex) {
                                     : (byStreak ? r.rankStreakText : r.rankPointsText));
     // the emoji tag shows either way; the name only when the network is not anonymous
     const bool anon = r.anonymous || r.displayName.empty();
-    Glib::ustring name = anon ? (isOwn && !ownName.empty() ? Glib::ustring(ownName) : anonymous)
-                              : Glib::ustring(r.displayName);
+    Glib::ustring name = anon ? anonymous : Glib::ustring(r.displayName);
     row.cells[1]->set_text(name);
     identity.bottom->set_text(r.emojiTag);
     identity.bottom->set_visible(!r.emojiTag.empty());
