@@ -115,7 +115,7 @@ class ConnectPage : public Gtk::Box {
   // beside the other two (MainWindow.cpp: on_open_provider_locations ->
   // OpenProviderLocations).
   std::function<void()> on_open_provider_locations;
-  // The easter egg: five taps on the connected dot, each within five seconds
+  // The easter egg: five taps on the connected dot, each within two seconds
   // of the previous, play the Pro celebration (the window owns the flight).
   // Silent: no counter, no toast, no announcement; taps while not connected
   // are ignored.

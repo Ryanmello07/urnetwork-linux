@@ -1,5 +1,5 @@
 // The connect page's easter-egg gate: five taps on the connected dot, each
-// within five seconds of the previous one, play the Pro celebration; a longer
+// within two seconds of the previous one, play the Pro celebration; a longer
 // gap starts the count over, and so does a completed sequence.
 //
 // SPDX-License-Identifier: MPL-2.0
@@ -11,45 +11,48 @@ namespace {
 using urnw::TapSequenceGate;
 
 UR_TEST(tapSequenceCompletesOnTheFifthTapWithinTheWindow) {
-  TapSequenceGate gate(5, 5000);
-  // four taps a second apart do nothing; the fifth completes
+  TapSequenceGate gate(5, 2000);
+  // four taps half a second apart do nothing; the fifth completes
+  UR_EXPECT_FALSE(gate.Tap(500));
   UR_EXPECT_FALSE(gate.Tap(1000));
+  UR_EXPECT_FALSE(gate.Tap(1500));
   UR_EXPECT_FALSE(gate.Tap(2000));
-  UR_EXPECT_FALSE(gate.Tap(3000));
-  UR_EXPECT_FALSE(gate.Tap(4000));
   UR_EXPECT_EQ(4, gate.Taps());
-  UR_EXPECT_TRUE(gate.Tap(5000));
+  UR_EXPECT_TRUE(gate.Tap(2500));
   UR_EXPECT_EQ(0, gate.Taps());
   // each tap only has to follow the previous one within the window: a slow
-  // sequence spanning more than five seconds in total still completes
+  // sequence spanning more than two seconds in total still completes
   UR_EXPECT_FALSE(gate.Tap(10000));
-  UR_EXPECT_FALSE(gate.Tap(14000));
-  UR_EXPECT_FALSE(gate.Tap(18000));
-  UR_EXPECT_FALSE(gate.Tap(22000));
-  UR_EXPECT_TRUE(gate.Tap(26000));
+  UR_EXPECT_FALSE(gate.Tap(11800));
+  UR_EXPECT_FALSE(gate.Tap(13600));
+  UR_EXPECT_FALSE(gate.Tap(15400));
+  UR_EXPECT_TRUE(gate.Tap(17200));
 }
 
-UR_TEST(tapSequenceResetsAfterAFiveSecondGap) {
-  TapSequenceGate gate(5, 5000);
+UR_TEST(tapSequenceResetsAfterATwoSecondGap) {
+  TapSequenceGate gate(5, 2000);
   UR_EXPECT_FALSE(gate.Tap(1000));
+  UR_EXPECT_FALSE(gate.Tap(1500));
   UR_EXPECT_FALSE(gate.Tap(2000));
-  UR_EXPECT_FALSE(gate.Tap(3000));
-  UR_EXPECT_FALSE(gate.Tap(4000));
-  // a gap longer than the window: this tap is the first of a new sequence
-  UR_EXPECT_FALSE(gate.Tap(9001));
+  UR_EXPECT_FALSE(gate.Tap(2500));
+  // a gap over two seconds: this tap is the first of a new sequence
+  UR_EXPECT_FALSE(gate.Tap(4501));
   UR_EXPECT_EQ(1, gate.Taps());
-  UR_EXPECT_FALSE(gate.Tap(9002));
-  UR_EXPECT_FALSE(gate.Tap(9003));
-  UR_EXPECT_FALSE(gate.Tap(9004));
-  UR_EXPECT_TRUE(gate.Tap(9005));
-  // exactly the window is still inside it
+  UR_EXPECT_FALSE(gate.Tap(4502));
+  UR_EXPECT_FALSE(gate.Tap(4503));
+  UR_EXPECT_FALSE(gate.Tap(4504));
+  UR_EXPECT_TRUE(gate.Tap(4505));
+  // exactly two seconds is still inside the window
   UR_EXPECT_FALSE(gate.Tap(20000));
-  UR_EXPECT_FALSE(gate.Tap(25000));
+  UR_EXPECT_FALSE(gate.Tap(22000));
   UR_EXPECT_EQ(2, gate.Taps());
+  // one millisecond over is not
+  UR_EXPECT_FALSE(gate.Tap(24001));
+  UR_EXPECT_EQ(1, gate.Taps());
 }
 
 UR_TEST(tapSequenceRestartsAfterALaunch) {
-  TapSequenceGate gate(5, 5000);
+  TapSequenceGate gate(5, 2000);
   for (int i = 1; i <= 4; ++i) UR_EXPECT_FALSE(gate.Tap(i * 100));
   UR_EXPECT_TRUE(gate.Tap(500));
   // the taps right after a launch count from zero again: four more do

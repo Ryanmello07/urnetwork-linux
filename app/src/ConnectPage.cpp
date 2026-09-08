@@ -367,7 +367,7 @@ void ConnectPage::BuildPaneA() {
   statusDot_->set_valign(Gtk::Align::START);
   statusDot_->set_margin_top(7);
   kit::MarkDecorative(*statusDot_);
-  // the easter egg: five taps on the dot while connected, each within five
+  // the easter egg: five taps on the dot while connected, each within two
   // seconds of the previous, play the Pro celebration; silent otherwise
   auto dotTap = Gtk::GestureClick::create();
   dotTap->signal_released().connect([this](int, double, double) {
