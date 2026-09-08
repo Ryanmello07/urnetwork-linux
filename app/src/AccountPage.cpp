@@ -1310,6 +1310,13 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
                                               : Glib::ustring(T_("free", "Free"));
   SetToned(*planValue_, balance_.isPro ? kProGold : kOffWhite, plan);
   kit::SetAccessibleLabel(*planValue_, Glib::ustring(T_("plan", "Plan")) + ", " + plan);
+  // the Pro label is a button that replays the celebration: say so with the
+  // cursor (free and guest labels stay plain text)
+  if (balance_.isPro && !balance_.guest) {
+    SetPointerCursor(*planValue_);
+  } else {
+    planValue_->set_cursor();
+  }
 
   // 2. the confirmation ring: active AND visible exactly while the poll runs.
   planRing_->set_visible(balance_.confirming);
@@ -1399,6 +1406,13 @@ void AccountPage::BuildPlanPane() {
     // set_attributes rides ON TOP of the markup SetToned writes, so the size
     // and weight survive every colour change.
     planValue_->set_attributes(attrs);
+    // a Pro network's label replays the Pro celebration on a tap; the gesture
+    // is inert for free and guest labels (ApplyBalance keeps the cursor honest)
+    auto planTap = Gtk::GestureClick::create();
+    planTap->signal_released().connect([this](int, double, double) {
+      if (balance_.isPro && !balance_.guest && on_plan_label_tap) on_plan_label_tap();
+    });
+    planValue_->add_controller(planTap);
     row.content->append(*planValue_);
     content->append(*row.root);
   }

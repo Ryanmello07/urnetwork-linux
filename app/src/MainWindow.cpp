@@ -144,7 +144,20 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // see Ui.hpp ShowToast).
   GtkWidget* toastOverlay = adw_toast_overlay_new();
   adw_toast_overlay_set_child(ADW_TOAST_OVERLAY(toastOverlay), GTK_WIDGET(stack_.gobj()));
-  gtk_window_set_child(GTK_WINDOW(gobj()), toastOverlay);
+  // The Pro celebration wraps everything: the page stack (with its toasts)
+  // sits in the mosaic container, and the confetti overlay floats above it.
+  // Both are inert until a flight starts (ProCelebration.hpp).
+  proPixelateBin_ = Gtk::make_managed<PixelateBin>(proFlightClock_);
+  proPixelateBin_->SetChild(*Glib::wrap(toastOverlay));
+  auto* windowOverlay = Gtk::make_managed<Gtk::Overlay>();
+  windowOverlay->set_child(*proPixelateBin_);
+  proCelebration_ = Gtk::make_managed<ProCelebrationOverlay>(proFlightClock_);
+  proCelebration_->on_frame = [this] {
+    if (proPixelateBin_) proPixelateBin_->queue_draw();
+  };
+  windowOverlay->add_overlay(*proCelebration_);
+  windowOverlay->set_measure_overlay(*proCelebration_, false);
+  set_child(*windowOverlay);
 
   // Track window visibility (tray app: closing hides to tray). Skip window-widget
   // updates while hidden and resync when shown, so a hidden window doesn't churn
@@ -218,6 +231,13 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       provideResetOnUpgrade_ = true;
       host_.ResetProvideToNever();
       SyncProvideControlMode();  // reflect it in the home controls
+    }
+    // The Pro celebration, once per purchase: the store confirms the free ->
+    // Pro flip after checkout (the upgrade sheet's success state reads the
+    // same snapshot), and the flight plays over whatever is on screen.
+    if (balance_.DidDetectUpgradeToPro() && !proCelebrated_) {
+      proCelebrated_ = true;
+      LaunchProCelebration();
     }
   });
 
@@ -1614,6 +1634,8 @@ void MainWindow::BuildHome() {
       drawer_->OpenUpgrade();
     }
   };
+  // a Pro network's plan label replays the Pro celebration
+  accountPage_->on_plan_label_tap = [this] { LaunchProCelebration(); };
   // The redeem sheet needs the balance store (it starts confirmation polling),
   // which the page deliberately does not hold — so the window opens it.
   accountPage_->on_open_redeem = [this] {
@@ -2292,6 +2314,13 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
       stats.provideEnabled && stats.provideHasNetworkKey
           ? T_("device_discoverable", "This device is discoverable")
           : T_("device_not_discoverable", "Enable provide mode to make this device discoverable"));
+}
+
+// ---- the Pro celebration ----------------------------------------------------
+// One flight at a time; the overlay itself declines to start while a flight
+// is in the air or when animations are off, so the callers stay simple.
+void MainWindow::LaunchProCelebration() {
+  if (proCelebration_) proCelebration_->Launch();
 }
 
 }  // namespace urnw

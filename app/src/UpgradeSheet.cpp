@@ -101,23 +101,8 @@ void UpgradeSheet::BuildUi() {
   proTitle->set_xalign(0);
   optionsBox_->append(*proTitle);
 
-  auto* supportUs = Gtk::make_managed<Gtk::Label>(
-      T_("support_us",
-         "Support us in building a new kind of network that gives instead of takes."));
-  supportUs->add_css_class("dim-label");
-  supportUs->set_wrap(true);
-  supportUs->set_xalign(0);
-  supportUs->set_margin_top(16);
-  optionsBox_->append(*supportUs);
-  auto* unlock = Gtk::make_managed<Gtk::Label>(
-      T_("unlock_speed",
-         "You’ll unlock even faster speeds, and first dibs on new features like robust "
-         "anti-censorship measures and data control."));
-  unlock->add_css_class("dim-label");
-  unlock->set_wrap(true);
-  unlock->set_xalign(0);
-  unlock->set_margin_top(8);
-  optionsBox_->append(*unlock);
+  // No explainer under the title: the sheet is the title and the two plan
+  // options (android UpgradeScreenHeader).
 
   // the plan picker the onboarding welcome page shows: yearly in the gold
   // dress with the trial, selected by default, monthly plain below it. One

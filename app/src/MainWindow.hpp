@@ -31,6 +31,7 @@
 #include "ReferralsPage.hpp"
 #include "SdkHost.hpp"
 #include "SeedphraseSheet.hpp"
+#include "ProCelebration.hpp"
 #include "SubscriptionBalance.hpp"
 #include "UrMotion.hpp"
 
@@ -142,6 +143,16 @@ class MainWindow : public Gtk::ApplicationWindow {
   // upgrade + redeem confirmation polling)
   SubscriptionBalanceStore balance_;
   Gtk::Stack stack_;
+
+  // The Pro celebration (ProCelebration.hpp): the overlay above the whole
+  // window, the mosaic container around the page stack, and the one clock
+  // both follow. Plays once at the free -> Pro upgrade, and on a tap of the
+  // Account plan label while Pro.
+  ProFlightClock proFlightClock_;
+  ProCelebrationOverlay* proCelebration_ = nullptr;
+  PixelateBin* proPixelateBin_ = nullptr;
+  bool proCelebrated_ = false;
+  void LaunchProCelebration();
 
   Gtk::Entry email_;
   Gtk::Button* getStartedBtn_ = nullptr;  // disabled while a discovery is in flight

@@ -170,6 +170,9 @@ class AccountPage : public Gtk::Box {
   // The plan pane's primary action. Guests go to the create-account (guest
   // upgrade) flow, everyone else to the UpgradeSheet the window/drawer owns.
   std::function<void()> on_open_upgrade;
+  // A Pro network's plan label ("Pro") replays the Pro celebration (android
+  // AccountRootSubscription onPlanLabelTap); free and guest labels are inert.
+  std::function<void()> on_plan_label_tap;
   // The Redeem row: the existing RedeemCodeSheet (linux-reuse §2.15), which
   // needs the balance store the window owns.
   std::function<void()> on_open_redeem;

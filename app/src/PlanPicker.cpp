@@ -71,12 +71,15 @@ class GoldPlanCard : public Gtk::Overlay {
     set_overflow(Gtk::Overflow::VISIBLE);
     auto* content = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
     content->set_margin(22);
-    content->set_margin_top(24);
-    content->set_margin_bottom(24);
+    // taller than wide: the plan lines get room to breathe (android
+    // PlanOptionContainer, vertical 36); the text sits level with the dot
+    content->set_margin_top(36);
+    content->set_margin_bottom(36);
     dot_.set_valign(Gtk::Align::CENTER);
     content->append(dot_);
     auto* column = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     column->set_hexpand(true);
+    column->set_valign(Gtk::Align::CENTER);
     price_.add_css_class("ur-onb-neuebit");
     price_.set_xalign(0);
     column->append(price_);
@@ -252,11 +255,41 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   monthlyCard_->set_margin_top(16);
   auto* monthlyRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
   monthlyDot_ = Gtk::make_managed<Gtk::Label>();
+  monthlyDot_->set_valign(Gtk::Align::CENTER);
   monthlyRow->append(*monthlyDot_);
+  // The monthly card has one line. Size it like the yearly card (an invisible
+  // copy of that card's three lines, never read aloud) so both cards are the
+  // same height at any text scale, and center the visible line in that space
+  // so it sits level with the dot (android SubscriptionOptions).
+  auto* monthlyReserve = Gtk::make_managed<Gtk::Overlay>();
+  monthlyReserve->set_hexpand(true);
+  auto* reserved = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+  reserved->set_opacity(0);
+  reserved->set_can_target(false);
+  reserved->set_can_focus(false);
+  gtk_accessible_update_state(GTK_ACCESSIBLE(reserved->gobj()), GTK_ACCESSIBLE_STATE_HIDDEN, TRUE, -1);
+  const char* reservedClasses[3][2] = {{"ur-onb-neuebit", nullptr},
+                                       {"ur-onb-body", "ur-onb-muted"},
+                                       {"ur-onb-body", "ur-onb-gold-light"}};
+  const Glib::ustring reservedTexts[3] = {
+      T_("plan_yearly_price", "$40/year"), T_("save_33_percent", "Save 33%"),
+      Format(T_("includes_free_trial_days", "Includes {} day free trial"), kFreeTrialDays)};
+  for (int i = 0; i < 3; ++i) {
+    auto* line = Gtk::make_managed<Gtk::Label>(reservedTexts[i]);
+    for (const char* css : reservedClasses[i]) {
+      if (css) line->add_css_class(css);
+    }
+    line->set_xalign(0);
+    reserved->append(*line);
+  }
+  monthlyReserve->set_child(*reserved);
   auto* monthlyText = Gtk::make_managed<Gtk::Label>(T_("plan_monthly_price", "$5/month"));
   monthlyText->add_css_class("ur-onb-neuebit");
   monthlyText->set_xalign(0);
-  monthlyRow->append(*monthlyText);
+  monthlyText->set_halign(Gtk::Align::START);
+  monthlyText->set_valign(Gtk::Align::CENTER);
+  monthlyReserve->add_overlay(*monthlyText);
+  monthlyRow->append(*monthlyReserve);
   monthlyCard_->set_child(*monthlyRow);
   monthlyCard_->signal_clicked().connect([this] {
     Select(false);
