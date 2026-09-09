@@ -1065,6 +1065,11 @@ msgctxt "continue_txt"
 msgid "Continue"
 msgstr "Continua"
 
+#. Onboarding offer screen: the always-visible secondary text link that keeps the free plan and finishes onboarding.
+msgctxt "continue_with_free_plan"
+msgid "Continue with the free plan"
+msgstr "Continuar com o plano gratuito"
+
 #. A label displayed in the center of a contract circle.
 msgctxt "contract"
 msgid "Contract"
@@ -1911,6 +1916,26 @@ msgstr "Editar código de indicação"
 msgctxt "edit_split_rule"
 msgid "Edit split rule"
 msgstr "Editar regra de divisão"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 1.
+msgctxt "email_e4_reason_not_needed"
+msgid "I didn't need it yet"
+msgstr "Ainda não precisei"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 2.
+msgctxt "email_e4_reason_not_working"
+msgid "It didn't work"
+msgstr "Não funcionou"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 4.
+msgctxt "email_e4_reason_other"
+msgid "Something else"
+msgstr "Outra coisa"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 3.
+msgctxt "email_e4_reason_trust"
+msgid "I'm not sure I trust a VPN"
+msgstr "Não sei se confio em VPN"
 
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
@@ -3106,6 +3131,66 @@ msgctxt "off"
 msgid "Off"
 msgstr "Desativado"
 
+#. Onboarding offer screen: the static deadline sentence; the placeholder is a local date and time.
+msgctxt "offer_available_until"
+msgid "Available until {}"
+msgstr "Disponível até {}"
+
+#. Onboarding offer screen: the single primary button. The number is the months the discount equals.
+msgctxt "offer_cta_start_trial_months_free"
+msgid "Start free trial with {} months free"
+msgstr "Começar o teste grátis com {} meses grátis"
+
+#. Plan card with the welcome offer: the billed first-year amount (most prominent line).
+msgctxt "offer_first_year_price"
+msgid "{} for your first year"
+msgstr "{} no primeiro ano"
+
+#. Onboarding offer screen headline. The number is the months the discount equals.
+msgctxt "offer_months_free_headline"
+msgid "{} months of Pro, free"
+msgstr "{} meses de Pro, grátis"
+
+#. Onboarding offer screen sub-line under the headline. The number is the percent off the first year.
+msgctxt "offer_percent_off_first_year"
+msgid "{}% off your first year"
+msgstr "{}% de desconto no primeiro ano"
+
+#. Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).
+msgctxt "offer_terms_first_year"
+msgid "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgstr "{0} dias grátis, depois {1} no primeiro ano, depois {2}/ano. Cancele quando quiser."
+
+#. Plan card with the welcome offer: the renewal price line under the first-year amount.
+msgctxt "offer_then_regular_price"
+msgid "then {}/year"
+msgstr "depois {}/ano"
+
+#. Onboarding offer screen trial timeline: a row label for a day of the trial.
+msgctxt "offer_timeline_day"
+msgid "Day {}"
+msgstr "Dia {}"
+
+#. Onboarding offer screen trial timeline: the first-charge row; the placeholder is the discounted yearly amount.
+msgctxt "offer_timeline_first_charge"
+msgid "{} for the year, cancel anytime before"
+msgstr "{} pelo ano, cancele antes quando quiser"
+
+#. Onboarding offer screen trial timeline: the reminder row (two days before the charge).
+msgctxt "offer_timeline_reminder"
+msgid "Reminder before the charge"
+msgstr "Lembrete antes da cobrança"
+
+#. Onboarding offer screen trial timeline: the first row's label.
+msgctxt "offer_timeline_today"
+msgid "Today"
+msgstr "Hoje"
+
+#. Onboarding offer screen trial timeline: what happens today.
+msgctxt "offer_timeline_trial_starts"
+msgid "Free trial starts"
+msgstr "Começa o teste grátis"
+
 #. A label for a DNS setting that is enabled.
 msgctxt "on"
 msgid "On"
@@ -3226,6 +3311,11 @@ msgctxt "pending_mb_provided"
 msgid "Pending: {} MB provided"
 msgstr "Pendente: {} MB fornecidos"
 
+#. Sign-up pages: the marketing opt-out switch shown at collection, on by default.
+msgctxt "periodic_product_updates"
+msgid "Periodic product updates"
+msgstr "Novidades periódicas do produto"
+
 #. Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "phantom"
 msgid "Phantom"
@@ -3256,10 +3346,35 @@ msgctxt "plan"
 msgid "Plan"
 msgstr "Plano"
 
+#. Plan picker: the line under the monthly price.
+msgctxt "plan_billed_monthly_cancel_anytime"
+msgid "Billed monthly · cancel anytime"
+msgstr "Cobrado mensalmente · cancele quando quiser"
+
+#. Plan picker on the regional price tier: the line under the yearly price instead of a per-month equivalent; the placeholder is the storefront country's name.
+msgctxt "plan_billed_yearly_price_for_country"
+msgid "Billed once a year · price for {}"
+msgstr "Cobrado uma vez por ano · preço para {}"
+
+#. Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).
+msgctxt "plan_monthly_equivalent_line"
+msgid "≈ {}/month · billed once a year"
+msgstr "≈ {}/mês · cobrado uma vez por ano"
+
 #. The monthly plan card's price on the Linux onboarding page.
 msgctxt "plan_monthly_price"
 msgid "$5/month"
 msgstr "$5/month"
+
+#. Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.
+msgctxt "plan_save_percent"
+msgid "Save {}%"
+msgstr "Economize {}%"
+
+#. Plan picker: the terms line under the button for the yearly plan with its trial.
+msgctxt "plan_terms_yearly"
+msgid "{0} days free, then {1}/year. Cancel anytime."
+msgstr "{0} dias grátis, depois {1}/ano. Cancele quando quiser."
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -5117,6 +5232,11 @@ msgstr "Falha ao entrar com a carteira"
 msgctxt "wallet_sign_in_method_added"
 msgid "Wallet sign-in method added"
 msgstr "Método de login com carteira adicionado"
+
+#. Onboarding offer screen: the small uppercase eyebrow above the headline.
+msgctxt "welcome_offer_eyebrow"
+msgid "Welcome offer"
+msgstr "Oferta de boas-vindas"
 
 #. Call to action
 msgctxt "welcome_to_urnetwork"

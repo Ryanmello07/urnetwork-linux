@@ -1062,6 +1062,11 @@ msgctxt "continue_txt"
 msgid "Continue"
 msgstr "继续"
 
+#. Onboarding offer screen: the always-visible secondary text link that keeps the free plan and finishes onboarding.
+msgctxt "continue_with_free_plan"
+msgid "Continue with the free plan"
+msgstr "继续使用免费方案"
+
 #. A label displayed in the center of a contract circle.
 msgctxt "contract"
 msgid "Contract"
@@ -1907,6 +1912,26 @@ msgstr "编辑推荐码"
 msgctxt "edit_split_rule"
 msgid "Edit split rule"
 msgstr "编辑分流规则"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 1.
+msgctxt "email_e4_reason_not_needed"
+msgid "I didn't need it yet"
+msgstr "还没用上"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 2.
+msgctxt "email_e4_reason_not_working"
+msgid "It didn't work"
+msgstr "用不了"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 4.
+msgctxt "email_e4_reason_other"
+msgid "Something else"
+msgstr "其他原因"
+
+#. Onboarding feedback email, not-activated variant: one-tap reason 3.
+msgctxt "email_e4_reason_trust"
+msgid "I'm not sure I trust a VPN"
+msgstr "不确定能不能信任 VPN"
 
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
@@ -3098,6 +3123,66 @@ msgctxt "off"
 msgid "Off"
 msgstr "关"
 
+#. Onboarding offer screen: the static deadline sentence; the placeholder is a local date and time.
+msgctxt "offer_available_until"
+msgid "Available until {}"
+msgstr "有效期至 {}"
+
+#. Onboarding offer screen: the single primary button. The number is the months the discount equals.
+msgctxt "offer_cta_start_trial_months_free"
+msgid "Start free trial with {} months free"
+msgstr "开始免费试用，另享 {} 个月免费"
+
+#. Plan card with the welcome offer: the billed first-year amount (most prominent line).
+msgctxt "offer_first_year_price"
+msgid "{} for your first year"
+msgstr "首年 {}"
+
+#. Onboarding offer screen headline. The number is the months the discount equals.
+msgctxt "offer_months_free_headline"
+msgid "{} months of Pro, free"
+msgstr "Pro 免费 {} 个月"
+
+#. Onboarding offer screen sub-line under the headline. The number is the percent off the first year.
+msgctxt "offer_percent_off_first_year"
+msgid "{}% off your first year"
+msgstr "首年立减 {}%"
+
+#. Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).
+msgctxt "offer_terms_first_year"
+msgid "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgstr "免费 {0} 天，首年 {1}，之后 {2}/年。可随时取消。"
+
+#. Plan card with the welcome offer: the renewal price line under the first-year amount.
+msgctxt "offer_then_regular_price"
+msgid "then {}/year"
+msgstr "之后 {}/年"
+
+#. Onboarding offer screen trial timeline: a row label for a day of the trial.
+msgctxt "offer_timeline_day"
+msgid "Day {}"
+msgstr "第 {} 天"
+
+#. Onboarding offer screen trial timeline: the first-charge row; the placeholder is the discounted yearly amount.
+msgctxt "offer_timeline_first_charge"
+msgid "{} for the year, cancel anytime before"
+msgstr "全年 {}，此前可随时取消"
+
+#. Onboarding offer screen trial timeline: the reminder row (two days before the charge).
+msgctxt "offer_timeline_reminder"
+msgid "Reminder before the charge"
+msgstr "扣费前提醒"
+
+#. Onboarding offer screen trial timeline: the first row's label.
+msgctxt "offer_timeline_today"
+msgid "Today"
+msgstr "今天"
+
+#. Onboarding offer screen trial timeline: what happens today.
+msgctxt "offer_timeline_trial_starts"
+msgid "Free trial starts"
+msgstr "免费试用开始"
+
 #. A label for a DNS setting that is enabled.
 msgctxt "on"
 msgid "On"
@@ -3218,6 +3303,11 @@ msgctxt "pending_mb_provided"
 msgid "Pending: {} MB provided"
 msgstr "待处理：提供了 {} MB"
 
+#. Sign-up pages: the marketing opt-out switch shown at collection, on by default.
+msgctxt "periodic_product_updates"
+msgid "Periodic product updates"
+msgstr "定期产品更新"
+
 #. Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "phantom"
 msgid "Phantom"
@@ -3248,10 +3338,35 @@ msgctxt "plan"
 msgid "Plan"
 msgstr "计划"
 
+#. Plan picker: the line under the monthly price.
+msgctxt "plan_billed_monthly_cancel_anytime"
+msgid "Billed monthly · cancel anytime"
+msgstr "按月扣费 · 可随时取消"
+
+#. Plan picker on the regional price tier: the line under the yearly price instead of a per-month equivalent; the placeholder is the storefront country's name.
+msgctxt "plan_billed_yearly_price_for_country"
+msgid "Billed once a year · price for {}"
+msgstr "每年扣费一次 · {} 价格"
+
+#. Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).
+msgctxt "plan_monthly_equivalent_line"
+msgid "≈ {}/month · billed once a year"
+msgstr "≈ {}/月 · 每年扣费一次"
+
 #. The monthly plan card's price on the Linux onboarding page.
 msgctxt "plan_monthly_price"
 msgid "$5/month"
 msgstr "$5/month"
+
+#. Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.
+msgctxt "plan_save_percent"
+msgid "Save {}%"
+msgstr "省 {}%"
+
+#. Plan picker: the terms line under the button for the yearly plan with its trial.
+msgctxt "plan_terms_yearly"
+msgid "{0} days free, then {1}/year. Cancel anytime."
+msgstr "免费 {0} 天，之后 {1}/年。可随时取消。"
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -4878,6 +4993,26 @@ msgctxt "site_invalid_balance_code"
 msgid "Invalid balance code."
 msgstr "余额码无效。"
 
+#. Email landing page: the web fallback link.
+msgctxt "site_landing_continue_web"
+msgid "Continue on the web"
+msgstr "在网页上继续"
+
+#. Email landing page: the store fallback button.
+msgctxt "site_landing_get_app"
+msgid "Get the app"
+msgstr "获取应用"
+
+#. Email landing page: the button that retries the app link.
+msgctxt "site_landing_open_app"
+msgid "Open in the app"
+msgstr "在应用中打开"
+
+#. Email landing page: while the app link is being opened.
+msgctxt "site_landing_opening"
+msgid "Opening URnetwork…"
+msgstr "正在打开 URnetwork…"
+
 #. Account panel: balance codes load error
 msgctxt "site_load_balance_codes_error"
 msgid "Could not load balance codes"
@@ -4963,6 +5098,81 @@ msgctxt "site_no_proxies"
 msgid "No proxies yet"
 msgstr "暂无代理"
 
+#. Final offer screen: the static deadline line. {when} is a local date and time.
+msgctxt "site_offer_available_until"
+msgid "Available until {}"
+msgstr "有效期至 {}"
+
+#. Final offer screen: the always-visible decline link.
+msgctxt "site_offer_continue_free"
+msgid "Continue with the free plan"
+msgstr "继续使用免费方案"
+
+#. Final offer screen: the one primary button. {months} is a whole number.
+msgctxt "site_offer_cta"
+msgid "Start free trial with {} months free"
+msgstr "开始免费试用，享 {} 个月免费"
+
+#. Trial timeline: a row label for day {day}.
+msgctxt "site_offer_day_n"
+msgid "Day {}"
+msgstr "第 {} 天"
+
+#. Final offer screen: the small eyebrow label above the headline.
+msgctxt "site_offer_eyebrow"
+msgid "Welcome offer"
+msgstr "欢迎优惠"
+
+#. Welcome-offer card: the discounted first-year line. {price} is a formatted amount.
+msgctxt "site_offer_first_year"
+msgid "{} for your first year"
+msgstr "首年 {}"
+
+#. Final offer screen: the headline. {months} is a whole number.
+msgctxt "site_offer_headline"
+msgid "{} months of Pro, free"
+msgstr "{} 个月 Pro，免费"
+
+#. Upgrade sheet: the welcome-offer line while the offer is active. {percent} whole number, {when} a local date and time.
+msgctxt "site_offer_sheet_line"
+msgid "Welcome offer: {0}% off your first year, until {1}"
+msgstr "欢迎优惠：首年立减 {0}%，有效期至 {1}"
+
+#. Final offer screen: the sub-line under the headline. {percent} is a whole number.
+msgctxt "site_offer_subline"
+msgid "{}% off your first year"
+msgstr "首年立减 {}%"
+
+#. Final offer screen: the terms line under the buttons. {date} is a local date.
+msgctxt "site_offer_terms"
+msgid "Cancel anytime before {} and you won't be charged."
+msgstr "在 {} 之前随时取消，不会产生任何费用。"
+
+#. Welcome-offer card: the regular price after the first year.
+msgctxt "site_offer_then_per_year"
+msgid "then {}/year"
+msgstr "之后 {}/年"
+
+#. Trial timeline: the first-charge row. {price} is the discounted first-year amount, {regular} the regular yearly amount.
+msgctxt "site_offer_timeline_charge"
+msgid "First charge: {0} for your first year, then {1}/year."
+msgstr "首次扣款：首年 {0}，之后 {1}/年。"
+
+#. Trial timeline: the reminder row.
+msgctxt "site_offer_timeline_reminder"
+msgid "We remind you before the trial ends."
+msgstr "试用结束前我们会提醒您。"
+
+#. Trial timeline: what happens today.
+msgctxt "site_offer_timeline_today"
+msgid "Your free trial starts with full Pro access."
+msgstr "免费试用开始，享有完整的 Pro 权限。"
+
+#. Trial timeline: the first row's label.
+msgctxt "site_offer_today"
+msgid "Today"
+msgstr "今天"
+
 #. Account panel: open the in-site web app (/app)
 msgctxt "site_open_app"
 msgid "Open app"
@@ -4977,6 +5187,81 @@ msgstr "打开客户端管理器"
 msgctxt "site_operator_client_ui"
 msgid "Operator Client UI"
 msgstr "运营者客户端界面"
+
+#. Embedded pay page: the immediate charge line (monthly). {price} amount.
+msgctxt "site_pay_sheet_charge_line"
+msgid "{} today, then monthly. Cancel anytime."
+msgstr "今天 {}，之后按月。随时取消。"
+
+#. Embedded pay page: the completion state.
+msgctxt "site_pay_sheet_done"
+msgid "Payment complete. You can close this window."
+msgstr "支付完成。您可以关闭此窗口。"
+
+#. Embedded pay page: a failed confirmation.
+msgctxt "site_pay_sheet_error"
+msgid "The payment could not be completed. Check the details and try again."
+msgstr "无法完成支付。请检查信息后重试。"
+
+#. Embedded pay page: opened without its parameters.
+msgctxt "site_pay_sheet_missing"
+msgid "This page needs to be opened from the URnetwork app."
+msgstr "此页面需要从 URnetwork 应用中打开。"
+
+#. Embedded pay page: the submit button for an immediate charge.
+msgctxt "site_pay_sheet_pay"
+msgid "Pay {}"
+msgstr "支付 {}"
+
+#. Embedded pay page: the title.
+msgctxt "site_pay_sheet_title"
+msgid "Get Pro"
+msgstr "获取 Pro"
+
+#. Embedded pay page: what happens with the card on a trial. {price} amount, {date} local date.
+msgctxt "site_pay_sheet_trial_line"
+msgid "Your card is saved today and charged {1} on {0}. Cancel anytime before then."
+msgstr "今天保存您的卡，{0} 扣款 {1}。在此之前可随时取消。"
+
+#. Plan picker: the monthly card's sub-line.
+msgctxt "site_plan_billed_monthly"
+msgid "Billed monthly · cancel anytime"
+msgstr "按月计费 · 随时取消"
+
+#. Plan picker: the regional-tier yearly card's sub-line (no per-month equivalent).
+msgctxt "site_plan_billed_yearly"
+msgid "Billed once a year"
+msgstr "每年计费一次"
+
+#. Plan picker: the yearly plan's per-month equivalent sub-line (ceiling rounded).
+msgctxt "site_plan_monthly_equivalent"
+msgid "≈ {} / month, billed yearly"
+msgstr "≈ {} / 月，按年计费"
+
+#. Under the monthly CTA: the billing terms. {price} is the monthly amount.
+msgctxt "site_plan_monthly_terms"
+msgid "{}/month, billed monthly. Cancel anytime."
+msgstr "{}/月，按月计费。随时取消。"
+
+#. Plan picker: the monthly price line. {price} is a formatted amount.
+msgctxt "site_plan_per_month"
+msgid "{} / month"
+msgstr "{} / 月"
+
+#. Plan picker: the yearly price line. {price} is a formatted amount.
+msgctxt "site_plan_per_year"
+msgid "{} / year"
+msgstr "{} / 年"
+
+#. Plan picker: the saving badge on the yearly card. {percent} is a whole number.
+msgctxt "site_plan_save_percent"
+msgid "Save {}%"
+msgstr "节省 {}%"
+
+#. Under the yearly CTA: the trial terms. {price} is the yearly amount.
+msgctxt "site_plan_trial_terms"
+msgid "{0} days free, then {1}/year. Cancel anytime."
+msgstr "{0} 天免费，之后 {1}/年。随时取消。"
 
 #. Account panel: client info — principal label
 msgctxt "site_principal"
@@ -5022,6 +5307,11 @@ msgstr "正在搜索…"
 msgctxt "site_seedphrase_copy_failed"
 msgid "Could not copy the seedphrase. Select and copy the words below."
 msgstr "无法复制助记词。请选中并复制下面的单词。"
+
+#. Sign-up pages: the product-updates consent row (default on, one tap off)
+msgctxt "site_signup_product_updates"
+msgid "Periodic product updates"
+msgstr "定期产品更新"
 
 #. Account panel: SOCKS credential note
 msgctxt "site_socks_cred_note"
@@ -5162,6 +5452,11 @@ msgstr "您的 Pro 订阅通过 Stripe 计费。您可以在下方随时更新�
 msgctxt "site_unexpected_error"
 msgid "Something unexpected happened."
 msgstr "发生了意外错误。"
+
+#. USDC panel: the term the welcome-offer payment buys.
+msgctxt "site_usdc_offer_term"
+msgid "{1} months plus {0} days of Pro"
+msgstr "{1} 个月加 {0} 天 Pro"
 
 #. The subnet alpha token symbol.
 msgctxt "sn_alpha_symbol"
@@ -5846,6 +6141,11 @@ msgstr "钱包登录失败"
 msgctxt "wallet_sign_in_method_added"
 msgid "Wallet sign-in method added"
 msgstr "已添加钱包登录方式"
+
+#. Onboarding offer screen: the small uppercase eyebrow above the headline.
+msgctxt "welcome_offer_eyebrow"
+msgid "Welcome offer"
+msgstr "欢迎优惠"
 
 #. Call to action
 msgctxt "welcome_to_urnetwork"
