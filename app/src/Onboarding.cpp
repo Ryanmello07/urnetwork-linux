@@ -580,7 +580,7 @@ void OnboardingWindow::BuildWelcome() {
   title->set_margin_top(20);
   top->append(*title);
   auto* tagline = MakeLabel(T_("intro_verifiable_encryption",
-                               "URnetwork gives you verifiable encryption for everyday use."),
+                               "Encryption for everyday use."),
                             "ur-onb-lead");
   tagline->set_margin_top(16);
   top->append(*tagline);
