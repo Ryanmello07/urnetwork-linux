@@ -3096,6 +3096,11 @@ msgctxt "no_redeemed_balance_codes_found"
 msgid "No redeemed balance codes found"
 msgstr "कोई रिडीम किए गए बैलेंस कोड नहीं मिले"
 
+#. Toast on the plan picker when the solana: payment link has no wallet app to open it.
+msgctxt "no_solana_wallet_found"
+msgid "No wallet app found to handle the Solana payment."
+msgstr "Solana भुगतान के लिए कोई वॉलेट ऐप नहीं मिला।"
+
 #. Call to action
 msgctxt "no_solana_wallets_found"
 msgid "No Solana Wallets Found"
