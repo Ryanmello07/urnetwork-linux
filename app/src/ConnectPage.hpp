@@ -276,6 +276,16 @@ class ConnectPage : public Gtk::Box {
   // set the first time a real DrawerEvent lands: the clock-driven poll then
   // drops to a slow safety net instead of carrying the page on its own.
   bool eventsWired_ = false;
+  // DESIGNSTYLE "Placeholders, not pop-in": the sections whose data arrives
+  // after first paint (the dns readings, the transport legend) hold a skeleton
+  // of their settled box until it lands. `dnsSettled_` is "a reading has been
+  // taken" — absent settings after that are the unavailable row, before it
+  // they are still loading. The clock closes both after kPlaceholderCeilingUs
+  // (a daemon that never answers settles on its empty states, not a shimmer).
+  bool dnsSettled_ = false;
+  gint64 placeholdersSinceUs_ = 0;
+  void BeginPlaceholders();
+  void SettlePlaceholders();
   int widthDip_ = 1120;
   int foldWidth_ = -1;  // the pane-grid width the current fold was taken on
   bool foldRecheckPending_ = false;

@@ -4,6 +4,7 @@
 #include <gtk/gtk.h>
 
 #include "Ui.hpp"
+#include "UrMotion.hpp"
 
 namespace urnw::kit {
 namespace {
@@ -43,6 +44,41 @@ void SetTextOrCollapse(Gtk::Label& line, const Glib::ustring& text) {
 void MarkDecorative(Gtk::Widget& widget) {
   gtk_accessible_update_state(GTK_ACCESSIBLE(widget.gobj()), GTK_ACCESSIBLE_STATE_HIDDEN,
                               TRUE, -1);
+}
+
+Gtk::Label* MakeSkeletonLabel(const Glib::ustring& sizer, const char* textCssClass) {
+  auto* label = Gtk::make_managed<Gtk::Label>(sizer);
+  if (textCssClass) label->add_css_class(textCssClass);
+  label->set_xalign(0);
+  label->set_valign(Gtk::Align::CENTER);
+  SetSkeleton(*label, true);
+  return label;
+}
+
+Gtk::Widget* MakeSkeletonDot(int size) {
+  auto* dot = Gtk::make_managed<Gtk::Box>();
+  dot->set_size_request(size, size);
+  dot->set_valign(Gtk::Align::CENTER);
+  dot->add_css_class("ur-skeleton-dot");
+  SetSkeleton(*dot, true);
+  return dot;
+}
+
+void SetSkeleton(Gtk::Widget& widget, bool on) {
+  if (on) {
+    widget.add_css_class("ur-skeleton");
+    // the shimmer is a separate class so a reduce-motion setting leaves a
+    // still bar rather than a stopped animation
+    if (motion::ShouldAnimate()) widget.add_css_class("ur-skeleton-shimmer");
+  } else {
+    widget.remove_css_class("ur-skeleton");
+    widget.remove_css_class("ur-skeleton-shimmer");
+  }
+}
+
+void SetBusy(Gtk::Widget& widget, bool busy) {
+  gtk_accessible_update_state(GTK_ACCESSIBLE(widget.gobj()), GTK_ACCESSIBLE_STATE_BUSY,
+                              busy ? TRUE : FALSE, -1);
 }
 
 void SetAccessibleLabel(Gtk::Widget& widget, const Glib::ustring& label) {

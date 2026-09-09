@@ -318,6 +318,22 @@ button.ur-usage-referral-row {
 }
 button.ur-usage-referral-row:hover { background-color: #1C1C1C; }
 button.ur-usage-referral-row:active { background-color: #2A2A2A; }
+
+/* ---- DESIGNSTYLE "Placeholders, not pop-in": the shared skeleton --------
+   A faint rounded bar in the EXACT box of the content it stands in for. On a
+   label the text is the sizer: the value the row will show, rendered
+   transparent under the fill, so the bar has the label's own metrics and can
+   never be a different height from what replaces it. The shimmer is a slow
+   opacity breath on a second class that PaneKit::SetSkeleton adds only while
+   gtk-enable-animations is on (the reduce-motion setting). */
+.ur-skeleton { background-color: alpha(#ffffff, 0.08); border-radius: 4px; }
+.ur-skeleton, .ur-value.ur-skeleton, .ur-key.ur-skeleton, .ur-caption-11.ur-skeleton,
+.ur-value.dim-label.ur-skeleton { color: transparent; }
+.ur-skeleton-dot { border-radius: 999px; }
+@keyframes ur-skeleton-shimmer {
+  0% { opacity: 1; } 50% { opacity: 0.45; } 100% { opacity: 1; }
+}
+.ur-skeleton-shimmer { animation: ur-skeleton-shimmer 1.8s ease-in-out infinite; }
 )";
 
 void AddFontFile(const std::string& dir, const char* file) {

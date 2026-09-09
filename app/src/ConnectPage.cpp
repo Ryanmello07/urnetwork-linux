@@ -311,6 +311,7 @@ ConnectPage::ConnectPage(SdkHost& host)
   // session must still SETTLE on its empty/unavailable readings rather than
   // sit blank (docs/parity/connect-page.md §8).
   RefreshAllPanes();
+  BeginPlaceholders();
   ApplyBreakpoint(widthDip_);
 
   // "Presenting" is the WINDOW being up; "visible" is this destination being
@@ -1056,6 +1057,37 @@ void ConnectPage::BuildDnsGroup() {
 // a completion that will never arrive is a worse lie than the one being fixed.
 constexpr gint64 kDisconnectIntentUs = 8 * G_TIME_SPAN_SECOND;
 
+// How long a loading skeleton may stand before the section settles on its
+// empty reading (DESIGNSTYLE: a placeholder must resolve). The device is up
+// well inside this after a sign-in; past it, the honest reading is the one
+// the accessors give — unavailable rows, an empty transport track.
+constexpr gint64 kPlaceholderCeilingUs = 6 * G_TIME_SPAN_SECOND;
+
+// ---- DESIGNSTYLE "Placeholders, not pop-in" -----------------------------------
+
+// Arm the skeletons for whatever has not been read yet: at build, and on every
+// Resync (login / re-show) — a null distribution on a signed-in page means the
+// device is still coming up, and the reading is worth waiting for.
+void ConnectPage::BeginPlaceholders() {
+  placeholdersSinceUs_ = g_get_monotonic_time();
+  if (!dnsSettings_) {
+    dnsSettled_ = false;
+    ApplyDnsCard();
+  }
+  if (transportBar_ && !host_.ClientTransportDistribution()) transportBar_->BeginLoading();
+}
+
+// The ceiling: whatever is still a skeleton becomes its empty reading, in
+// the same box. Idempotent — a section that settled on real data is untouched.
+void ConnectPage::SettlePlaceholders() {
+  placeholdersSinceUs_ = 0;
+  if (!dnsSettled_) {
+    dnsSettled_ = true;
+    ApplyDnsCard();
+  }
+  if (transportBar_ && transportBar_->IsLoading()) transportBar_->SettleEmpty();
+}
+
 bool ConnectPage::DisconnectIntentLive() {
   if (disconnectRequestedAtUs_ == 0) return false;
   // SETTLED, not merely observed. Once the session is actually down the intent
@@ -1549,15 +1581,43 @@ void ConnectPage::ApplySplitRuleCount() {
 
 void ConnectPage::ApplyDnsCard() {
   const bool present = dnsSettings_.has_value();
-  if (dnsRowsPanel_) dnsRowsPanel_->set_visible(present);
-  if (dnsUnavailableRow_) dnsUnavailableRow_->set_visible(!present);
+  if (present) dnsSettled_ = true;
+  // DESIGNSTYLE "Placeholders, not pop-in": before the first reading the four
+  // rows are up with their labels (the labels are static) and a skeleton
+  // where the On/Off value goes, so the group opens at its settled 4x34 and
+  // the values are replaced in place. Only a reading that comes back empty
+  // swaps to the unavailable row — the error state, in the same group.
+  const bool loading = !present && !dnsSettled_;
+  if (dnsRowsPanel_) {
+    dnsRowsPanel_->set_visible(present || loading);
+    kit::SetBusy(*dnsRowsPanel_, loading);
+  }
+  if (dnsUnavailableRow_) dnsUnavailableRow_->set_visible(!present && !loading);
   // the editor has nothing to draft from without settings (DnsSheet::Open
   // returns false and does not present) — say so on the control
   if (dnsEditButton_) dnsEditButton_->set_sensitive(present);
   ApplyDnsRecommendationPill();  // collapses with the rows
+  if (loading) {
+    const Glib::ustring loadingText = T_("loading", "Loading...");
+    auto placeholder = [&loadingText](DnsStatusRow& row, const Glib::ustring& label) {
+      if (!row.dot || !row.state) return;
+      row.dot->remove_css_class("ur-dot-on");
+      row.dot->add_css_class("ur-dot-off");
+      row.state->remove_css_class("ur-value-on");
+      row.state->set_text(T_("off", "Off"));  // the sizer: the wider of the two values
+      kit::SetSkeleton(*row.state, true);
+      kit::SetAccessibleLabel(*row.state, label + ", " + loadingText);
+    };
+    placeholder(dnsDohRow_, T_("dns_over_https", "DNS over HTTPS"));
+    placeholder(dnsUnencryptedRow_, T_("unencrypted_dns", "Unencrypted DNS"));
+    placeholder(dnsLocalRow_, T_("local_dns", "Local DNS"));
+    placeholder(dnsFallbackRow_, T_("local_dns_fallback", "Local DNS fallback"));
+    return;
+  }
   if (!present) return;
   auto apply = [](DnsStatusRow& row, const Glib::ustring& label, bool on) {
     if (!row.dot || !row.state) return;
+    kit::SetSkeleton(*row.state, false);
     row.dot->remove_css_class(on ? "ur-dot-off" : "ur-dot-on");
     row.dot->add_css_class(on ? "ur-dot-on" : "ur-dot-off");
     if (on) {
@@ -2244,6 +2304,7 @@ void ConnectPage::Resync() {
   ++(*epoch_);  // anything in flight against the old reading is stale
   SyncProvideControlMode();
   RefreshAllPanes();
+  BeginPlaceholders();
   // Seed the exit tables on entry rather than waiting up to a full 5 s tick:
   // Resync is login / tab entry / window re-show, i.e. exactly the moments the
   // pane comes back on screen. The tables are deliberately NOT cleared here —
@@ -2266,6 +2327,16 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       exits_.reset();
       destinationExits_.reset();
       RefreshAllPanes();
+      // the device's arrival (or departure) IS the dns reading: what the
+      // accessor returns now is the answer, so the skeleton rows settle on it.
+      // The transport bar settles on its first real distribution, pulled here
+      // rather than on the next throughput tick so the footer does not trail
+      // the rows by half a second.
+      if (!dnsSettled_) {
+        dnsSettled_ = true;
+        ApplyDnsCard();
+      }
+      if (transportBar_) transportBar_->SetDistribution(host_.ClientTransportDistribution());
       if (advanced_) RefreshExitRouting();
       break;
     case DrawerEvent::Throughput:
@@ -2300,6 +2371,7 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
       break;
     case DrawerEvent::DnsSettings:
+      dnsSettled_ = true;
       dnsSettings_ = host_.GetDnsResolverSettings();
       ApplyDnsCard();
       break;
@@ -2568,6 +2640,11 @@ void ConnectPage::Tick() {
   // "Disconnecting…" and a dead button on screen indefinitely. Re-rendered only
   // while an intent is actually outstanding, so an idle page costs nothing.
   if (disconnectRequestedAtUs_ != 0) ApplyConnectStatus();
+  // the loading skeletons' ceiling is clock-driven for the same reason
+  if (placeholdersSinceUs_ != 0 &&
+      g_get_monotonic_time() - placeholdersSinceUs_ > kPlaceholderCeilingUs) {
+    SettlePlaceholders();
+  }
   // the charts ride the throughput feed; at 2fps the 60s window still reads
   // live and the read stays off the per-frame path
   if (tickCount_ % 5 == 0) PullThroughput();

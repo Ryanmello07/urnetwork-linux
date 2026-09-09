@@ -76,6 +76,16 @@ class TransportBar : public Gtk::Box {
   // Opens the transport settings editor (the whole component is the target).
   std::function<void()> on_activate;
 
+  // DESIGNSTYLE "Placeholders, not pop-in": while the page is waiting for its
+  // first distribution (the device is still coming up) the legend line is a
+  // skeleton of itself, so the row opens at the height it settles at instead
+  // of growing by a line when the footer arrives. Cleared by the first
+  // distribution, or by SettleEmpty when the page decides nothing is coming
+  // (no device: the empty track is the settled reading).
+  void BeginLoading();
+  void SettleEmpty();
+  bool IsLoading() const { return loading_; }
+
  private:
   void BuildUi();
   void OnDrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height);
@@ -88,6 +98,9 @@ class TransportBar : public Gtk::Box {
   Gtk::DrawingArea bar_;
   WrapRow* legend_ = nullptr;
   WrapRow* unused_ = nullptr;
+  // the legend line's skeleton (BeginLoading / SettleEmpty)
+  Gtk::Box* placeholder_ = nullptr;
+  bool loading_ = false;
 
   // the last published distribution (dedup) and, per share index in the SDK's
   // stable order, the segment color

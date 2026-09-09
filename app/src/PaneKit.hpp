@@ -264,4 +264,21 @@ class Snackbar {
   sigc::connection timer_;
 };
 
+// ---- DESIGNSTYLE "Placeholders, not pop-in" -----------------------------------
+//
+// A skeleton stands in for content that arrives after first paint, in the
+// content's OWN box, so a section never opens shorter than it settles and a
+// drawer can be pulled fully open on first show. The bar IS the label it
+// becomes: `sizer` is the text the real value will show (or a representative
+// width), rendered transparent under the faint rounded fill, so the two share
+// one set of metrics. Shimmers only while animations are on (motion::ShouldAnimate).
+Gtk::Label* MakeSkeletonLabel(const Glib::ustring& sizer, const char* textCssClass);
+// The dot form of the same bar (a chip's status dot), `size` square.
+Gtk::Widget* MakeSkeletonDot(int size);
+// Toggle the skeleton on an existing widget (the value column of a row that
+// keeps its key): on = faint bar over transparent text, off = as styled.
+void SetSkeleton(Gtk::Widget& widget, bool on);
+// The accessible BUSY state (aria-busy) on the container that is loading.
+void SetBusy(Gtk::Widget& widget, bool busy);
+
 }  // namespace urnw::kit
