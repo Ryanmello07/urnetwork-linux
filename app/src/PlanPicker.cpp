@@ -7,6 +7,7 @@
 #include <graphene.h>
 
 #include "I18n.hpp"
+#include "OfferCard.hpp"
 #include "ReferralPanel.hpp"  // EnsureOnboardingCss
 #include "Ui.hpp"
 #include "UrMotion.hpp"
@@ -87,6 +88,13 @@ class GoldPlanCard : public Gtk::Overlay {
     saving_.add_css_class("ur-onb-muted");
     saving_.set_xalign(0);
     column->append(saving_);
+    // the per-month equivalent: a sub-line under the billed amount, only when
+    // the presentation rules show one (PricePresentation.hpp)
+    equivalent_.add_css_class("ur-onb-body");
+    equivalent_.add_css_class("ur-onb-muted");
+    equivalent_.set_xalign(0);
+    equivalent_.set_visible(false);
+    column->append(equivalent_);
     trial_.add_css_class("ur-onb-body");
     trial_.add_css_class("ur-onb-gold-light");
     trial_.set_xalign(0);
@@ -126,10 +134,13 @@ class GoldPlanCard : public Gtk::Overlay {
     if (tick_) remove_tick_callback(tick_);
   }
 
-  void SetTexts(const Glib::ustring& price, const Glib::ustring& saving, const Glib::ustring& trial) {
+  void SetTexts(const Glib::ustring& price, const Glib::ustring& saving,
+                const Glib::ustring& equivalent, const Glib::ustring& trial) {
     price_.set_text(price);
     saving_.set_text(saving);
     saving_.set_visible(!saving.empty());
+    equivalent_.set_text(equivalent);
+    equivalent_.set_visible(!equivalent.empty());
     trial_.set_text(trial);
   }
   void SetSelected(bool selected) {
@@ -220,6 +231,7 @@ class GoldPlanCard : public Gtk::Overlay {
   Gtk::Label dot_;
   Gtk::Label price_;
   Gtk::Label saving_;
+  Gtk::Label equivalent_;
   Gtk::Label trial_;
   Gtk::Label pill_;
   Glib::RefPtr<Gtk::GestureClick> click_;
@@ -237,13 +249,10 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   EnsureOnboardingCss();
   set_overflow(Gtk::Overflow::VISIBLE);  // the gold card's halo spills past the box
 
-  // the plan cards: annual in the gold dress, monthly plain. The prices are
-  // the Stripe prices as product literals in the store ($40 a year is a
-  // third off twelve months at $5); the trial line is the yearly plan's only.
+  // the plan cards: annual in the gold dress, monthly plain. The prices come
+  // from the server's price tier (SetPrices, fed by the balance store); the
+  // picker starts on the standard tier so it never prints nothing.
   yearlyCard_ = Gtk::make_managed<GoldPlanCard>();
-  yearlyCard_->SetTexts(T_("plan_yearly_price", "$40/year"), T_("save_33_percent", "Save 33%"),
-                        Format(T_("includes_free_trial_days", "Includes {} day free trial"),
-                               kFreeTrialDays));
   yearlyCard_->on_select = [this] {
     Select(true);
     if (on_select) on_select(true);
@@ -257,10 +266,10 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   monthlyDot_ = Gtk::make_managed<Gtk::Label>();
   monthlyDot_->set_valign(Gtk::Align::CENTER);
   monthlyRow->append(*monthlyDot_);
-  // The monthly card has one line. Size it like the yearly card (an invisible
-  // copy of that card's three lines, never read aloud) so both cards are the
-  // same height at any text scale, and center the visible line in that space
-  // so it sits level with the dot (android SubscriptionOptions).
+  // The monthly card has two lines. Size it like the yearly card (an invisible
+  // copy of that card's lines, never read aloud) so both cards are the same
+  // height at any text scale, and center the visible lines in that space so
+  // they sit level with the dot (android SubscriptionOptions).
   auto* monthlyReserve = Gtk::make_managed<Gtk::Overlay>();
   monthlyReserve->set_hexpand(true);
   auto* reserved = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
@@ -271,24 +280,29 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   const char* reservedClasses[3][2] = {{"ur-onb-neuebit", nullptr},
                                        {"ur-onb-body", "ur-onb-muted"},
                                        {"ur-onb-body", "ur-onb-gold-light"}};
-  const Glib::ustring reservedTexts[3] = {
-      T_("plan_yearly_price", "$40/year"), T_("save_33_percent", "Save 33%"),
-      Format(T_("includes_free_trial_days", "Includes {} day free trial"), kFreeTrialDays)};
   for (int i = 0; i < 3; ++i) {
-    auto* line = Gtk::make_managed<Gtk::Label>(reservedTexts[i]);
+    auto* line = Gtk::make_managed<Gtk::Label>("");
     for (const char* css : reservedClasses[i]) {
       if (css) line->add_css_class(css);
     }
     line->set_xalign(0);
     reserved->append(*line);
+    reservedLines_.push_back(line);
   }
   monthlyReserve->set_child(*reserved);
-  auto* monthlyText = Gtk::make_managed<Gtk::Label>(T_("plan_monthly_price", "$5/month"));
-  monthlyText->add_css_class("ur-onb-neuebit");
-  monthlyText->set_xalign(0);
-  monthlyText->set_halign(Gtk::Align::START);
-  monthlyText->set_valign(Gtk::Align::CENTER);
-  monthlyReserve->add_overlay(*monthlyText);
+  auto* monthlyColumn = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+  monthlyColumn->set_halign(Gtk::Align::START);
+  monthlyColumn->set_valign(Gtk::Align::CENTER);
+  monthlyText_ = Gtk::make_managed<Gtk::Label>("");
+  monthlyText_->add_css_class("ur-onb-neuebit");
+  monthlyText_->set_xalign(0);
+  monthlyColumn->append(*monthlyText_);
+  monthlyLine_ = Gtk::make_managed<Gtk::Label>("");
+  monthlyLine_->add_css_class("ur-onb-body");
+  monthlyLine_->add_css_class("ur-onb-muted");
+  monthlyLine_->set_xalign(0);
+  monthlyColumn->append(*monthlyLine_);
+  monthlyReserve->add_overlay(*monthlyColumn);
   monthlyRow->append(*monthlyReserve);
   monthlyCard_->set_child(*monthlyRow);
   monthlyCard_->signal_clicked().connect([this] {
@@ -297,7 +311,27 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   });
   append(*monthlyCard_);
 
+  SetPrices(PriceTierView{}, OfferView{});
   Paint();
+}
+
+void PlanPicker::SetPrices(const PriceTierView& tier, const OfferView& offer) {
+  SetTexts(ComposePlanCardTexts(tier, offer, kFreeTrialDays));
+}
+
+void PlanPicker::SetTexts(const PlanCardTexts& texts) {
+  yearlyCard_->SetTexts(texts.yearlyPrice, texts.yearlySecondary, texts.yearlyEquivalent,
+                        texts.yearlyTrial);
+  // the invisible copy that sizes the monthly card like the yearly one
+  if (reservedLines_.size() == 3) {
+    reservedLines_[0]->set_text(texts.yearlyPrice);
+    reservedLines_[1]->set_text(texts.yearlySecondary.empty() ? texts.yearlyEquivalent
+                                                              : texts.yearlySecondary);
+    reservedLines_[2]->set_text(texts.yearlyTrial);
+  }
+  monthlyText_->set_text(texts.monthlyPrice);
+  monthlyLine_->set_text(texts.monthlyLine);
+  monthlyLine_->set_visible(!texts.monthlyLine.empty());
 }
 
 void PlanPicker::Select(bool yearly) {

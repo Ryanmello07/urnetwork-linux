@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <random>
 
 #include <graphene.h>
 
 #include "AppPrefs.hpp"
+#include "ClientEvents.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
@@ -117,14 +119,20 @@ class StepBubbles : public Gtk::DrawingArea {
   void SetStep(int step) {
     step_ = step;
     kit::SetAccessibleLabel(*this, Format(T_("onboarding_step_of", "Step {0} of {1}"), step,
-                                          kOnboardingSteps));
+                                          count_));
     queue_draw();
+  }
+  // four pages for the offer holdout, five with the offer page
+  void SetCount(int count) {
+    count_ = std::clamp(count, 1, kOnboardingSteps);
+    set_content_width(count_ * 8 + 14 + (count_ - 1) * 6);
+    SetStep(step_);
   }
 
  private:
   void Draw(const Cairo::RefPtr<Cairo::Context>& cr) {
     double x = 0;
-    for (int i = 1; i <= kOnboardingSteps; ++i) {
+    for (int i = 1; i <= count_; ++i) {
       const bool current = i == step_;
       const double w = current ? 22 : 8;
       if (current) cr->set_source_rgba(1, 1, 1, 1);
@@ -136,6 +144,7 @@ class StepBubbles : public Gtk::DrawingArea {
     }
   }
   int step_ = 1;
+  int count_ = kOnboardingSteps;
 };
 
 // ---------------------------------------------------------------------------
@@ -334,10 +343,21 @@ OnboardingWindow::~OnboardingWindow() {
 }
 
 void OnboardingWindow::Open() {
-  step_ = 1;
+  step_ = 0;  // no page yet: the first ShowStep completes nothing
+  standalone_ = false;
+  offerIssued_ = false;
+  introOfferShown_ = false;
+  // the in-app offer experiment: the holdout gets the four-page flow with the
+  // regular picker and never the issue call
+  offerEnabled_ = OfferPageEnabled(balance_.ExperimentVariant(kOfferExperimentSurface));
+  bubbles_->SetCount(OnboardingStepCount(offerEnabled_));
+  if (referralDone_) {
+    referralDone_->set_label(offerEnabled_ ? T_("next", "Next") : T_("get_connected", "Get connected"));
+  }
   connectorInHeader_ = false;
   connectorVisible_ = false;
   if (route_) route_->SetDrawConnector(true);
+  ApplyPrices();
   ShowStep(1);
   balance_.FetchNow();
   RefreshBalance();
@@ -346,8 +366,20 @@ void OnboardingWindow::Open() {
   balancePoll_ = Glib::signal_timeout().connect([this] {
     RefreshBalance();
     RefreshReferral();
+    ApplyPrices();
+    // the experiment assignment can land after the first paint (the balance
+    // store fetches in the background): take the holdout out of the offer
+    if (offerEnabled_ && !OfferPageEnabled(balance_.ExperimentVariant(kOfferExperimentSurface))) {
+      offerEnabled_ = false;
+      bubbles_->SetCount(OnboardingStepCount(false));
+      if (referralDone_) referralDone_->set_label(T_("get_connected", "Get connected"));
+      if (welcomeOffer_) welcomeOffer_->set_visible(false);
+      skip_->set_visible(OnboardingShowsSkip(step_, false));
+    }
+    if (offerEnabled_ && !offerIssued_) IssueOffer();
     return true;
   }, 2000);
+  if (offerEnabled_) IssueOffer();
   present();
 }
 
@@ -358,8 +390,111 @@ void OnboardingWindow::OpenAt(int step) {
   }
 }
 
+void OnboardingWindow::OpenOffer() {
+  Open();
+  standalone_ = true;
+  offerEnabled_ = true;
+  bubbles_->SetCount(OnboardingStepCount(true));
+  ShowStep(kOnboardingStepOffer);
+  back_->set_visible(false);
+}
+
+// Skip is not a way around the offer page: from any earlier page it lands
+// there once; only the page's own link finishes the flow (the holdout has no
+// offer page, so Skip finishes at once).
+void OnboardingWindow::Skip() {
+  host_.events().OnboardingStepSkipped(OnboardingStepName(step_), step_, StepElapsedMs());
+  const int target = OnboardingSkipTarget(step_, offerEnabled_);
+  if (target == 0) {
+    Finish();
+  } else {
+    ShowStep(target);
+  }
+}
+
 void OnboardingWindow::Finish() {
   hide();
+}
+
+int64_t OnboardingWindow::StepElapsedMs() const {
+  return stepShownAt_ <= 0 ? 0 : static_cast<int64_t>(Now() - stepShownAt_);
+}
+
+void OnboardingWindow::ApplyPrices() {
+  const PriceTierView& tier = balance_.Tier();
+  const OfferView& offer = balance_.Offer();
+  const bool showOffer = offerEnabled_ && offer.active;
+  // the picker: the offer card while the offer is active, the tier otherwise
+  OfferView pickerOffer = offer;
+  pickerOffer.active = showOffer;
+  if (plans_) plans_->SetPrices(tier, pickerOffer);
+  if (welcomeOffer_) {
+    welcomeOffer_->set_visible(showOffer);
+    if (showOffer) welcomeOffer_->Update(offer, tier, kFreeTrialDays);
+  }
+  // the final page always prints the offer's numbers (a page the holdout never sees)
+  if (offerEyebrow_) {
+    offerEyebrow_->set_text(
+        Format(T_("offer_percent_off_first_year", "{}% off your first year"), offer.percentOff));
+  }
+  if (offerHeadline_) {
+    offerHeadline_->set_text(
+        Format(T_("offer_months_free_headline", "{} months of Pro, free"), offer.monthsFree));
+  }
+  if (offerPrice_) {
+    offerPrice_->set_text(Format(T_("offer_first_year_price", "{} for your first year"),
+                                 FormatMoney(offer.firstYear, offer.currency)));
+  }
+  if (offerThen_) {
+    offerThen_->set_text(Format(T_("offer_then_regular_price", "then {}/year"),
+                                FormatMoney(offer.regularYear, offer.currency)));
+  }
+  if (offerTrial_) {
+    offerTrial_->set_text(
+        Format(T_("includes_free_trial_days", "Includes {} day free trial"), kFreeTrialDays));
+  }
+  if (offerCard_) offerCard_->Update(offer, tier, kFreeTrialDays);
+  if (offerCta_) {
+    offerCta_->set_label(Format(
+        T_("offer_cta_start_trial_months_free", "Start free trial with {} months free"),
+        offer.monthsFree));
+  }
+  // the intro surface's shown event, once the offer is actually on the page
+  if (showOffer && step_ == kOnboardingStepWelcome && !introOfferShown_) {
+    introOfferShown_ = true;
+    host_.events().OfferScreenShown("intro_step", balance_.ExperimentId(kOfferExperimentSurface),
+                                    balance_.ExperimentVariant(kOfferExperimentSurface), tier.name,
+                                    offer.firstYear, offer.currency, OfferExpiresInSeconds(offer));
+  }
+}
+
+void OnboardingWindow::IssueOffer() {
+  if (offerIssued_ || !host_.IsLoggedIn()) return;
+  offerIssued_ = true;
+  urnet::OnboardingOfferIssueArgs args;
+  args.surface = "intro_step";
+  host_.api().onboardingOfferIssue(
+      args, [this](std::optional<urnet::OnboardingOfferIssueResult> result,
+                   std::optional<std::string> err) {
+        PostToMain([this, result = std::move(result), err = std::move(err)] {
+          if (err) {
+            std::fprintf(stderr, "[onboarding] offer issue failed: %s\n", err->c_str());
+            return;
+          }
+          if (!result || !result->offer) return;
+          balance_.SetOffer(*result->offer);
+          ApplyPrices();
+        });
+      });
+}
+
+void OnboardingWindow::StartCheckout(bool yearly, const char* surface) {
+  if (offerEnabled_ && balance_.OfferActive() && yearly) {
+    host_.events().OfferCtaTapped(PlanName(true), "stripe");
+  }
+  (void)surface;
+  if (!checkout_) checkout_ = std::make_unique<UpgradeSheet>(*this, host_, balance_);
+  checkout_->OpenCheckout(yearly);
 }
 
 Gtk::Widget* OnboardingWindow::WrapPage(Gtk::Widget& page) {
@@ -400,7 +535,7 @@ void OnboardingWindow::BuildTopBar(Gtk::Box& column) {
 
   skip_ = Gtk::make_managed<Gtk::Button>(T_("skip", "Skip"));
   skip_->add_css_class("ur-onb-skip");
-  skip_->signal_clicked().connect([this] { Finish(); });
+  skip_->signal_clicked().connect([this] { Skip(); });
   bar->set_end_widget(*skip_);
   column.append(*bar);
 }
@@ -420,6 +555,7 @@ void OnboardingWindow::BuildUi() {
   BuildBandwidth();
   BuildProvide();
   BuildReferral();
+  BuildOffer();
 }
 
 // ---- page 1: welcome + the plan
@@ -442,18 +578,27 @@ void OnboardingWindow::BuildWelcome() {
   // the plan cards (the shared picker: annual in the gold dress, monthly plain)
   plans_ = Gtk::make_managed<PlanPicker>();
   plans_->set_margin_top(52);  // room for the halo and the pill, and air after the tagline
-  plans_->on_select = [this](bool yearly) { SelectPlan(yearly); };
+  plans_->on_select = [this](bool yearly) {
+    if (yearly && offerEnabled_ && balance_.OfferActive()) {
+      host_.events().OfferCardTapped(PlanName(true));
+    }
+    SelectPlan(yearly);
+  };
   top->append(*plans_);
+
+  // the welcome offer under the picker while the network's offer is active:
+  // the static deadline, the trial timeline and the terms (OfferCard)
+  welcomeOffer_ = Gtk::make_managed<OfferCard>();
+  welcomeOffer_->set_margin_top(20);
+  welcomeOffer_->set_visible(false);
+  top->append(*welcomeOffer_);
 
   startButton_ = Gtk::make_managed<Gtk::Button>(PlanPicker::CtaLabel(true));
   auto* start = startButton_;
   start->add_css_class("ur-btn-primary");
   start->add_css_class("pill");
   start->set_margin_top(20);
-  start->signal_clicked().connect([this] {
-    if (!checkout_) checkout_ = std::make_unique<UpgradeSheet>(*this, host_, balance_);
-    checkout_->OpenCheckout(yearly_);
-  });
+  start->signal_clicked().connect([this] { StartCheckout(yearly_, "intro_step"); });
   top->append(*start);
   page->append(*top);
 
@@ -662,12 +807,83 @@ void OnboardingWindow::BuildReferral() {
   spacer->set_vexpand(true);
   page->append(*spacer);
   auto* done = Gtk::make_managed<Gtk::Button>(T_("get_connected", "Get connected"));
+  referralDone_ = done;
   done->add_css_class("ur-btn-primary");
   done->add_css_class("pill");
   done->set_margin_top(24);
-  done->signal_clicked().connect([this] { Finish(); });
+  // the offer page follows (everyone reaches it); the holdout finishes here
+  done->signal_clicked().connect([this] {
+    const int next = OnboardingReferralNext(offerEnabled_);
+    if (next == 0) {
+      host_.events().OnboardingStepCompleted(OnboardingStepName(step_), step_, StepElapsedMs());
+      Finish();
+    } else {
+      ShowStep(next);
+    }
+  });
   page->append(*done);
   stack_.add(*WrapPage(*page), "referral");
+}
+
+// ---- page 5: the welcome offer (mmm/onboarding/PLAN.md "in-app offer screen")
+// The same offer the plan page showed, restated: headline, the billed amount
+// as the most prominent number, the static deadline, the trial timeline, one
+// primary CTA, and the always-visible "Continue with the free plan". No
+// countdown, and no second offer when the user declines.
+void OnboardingWindow::BuildOffer() {
+  auto* page = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  auto* top = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  offerEyebrow_ = MakeLabel("", "ur-onb-kicker");
+  offerEyebrow_->add_css_class("ur-onb-gold");
+  offerEyebrow_->set_margin_top(12);
+  top->append(*offerEyebrow_);
+  offerHeadline_ = MakeLabel("", "ur-onb-title");
+  offerHeadline_->set_margin_top(8);
+  top->append(*offerHeadline_);
+
+  // the offer card: the price lines in the gold dress, then the supporting lines
+  auto* card = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+  card->add_css_class("ur-onb-offer-card");
+  card->set_margin_top(28);
+  offerPrice_ = MakeLabel("", "ur-onb-neuebit");
+  card->append(*offerPrice_);
+  offerThen_ = MakeLabel("", "ur-onb-body");
+  offerThen_->add_css_class("ur-onb-muted");
+  card->append(*offerThen_);
+  offerTrial_ = MakeLabel("", "ur-onb-body");
+  offerTrial_->add_css_class("ur-onb-gold-light");
+  card->append(*offerTrial_);
+  offerCard_ = Gtk::make_managed<OfferCard>();
+  offerCard_->set_margin_top(12);
+  card->append(*offerCard_);
+  top->append(*card);
+  page->append(*top);
+
+  auto* spacer = Gtk::make_managed<Gtk::Box>();
+  spacer->set_vexpand(true);
+  page->append(*spacer);
+
+  offerCta_ = Gtk::make_managed<Gtk::Button>();
+  offerCta_->add_css_class("ur-btn-primary");
+  offerCta_->add_css_class("pill");
+  offerCta_->set_margin_top(24);
+  offerCta_->signal_clicked().connect([this] { StartCheckout(true, "final_screen"); });
+  page->append(*offerCta_);
+
+  auto* keepFree = Gtk::make_managed<Gtk::Button>(
+      T_("continue_with_free_plan", "Continue with the free plan"));
+  keepFree->add_css_class("ur-onb-link");
+  keepFree->add_css_class("flat");
+  keepFree->set_halign(Gtk::Align::CENTER);
+  keepFree->set_margin_top(8);
+  // the decline: finishes exactly as Skip used to, and is never re-offered
+  keepFree->signal_clicked().connect([this] {
+    host_.events().OfferDeclined("continue_free", StepElapsedMs());
+    host_.events().OnboardingStepCompleted(OnboardingStepName(step_), step_, StepElapsedMs());
+    Finish();
+  });
+  page->append(*keepFree);
+  stack_.add(*WrapPage(*page), "offer");
 }
 
 void OnboardingWindow::RefreshReferral() {
@@ -689,15 +905,31 @@ void OnboardingWindow::RefreshReferral() {
 
 // ---- the flow
 void OnboardingWindow::ShowStep(int step) {
-  step = std::clamp(step, 1, kOnboardingSteps);
+  step = std::clamp(step, 1, OnboardingStepCount(offerEnabled_));
+  // the step events: the page we leave completed (or was skipped: Skip emits
+  // its own event first, so the completion here is the forward path only),
+  // the page we land on shown
+  if (0 < step_ && step_ != step && step_ < step) {
+    host_.events().OnboardingStepCompleted(OnboardingStepName(step_), step_, StepElapsedMs());
+  }
   step_ = step;
-  static const char* names[] = {"welcome", "bandwidth", "provide", "referral"};
-  stack_.set_visible_child(names[step - 1]);
+  stepShownAt_ = Now();
+  host_.events().OnboardingStepShown(OnboardingStepName(step), step, 0);
+  stack_.set_visible_child(OnboardingStepName(step));
   bubbles_->SetStep(step);
-  back_->set_visible(1 < step);
+  back_->set_visible(1 < step && !standalone_);
   headerSlot_->set_visible(1 < step);
-  if (step == 2) RefreshBalance();
-  if (step == 4) RefreshReferral();
+  skip_->set_visible(OnboardingShowsSkip(step, offerEnabled_));
+  if (step == kOnboardingStepBandwidth) RefreshBalance();
+  if (step == kOnboardingStepReferral) RefreshReferral();
+  if (step == kOnboardingStepOffer) {
+    ApplyPrices();
+    const OfferView& offer = balance_.Offer();
+    host_.events().OfferScreenShown("final_screen", balance_.ExperimentId(kOfferExperimentSurface),
+                                    balance_.ExperimentVariant(kOfferExperimentSurface),
+                                    balance_.Tier().name, offer.firstYear, offer.currency,
+                                    OfferExpiresInSeconds(offer));
+  }
   // the connector: large in page 1's route, small beside the bubbles after it
   // the flight measures both slots, so it waits for the layout pass that
   // places the header slot (it just became visible) before taking off

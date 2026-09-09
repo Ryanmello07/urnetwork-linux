@@ -53,6 +53,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // the tray menu — which must therefore ask the page what the press means.
   void ToggleConnect();
   bool connected() const { return connected_; }
+  // The screenshot hook (main.cpp URNETWORK_SHOOT) renders this window when a
+  // URNW_ONBOARDING_PREVIEW review has it open, else null.
+  Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
   std::function<void(bool connected)> on_connected_change;
 
  private:
@@ -186,6 +189,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   Gtk::Label* seedphraseError_ = nullptr;
   bool seedphraseLoggingIn_ = false;
   Gtk::CheckButton* instantTerms_ = nullptr;
+  Gtk::Switch* instantProductUpdates_ = nullptr;  // "Periodic product updates", default on
   Gtk::Button* instantCreate_ = nullptr;
   Gtk::Label* instantError_ = nullptr;
   bool creatingInstant_ = false;
@@ -247,6 +251,13 @@ class MainWindow : public Gtk::ApplicationWindow {
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;
   std::unique_ptr<OnboardingWindow> onboarding_;
   void OpenOnboardingIfPending();
+  // urnetwork://onboarding/<connect|widgets|offer|feedback> (the campaign
+  // emails' buttons): Connect, Account (the closest page to Widgets), the
+  // offer page (the upgrade sheet when no offer is active), the feedback form
+  // pre-filled from the link's token.
+  void HandleOnboardingLink(const std::string& url);
+  // connect.first, once per network (remembered in the prefs)
+  void NoteConnected();
   // Last width (in dip) fanned out to the destinations. Pages fold their own
   // panes; nothing else in the app measures the window for them.
   int pageWidthDip_ = -1;

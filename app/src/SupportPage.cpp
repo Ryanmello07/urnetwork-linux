@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "SupportPage.hpp"
 
+#include <cstdio>
+
 #include <glib.h>
 
 #include <exception>
 #include <utility>
 
+#include "ClientEvents.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
 #include "Ui.hpp"
@@ -261,6 +264,21 @@ void SupportPage::BuildSideStack() {
 
 // ---- the rating -------------------------------------------------------------
 
+void SupportPage::PrefillFromCampaign(const std::string& token, int rating,
+                                      const std::string& reason) {
+  if (1 <= rating && rating <= kStarCount) {
+    rating_ = rating;
+    PaintStars();
+  }
+  if (!reason.empty() && feedbackView_) feedbackView_->get_buffer()->set_text(reason);
+  if (token.empty() || !host_.IsLoggedIn()) return;
+  host_.api().onboardingFeedbackToken(
+      token, rating, reason,
+      [](std::optional<urnet::OnboardingFeedbackTokenResult>, std::optional<std::string> err) {
+        if (err) std::fprintf(stderr, "[support] feedback token failed: %s\n", err->c_str());
+      });
+}
+
 void SupportPage::SetRating(int value) {
   // clearable, the RatingControl default: picking the current value clears
   // back to unset (-1)
@@ -306,6 +324,8 @@ void SupportPage::OnSendFeedback() {
     args.needs = needs;
   }
   const bool attachLogs = includeLogs_->get_active();  // captured NOW, pre-async
+  const int64_t sentRating = args.star_count;   // for feedback.submitted
+  const std::string sentText = text.raw();
 
   // 3. Disable Send — the only in-flight gating; no spinner.
   sending_ = true;
@@ -317,9 +337,9 @@ void SupportPage::OnSendFeedback() {
   const uint64_t seen = *epoch_;
   host_.api().sendFeedback(
       std::optional<urnet::FeedbackSendArgs>(args),
-      [this, epoch, seen, attachLogs](std::optional<urnet::FeedbackSendResult> result,
-                                      std::optional<std::string> err) {
-        PostToMain([this, epoch, seen, attachLogs, result = std::move(result),
+      [this, epoch, seen, attachLogs, sentRating, sentText](
+          std::optional<urnet::FeedbackSendResult> result, std::optional<std::string> err) {
+        PostToMain([this, epoch, seen, attachLogs, sentRating, sentText, result = std::move(result),
                     err = std::move(err)] {
           if (*epoch != seen) return;  // stale: a newer Load() owns the page
           sending_ = false;
@@ -347,6 +367,7 @@ void SupportPage::OnSendFeedback() {
 
           // Success: timed snackbar; clear the text and the checkbox. The
           // star rating is deliberately NOT reset (windows parity).
+          host_.events().FeedbackSubmitted(sentRating, "", sentText);
           Snack(T_("thanks_for_the_feedback", "Thanks for the feedback!"), false);
           feedbackView_->get_buffer()->set_text("");
           includeLogs_->set_active(false);

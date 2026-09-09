@@ -152,9 +152,13 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
   isLoading_ = true;
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
-  host_.api().subscriptionBalance(
-      [this, epoch, issued](std::optional<urnet::SubscriptionBalanceResult> result,
-                            std::optional<std::string> err) {
+  // the storefront variant of the balance call: the same balance plus the
+  // price tier, the welcome offer and the experiment assignments. There is no
+  // storefront on the desktop, so the server resolves the tier from billing
+  // or the request's country (an estimate until the card's country is known).
+  host_.api().subscriptionBalanceForStorefront(
+      "", [this, epoch, issued](std::optional<urnet::SubscriptionBalanceResult> result,
+                                std::optional<std::string> err) {
         PostToMain([this, epoch, issued, result = std::move(result), err = std::move(err)] {
           if (*epoch != issued) return;  // logged out (or re-logged-in) since
           isLoading_ = false;
@@ -169,6 +173,22 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
             usedByteCount_ =
                 result->start_balance_byte_count - availableByteCount_ - pendingByteCount_;
             startBalanceByteCount_ = result->start_balance_byte_count;
+            if (result->price_tier) {
+              tier_.name = result->price_tier->name.empty() ? kPriceTierStandard
+                                                            : result->price_tier->name;
+              if (0 < result->price_tier->yearly_usd) tier_.yearly = result->price_tier->yearly_usd;
+              if (0 < result->price_tier->monthly_usd) tier_.monthly = result->price_tier->monthly_usd;
+              if (!result->price_tier->currency.empty()) tier_.currency = result->price_tier->currency;
+            }
+            if (result->onboarding_offer) {
+              SetOffer(*result->onboarding_offer);
+            } else {
+              offer_.active = false;
+            }
+            experiments_.clear();
+            if (result->experiments) {
+              for (const auto& a : *result->experiments) experiments_.push_back(a);
+            }
 
             // The server is the source of truth for Pro: `current_subscription`
             // is non-nil exactly when the network is Pro. The jwt's Pro claim
@@ -211,6 +231,31 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
           Emit();
         });
       });
+}
+
+void SubscriptionBalanceStore::SetOffer(const urnet::OnboardingOffer& offer) {
+  offer_.active = offer.state == "active";
+  if (0 < offer.percent_off) offer_.percentOff = offer.percent_off;
+  if (0 < offer.months_free) offer_.monthsFree = offer.months_free;
+  if (0 < offer.regular_year_usd) offer_.regularYear = offer.regular_year_usd;
+  offer_.firstYear = 0 < offer.first_year_usd ? offer.first_year_usd
+                                              : OfferFirstYear(offer_.regularYear, offer_.percentOff);
+  if (!offer.currency.empty()) offer_.currency = offer.currency;
+  offer_.expiresAt = offer.expires_at;
+}
+
+std::string SubscriptionBalanceStore::ExperimentVariant(const std::string& surface) const {
+  for (const auto& a : experiments_) {
+    if (a.surface == surface) return a.variant;
+  }
+  return "";
+}
+
+std::string SubscriptionBalanceStore::ExperimentId(const std::string& surface) const {
+  for (const auto& a : experiments_) {
+    if (a.surface == surface) return a.experiment_id;
+  }
+  return "";
 }
 
 // The referral row of the usage bar (mac ReferralLinkViewModel, folded into

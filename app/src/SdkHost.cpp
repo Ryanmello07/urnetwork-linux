@@ -323,6 +323,10 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     api_ = networkSpace_->getApi();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
+    // the client event queue sends over this Api's C handle, only while a
+    // session exists (the endpoint is authenticated; pending events wait on disk)
+    events_ = std::make_unique<ClientEventQueue>(storageDir);
+    events_->Attach(api_->handle(), [this] { return IsLoggedIn(); });
     // RESTORE THE API'S AUTHORIZATION FROM THE PERSISTED SESSION.
     //
     // api_->setByJwt is called in exactly one other place — RegisterNetworkClient,
@@ -1317,7 +1321,22 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
   });
 }
 
+void SdkHost::ApplyProductUpdatesOptOut() {
+  if (!api_) return;
+  urnet::AccountPreferencesSetArgs prefs;
+  prefs.product_updates = false;
+  api_->accountPreferencesUpdate(
+      prefs, [](std::optional<urnet::AccountPreferencesSetResult>, std::optional<std::string> err) {
+        if (err) std::fprintf(stderr, "[sdk] product updates opt-out failed: %s\n", err->c_str());
+      });
+  if (events_) events_->SignupOptoutChanged(false);
+}
+
 void SdkHost::HandleDeepLink(const std::string& url) {
+  if (url.rfind("urnetwork://onboarding/", 0) == 0) {
+    if (onOnboardingLink_) onOnboardingLink_(url);
+    return;
+  }
   wallet_.HandleDeepLink(url);  // returns false for non-wallet links (future: OAuth)
 }
 
@@ -3233,6 +3252,7 @@ void SdkHost::Logout() {
   ForgetRpcSession();
   pendingWalletAuth_.reset();
   if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+  if (events_) events_->NewSession();  // the next sign-in is a new session
   if (onAuth_) onAuth_(false);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);  // drawer falls back to empty states
 }

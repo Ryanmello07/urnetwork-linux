@@ -35,9 +35,11 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <glibmm/main.h>
 
+#include "PricePresentation.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
@@ -103,6 +105,19 @@ class SubscriptionBalanceStore {
   int64_t ReferredBonusGibPerDay() const { return referredBonusGibPerDay_; }
   const std::string& ReferralCode() const { return referralCode_; }
 
+  // The plan response's price tier (standard/regional, from the storefront
+  // country the server resolved), the network's welcome offer and the
+  // experiment assignments (mmm/onboarding/PLAN.md). Defaults until fetched.
+  const PriceTierView& Tier() const { return tier_; }
+  const OfferView& Offer() const { return offer_; }
+  bool OfferActive() const { return offer_.active; }
+  // the variant for an experiment surface ("" when unassigned)
+  std::string ExperimentVariant(const std::string& surface) const;
+  std::string ExperimentId(const std::string& surface) const;
+  // A freshly issued offer (POST /onboarding/offer/issue) lands here so every
+  // plan surface prints it before the next poll.
+  void SetOffer(const urnet::OnboardingOffer& offer);
+
   void SetChangedHandler(ChangedHandler h) { onChanged_ = std::move(h); }
   // Fired on the GTK main loop when the referral poll observes new referrals
   // over the persisted per-network baseline (the first observation only
@@ -157,6 +172,10 @@ class SubscriptionBalanceStore {
   int64_t bonusGibPerDay_ = 3;
   int64_t referredBonusGibPerDay_ = 3;
   std::string referralCode_;
+
+  PriceTierView tier_;
+  OfferView offer_;
+  std::vector<urnet::ExperimentAssignment> experiments_;
 
   // polling (mac: backgroundPollingTimer / pollingTimer / pollingDeadline).
   // The confirmation deadline only elapses while the poll timer runs:

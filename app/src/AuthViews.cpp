@@ -132,6 +132,22 @@ void CreateNetworkPage::BuildUi() {
   termsRow->append(*termsLabel);
   card->append(*termsRow);
 
+  // the marketing opt-out, on by default: one short row under the terms
+  auto* updatesRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+  productUpdates_ = Gtk::make_managed<Gtk::Switch>();
+  productUpdates_->set_valign(Gtk::Align::CENTER);
+  productUpdates_->set_active(true);
+  updatesRow->append(*productUpdates_);
+  auto* updatesLabel = Gtk::make_managed<Gtk::Label>(
+      T_("periodic_product_updates", "Periodic product updates"));
+  updatesLabel->add_css_class("dim-label");
+  updatesLabel->add_css_class("caption");
+  updatesLabel->set_wrap(true);
+  updatesLabel->set_xalign(0);
+  updatesLabel->set_hexpand(true);
+  updatesRow->append(*updatesLabel);
+  card->append(*updatesRow);
+
   // bonus referral code: a flat toggle revealing the entry + apply button
   referralToggle_ = Gtk::make_managed<Gtk::Button>(T_("add_referral_code", "Add referral code"));
   referralToggle_->add_css_class("flat");
@@ -385,13 +401,16 @@ void CreateNetworkPage::OnContinue() {
       (referralValid_ && !referralCapped_) ? TrimWhitespace(referralEntry_->get_text())
                                            : std::string();
 
+  const bool productUpdates = !productUpdates_ || productUpdates_->get_active();
+
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
-  auto done = [this, epoch, issued, userAuth](AuthResult r) {
-    PostToMain([this, epoch, issued, userAuth, r] {
+  auto done = [this, epoch, issued, userAuth, productUpdates](AuthResult r) {
+    PostToMain([this, epoch, issued, userAuth, productUpdates, r] {
       if (*epoch != issued) return;
       SetCreating(false);
       if (r.verification_required) {
+        if (!productUpdates) host_.ApplyProductUpdatesOptOut();
         if (on_verify) on_verify(userAuth);
         return;
       }
@@ -403,6 +422,7 @@ void CreateNetworkPage::OnContinue() {
                 : r.error);
         return;
       }
+      if (!productUpdates) host_.ApplyProductUpdatesOptOut();
       if (on_success) on_success();
     });
   };

@@ -170,7 +170,13 @@ int main(int argc, char** argv) {
             return false;
           }
           if (!window) return true;
-          Gtk::Widget* child = window->get_child();
+          // an onboarding review (URNW_ONBOARDING_PREVIEW) shoots the sheet,
+          // once it is up and its opening page change has settled
+          const bool wantSheet = g_getenv("URNW_ONBOARDING_PREVIEW") != nullptr;
+          Gtk::Window* target = window->PreviewSheet();
+          if (wantSheet && (!target || !target->get_mapped() || *tries < 4)) return true;
+          if (!target) target = window.get();
+          Gtk::Widget* child = target->get_child();
           if (!child) return true;
           const int w = child->get_width();
           const int h = child->get_height();

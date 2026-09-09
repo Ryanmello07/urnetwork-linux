@@ -9,6 +9,8 @@
 
 #include <cstdio>
 
+#include <glibmm/datetime.h>
+
 #include "AppPrefs.hpp"
 #include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
@@ -131,12 +133,35 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // URNW_ONBOARDING_PREVIEW=1 opens the onboarding flow over whatever is
   // showing, for design review without an account (no data behind it)
   if (const char* preview = g_getenv("URNW_ONBOARDING_PREVIEW"); preview && *preview) {
+    const std::string tag(preview);
     const int step = std::max(1, atoi(preview));
-    Glib::signal_timeout().connect_once([this, step] {
+    Glib::signal_timeout().connect_once([this, tag, step] {
       if (!onboarding_) {
         onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
       }
-      onboarding_->OpenAt(step);
+      // URNW_ONBOARDING_PREVIEW_OFFER=1 seeds a sample welcome offer (no
+      // session behind the preview, so nothing is issued): the offer card on
+      // the plan page and the offer page print the sample's numbers
+      if (const char* sample = g_getenv("URNW_ONBOARDING_PREVIEW_OFFER"); sample && *sample) {
+        urnet::OnboardingOffer offer;
+        offer.state = "active";
+        offer.percent_off = 25;
+        offer.months_free = 3;
+        offer.first_year_usd = 30;
+        offer.regular_year_usd = 40;
+        offer.tier = "standard";
+        offer.currency = "USD";
+        offer.expires_at =
+            Glib::DateTime::create_now_utc().add_days(5).format_iso8601();
+        balance_.SetOffer(offer);
+      }
+      // "offer" reviews the urnetwork://onboarding/offer destination: the
+      // offer page on its own
+      if (tag == "offer") {
+        onboarding_->OpenOffer();
+      } else {
+        onboarding_->OpenAt(step);
+      }
     }, 800);
   }
   // AdwToastOverlay across the page stack: hosts the drawer PQI panel's
@@ -272,6 +297,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   });
   host_.SetJwtRefreshedHandler([this] {
     PostToMain([this] { balance_.OnJwtRefreshed(); });
+  });
+  host_.SetOnboardingLinkHandler([this](const std::string& url) {
+    PostToMain([this, url] { HandleOnboardingLink(url); });
   });
   // THE CONNECTION FEED, AND IT IS NOT GATED ON VISIBILITY. That asymmetry —
   // this push ungated beside a stats push gated on windowVisible_ — is how two
@@ -1270,6 +1298,22 @@ void MainWindow::BuildInstantStep() {
   termsRow->append(*termsText);
   scaffold.card->append(*termsRow);
 
+  // the marketing opt-out, on by default (every page that creates a network)
+  auto* updatesRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  instantProductUpdates_ = Gtk::make_managed<Gtk::Switch>();
+  instantProductUpdates_->set_valign(Gtk::Align::CENTER);
+  instantProductUpdates_->set_active(true);
+  updatesRow->append(*instantProductUpdates_);
+  auto* updatesText = Gtk::make_managed<Gtk::Label>(
+      T_("periodic_product_updates", "Periodic product updates"));
+  updatesText->add_css_class("dim-label");
+  updatesText->add_css_class("caption");
+  updatesText->set_wrap(true);
+  updatesText->set_xalign(0);
+  updatesText->set_hexpand(true);
+  updatesRow->append(*updatesText);
+  scaffold.card->append(*updatesRow);
+
   // optional referral code (android/apple instant-account parity): the server
   // links the referral on the guest/seedphrase create path too
   instantReferralToggle_ =
@@ -1410,6 +1454,9 @@ void MainWindow::OnInstantSubmit() {
               return;
             }
             prefs::Set(kOnboardingPendingKey, true);  // an instant account is a new network
+            if (instantProductUpdates_ && !instantProductUpdates_->get_active()) {
+              host_.ApplyProductUpdatesOptOut();
+            }
             StartTunnelUi();  // auth handler flips the view
           });
         });
@@ -2044,6 +2091,70 @@ void MainWindow::SyncProvideControlMode() {
 
 // The post-sign-up onboarding: shown once, only after a network was created
 // on this machine (never for an existing account signing in).
+void MainWindow::NoteConnected() {
+  // connect.first: once per network. The network id keys the memory, so a
+  // second account on the same machine gets its own first connect.
+  auto byJwt = host_.ParseByJwt();
+  const std::string networkId = byJwt && byJwt->NetworkId ? *byJwt->NetworkId : byJwt ? byJwt->NetworkName : "";
+  if (networkId.empty()) return;
+  const std::string key = "connect_first_" + networkId;
+  if (prefs::Get<bool>(key.c_str(), false)) return;
+  prefs::Set(key.c_str(), true);
+  host_.events().ConnectFirst();
+}
+
+void MainWindow::HandleOnboardingLink(const std::string& url) {
+  if (!host_.IsLoggedIn() || !shell_) return;
+  present();
+  std::map<std::string, std::string> query;
+  if (const size_t q = url.find('?'); q != std::string::npos) {
+    size_t i = q + 1;
+    while (i < url.size()) {
+      const size_t amp = url.find('&', i);
+      const std::string pair = url.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
+      if (const size_t eq = pair.find('='); eq != std::string::npos) {
+        char* dec = g_uri_unescape_string(pair.substr(eq + 1).c_str(), nullptr);
+        query[pair.substr(0, eq)] = dec ? std::string(dec) : pair.substr(eq + 1);
+        if (dec) g_free(dec);
+      }
+      if (amp == std::string::npos) break;
+      i = amp + 1;
+    }
+  }
+  switch (ParseOnboardingLink(url)) {
+    case OnboardingLink::Connect:
+      shell_->Navigate("connect");
+      break;
+    case OnboardingLink::Widgets:
+      // no widgets on the desktop: the Account page is the closest destination
+      shell_->Navigate("account");
+      break;
+    case OnboardingLink::Offer:
+      if (balance_.OfferActive()) {
+        if (!onboarding_) {
+          onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
+          onboarding_->on_finished = [] { prefs::Set(kOnboardingPendingKey, false); };
+        }
+        onboarding_->OpenOffer();
+      } else if (drawer_) {
+        drawer_->OpenUpgrade();
+      }
+      break;
+    case OnboardingLink::Feedback: {
+      shell_->Navigate("support");
+      int rating = 0;
+      if (auto r = query.find("r"); r != query.end()) rating = std::atoi(r->second.c_str());
+      const std::string why = query.count("why") ? query["why"] : "";
+      std::string token = query.count("token") ? query["token"] : "";
+      if (token.empty() && query.count("t")) token = query["t"];
+      if (supportPage_) supportPage_->PrefillFromCampaign(token, rating, why);
+      break;
+    }
+    case OnboardingLink::None:
+      break;
+  }
+}
+
 void MainWindow::OpenOnboardingIfPending() {
   if (!prefs::Get<bool>(kOnboardingPendingKey, false)) return;
   Glib::signal_timeout().connect_once([this] {
@@ -2192,6 +2303,7 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // longer say "Connect" over a press that disconnects.
   connected_ = view.action == health::Action::Disconnect;
   connectBtn_.set_label(connected_ ? T_("disconnect", "Disconnect") : T_("connect", "Connect"));
+  if (view.state == health::State::Connected) NoteConnected();
   // The strip's raw status field carries the controller's OWN token now
   // (CONNECTING/CONNECTED/CONNECT_FAILED), not the two-word destination
   // vocabulary the old push could produce.

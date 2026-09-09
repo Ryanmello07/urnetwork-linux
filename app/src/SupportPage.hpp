@@ -62,6 +62,11 @@ class SupportPage : public Gtk::Box {
   // only diagnostic); error=false the timed Success one (auto-dismiss 4s).
   std::function<void(const Glib::ustring& message, bool error)> on_snackbar;
 
+  // urnetwork://onboarding/feedback?token=&r=&why=: records the click for the
+  // campaign (GET /onboarding/feedback/{token}) and pre-fills the form with
+  // the rating and the reason the email button carried.
+  void PrefillFromCampaign(const std::string& token, int rating, const std::string& reason);
+
  private:
   void BuildMainStack();
   void BuildSideStack();

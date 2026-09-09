@@ -11,10 +11,15 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 #include <gtkmm.h>
 
+#include "PricePresentation.hpp"
+
 namespace urnw {
+
+struct PlanCardTexts;
 
 // The free trial the yearly plan starts with, in days, as printed on the plan
 // card. The trial itself is the server's Stripe checkout session setting
@@ -33,6 +38,12 @@ class PlanPicker : public Gtk::Box {
   void Select(bool yearly);
   // The CTA label for a selection: only the yearly plan carries the trial.
   static std::string CtaLabel(bool yearly);
+  // Reprints both cards from the price tier and, while it is active, the
+  // welcome offer (the yearly card becomes the offer card: first-year price,
+  // then the regular price, the trial line). Called by the host from the
+  // balance store's feed; the picker starts on the standard tier.
+  void SetPrices(const PriceTierView& tier, const OfferView& offer);
+  void SetTexts(const PlanCardTexts& texts);
 
   // Fired on a tap, after the selection changed.
   std::function<void(bool yearly)> on_select;
@@ -44,6 +55,9 @@ class PlanPicker : public Gtk::Box {
   GoldPlanCard* yearlyCard_ = nullptr;
   Gtk::Button* monthlyCard_ = nullptr;
   Gtk::Label* monthlyDot_ = nullptr;
+  Gtk::Label* monthlyText_ = nullptr;
+  Gtk::Label* monthlyLine_ = nullptr;
+  std::vector<Gtk::Label*> reservedLines_;  // sizes the monthly card like the yearly
 };
 
 }  // namespace urnw

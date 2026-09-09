@@ -7,9 +7,18 @@
 // purchase still lands later; the background poll and the next launch pick it
 // up).
 //
-// Two checkout paths (PARITY.md decision #2):
+// Three checkout paths, tried in order (mmm/onboarding/PLAN.md: inline
+// Stripe, never an external browser while a web view exists):
 //
-//   * embedded (preferred): ui_mode "embedded" -> the sheet content swaps to a
+//   * payment sheet (preferred): Api::stripePaymentSheet{plan} -> the ur.io
+//     embedded pay page https://ur.io/app/pay-sheet?cs=&pk=&plan=&return=
+//     in the sheet's web view. The page mounts Stripe's Payment Element,
+//     confirms the SetupIntent (yearly: the trial, the welcome offer's coupon
+//     applied server-side) or the PaymentIntent (monthly), and hands control
+//     back by navigating to the return url urnetwork://pay/done or posting
+//     {type: "ur-pay", status}. A pay-sheet failure before anything rendered
+//     falls through to the next path.
+//   * embedded (fallback): ui_mode "embedded" -> the sheet content swaps to a
 //     WebKitGTK webview loading https://ur.io/checkout, which mounts Stripe's
 //     Embedded Checkout and hands control back over the urnetwork:// scheme
 //     (intercepted in "decide-policy"; the navigation never leaves the
@@ -26,6 +35,7 @@
 
 #include <gtkmm.h>
 
+#include "OfferCard.hpp"
 #include "SdkHost.hpp"
 #include "SubscriptionBalance.hpp"
 
@@ -40,6 +50,9 @@ class UpgradeSheet : public Gtk::Window {
   void Open();
   // selects the plan and goes straight to the Stripe checkout (the onboarding's Start free trial)
   void OpenCheckout(bool yearly);
+  // The balance store's tier/offer changed: reprint the plan cards and the
+  // read-only offer line (shown while the offer state is active).
+  void ApplyPrices();
   // Balance store change feed (marshalled onto the GTK loop by the owner):
   // flips waiting -> success / timed-out.
   void OnBalanceChanged();
@@ -49,6 +62,11 @@ class UpgradeSheet : public Gtk::Window {
 
   void BuildUi();
   void StartCheckout();
+  // The pay-sheet path: one stripePaymentSheet round trip, then the ur.io pay
+  // page in the web view. Any failure before the page rendered continues
+  // with the embedded checkout session.
+  void RequestPaymentSheet();
+  void EmitPurchase(const char* outcome, const std::string& errorClass = "");
   // One createStripeCheckoutSession round trip. An embedded failure retries
   // once as hosted; sessions are only ever created in sequence, never both.
   void RequestSession(bool embedded);
@@ -59,8 +77,11 @@ class UpgradeSheet : public Gtk::Window {
   // runtime and checkout must go hosted.
   bool EnsureWebView();
   void OpenEmbedded(const std::string& clientSecret);
-  // urnetwork://checkout?... interception from the webview's "decide-policy".
+  void OpenPaySheet(const std::string& clientSecret, const std::string& publishableKey);
+  // urnetwork://checkout?... and urnetwork://pay/... interception from the
+  // webview's "decide-policy", and the pay page's posted {type:"ur-pay"} message.
   void HandleCheckoutCallback(const std::string& uri);
+  void HandlePayMessage(const std::string& json);
   // Checkout page failed before it ever rendered: retry the purchase hosted.
   void OnCheckoutLoadFailed();
   void TeardownWebView();
@@ -81,6 +102,9 @@ class UpgradeSheet : public Gtk::Window {
   Gtk::Label* joinLabel_ = nullptr;  // follows the selection: trial vs subscribe
   Gtk::Spinner* joinSpinner_ = nullptr;
   Gtk::Label* errorLabel_ = nullptr;
+  OfferCard* offerLine_ = nullptr;  // the active welcome offer, read-only
+  bool purchaseEmitted_ = false;    // purchase.completed once per checkout
+  bool paySheetActive_ = false;     // the web view shows the pay page (not Checkout)
   // waiting-state headline: "complete in the browser" (hosted) vs
   // "processing payment" (embedded, already paid in the webview)
   Gtk::Label* waitingLabel_ = nullptr;

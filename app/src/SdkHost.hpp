@@ -29,6 +29,7 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ClientEvents.hpp"
 #include "ControlClient.hpp"
 #include "Health.hpp"
 #include "RpcSession.hpp"
@@ -771,6 +772,22 @@ class SdkHost {
 
   // Exposed so the (full-parity) UI/view models can drive the SDK directly.
   urnet::Api& api() { return *api_; }
+  // The app-wide client event queue (ClientEvents.hpp): every product event
+  // the onboarding optimization loop reads goes through this one facade.
+  // Valid after Initialize().
+  ClientEventQueue& events() { return *events_; }
+  // The sign-up pages' "Periodic product updates" switched off: set the
+  // account preference right after the network exists and record it. The
+  // C ABI's NetworkCreateArgs carry no product_updates field (the Go side
+  // marshals one but never unmarshals it), so the desktop cannot opt out on
+  // the create call itself; this is the same preference the account page
+  // sets, applied at collection.
+  void ApplyProductUpdatesOptOut();
+  // urnetwork://onboarding/<step> deep links (the campaign emails' buttons):
+  // routed to the window, which owns the destinations. Fired on the GTK loop.
+  void SetOnboardingLinkHandler(std::function<void(const std::string& url)> handler) {
+    onOnboardingLink_ = std::move(handler);
+  }
   // "There is a session I can drive", NOT "I am holding a handle".
   //
   // A urnet::DeviceRemote handle belongs to this process and nothing
@@ -916,6 +933,8 @@ class SdkHost {
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::Api> api_;
+  std::unique_ptr<ClientEventQueue> events_;
+  std::function<void(const std::string& url)> onOnboardingLink_;
   std::optional<urnet::AsyncLocalState> asyncLocalState_;
   std::optional<urnet::LocalState> localState_;
   // The remote face of the daemon's DeviceLocal. Exists only while a tunnel
