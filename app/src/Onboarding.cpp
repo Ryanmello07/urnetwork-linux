@@ -391,12 +391,22 @@ void OnboardingWindow::OpenAt(int step) {
 }
 
 void OnboardingWindow::OpenOffer() {
-  Open();
+  step_ = 0;
   standalone_ = true;
   offerEnabled_ = true;
+  offerIssued_ = true;  // the link's offer already exists: never re-issued
+  introOfferShown_ = true;
   bubbles_->SetCount(OnboardingStepCount(true));
+  connectorInHeader_ = true;
+  connectorVisible_ = false;
+  ApplyPrices();
   ShowStep(kOnboardingStepOffer);
-  back_->set_visible(false);
+  balancePoll_.disconnect();
+  balancePoll_ = Glib::signal_timeout().connect([this] {
+    ApplyPrices();
+    return true;
+  }, 2000);
+  present();
 }
 
 // Skip is not a way around the offer page: from any earlier page it lands
