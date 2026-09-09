@@ -4622,6 +4622,11 @@ msgctxt "site_app_redeemed_on"
 msgid "Redeemed {date}"
 msgstr "Canjeado el {date}"
 
+#. Sign-up dialog: label of the optional referral code field
+msgctxt "site_app_referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "Código de referido (opcional)"
+
 #. App settings: referral network section
 msgctxt "site_app_referral_network"
 msgid "Referral network"
