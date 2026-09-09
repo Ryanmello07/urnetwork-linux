@@ -88,9 +88,8 @@ class CreateNetworkPage : public Gtk::Box {
   Gtk::Label* passwordCaption_ = nullptr;
   Gtk::Switch* termsSwitch_ = nullptr;
   // "Periodic product updates": the marketing opt-out at collection, on by
-  // default (mmm/onboarding/PLAN.md). Off -> the account preference is set
-  // right after the network exists (the C ABI's network-create args carry no
-  // product_updates field; see SdkHost/S1 gap) and signup.optout_changed fires.
+  // default (mmm/onboarding/PLAN.md). Off -> the create carries
+  // product_updates=false and signup.optout_changed fires.
   Gtk::Switch* productUpdates_ = nullptr;
   Gtk::Button* referralToggle_ = nullptr;
   Gtk::Revealer* referralRevealer_ = nullptr;

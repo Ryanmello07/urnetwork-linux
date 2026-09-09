@@ -1428,6 +1428,8 @@ void MainWindow::OnInstantSubmit() {
   const std::string referralCode =
       instantReferralValid_ ? TrimWhitespace(instantReferralEntry_->get_text())
                             : std::string();
+  // the marketing opt-out rides on the create call (absent = opted in)
+  host_.SetProductUpdatesOptOut(instantProductUpdates_ && !instantProductUpdates_->get_active());
   host_.CreateInstantAccount(referralCode, [this](SdkHost::InstantAccount account) {
     PostToMain([this, account = std::move(account)]() mutable {
       creatingInstant_ = false;
@@ -1454,9 +1456,6 @@ void MainWindow::OnInstantSubmit() {
               return;
             }
             prefs::Set(kOnboardingPendingKey, true);  // an instant account is a new network
-            if (instantProductUpdates_ && !instantProductUpdates_->get_active()) {
-              host_.ApplyProductUpdatesOptOut();
-            }
             StartTunnelUi();  // auth handler flips the view
           });
         });

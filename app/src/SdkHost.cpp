@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "SdkHost.hpp"
 
+#include <urnetwork_sdk.h>
+
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -323,10 +325,10 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     api_ = networkSpace_->getApi();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
-    // the client event queue sends over this Api's C handle, only while a
-    // session exists (the endpoint is authenticated; pending events wait on disk)
-    events_ = std::make_unique<ClientEventQueue>(storageDir);
-    events_->Attach(api_->handle(), [this] { return IsLoggedIn(); });
+    // the SDK's client event queue over this network space: it persists,
+    // batches and sends the product events (ClientEvents.hpp)
+    events_ = std::make_unique<ClientEventQueue>(networkSpace_->handle(), UR_APP_VERSION,
+                                                 ClientEventLocale());
     // RESTORE THE API'S AUTHORIZATION FROM THE PERSISTED SESSION.
     //
     // api_->setByJwt is called in exactly one other place — RegisterNetworkClient,
@@ -456,6 +458,7 @@ void SdkHost::LoginWithCode(const std::string& authCode, std::function<void(Auth
 
 void SdkHost::LoginAsGuest(std::function<void(AuthResult)> done) {
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.terms = true;
   args.guest_mode = true;
   api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
@@ -522,6 +525,7 @@ void SdkHost::CreateInstantAccount(const std::string& referralCode,
   // NO user_auth, password, auth_jwt or wallet_auth: that combination is what
   // makes the server mint a seedphrase-secured network and return the phrase.
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.terms = true;  // the form's button is gated on the terms consent
   if (!referralCode.empty()) args.referral_code = referralCode;
   api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
@@ -750,6 +754,7 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
                             const std::string& password, const std::string& referralCode,
                             std::function<void(AuthResult)> done) {
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
   args.user_auth = userAuth;
   args.password = password;
@@ -1175,6 +1180,7 @@ void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
     jwt = pendingSsoJwt_;
   }
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
   args.auth_jwt_type = type;
   args.auth_jwt = jwt;
@@ -1308,6 +1314,7 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
   }
 
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.user_name = std::string();
   args.network_name = networkName;
   args.terms = true;
@@ -1321,15 +1328,24 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
   });
 }
 
-void SdkHost::ApplyProductUpdatesOptOut() {
-  if (!api_) return;
-  urnet::AccountPreferencesSetArgs prefs;
-  prefs.product_updates = false;
-  api_->accountPreferencesUpdate(
-      prefs, [](std::optional<urnet::AccountPreferencesSetResult>, std::optional<std::string> err) {
-        if (err) std::fprintf(stderr, "[sdk] product updates opt-out failed: %s\n", err->c_str());
-      });
-  if (events_) events_->SignupOptoutChanged(false);
+void SdkHost::SetProductUpdatesOptOut(bool optOut) {
+  productUpdatesOptOut_ = optOut;
+  if (optOut && events_) events_->SignupOptoutChanged(false);
+}
+
+void SdkHost::ApplySignupPreferences(urnet::NetworkCreateArgs& args) const {
+  if (productUpdatesOptOut_) args.product_updates = false;
+}
+
+void SdkHost::AuthNetworkClientWithLocale(const urnet::AuthNetworkClientArgs& args,
+                                          urnet::AuthNetworkClientCallback callback) {
+  nlohmann::json json = args;
+  json["time_zone"] = LocalTimeZoneId();
+  json["locale"] = ClientEventLocale();
+  const std::string body = json.dump();
+  auto* fn = new urnet::AuthNetworkClientCallback(std::move(callback));
+  urnet_api_auth_network_client(api_->handle(), body.c_str(),
+                                &urnet::detail::oneshot_auth_network_client, fn);
 }
 
 void SdkHost::HandleDeepLink(const std::string& url) {
@@ -1412,8 +1428,8 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void
     urnet::AuthNetworkClientArgs args;
     args.description = UrDeviceDescription();
     args.device_spec = UrDeviceSpec();
-    api_->authNetworkClient(args, [this, done](std::optional<urnet::AuthNetworkClientResult> result,
-                                               std::optional<std::string> err) {
+    AuthNetworkClientWithLocale(args, [this, done](std::optional<urnet::AuthNetworkClientResult> result,
+                                                   std::optional<std::string> err) {
       if (err) { done({false, false, *err}); return; }
       if (!result) { done({false, false, "no result"}); return; }
       if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }

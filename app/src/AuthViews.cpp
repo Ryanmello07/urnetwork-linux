@@ -401,16 +401,16 @@ void CreateNetworkPage::OnContinue() {
       (referralValid_ && !referralCapped_) ? TrimWhitespace(referralEntry_->get_text())
                                            : std::string();
 
-  const bool productUpdates = !productUpdates_ || productUpdates_->get_active();
+  // the marketing opt-out rides on the create call (absent = opted in)
+  host_.SetProductUpdatesOptOut(productUpdates_ && !productUpdates_->get_active());
 
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
-  auto done = [this, epoch, issued, userAuth, productUpdates](AuthResult r) {
-    PostToMain([this, epoch, issued, userAuth, productUpdates, r] {
+  auto done = [this, epoch, issued, userAuth](AuthResult r) {
+    PostToMain([this, epoch, issued, userAuth, r] {
       if (*epoch != issued) return;
       SetCreating(false);
       if (r.verification_required) {
-        if (!productUpdates) host_.ApplyProductUpdatesOptOut();
         if (on_verify) on_verify(userAuth);
         return;
       }
@@ -422,7 +422,6 @@ void CreateNetworkPage::OnContinue() {
                 : r.error);
         return;
       }
-      if (!productUpdates) host_.ApplyProductUpdatesOptOut();
       if (on_success) on_success();
     });
   };

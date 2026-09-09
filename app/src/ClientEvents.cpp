@@ -1,40 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ClientEvents.hpp"
 
-#include <cstdio>
-#include <fstream>
-
 #include <glib.h>
-#include <glibmm/datetime.h>
 #include <urnetwork_sdk.h>
 
-#include "Ui.hpp"
-
-#ifndef UR_APP_VERSION
-#define UR_APP_VERSION "0.0.0"
-#endif
-
 namespace urnw {
-namespace {
-
-// the server's per-call cap (sdk MaxClientEventsPerCall)
-constexpr size_t kMaxPerCall = 200;
-// a batch that fails this many sends is dropped: the loop tolerates gaps,
-// not a queue that never drains
-constexpr int kMaxAttempts = 3;
-// pending events kept on disk at most; the oldest go first
-constexpr size_t kMaxPending = 1000;
-constexpr unsigned kFlushDelayMs = 2500;   // after an add: batch the burst
-constexpr unsigned kRetryDelayMs = 30000;  // after a failed send
-
-std::string EventsPath(const std::string& storageDir) { return storageDir + "/client_events.json"; }
-
-std::string NowRfc3339() {
-  auto now = Glib::DateTime::create_now_utc();
-  return now.format_iso8601();
-}
-
-}  // namespace
 
 std::string ClientEventLocale() {
   const char* const* names = g_get_language_names();
@@ -49,33 +19,71 @@ std::string ClientEventLocale() {
   return tag;
 }
 
-ClientEventQueue::ClientEventQueue(std::string storageDir)
-    : storageDir_(std::move(storageDir)), appVersion_(UR_APP_VERSION), locale_(ClientEventLocale()) {
-  NewSession();
-  Load();
+std::string LocalTimeZoneId() {
+  std::string id;
+  GTimeZone* tz = g_time_zone_new_local();
+  if (tz) {
+    const char* identifier = g_time_zone_get_identifier(tz);
+    if (identifier) id = identifier;
+    g_time_zone_unref(tz);
+  }
+  // GLib reports "localtime" (or a bare offset) when TZ is unset and the zone
+  // file carries no name; the /etc/localtime symlink usually names it
+  const bool named = !id.empty() && id != "localtime" && id[0] != '+' && id[0] != '-' &&
+                     id.find('/') != std::string::npos;
+  if (!named) {
+    char* target = g_file_read_link("/etc/localtime", nullptr);
+    if (target) {
+      const std::string link(target);
+      g_free(target);
+      if (const auto at = link.find("zoneinfo/"); at != std::string::npos) {
+        id = link.substr(at + 9);
+      }
+    }
+  }
+  return id;
 }
+
+ClientEventQueue::ClientEventQueue(uint64_t networkSpace, const std::string& appVersion,
+                                   const std::string& locale)
+    : handle_(urnet_new_client_event_queue(networkSpace, "linux", appVersion.c_str(),
+                                           locale.c_str())) {}
 
 ClientEventQueue::~ClientEventQueue() {
-  ++*epoch_;
-  flushTimer_.disconnect();
-  Save();
-}
-
-void ClientEventQueue::Attach(uint64_t apiHandle, std::function<bool()> canSend) {
-  apiHandle_ = apiHandle;
-  canSend_ = std::move(canSend);
-  if (!pending_.empty()) ScheduleFlush(kFlushDelayMs);
-}
-
-void ClientEventQueue::NewSession() {
-  char* id = g_uuid_string_random();
-  session_ = id ? id : "";
-  if (id) g_free(id);
+  if (!handle_) return;
+  urnet_client_event_queue_close(handle_);
+  urnet_release(handle_);
+  handle_ = 0;
 }
 
 void ClientEventQueue::Flush() {
-  flushTimer_.disconnect();
-  SendBatch();
+  if (handle_) urnet_client_event_queue_flush(handle_);
+}
+
+void ClientEventQueue::FlushAndWait(int64_t timeoutMillis) {
+  if (handle_) urnet_client_event_queue_flush_and_wait(handle_, timeoutMillis);
+}
+
+void ClientEventQueue::NewSession() {
+  if (handle_) urnet_client_event_queue_new_session(handle_);
+}
+
+int64_t ClientEventQueue::Pending() const {
+  return handle_ ? urnet_client_event_queue_pending_count(handle_) : 0;
+}
+
+std::string ClientEventQueue::Session() const {
+  if (!handle_) return "";
+  char* s = urnet_client_event_queue_get_session(handle_);
+  std::string out = s ? s : "";
+  if (s) urnet_free_string(s);
+  return out;
+}
+
+void ClientEventQueue::Add(char* sdkEventJson) {
+  if (!sdkEventJson) return;
+  if (handle_) urnet_client_event_queue_add(handle_, sdkEventJson);
+  urnet_free_string(sdkEventJson);
 }
 
 // ---- the facade -------------------------------------------------------------
@@ -139,125 +147,6 @@ void ClientEventQueue::SignupOptoutChanged(bool productUpdates) {
 }
 void ClientEventQueue::WidgetAdded(const std::string& kind) {
   Add(urnet_new_widget_added_event(kind.c_str()));
-}
-
-// ---- the queue ----------------------------------------------------------------
-
-void ClientEventQueue::Add(char* sdkEventJson) {
-  if (!sdkEventJson) return;
-  nlohmann::json event = nlohmann::json::parse(sdkEventJson, nullptr, false);
-  urnet_free_string(sdkEventJson);
-  if (!event.is_object() || !event.contains("name")) return;
-  // the envelope the SDK queue would fill
-  event["at"] = NowRfc3339();
-  event["platform"] = platform_;
-  event["app_version"] = appVersion_;
-  event["locale"] = locale_;
-  event["session"] = session_;
-  pending_.push_back(std::move(event));
-  while (kMaxPending < pending_.size()) pending_.erase(pending_.begin());
-  Save();
-  ScheduleFlush(kFlushDelayMs);
-}
-
-void ClientEventQueue::Load() {
-  std::ifstream in(EventsPath(storageDir_));
-  if (!in.good()) return;
-  nlohmann::json parsed = nlohmann::json::parse(in, nullptr, false);
-  if (!parsed.is_array()) return;
-  for (auto& e : parsed) {
-    if (e.is_object() && e.contains("name")) pending_.push_back(std::move(e));
-  }
-}
-
-void ClientEventQueue::Save() const {
-  const std::string path = EventsPath(storageDir_);
-  if (pending_.empty()) {
-    std::remove(path.c_str());
-    return;
-  }
-  std::ofstream out(path, std::ios::trunc);
-  if (!out.good()) return;
-  out << nlohmann::json(pending_).dump();
-}
-
-void ClientEventQueue::ScheduleFlush(unsigned delayMs) {
-  if (flushTimer_.connected()) return;
-  flushTimer_ = Glib::signal_timeout().connect(
-      [this] {
-        flushTimer_.disconnect();
-        SendBatch();
-        return false;
-      },
-      delayMs);
-}
-
-void ClientEventQueue::SendBatch() {
-  if (inFlight_ || pending_.empty() || apiHandle_ == 0) return;
-  if (canSend_ && !canSend_()) return;  // no session yet: wait on disk
-  const size_t count = std::min(kMaxPerCall, pending_.size());
-  nlohmann::json args = nlohmann::json::object();
-  args["events"] = nlohmann::json(std::vector<nlohmann::json>(pending_.begin(), pending_.begin() + count));
-  const std::string json = args.dump();
-  inFlight_ = true;
-  inFlightCount_ = count;
-  const uint64_t issued = *epoch_;
-
-  struct Ticket {
-    ClientEventQueue* queue;
-    std::shared_ptr<uint64_t> epoch;
-    uint64_t issued;
-  };
-  auto* ticket = new Ticket{this, epoch_, issued};
-  urnet_api_client_events_send(
-      apiHandle_, json.c_str(),
-      +[](void* userData, const char* resultJson, const char* err) {
-        std::unique_ptr<Ticket> t(static_cast<Ticket*>(userData));
-        const bool ok = err == nullptr && resultJson != nullptr;
-        std::string result = resultJson ? resultJson : "";
-        if (err) std::fprintf(stderr, "[events] send failed: %s\n", err);
-        ClientEventQueue* queue = t->queue;
-        std::shared_ptr<uint64_t> epoch = t->epoch;
-        const uint64_t issued = t->issued;
-        PostToMain([queue, epoch, issued, ok, result = std::move(result)] {
-          if (*epoch != issued) return;  // the queue is gone
-          queue->OnSent(issued, ok, result);
-        });
-      },
-      ticket);
-}
-
-void ClientEventQueue::OnSent(uint64_t, bool ok, const std::string& resultJson) {
-  inFlight_ = false;
-  bool drop = ok;
-  if (ok) {
-    // {accepted, rejected:[{index,message}]}: rejected events are schema
-    // failures, never retried; the whole batch is done either way
-    nlohmann::json result = nlohmann::json::parse(resultJson, nullptr, false);
-    if (result.is_object() && result.contains("rejected") && result["rejected"].is_array()) {
-      for (const auto& r : result["rejected"]) {
-        if (r.is_object() && r.contains("message") && r["message"].is_string()) {
-          std::fprintf(stderr, "[events] rejected: %s\n", r["message"].get<std::string>().c_str());
-        }
-      }
-    }
-    attempts_ = 0;
-  } else {
-    ++attempts_;
-    if (kMaxAttempts <= attempts_) {
-      std::fprintf(stderr, "[events] dropping %zu events after %d failed sends\n", inFlightCount_,
-                   attempts_);
-      drop = true;
-      attempts_ = 0;
-    }
-  }
-  if (drop) {
-    const size_t n = std::min(inFlightCount_, pending_.size());
-    pending_.erase(pending_.begin(), pending_.begin() + n);
-    Save();
-  }
-  inFlightCount_ = 0;
-  if (!pending_.empty()) ScheduleFlush(ok ? kFlushDelayMs : kRetryDelayMs);
 }
 
 }  // namespace urnw
