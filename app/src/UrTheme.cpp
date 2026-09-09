@@ -182,6 +182,12 @@ button.link:hover label { color: #8AA9FF; }
 /* the signed-in user's own row in the earnings leaderboard: card fill against
    the pane, never an accent — the rank is the emphasis, not the row */
 .ur-earn-own-row { background-color: #1C1C1C; }
+/* the rank and tier beside the points board's position indicator while it is
+   dragged: card fill, hairline edge, right-aligned lines */
+.ur-earn-scrub {
+  background-color: #1C1C1C; border: 1px solid alpha(#ffffff, 0.12);
+  border-radius: 8px; padding: 6px 10px;
+}
 /* the status chip on a history row (unclaimed / claimed / expired) */
 .ur-earn-tag {
   background-color: alpha(#F8F8F8, .04); border-radius: 6px; padding: 2px 6px;

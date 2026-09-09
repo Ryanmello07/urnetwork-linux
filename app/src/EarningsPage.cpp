@@ -15,6 +15,7 @@
 #include "EmojiTagSheet.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "LeaderboardIndicator.hpp"
 #include "UrTheme.hpp"
 
 namespace urnw {
@@ -1163,7 +1164,12 @@ EarningsPage::EarningsPage(SdkHost& host)
   append(*ruleB_);
 
   BuildLedgerPane();
-  append(*paneB_.root);
+  // the points board's position indicator floats over the pane's scroller
+  paneBOverlay_ = Gtk::make_managed<Gtk::Overlay>();
+  paneBOverlay_->set_hexpand(true);
+  paneBOverlay_->set_child(*paneB_.root);
+  BuildPointsIndicator();
+  append(*paneBOverlay_);
   ruleC_ = kit::MakePaneVRule();
   append(*ruleC_);
 
@@ -1569,6 +1575,12 @@ void EarningsPage::BuildLedgerPane() {
       boards->append(*tab);
       tab->signal_toggled().connect([this, tab] {
         if (tab->get_active()) OnBoardTabChanged();
+      });
+      // activating a tab -- the already-active one included -- scrolls its
+      // list to the top (mmm/DESIGNSTYLE.md "Long ranked lists"); a press on
+      // the active tab of a group toggles nothing, so this hangs on clicked
+      tab->signal_clicked().connect([this, tab] {
+        if (tab->get_active()) ResetBoardList(tab == pointsBoardTab_);
       });
     }
     leaderboardHost_->append(*boards);
@@ -2430,6 +2442,7 @@ void EarningsPage::OnLedgerTabChanged() {
     LoadLeaderboard();
   }
   if (!history && pointsBoardShowing_) EnsurePointsBoard();
+  UpdatePointsIndicator();
 }
 
 // ---- attach a Bittensor wallet -----------------------------------------------
@@ -3057,6 +3070,12 @@ void EarningsPage::ApplyPreviewSample() {
   }
 
   ApplyPoints(samplePoints, Fetch::Ready);
+  // URNETWORK_PREVIEW_POINTS=1: the Leaderboard tab on its Points board, so
+  // the position indicator can be looked at (ApplyPointsBoardSample)
+  if (g_getenv("URNETWORK_PREVIEW_POINTS") != nullptr) {
+    if (leaderboardTab_ != nullptr) leaderboardTab_->set_active(true);
+    if (pointsBoardTab_ != nullptr) pointsBoardTab_->set_active(true);
+  }
   ApplyEpochs(sampleEpochs, Fetch::Ready);
   ApplyReliability(window, Fetch::Ready);
   ApplyRanking(ranking, true);
@@ -3139,6 +3158,7 @@ constexpr int kPointsRowHeight = 52;
 
 EarningsPage::PointsRowUi ToPointsRowUi(const urnet::PointsLeaderboardRow& row) {
   EarningsPage::PointsRowUi out;
+  out.position = row.position;
   out.networkId = row.network_id.value_or(std::string());
   out.displayName = row.display_name.value_or(std::string());
   out.emojiTag = row.emoji_tag.value_or(std::string());
@@ -3221,6 +3241,8 @@ void EarningsPage::BuildPointsBoard() {
   if (Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content)) {
     pointsScrollConn_ =
         scroller->get_vadjustment()->signal_value_changed().connect([this] { OnPointsScrolled(); });
+    // the range changes as pages land and the pane resizes: the thumb re-fits
+    scroller->get_vadjustment()->signal_changed().connect([this] { RefreshPointsPosition(); });
   }
 }
 
@@ -3354,6 +3376,7 @@ void EarningsPage::OnBoardTabChanged() {
   if (pointsGroup_ != nullptr) pointsGroup_->set_visible(points);
   ApplyLedgerMeta();
   if (points) EnsurePointsBoard();
+  UpdatePointsIndicator();
 }
 
 void EarningsPage::EnsurePointsBoard() {
@@ -3413,9 +3436,16 @@ void EarningsPage::ClosePointsBoard(bool deviceAlive) {
   pointsEnd_ = false;
   pointsError_.clear();
   pointsMe_.reset();
+  pointsTotalRanked_ = 0;
+  pointsFirstPosition_ = 1;
+  pointsHasMoreBefore_ = false;
+  pointsFirstVisible_ = 1;
+  pointsSeekPending_ = false;
+  pointsAnchorConn_.disconnect();
   if (pointsRows_ != nullptr) RebuildPointsRows();
   RenderPointsHeader();
   RenderPointsFooter();
+  UpdatePointsIndicator();
 }
 
 void EarningsPage::ReadPointsBoard() {
@@ -3432,6 +3462,8 @@ void EarningsPage::ReadPointsBoard() {
     pointsEnd_ = pointsVc_->isEndReached();
     pointsError_ = pointsVc_->getErrorMessage();
     pointsTotalRanked_ = pointsVc_->getTotalRanked();
+    pointsFirstPosition_ = std::max<int64_t>(1, pointsVc_->firstLoadedPosition());
+    pointsHasMoreBefore_ = pointsVc_->hasMoreBefore();
     if (auto me = pointsVc_->getMe()) {
       pointsMe_ = me->Row ? std::optional<PointsRowUi>(ToPointsRowUi(*me->Row)) : std::nullopt;
       if (ownFlagsAppliedAt_ >= ownFlagsEditedAt_) {
@@ -3452,12 +3484,24 @@ void EarningsPage::ReadPointsBoard() {
   const bool extends = sameContext && pointsRenderedCount_ == pointsRowsUi_.size() &&
                        next.size() > pointsRowsUi_.size() &&
                        std::equal(pointsRowsUi_.begin(), pointsRowsUi_.end(), next.begin());
+  // the page before the window lands above the rows already drawn (the old
+  // rows are the new list's tail): those are kept, the new ones inserted
+  // above them, and the scroller moved by their height so the row in view
+  // stays put
+  const bool prepends = !extends && sameContext && pointsRenderedCount_ == pointsRowsUi_.size() &&
+                        !pointsRowsUi_.empty() && next.size() > pointsRowsUi_.size() &&
+                        std::equal(pointsRowsUi_.begin(), pointsRowsUi_.end(),
+                                   next.end() - static_cast<std::ptrdiff_t>(pointsRowsUi_.size()));
+  const size_t prepended = prepends ? next.size() - pointsRowsUi_.size() : 0;
   const bool rowsChanged = next != pointsRowsUi_ || !sameContext;
   const size_t renderFrom = extends ? pointsRowsUi_.size() : 0;
   if (next != pointsRowsUi_) pointsRowsUi_ = std::move(next);
   if (!pointsLoading_ && (!pointsRowsUi_.empty() || pointsEnd_ || !pointsError_.empty())) {
     pointsHasLoaded_ = true;
   }
+  // a seek's window has landed once the controller is done loading: the
+  // scroller goes to its first row (the rank released on)
+  const bool seekLanded = pointsSeekPending_ && !pointsLoading_ && pointsError_.empty();
 
   // the sort chips follow the controller (a same-sort reselect is a no-op)
   const int sortIndex = pointsSort_ == urnet::PointsLeaderboardSortBlocks   ? 1
@@ -3467,10 +3511,26 @@ void EarningsPage::ReadPointsBoard() {
     pointsSortTabs_[sortIndex]->set_active(true);
   }
 
-  if (rowsChanged) RebuildPointsRows(renderFrom);
+  if (prepends) {
+    PrependPointsRows(prepended);
+    AnchorPointsScroll(static_cast<double>(prepended) * kPointsRowHeight);
+  } else if (rowsChanged) {
+    RebuildPointsRows(renderFrom);
+  }
   RenderPointsHeader();
   RenderPointsFooter();
   if (pointsBoardShowing_) ApplyLedgerMeta();
+  if (seekLanded) {
+    pointsSeekPending_ = false;
+    ScrollPointsToFirstRow();
+  }
+  // the positions in view follow the new window once it is laid out
+  {
+    auto alive = alive_;
+    Glib::signal_idle().connect_once([this, alive] {
+      if (*alive) RefreshPointsPosition();
+    });
+  }
 
   // a page that does not fill the pane can never be scrolled to its end, so
   // the next one is asked for once layout has run (the controller refuses a
@@ -3510,6 +3570,30 @@ void EarningsPage::RebuildPointsRows(size_t fromIndex) {
   pointsRenderedCount_ = pointsRowsUi_.size();
   if (pointsRowsUi_.empty()) return;
 
+  for (size_t i = fromIndex; i < pointsRowsUi_.size(); ++i) {
+    pointsRows_->append(*MakePointsRow(pointsRowsUi_[i], ownId));
+  }
+}
+
+// The page before the window: `count` rows now at the head of pointsRowsUi_
+// go in above the rows already drawn, under the column-name strip.
+void EarningsPage::PrependPointsRows(size_t count) {
+  Gtk::Widget* header = pointsRows_ != nullptr ? pointsRows_->get_first_child() : nullptr;
+  if (header == nullptr || count > pointsRowsUi_.size()) {
+    RebuildPointsRows();
+    return;
+  }
+  const std::string ownId = pointsMe_ ? pointsMe_->networkId : std::string();
+  // inserted last-first, each straight under the header, so they end up in order
+  for (size_t i = count; i-- > 0;) {
+    pointsRows_->insert_child_after(*MakePointsRow(pointsRowsUi_[i], ownId), *header);
+  }
+  pointsRenderedCount_ = pointsRowsUi_.size();
+}
+
+// One ranked row of the table, keyed by its position.
+Gtk::Widget* EarningsPage::MakePointsRow(const PointsRowUi& r, const std::string& ownId) {
+  const std::vector<int> weights{1, 5, 2, 1, 1};
   const bool byBlocks = pointsSort_ == urnet::PointsLeaderboardSortBlocks;
   const bool byStreak = pointsSort_ == urnet::PointsLeaderboardSortStreak;
   const size_t activeColumn = byBlocks ? 3 : (byStreak ? 4 : 2);
@@ -3518,41 +3602,37 @@ void EarningsPage::RebuildPointsRows(size_t fromIndex) {
   // own row is what the network looks like to others, only highlighted (the
   // highlight keys on the network id, never the name; the own card carries
   // the name)
-
-  for (size_t i = fromIndex; i < pointsRowsUi_.size(); ++i) {
-    const auto& r = pointsRowsUi_[i];
-    const bool isOwn = !ownId.empty() && r.networkId == ownId;
-    auto row = kit::MakePaneTableRow(weights, kPointsRowHeight, 2);
-    // the name sits on its own line above the tag, so a long tag never
-    // squeezes the name to a stub on a narrow pane
-    auto identity = kit::MakePaneTableStack(row, 1);
-    row.cells[0]->set_text(byBlocks ? r.rankBlocksText
-                                    : (byStreak ? r.rankStreakText : r.rankPointsText));
-    // the emoji tag shows either way; the name only when the network is not anonymous
-    const bool anon = r.anonymous || r.displayName.empty();
-    Glib::ustring name = anon ? anonymous : Glib::ustring(r.displayName);
-    row.cells[1]->set_text(name);
-    identity.bottom->set_text(r.emojiTag);
-    identity.bottom->set_visible(!r.emojiTag.empty());
-    row.cells[2]->set_text(r.totalPointsText);
-    row.cells[3]->set_text(r.blocksText);
-    row.cells[4]->set_text(r.streakText);
-    // the sorted figure reads in the text voice; the other two step back
-    for (size_t i = 2; i < row.cells.size(); ++i) {
-      row.cells[i]->add_css_class(i == activeColumn ? "ur-value" : "dim-label");
-    }
-    if (anon) row.cells[1]->add_css_class("dim-label");
-    // the account's own row is the point of the table: colour AND the pane's
-    // fill step, because colour alone is never the only signal
-    if (isOwn) {
-      for (Gtk::Label* cell : row.cells) {
-        cell->remove_css_class("dim-label");
-        cell->add_css_class("ur-value-on");
-      }
-      row.root->add_css_class("ur-earn-own-row");
-    }
-    pointsRows_->append(*row.root);
+  const bool isOwn = !ownId.empty() && r.networkId == ownId;
+  auto row = kit::MakePaneTableRow(weights, kPointsRowHeight, 2);
+  // the name sits on its own line above the tag, so a long tag never
+  // squeezes the name to a stub on a narrow pane
+  auto identity = kit::MakePaneTableStack(row, 1);
+  row.cells[0]->set_text(byBlocks ? r.rankBlocksText
+                                  : (byStreak ? r.rankStreakText : r.rankPointsText));
+  // the emoji tag shows either way; the name only when the network is not anonymous
+  const bool anon = r.anonymous || r.displayName.empty();
+  Glib::ustring name = anon ? anonymous : Glib::ustring(r.displayName);
+  row.cells[1]->set_text(name);
+  identity.bottom->set_text(r.emojiTag);
+  identity.bottom->set_visible(!r.emojiTag.empty());
+  row.cells[2]->set_text(r.totalPointsText);
+  row.cells[3]->set_text(r.blocksText);
+  row.cells[4]->set_text(r.streakText);
+  // the sorted figure reads in the text voice; the other two step back
+  for (size_t i = 2; i < row.cells.size(); ++i) {
+    row.cells[i]->add_css_class(i == activeColumn ? "ur-value" : "dim-label");
   }
+  if (anon) row.cells[1]->add_css_class("dim-label");
+  // the account's own row is the point of the table: colour AND the pane's
+  // fill step, because colour alone is never the only signal
+  if (isOwn) {
+    for (Gtk::Label* cell : row.cells) {
+      cell->remove_css_class("dim-label");
+      cell->add_css_class("ur-value-on");
+    }
+    row.root->add_css_class("ur-earn-own-row");
+  }
+  return row.root;
 }
 
 // The network's own name for the points board: the me row's, or the jwt's
@@ -3644,6 +3724,468 @@ void EarningsPage::RenderPointsFooter() {
   }
 }
 
+// ---- the position indicator ---------------------------------------------------
+// A slider over ranks 1..N floating at the pane's right edge while the points
+// board is longer than the pane (mmm/DESIGNSTYLE.md "Long ranked lists: tab
+// reset and a draggable position indicator"). The thumb sits at the first row
+// in view over the total and is as long as the loaded window over the total;
+// dragging it shows the rank and tier beside it and, on release, asks the
+// controller for the window at that rank. The math is LeaderboardIndicator.hpp.
+
+namespace {
+constexpr double kIndicatorWidth = 32.0;  // the 24px thumb with 4px of air each side
+constexpr double kIndicatorPad = 8.0;     // the track stops short of the pane's ends
+constexpr double kIndicatorTrackWidth = 6.0;
+
+void RoundedRectPath(const Cairo::RefPtr<Cairo::Context>& cr, double x, double y, double w,
+                     double h, double r) {
+  r = std::min(r, std::min(w, h) / 2.0);
+  cr->begin_new_sub_path();
+  cr->arc(x + w - r, y + r, r, -M_PI / 2, 0);
+  cr->arc(x + w - r, y + h - r, r, 0, M_PI / 2);
+  cr->arc(x + r, y + h - r, r, M_PI / 2, M_PI);
+  cr->arc(x + r, y + r, r, M_PI, 3 * M_PI / 2);
+  cr->close_path();
+}
+}  // namespace
+
+void EarningsPage::BuildPointsIndicator() {
+  if (paneBOverlay_ == nullptr) return;
+  // a slider to assistive tech; the role is construct-only, so the area comes
+  // from the C constructor
+  GtkWidget* raw = GTK_WIDGET(g_object_new(GTK_TYPE_DRAWING_AREA, "accessible-role",
+                                           GTK_ACCESSIBLE_ROLE_SLIDER, nullptr));
+  pointsIndicator_ = Gtk::manage(Glib::wrap(GTK_DRAWING_AREA(raw)));
+  pointsIndicator_->set_content_width(static_cast<int>(kIndicatorWidth));
+  pointsIndicator_->set_halign(Gtk::Align::END);
+  pointsIndicator_->set_valign(Gtk::Align::FILL);
+  pointsIndicator_->set_visible(false);
+  pointsIndicator_->set_focusable(true);
+  pointsIndicator_->set_cursor("grab");
+  kit::SetAccessibleLabel(*pointsIndicator_,
+                          T_("leaderboard_position_indicator", "Leaderboard position"));
+  pointsIndicator_->set_draw_func(sigc::mem_fun(*this, &EarningsPage::DrawPointsIndicator));
+  paneBOverlay_->add_overlay(*pointsIndicator_);
+  paneBOverlay_->set_measure_overlay(*pointsIndicator_, false);
+
+  auto drag = Gtk::GestureDrag::create();
+  drag->set_button(GDK_BUTTON_PRIMARY);
+  drag->signal_drag_begin().connect(
+      [this, drag](double x, double y) { OnPointsDragBegin(x, y, drag); });
+  drag->signal_drag_update().connect([this](double, double dy) { OnPointsDragUpdate(dy); });
+  drag->signal_drag_end().connect([this](double, double dy) { OnPointsDragEnd(dy); });
+  pointsIndicator_->add_controller(drag);
+
+  // the keyboard moves the thumb and seeks: arrows by a window, page keys by
+  // a tenth of the list, Home and End to the ends
+  auto key = Gtk::EventControllerKey::create();
+  key->signal_key_pressed().connect(
+      [this](guint keyval, guint, Gdk::ModifierType) -> bool { return OnPointsIndicatorKey(keyval); },
+      false);
+  pointsIndicator_->add_controller(key);
+
+  // the floating label beside the thumb: the rank, the tier beneath
+  pointsIndicatorLabel_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  pointsIndicatorLabel_->add_css_class("ur-earn-scrub");
+  pointsIndicatorLabel_->set_halign(Gtk::Align::END);
+  pointsIndicatorLabel_->set_valign(Gtk::Align::START);
+  pointsIndicatorLabel_->set_margin_end(static_cast<int>(kIndicatorWidth) + 8);
+  pointsIndicatorLabel_->set_visible(false);
+  pointsIndicatorLabel_->set_can_target(false);
+  kit::MarkDecorative(*pointsIndicatorLabel_);  // the slider's value text says the same
+  pointsIndicatorRank_ = Gtk::make_managed<Gtk::Label>();
+  pointsIndicatorRank_->add_css_class("ur-value");
+  pointsIndicatorRank_->set_halign(Gtk::Align::END);
+  pointsIndicatorTier_ = Gtk::make_managed<Gtk::Label>();
+  pointsIndicatorTier_->add_css_class("dim-label");
+  pointsIndicatorTier_->add_css_class("caption");
+  pointsIndicatorTier_->set_halign(Gtk::Align::END);
+  pointsIndicatorLabel_->append(*pointsIndicatorRank_);
+  pointsIndicatorLabel_->append(*pointsIndicatorTier_);
+  paneBOverlay_->add_overlay(*pointsIndicatorLabel_);
+  paneBOverlay_->set_measure_overlay(*pointsIndicatorLabel_, false);
+}
+
+urnw::leaderboard::Thumb EarningsPage::PointsThumb(double& trackTop, double& trackHeight) const {
+  trackTop = 0;
+  trackHeight = 0;
+  Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content);
+  if (scroller == nullptr || pointsIndicator_ == nullptr) return {};
+  // the track spans the scroller, not the pane's header above it
+  graphene_rect_t bounds;
+  if (!gtk_widget_compute_bounds(GTK_WIDGET(scroller->gobj()), GTK_WIDGET(pointsIndicator_->gobj()),
+                                 &bounds)) {
+    return {};
+  }
+  trackTop = bounds.origin.y + kIndicatorPad;
+  trackHeight = bounds.size.height - 2 * kIndicatorPad;
+  auto adjustment = scroller->get_vadjustment();
+  auto thumb = urnw::leaderboard::ThumbFor(pointsFirstVisible_,
+                                           static_cast<int64_t>(pointsRowsUi_.size()),
+                                           pointsTotalRanked_, trackHeight, adjustment->get_upper(),
+                                           adjustment->get_page_size());
+  if (thumb.visible && pointsDragging_) thumb.top = pointsDragTop_;
+  return thumb;
+}
+
+void EarningsPage::DrawPointsIndicator(const Cairo::RefPtr<Cairo::Context>& cr, int width, int) {
+  double trackTop = 0;
+  double trackHeight = 0;
+  const auto thumb = PointsThumb(trackTop, trackHeight);
+  if (!thumb.visible) return;
+  const double centre = width / 2.0;
+  // the faint track
+  RoundedRectPath(cr, centre - kIndicatorTrackWidth / 2, trackTop, kIndicatorTrackWidth, trackHeight,
+                  kIndicatorTrackWidth / 2);
+  cr->set_source_rgba(kUrTextMuted.r, kUrTextMuted.g, kUrTextMuted.b, 0.22);
+  cr->fill();
+  // the accent thumb, brighter in hand
+  const double x = centre - urnw::leaderboard::kThumbWidth / 2;
+  RoundedRectPath(cr, x, trackTop + thumb.top, urnw::leaderboard::kThumbWidth, thumb.height, 6.0);
+  cr->set_source_rgba(kUrAccent.r, kUrAccent.g, kUrAccent.b, pointsDragging_ ? 1.0 : 0.85);
+  cr->fill();
+  // a grip: three short dark lines across the thumb's middle
+  cr->set_source_rgba(0, 0, 0, 0.35);
+  cr->set_line_width(1.5);
+  const double gripY = trackTop + thumb.top + thumb.height / 2;
+  for (int line = -1; line <= 1; ++line) {
+    cr->move_to(centre - 5, gripY + line * 4);
+    cr->line_to(centre + 5, gripY + line * 4);
+  }
+  cr->stroke();
+}
+
+// The first row in view, from the scroller; the thumb follows it (queue_draw
+// coalesces to the frame clock).
+void EarningsPage::RefreshPointsPosition() {
+  Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content);
+  if (scroller != nullptr && !pointsRowsUi_.empty()) {
+    auto adjustment = scroller->get_vadjustment();
+    pointsFirstVisible_ = urnw::leaderboard::FirstVisiblePosition(
+        adjustment->get_value(), PointsRowsTop(), kPointsRowHeight, pointsFirstPosition_,
+        static_cast<int64_t>(pointsRowsUi_.size()));
+  } else {
+    pointsFirstVisible_ = pointsFirstPosition_;
+  }
+  UpdatePointsIndicator();
+}
+
+void EarningsPage::UpdatePointsIndicator() {
+  if (pointsIndicator_ == nullptr) return;
+  const bool boardShowing = pointsBoardShowing_ && leaderboardTab_ != nullptr &&
+                            leaderboardTab_->get_active() && !pointsRowsUi_.empty();
+  double trackTop = 0;
+  double trackHeight = 0;
+  const auto thumb = boardShowing ? PointsThumb(trackTop, trackHeight) : urnw::leaderboard::Thumb{};
+  const bool show = boardShowing && thumb.visible;
+  if (show != pointsIndicator_->get_visible()) {
+    pointsIndicator_->set_visible(show);
+    // the indicator is the list's scrollbar while it shows, and the table
+    // steps in from under its strip
+    if (Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content)) {
+      scroller->set_policy(Gtk::PolicyType::NEVER,
+                           show ? Gtk::PolicyType::EXTERNAL : Gtk::PolicyType::AUTOMATIC);
+    }
+    if (pointsHost_ != nullptr) {
+      pointsHost_->set_margin_end(show ? static_cast<int>(kIndicatorWidth) : 0);
+    }
+    if (!show) {
+      pointsDragging_ = false;
+      HidePointsDragLabel(/*fade=*/false);
+    }
+  }
+  if (!show) return;
+  const int64_t rank = pointsDragging_ ? pointsDragRank_ : pointsFirstVisible_;
+  std::string valueText = "#" + urnw::leaderboard::GroupedRank(rank);
+  if (auto parts = urnet::pointsLeaderboardScrollLabel(rank, pointsTotalRanked_)) {
+    if (!parts->rank_text.empty()) valueText = parts->rank_text;
+    const char* tierKey = urnw::leaderboard::TierLabelKey(parts->tier);
+    if (std::string(tierKey) == "leaderboard_tier_top") {
+      valueText += ", " + urnw::Format(T_("leaderboard_tier_top", "Top {}%"), parts->tier_percent);
+    } else if (std::string(tierKey) == "leaderboard_tier_rest") {
+      valueText += std::string(", ") + T_("leaderboard_tier_rest", "Everyone else");
+    }
+  }
+  gtk_accessible_update_property(GTK_ACCESSIBLE(pointsIndicator_->gobj()),
+                                 GTK_ACCESSIBLE_PROPERTY_VALUE_MIN, 1.0,
+                                 GTK_ACCESSIBLE_PROPERTY_VALUE_MAX,
+                                 static_cast<double>(pointsTotalRanked_),
+                                 GTK_ACCESSIBLE_PROPERTY_VALUE_NOW, static_cast<double>(rank),
+                                 GTK_ACCESSIBLE_PROPERTY_VALUE_TEXT, valueText.c_str(), -1);
+  pointsIndicator_->queue_draw();
+}
+
+void EarningsPage::OnPointsDragBegin(double, double y, const Glib::RefPtr<Gtk::GestureDrag>& drag) {
+  double trackTop = 0;
+  double trackHeight = 0;
+  const auto thumb = PointsThumb(trackTop, trackHeight);
+  if (!thumb.visible || y < trackTop || y > trackTop + trackHeight) {
+    drag->set_state(Gtk::EventSequenceState::DENIED);
+    return;
+  }
+  drag->set_state(Gtk::EventSequenceState::CLAIMED);
+  pointsIndicator_->grab_focus();
+  pointsDragging_ = true;
+  // a press on the thumb picks it up where it is; a press on the track
+  // brings the thumb under the pointer
+  const double pressed = y - trackTop;
+  const bool onThumb = pressed >= thumb.top && pressed <= thumb.top + thumb.height;
+  pointsDragStartTop_ = onThumb ? thumb.top
+                                : std::clamp(pressed - thumb.height / 2, 0.0,
+                                             std::max(0.0, trackHeight - thumb.height));
+  pointsDragTop_ = pointsDragStartTop_;
+  pointsIndicator_->set_cursor("grabbing");
+  OnPointsDragUpdate(0);
+}
+
+void EarningsPage::OnPointsDragUpdate(double dy) {
+  if (!pointsDragging_) return;
+  double trackTop = 0;
+  double trackHeight = 0;
+  const auto thumb = PointsThumb(trackTop, trackHeight);
+  if (!thumb.visible) return;
+  pointsDragTop_ = std::clamp(pointsDragStartTop_ + dy, 0.0, std::max(0.0, trackHeight - thumb.height));
+  pointsDragRank_ = urnw::leaderboard::RankForThumbTop(pointsDragTop_, thumb.height, trackHeight,
+                                                       pointsTotalRanked_);
+  ShowPointsDragLabel(pointsDragRank_);
+  UpdatePointsIndicator();
+}
+
+void EarningsPage::OnPointsDragEnd(double dy) {
+  if (!pointsDragging_) return;
+  OnPointsDragUpdate(dy);
+  pointsDragging_ = false;
+  if (pointsIndicator_ != nullptr) pointsIndicator_->set_cursor("grab");
+  HidePointsDragLabel(/*fade=*/true);
+  SeekPoints(pointsDragRank_);
+  UpdatePointsIndicator();
+}
+
+bool EarningsPage::OnPointsIndicatorKey(guint keyval) {
+  using urnw::leaderboard::Step;
+  std::optional<Step> step;
+  switch (keyval) {
+    case GDK_KEY_Up: case GDK_KEY_KP_Up: step = Step::Up; break;
+    case GDK_KEY_Down: case GDK_KEY_KP_Down: step = Step::Down; break;
+    case GDK_KEY_Page_Up: case GDK_KEY_KP_Page_Up: step = Step::PageUp; break;
+    case GDK_KEY_Page_Down: case GDK_KEY_KP_Page_Down: step = Step::PageDown; break;
+    case GDK_KEY_Home: case GDK_KEY_KP_Home: step = Step::Home; break;
+    case GDK_KEY_End: case GDK_KEY_KP_End: step = Step::End; break;
+    default: break;
+  }
+  if (!step || pointsTotalRanked_ <= 0) return false;
+  const int64_t rank = urnw::leaderboard::StepRank(
+      pointsFirstVisible_, *step, static_cast<int64_t>(pointsRowsUi_.size()), pointsTotalRanked_);
+  ShowPointsDragLabel(rank);
+  HidePointsDragLabel(/*fade=*/true);
+  SeekPoints(rank);
+  return true;
+}
+
+// A rank inside the loaded window is a scroll; any other asks the controller
+// for the window at that rank, and the scroller goes to its first row when it
+// lands (ReadPointsBoard).
+void EarningsPage::SeekPoints(int64_t rank) {
+  if (pointsRowsUi_.empty() || pointsTotalRanked_ <= 0) return;
+  rank = std::clamp<int64_t>(rank, 1, pointsTotalRanked_);
+  const int64_t last = pointsFirstPosition_ + static_cast<int64_t>(pointsRowsUi_.size()) - 1;
+  if (rank >= pointsFirstPosition_ && rank <= last) {
+    if (Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content)) {
+      scroller->get_vadjustment()->set_value(
+          PointsRowsTop() + static_cast<double>(rank - pointsFirstPosition_) * kPointsRowHeight);
+    }
+    return;
+  }
+  if (!pointsVc_) return;
+  pointsSeekPending_ = true;
+  pointsVc_->seekToRank(rank);
+}
+
+void EarningsPage::ShowPointsDragLabel(int64_t rank) {
+  if (pointsIndicatorLabel_ == nullptr) return;
+  ++pointsLabelGen_;  // overtakes a fade in progress
+  std::string rankText = "#" + urnw::leaderboard::GroupedRank(rank);
+  Glib::ustring tier;
+  if (auto parts = urnet::pointsLeaderboardScrollLabel(rank, pointsTotalRanked_)) {
+    if (!parts->rank_text.empty()) rankText = parts->rank_text;
+    const std::string tierKey = urnw::leaderboard::TierLabelKey(parts->tier);
+    if (tierKey == "leaderboard_tier_top") {
+      tier = urnw::Format(T_("leaderboard_tier_top", "Top {}%"), parts->tier_percent);
+    } else if (tierKey == "leaderboard_tier_rest") {
+      tier = T_("leaderboard_tier_rest", "Everyone else");
+    }
+  }
+  pointsIndicatorRank_->set_text(rankText);
+  kit::SetTextOrCollapse(*pointsIndicatorTier_, tier);
+  pointsIndicatorLabel_->set_visible(true);  // a hidden widget measures as nothing
+  // beside the thumb's middle
+  double trackTop = 0;
+  double trackHeight = 0;
+  const auto thumb = PointsThumb(trackTop, trackHeight);
+  int minimum = 0, natural = 0, minimumBaseline = 0, naturalBaseline = 0;
+  pointsIndicatorLabel_->measure(Gtk::Orientation::VERTICAL, -1, minimum, natural, minimumBaseline,
+                                 naturalBaseline);
+  const double middle = trackTop + thumb.top + thumb.height / 2;
+  pointsIndicatorLabel_->set_margin_top(
+      static_cast<int>(std::max(0.0, middle - natural / 2.0)));
+  pointsIndicatorLabel_->set_opacity(1.0);
+  pointsIndicatorLabel_->set_visible(true);
+}
+
+// The label leaves after a beat: a short hold, then a fade.
+void EarningsPage::HidePointsDragLabel(bool fade) {
+  if (pointsIndicatorLabel_ == nullptr) return;
+  if (!fade) {
+    ++pointsLabelGen_;
+    pointsIndicatorLabel_->set_visible(false);
+    return;
+  }
+  const uint64_t gen = pointsLabelGen_;
+  auto alive = alive_;
+  Glib::signal_timeout().connect_once(
+      [this, alive, gen] {
+        if (!*alive || gen != pointsLabelGen_ || pointsIndicatorLabel_ == nullptr) return;
+        const gint64 start = g_get_monotonic_time();
+        pointsIndicatorLabel_->add_tick_callback(
+            [this, alive, gen, start](const Glib::RefPtr<Gdk::FrameClock>& clock) -> bool {
+              if (!*alive || gen != pointsLabelGen_) return false;
+              const double t = static_cast<double>(clock->get_frame_time() - start) / 250000.0;
+              if (t >= 1.0) {
+                pointsIndicatorLabel_->set_visible(false);
+                pointsIndicatorLabel_->set_opacity(1.0);
+                return false;
+              }
+              pointsIndicatorLabel_->set_opacity(1.0 - t);
+              return true;
+            });
+      },
+      600);
+}
+
+// After a seek: the window's first row to the top of the pane, once the new
+// rows are laid out.
+void EarningsPage::ScrollPointsToFirstRow() {
+  auto alive = alive_;
+  Glib::signal_idle().connect_once([this, alive] {
+    if (!*alive) return;
+    Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content);
+    if (scroller == nullptr || pointsRowsUi_.empty()) return;
+    scroller->get_vadjustment()->set_value(PointsRowsTop());
+    RefreshPointsPosition();
+  });
+}
+
+// Rows went in above the view: the scroller moves by their height once the
+// range has grown to hold them, so the row in view stays where it is.
+void EarningsPage::AnchorPointsScroll(double prependedHeight) {
+  Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content);
+  if (scroller == nullptr || prependedHeight <= 0) return;
+  auto adjustment = scroller->get_vadjustment();
+  const double target = adjustment->get_value() + prependedHeight;
+  pointsAnchorConn_.disconnect();
+  pointsAnchorConn_ = adjustment->signal_changed().connect([this, adjustment, target] {
+    pointsAnchorConn_.disconnect();
+    adjustment->set_value(target);
+  });
+}
+
+double EarningsPage::PointsRowsTop() const {
+  if (pointsRows_ == nullptr || paneB_.content == nullptr) return 0.0;
+  // the first row is the child after the column-name strip
+  Gtk::Widget* header = pointsRows_->get_first_child();
+  Gtk::Widget* first = header != nullptr ? header->get_next_sibling() : nullptr;
+  Gtk::Widget* anchor = first != nullptr ? first : pointsRows_;
+  graphene_rect_t bounds;
+  if (!gtk_widget_compute_bounds(GTK_WIDGET(anchor->gobj()), GTK_WIDGET(paneB_.content->gobj()),
+                                 &bounds)) {
+    return 0.0;
+  }
+  double top = bounds.origin.y;
+  if (first == nullptr && header != nullptr) top += header->get_height();
+  return top;
+}
+
+// A board tab activated (the active one included): its list to the top; the
+// points board also reloads from the top when its window moved away from it.
+void EarningsPage::ResetBoardList(bool pointsBoard) {
+  const auto reset =
+      urnw::leaderboard::TabResetFor(pointsBoard, pointsVc_.has_value(), pointsFirstPosition_);
+  if (reset.scrollToTop) {
+    if (Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content)) {
+      auto adjustment = scroller->get_vadjustment();
+      adjustment->set_value(adjustment->get_lower());
+    }
+  }
+  if (reset.reloadFromTop && pointsVc_) {
+    pointsSeekPending_ = false;
+    pointsVc_->reloadFromTop();
+  }
+  RefreshPointsPosition();
+}
+
+// URNETWORK_PREVIEW_SAMPLE: a long synthetic window so the indicator, its label
+// and a deep jump can be looked at without an account. URNETWORK_PREVIEW_POINTS_FROM
+// starts the window at that position (a jumped-to window, with rows above it).
+void EarningsPage::ApplyPointsBoardSample() {
+  int64_t from = 1;
+  if (const char* env = g_getenv("URNETWORK_PREVIEW_POINTS_FROM")) {
+    from = std::max<int64_t>(1, g_ascii_strtoll(env, nullptr, 10));
+  }
+  pointsTotalRanked_ = 12480;
+  pointsFirstPosition_ = from;
+  pointsHasMoreBefore_ = from > 1;
+  pointsHasLoaded_ = true;
+  pointsEnd_ = false;
+  pointsRowsUi_.clear();
+  const char* tags[] = {"🐸", "🦊🌵", "", "🍋", "🚀🌙", "🧊", "", "🐙🐙"};
+  for (int64_t i = 0; i < 60; ++i) {
+    PointsRowUi row;
+    row.position = from + i;
+    row.networkId = "sample-" + std::to_string(row.position);
+    row.anonymous = (i % 5) == 3;
+    row.displayName = row.anonymous ? std::string() : "sample-net-" + std::to_string(row.position);
+    row.emojiTag = tags[i % 8];
+    const int64_t points = std::max<int64_t>(1, 90000 - row.position * 7);
+    row.totalPointsText = urnw::leaderboard::GroupedRank(points);
+    row.blocksText = std::to_string(std::max<int64_t>(1, 40 - row.position / 400));
+    row.streakText = std::to_string(std::max<int64_t>(0, 12 - (row.position % 13)));
+    row.longestStreakText = row.streakText;
+    row.rankPointsText = "#" + urnw::leaderboard::GroupedRank(row.position);
+    row.rankBlocksText = row.rankPointsText;
+    row.rankStreakText = row.rankPointsText;
+    pointsRowsUi_.push_back(std::move(row));
+  }
+  if (pointsRows_ != nullptr) RebuildPointsRows();
+  RenderPointsHeader();
+  RenderPointsFooter();
+  if (pointsBoardStatus_ != nullptr) kit::SetTextOrCollapse(*pointsBoardStatus_, {});
+  auto alive = alive_;
+  Glib::signal_idle().connect_once([this, alive] {
+    if (*alive) RefreshPointsPosition();
+  });
+  // URNETWORK_PREVIEW_POINTS_DRAG=<rank>: the thumb held mid-drag at that
+  // rank with its label, once the pane has laid out
+  if (const char* env = g_getenv("URNETWORK_PREVIEW_POINTS_DRAG")) {
+    const int64_t rank = std::clamp<int64_t>(g_ascii_strtoll(env, nullptr, 10), 1, pointsTotalRanked_);
+    Glib::signal_timeout().connect_once(
+        [this, alive, rank] {
+          if (!*alive) return;
+          double trackTop = 0;
+          double trackHeight = 0;
+          const auto thumb = PointsThumb(trackTop, trackHeight);
+          if (!thumb.visible) return;
+          pointsDragging_ = true;
+          pointsDragRank_ = rank;
+          pointsDragTop_ = std::clamp(static_cast<double>(rank - 1) / pointsTotalRanked_ * trackHeight,
+                                      0.0, trackHeight - thumb.height);
+          pointsDragStartTop_ = pointsDragTop_;
+          ShowPointsDragLabel(rank);
+          UpdatePointsIndicator();
+        },
+        400);
+  }
+}
+
 // Switches the sort; the controller clears its rows and reloads.
 void EarningsPage::OnPointsSortChanged(const std::string& sort) {
   if (sort == pointsSort_ || !urnet::isPointsLeaderboardSort(sort)) return;
@@ -3672,8 +4214,15 @@ void EarningsPage::OnPointsScrolled() {
   const int64_t hiddenRows =
       static_cast<int64_t>(std::max(0.0, remainingBelow - footer) / kPointsRowHeight);
   const int64_t lastVisible = rowCount - 1 - hiddenRows;
-  if (emoji::ShouldLoadMore(lastVisible, rowCount, pointsLoading_, pointsEnd_,
-                            !pointsError_.empty())) {
+  RefreshPointsPosition();
+  // near the window's first row with rows above it (after a seek): the page
+  // before; otherwise near its last row: the page after
+  const int64_t firstVisibleRow = pointsFirstVisible_ - pointsFirstPosition_;
+  if (urnw::leaderboard::ShouldLoadMoreBefore(firstVisibleRow, pointsLoading_, pointsHasMoreBefore_,
+                                              !pointsError_.empty())) {
+    pointsVc_->loadMoreBefore();
+  } else if (emoji::ShouldLoadMore(lastVisible, rowCount, pointsLoading_, pointsEnd_,
+                                   !pointsError_.empty())) {
     pointsVc_->loadMore();
   }
 }
@@ -3835,6 +4384,10 @@ void EarningsPage::SaveEmojiTag(std::string tag, std::function<void(std::string)
 // --preview-ui: the board on its real empty state, with no controller
 void EarningsPage::SettlePointsBoardPreview() {
   ClosePointsBoard(/*deviceAlive=*/false);
+  if (samplePinned_) {
+    ApplyPointsBoardSample();
+    return;
+  }
   pointsHasLoaded_ = true;
   if (pointsBoardStatus_ != nullptr) {
     kit::SetTextOrCollapse(

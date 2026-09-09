@@ -51,6 +51,7 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "LeaderboardIndicator.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "Ui.hpp"
@@ -138,6 +139,7 @@ class EarningsPage : public Gtk::Box {
 
   // The points board's row and stat tile (public: a free helper in the .cpp builds rows).
   struct PointsRowUi {
+    int64_t position = 0;  // the row's 1-based place in the whole ranking (no ties)
     std::string networkId;
     std::string displayName;  // empty when anonymous: the row shows "Anonymous"
     std::string emojiTag;     // shows either way
@@ -150,7 +152,7 @@ class EarningsPage : public Gtk::Box {
     std::string rankBlocksText;
     std::string rankStreakText;
     bool operator==(const PointsRowUi& o) const {
-      return networkId == o.networkId && displayName == o.displayName &&
+      return position == o.position && networkId == o.networkId && displayName == o.displayName &&
              emojiTag == o.emojiTag && anonymous == o.anonymous &&
              totalPointsText == o.totalPointsText && blocksText == o.blocksText &&
              streakText == o.streakText && longestStreakText == o.longestStreakText &&
@@ -240,6 +242,29 @@ class EarningsPage : public Gtk::Box {
   void RenderPointsFooter();
   void OnPointsSortChanged(const std::string& sort);
   void OnPointsScrolled();
+  // ---- the position indicator and the tab reset (mmm/DESIGNSTYLE.md "Long
+  // ranked lists"; the math in LeaderboardIndicator.hpp)
+  void BuildPointsIndicator();  // the overlay over pane B: track, thumb, the drag label
+  void DrawPointsIndicator(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height);
+  // the thumb for the current window and scroll position; the track's
+  // extent inside the indicator comes back through the out-params
+  urnw::leaderboard::Thumb PointsThumb(double& trackTop, double& trackHeight) const;
+  void RefreshPointsPosition();  // the first row in view, from the scroller
+  void UpdatePointsIndicator();  // visibility, the slider value, a redraw
+  void OnPointsDragBegin(double x, double y, const Glib::RefPtr<Gtk::GestureDrag>& drag);
+  void OnPointsDragUpdate(double dy);
+  void OnPointsDragEnd(double dy);
+  bool OnPointsIndicatorKey(guint keyval);
+  void SeekPoints(int64_t rank);  // a rank in the window scrolls there; any other asks the controller
+  void ShowPointsDragLabel(int64_t rank);
+  void HidePointsDragLabel(bool fade);
+  void ScrollPointsToFirstRow();
+  void AnchorPointsScroll(double prependedHeight);
+  double PointsRowsTop() const;  // where the first row starts in the scrolled content
+  void PrependPointsRows(size_t count);
+  Gtk::Widget* MakePointsRow(const PointsRowUi& row, const std::string& ownId);
+  void ResetBoardList(bool pointsBoard);  // a board tab activated (the active one included)
+  void ApplyPointsBoardSample();          // preview rows for the indicator (URNETWORK_PREVIEW_SAMPLE)
   void OnPointsRetry();
   void OnPointsPublicToggled();
   void SetPointsToggle(bool on);
@@ -449,6 +474,23 @@ class EarningsPage : public Gtk::Box {
   bool pointsHasLoaded_ = false;  // the first page landed (rows, an empty end, or an error)
   std::string pointsError_;
   int64_t pointsTotalRanked_ = 0;
+  int64_t pointsFirstPosition_ = 1;  // the loaded window's first position
+  bool pointsHasMoreBefore_ = false;  // rows exist above the window (after a seek)
+  int64_t pointsFirstVisible_ = 1;    // the first row in view's position
+  // the draggable position indicator: a slider over ranks 1..N floating at
+  // the pane's right edge, with the rank and tier beside the thumb while dragging
+  Gtk::Overlay* paneBOverlay_ = nullptr;
+  Gtk::DrawingArea* pointsIndicator_ = nullptr;
+  Gtk::Box* pointsIndicatorLabel_ = nullptr;
+  Gtk::Label* pointsIndicatorRank_ = nullptr;
+  Gtk::Label* pointsIndicatorTier_ = nullptr;
+  bool pointsDragging_ = false;
+  double pointsDragStartTop_ = 0;  // the thumb's top when the drag began
+  double pointsDragTop_ = 0;       // the thumb's top while dragging
+  int64_t pointsDragRank_ = 0;
+  uint64_t pointsLabelGen_ = 0;     // cancels a fade the next show overtakes
+  bool pointsSeekPending_ = false;  // a seek's window is on its way: scroll to its first row when it lands
+  sigc::connection pointsAnchorConn_;
   std::optional<PointsRowUi> pointsMe_;
   bool pointsPublic_ = false;  // this network's opt-in, from `me`, updated locally on toggle
   std::string emojiTag_;       // this network's tag, from `me`, updated locally on save
