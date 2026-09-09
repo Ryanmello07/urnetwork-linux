@@ -334,8 +334,13 @@ void CreateNetworkPage::OnValidateReferral() {
       } else if (referralCapped_) {
         referralSupporting_->set_text(
             T_("referral_code_capped", "This code has been used up"));
-      } else {
+      } else if (ok) {
         referralSupporting_->set_text(T_("invalid_referral_code", "This code is not valid"));
+      } else {
+        // the check itself failed (no response, or the api refused the call):
+        // say so instead of calling a code the server never judged
+        referralSupporting_->set_text(
+            T_("something_went_wrong", "Something went wrong."));
       }
     });
   });
