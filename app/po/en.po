@@ -6167,11 +6167,6 @@ msgctxt "site_app_redeemed_on"
 msgid "Redeemed {date}"
 msgstr "Redeemed {date}"
 
-#. Sign-up dialog: label of the optional referral code field
-msgctxt "site_app_referral_code_optional"
-msgid "Referral code (optional)"
-msgstr "Referral code (optional)"
-
 #. App settings: referral network section
 msgctxt "site_app_referral_network"
 msgid "Referral network"
@@ -6631,6 +6626,11 @@ msgstr "Search for any location"
 msgctxt "site_locations"
 msgid "Locations"
 msgstr "Locations"
+
+#. Login stack: hint above the auth code field when signing in with a code generated elsewhere.
+msgctxt "site_login_auth_code_hint"
+msgid "Paste an auth code generated from another device or the command line tools."
+msgstr "Paste an auth code generated from another device or the command line tools."
 
 #. Login stack: hint above the seedphrase field when signing in with an instant account's seed.
 msgctxt "site_login_seed_hint"
