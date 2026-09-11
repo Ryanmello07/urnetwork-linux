@@ -100,6 +100,35 @@ UR_TEST(oldestPlottablePrefersAKnownStampOverAnUnknownOne) {
   UR_EXPECT_EQ(1, urnw::OldestPlottableIndex(allUnknown));
 }
 
+// The address-family tag is exactly one of the SDK's three labels; an older
+// peer that sends none, or a label this build cannot name, reads as v4 -- what
+// such a provider carries -- never as nothing.
+UR_TEST(ipFamilyTagIsOneOfTheThreeLabelsAndDefaultsToV4) {
+  ProviderLocationRow row = Row("a", "Tokyo", "", "Japan");
+  row.ipFamilyLabel = "both";
+  UR_EXPECT_TRUE(urnw::IpFamilyTag(row) == "both");
+  row.ipFamilyLabel = "v6";
+  UR_EXPECT_TRUE(urnw::IpFamilyTag(row) == "v6");
+  row.ipFamilyLabel = "v4";
+  UR_EXPECT_TRUE(urnw::IpFamilyTag(row) == "v4");
+  row.ipFamilyLabel = "";
+  UR_EXPECT_TRUE(urnw::IpFamilyTag(row) == "v4");
+  row.ipFamilyLabel = "dualstack";  // the category value, not the label: unknown here
+  UR_EXPECT_TRUE(urnw::IpFamilyTag(row) == "v4");
+}
+
+// A category change on a live provider (the SDK downgrades an exit that lost
+// v6) must read as a changed row, or the list would keep the stale tag.
+UR_TEST(ipFamilyLabelParticipatesInRowEquality) {
+  ProviderLocationRow a = Row("a", "Tokyo", "", "Japan");
+  ProviderLocationRow b = a;
+  UR_EXPECT_TRUE(a == b);
+  b.ipFamilyLabel = "both";
+  UR_EXPECT_TRUE(a != b);
+  a.ipFamilyLabel = "both";
+  UR_EXPECT_TRUE(a == b);
+}
+
 UR_TEST(oldestPlottableReportsNoneWhenNothingIsLocated) {
   UR_EXPECT_EQ(-1, urnw::OldestPlottableIndex(std::vector<ProviderLocationRow>{}));
   const std::vector<ProviderLocationRow> unlocated{Row("a", "", "", "", false)};

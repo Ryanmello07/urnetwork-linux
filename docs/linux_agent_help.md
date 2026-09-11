@@ -48,8 +48,10 @@ Ground rules (all final unless the owner says otherwise):
    actually captured"; DNS failure is reported but non-fatal; kill-switch blocking is disclosed
    ("traffic is blocked, not leaking"); empty/loading/failed states must be distinguishable.
    Every default in the wire protocol is chosen so silence *understates* protection.
-5. **The daemon is IPv4-only for now** (tunnel refuses IPv6-only networks rather than blackholing
-   the machine); the firewall drops IPv6 in the same table.
+5. **The tunnel is dual-stack** (connect/IPV6.md C2): the tun carries a v4 address and a ULA v6
+   address, a capture route set per family, and resolvers per family; the firewall refuses
+   *off-tunnel* IPv6 in the same table (v6 leaves through the tunnel or not at all). A host with
+   IPv6 disabled outright gets the v4 half only, reported as `ipv6_captured=false`.
 6. **Do not promise split tunneling in the UI.** It is not delivered on any platform (see §12).
 7. **Product tiering (owner decision 2026-08-08):** mobile = simple floor; desktop = advanced.
    Linux, like Windows, ships an app-wide persisted **Advanced Mode** toggle (Portmaster-style,
@@ -177,7 +179,7 @@ and 6):
 4. **4/8 device** — DeviceLocal from `by_jwt` + network space (+ persisted key material).
 5. **5/8 rpc** — mTLS loopback listener the app dials.
 6. **6/8 firewall + network config** — the FIRST destructive step: WFP policy, tun address,
-   MTU 1440, the 31 capture routes, DNS.
+   MTU 1280, the 31 + 8 capture routes, DNS.
 7. **7/8 split tunnel** — optional driver push.
 8. **8/8 pump** — wintun packet pump.
 
@@ -261,7 +263,8 @@ sweep (by table name) as first-class work (§6.5).
 - `windows:PLAN.md`: the design mirrors macOS — control pipe replaces
   `NETunnelProviderManager` + `providerConfiguration` + `handleAppMessage`; the device RPC is
   "exactly the macOS app↔extension channel". Adapter IP defaults
-  `DeviceLocal.TunnelLocalAddress()` fallback `169.254.2.1/24`, MTU 1440.
+  `DeviceLocal.TunnelLocalAddress()` fallback `169.254.2.1/24`, plus the v6 ULA from
+  `TunnelLocalAddressIpv6()` (fallback `fd00:7572:6e65:ffff::2/64`), MTU 1280.
 - `windows:README.md` beta-only features: open-on-launch, UrMotion, Onboarding, structurally
   separate Simple mode, smart routing (observing; only `ScoredAffinityDonor` steers,
   zero-value-off).
@@ -851,11 +854,13 @@ The 8-step sequence (§3.2) with the hard fence between 5 and 6 is the architect
   before routes install** (§5.8).
 - Step 4 first dials the platform **by name** — which is why any DNS permit window must open
   before step 3, not at step 6.
-- Step 6 refuses first on IPv6-only networks (no IPv4 default route but an IPv6 one → hard
-  error, never block the machine off the net). Order: WFP→Connecting (fatal iff kill switch on
-  and install fails), tun addr `/24` (from `tunnelLocalAddress()`, fallback `169.254.2.1`),
-  MTU `kTunnelMtu = 1440`, interface metric 1, the 31 capture routes (on-link, Metric 0), tun
-  DNS (resolvers from `tunnelDnsAddressesIpv4()`, fallback
+- Step 6 no longer refuses on IPv6-only networks: the tunnel is dual-stack, so user v6 rides it
+  and the daemon's own sockets are exempted whatever their family. Order: WFP→Connecting (fatal
+  iff kill switch on and install fails), tun addr `/24` (from `tunnelLocalAddress()`, fallback
+  `169.254.2.1`) and the v6 ULA `/64` (from `tunnelLocalAddressIpv6()`, fallback
+  `fd00:7572:6e65:ffff::2`), MTU `kTunnelMtu = 1280` (the IPv6 link minimum; packets stay at
+  most 1100), interface metric 1, the 31 v4 + 8 v6 capture routes (on-link, Metric 0), tun
+  DNS (resolvers from `tunnelDnsAddressesIpv4()` and `tunnelDnsAddressesIpv6()`, fallback
   `getDefaultTunnelDnsAddressIpv4()`; **always plain :53** — the SDK's in-tunnel UpgradeMux
   does the DoH upgrade), then: crash marker written BEFORE routes, widen firewall to
   Connected, flush resolver cache, record `dns_applied` honestly (DNS failure non-fatal but
@@ -952,8 +957,9 @@ Per-executable permit (ALE_APP_ID) is the hardest gap — use cgroup match
 daemon on its own sockets (`SO_MARK`)** — the fwmark approach is the closest analogue and also
 solves R1 (§5.8). Tun permit → `oifname "urnet0"` (Windows pins the tun **LUID**, never index
 — indices get recycled; interface *names* are the stable handle on Linux). Loopback →
-`oif "lo"`. Block-all floor → chain policy drop. IPv6 → drop in the same table (reject beats
-blackhole for Happy-Eyeballs fast-fail). **The 9b problem largely disappears on Linux**: Go
+`oif "lo"`. Block-all floor → chain policy drop. Off-tunnel IPv6 → reject/drop in the same
+table (reject beats blackhole for Happy-Eyeballs fast-fail); tunnel-bound v6 is accepted by
+the `oifname "urnet0"` permit above those rules, which is the whole v6 tunnel in one line. **The 9b problem largely disappears on Linux**: Go
 uses its native resolver reading resolv.conf, so DNS leaves the daemon's own sockets and can
 be permitted by mark/uid instead of machine-wide — the Connecting state can be strictly
 tighter; document the intentional improvement. **Crash safety must be rebuilt**: nftables

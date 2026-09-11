@@ -61,7 +61,8 @@
 //          hole in the floor, and the tunnel does not come up — or stay up —
 //          unless all four of its legs pass.
 //        * LEAK PREVENTION — off-tunnel :53/:853/mDNS/LLMNR/NetBIOS, the cloud
-//          metadata address, and all globally routable IPv6 — which per
+//          metadata address, and all OFF-TUNNEL globally routable IPv6 (v6
+//          leaves this machine through the tunnel or not at all) — which per
 //          docs/linux_agent_help.md §6.3 is NOT a preference: it applies
 //          regardless of the kill switch. The kill switch adds the
 //          block-everything floor on top, and the OFF variant of a ruleset is
@@ -86,8 +87,9 @@
 //      destroys the table silently, and NetFilter::Verify() on the reaper tick
 //      is the entire mitigation.
 //
-//   3. Tunnel — the tun fd, its address, the 31 capture prefixes (in a
-//      DEDICATED route table, not main, so the fwmark rule can steer the
+//   3. Tunnel — the tun fd, its two addresses (one per family, the tunnel is
+//      dual-stack: connect/IPV6.md C2), the 31 v4 and 8 v6 capture prefixes
+//      (in a DEDICATED route table, not main, so the fwmark rule can steer the
 //      daemon around them), the DNS takeover (THREE mechanisms, not one — see
 //      "DNS on a host that may not have systemd-resolved" below), and a
 //      deterministic self-check that BOTH halves took before the caller is
@@ -106,11 +108,11 @@
 #include <string>
 #include <vector>
 
-// The ONE definition of urnw::TunnelConfig, and the IPv4-only predicate
-// Tunnel::Open enforces against it. Upstream's Tunnel.hpp includes it here for
-// the same reason; this fork briefly carried a second, differently-named copy
-// of the struct in this header, which made IsIpv4OnlyTunnelConfig impossible to
-// call from Tunnel.cpp.
+// The ONE definition of urnw::TunnelConfig, and the dual-stack predicate
+// Tunnel::Open enforces against it (plus the v6 capture set, pure, so the
+// routes and the tests read the same table). This fork once carried a second,
+// differently-named copy of the struct in this header, which made the guard
+// impossible to call from Tunnel.cpp; do not re-declare the struct here.
 #include "TunnelPolicy.hpp"
 
 namespace urnw {
@@ -145,6 +147,15 @@ std::string FindTool(const char* tool);
 // inet_pton, in the daemon, on every address the device hands back. The GUI's
 // client-side validation (Formatters.cpp) is a courtesy, not a boundary.
 bool IsIpv4Address(const std::string& value);
+bool IsIpv6Address(const std::string& value);
+
+// Can this host carry the v6 half of the tunnel at all? False when the kernel
+// booted with ipv6.disable=1 (no /proc/sys/net/ipv6) or
+// net.ipv6.conf.all.disable_ipv6 is set, which no per-interface setting can
+// override. On such a host v6 can neither be carried nor leak, so the v6 half
+// is skipped and reported (TunnelReport::ipv6_captured) rather than refused.
+// *detail names the reason on false.
+bool HostIpv6Available(std::string* detail);
 
 // ---- the daemon's own cgroup ----------------------------------------------
 
@@ -481,7 +492,8 @@ inline constexpr int kConnectingWindowSeconds = 60;
 // Android (MainService's excludeRoute set), iOS (NEIPv4Settings.excludedRoutes)
 // and windows NetPolicy.h use, so LAN traffic reaches local devices directly.
 // 169.254/16 and 224.0.0.0/3 stay CAPTURED on purpose (own tun addr; metadata
-// service; LLMNR/mDNS live in the multicast range).
+// service; LLMNR/mDNS live in the multicast range). The v6 counterpart,
+// CaptureV6Prefixes, lives in TunnelPolicy.hpp (pure, unit-tested).
 const std::vector<std::string>& CaptureV4Prefixes();
 
 // ---- nftables: egress self-exclusion + the leak floor ----------------------
@@ -528,10 +540,14 @@ struct FilterConfig {
   // The resolvers ACTUALLY validated and applied on the tun (Tunnel::resolvers).
   // Connected pins :53 to these, over the tun only.
   std::vector<std::string> tunnel_resolvers;
-  // v6 has no tunnel (the SDK captures IPv4 only), so on a dual-stack network
-  // every AAAA-reachable destination would leave in the clear while the UI
-  // says Connected. In force for Connecting/Armed/Connected and NEVER gated on
-  // the kill switch — leak prevention is not a preference (§6.3).
+  // OFF-TUNNEL v6 is refused: the tun permit above the v6 rules accepts what
+  // the v6 capture routes send INTO the tunnel, and everything else that is
+  // globally routable is reject/dropped, so on a dual-stack network no
+  // AAAA-reachable destination can leave in the clear while the UI says
+  // Connected. In force for Connecting/Armed/Connected and NEVER gated on the
+  // kill switch — leak prevention is not a preference (§6.3). It stays on
+  // even when the v6 half of the tunnel is not installed (host IPv6 disabled):
+  // then it matches nothing and costs nothing.
   bool block_ipv6 = true;
   // :53/:853/5353/5355/137-139 off-tunnel. AND'd by the builder with
   // "we are Connected" AND "a tunnel resolver survived validation": installing
@@ -597,6 +613,10 @@ bool IsIpv6OnlyNetwork(std::string* detail);
 inline constexpr const char* kFilterCodeNftMissing = "nft_missing";
 inline constexpr const char* kFilterCodeNftRejected = "nft_rejected";
 inline constexpr const char* kFilterCodeCgroupUnavailable = "cgroup_unavailable";
+// RETIRED. Arming used to refuse on an IPv6-only network, because blocking v6
+// with no v6 tunnel cut such a machine off the net. The tunnel is dual-stack
+// now, so a v6-only network is carried like any other; nothing emits this
+// code any more, and it survives only so an older GUI's switch stays complete.
 inline constexpr const char* kFilterCodeIpv4DefaultRouteMissing = "ipv4_default_route_missing";
 
 class NetFilter {
@@ -913,8 +933,8 @@ bool RestoreDirectResolvConf(std::string* detail);
 // ---- the tun ---------------------------------------------------------------
 
 // TunnelConfig lives in TunnelPolicy.hpp (included above) together with
-// IsIpv4OnlyTunnelConfig, which Tunnel::Open refuses on. Keeping the struct and
-// the predicate that validates it in one header is what makes the guard
+// IsDualStackTunnelConfig, which Tunnel::Open refuses on. Keeping the struct
+// and the predicate that validates it in one header is what makes the guard
 // callable; do not re-declare the struct here.
 
 // What is ACTUALLY in force, as opposed to what was attempted. Every field
@@ -923,6 +943,12 @@ bool RestoreDirectResolvConf(std::string* detail);
 struct TunnelReport {
   std::string interface;
   bool routes_installed = false;
+  // The v6 half of the tunnel is in force: the tun carries its ULA address and
+  // the v6 capture routes and policy rule are installed. False only when
+  // HostIpv6Available said no, in which case ipv6_detail says why; a v6 step
+  // failing on a host that CAN carry v6 fails the bring-up like a v4 step.
+  bool ipv6_captured = false;
+  std::string ipv6_detail;
   // PROVEN BY MEASUREMENT (Tunnel::VerifyEgressWitness: two real sockets whose
   // committed source bindings must disagree, plus a counter over the daemon's
   // real traffic that must be zero), never by a routing hypothetical. The
@@ -972,6 +998,11 @@ class Tunnel {
   int fd() const { return fd_; }
   const std::string& name() const { return name_; }
   const TunnelReport& report() const { return report_; }
+  // The tun's own addresses, per family, as configured. localAddrV6 is set
+  // even when the v6 half was skipped (it is the address that WOULD have been
+  // used); report().ipv6_captured says whether it is on the interface.
+  const std::string& localAddrV4() const { return localAddr_; }
+  const std::string& localAddrV6() const { return localAddr6_; }
   // The resolvers that ACTUALLY survived inet_pton and were handed to
   // resolved — not what the device asked for. This is what
   // FilterConfig::tunnel_resolvers must be filled from, so the pinned-DNS
@@ -1097,7 +1128,13 @@ class Tunnel {
 
   int fd_ = -1;
   std::string name_;
-  std::string localAddr_;  // the tun's own address; leg A compares against it
+  std::string localAddr_;   // the tun's own v4 address; leg 1 compares against it
+  std::string localAddr6_;  // the tun's own v6 address; leg 1v6 compares against it
+  // The v6 half is installed (HostIpv6Available at Configure). Decided once
+  // per bring-up so the policy rule, the routes and the witness agree.
+  bool ipv6Captured_ = false;
+  // v4 resolvers first, then v6: what every DNS tier hands the host, and what
+  // FilterConfig::tunnel_resolvers is filled from.
   std::vector<std::string> dnsServers_;
   bool rulesInstalled_ = false;
   // "resolvectl was given a per-link override that must be reverted". Tiers 2

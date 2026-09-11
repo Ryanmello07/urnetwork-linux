@@ -66,6 +66,8 @@ class ProviderLocationsSheet : public Gtk::Window {
     // the provider's e2e identity identicon, shown to the right of the client
     // id only when the provider has a verified session (nullptr otherwise)
     IdenticonWidget* pqBadge = nullptr;
+    // the address-family tag ("both" / "v4" / "v6"), trailing the id row
+    Gtk::Label* ipFamily = nullptr;
     Gtk::Label* place = nullptr;
     Gtk::Label* coordinates = nullptr;
     Gtk::Label* duration = nullptr;

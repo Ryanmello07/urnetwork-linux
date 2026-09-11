@@ -3558,9 +3558,34 @@ msgid_plural "{} IPs"
 msgstr[0] ""
 msgstr[1] ""
 
+#. Title of the IP version histogram under the transport bar in the connect drawer: the connected providers grouped by whether they carry both IP versions, only IPv4, or only IPv6.
+msgctxt "ip_families"
+msgid "IP versions"
+msgstr ""
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.
+msgctxt "ip_family_both"
+msgid "Both"
+msgstr ""
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.
+msgctxt "ip_family_v4"
+msgid "v4"
+msgstr ""
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.
+msgctxt "ip_family_v6"
+msgid "v6"
+msgstr ""
+
 #. Label for a list of IPv4 addresses.
 msgctxt "ipv4"
 msgid "IPv4"
+msgstr ""
+
+#. Accessibility label for a provider that carries both IPv4 and IPv6 traffic.
+msgctxt "ipv4_and_ipv6"
+msgid "IPv4 and IPv6"
 msgstr ""
 
 #. Label for the IPv6 list of DNS servers.

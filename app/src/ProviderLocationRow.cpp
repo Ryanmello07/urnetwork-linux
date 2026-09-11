@@ -23,6 +23,12 @@ std::string CoordinatesLabel(const ProviderLocationRow& row) {
   return buf;
 }
 
+std::string IpFamilyTag(const ProviderLocationRow& row) {
+  // the SDK's three labels (sdk ip_family.go); anything else is the v4 rule
+  if (row.ipFamilyLabel == "both" || row.ipFamilyLabel == "v6") return row.ipFamilyLabel;
+  return "v4";
+}
+
 int OldestPlottableIndex(const std::vector<ProviderLocationRow>& rows) {
   // Searched by STAMP, not by position: the rows arrive in the view
   // controller's display order (west to east), which says nothing about how
