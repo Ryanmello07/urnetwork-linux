@@ -2365,7 +2365,11 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
     return buf;
   };
   // the drawer surfaces the insufficient-balance banner (upgrade flow CTA)
-  if (drawer_) drawer_->SetInsufficientBalance(stats.insufficientBalance);
+  // and the ip-version histogram (the same grid push the hero canvas rides)
+  if (drawer_) {
+    drawer_->SetInsufficientBalance(stats.insufficientBalance);
+    drawer_->SetProviderGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
+  }
   if (connectPage_) connectPage_->ApplyStats(stats);
   if (earningsPage_) earningsPage_->ApplyProvideState(stats);  // the provide row + gate
   // the status strip: provider + traffic (+ the Advanced raw field)

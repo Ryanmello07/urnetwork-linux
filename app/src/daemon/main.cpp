@@ -750,7 +750,8 @@ int ReportPreflight() {
   static const Tool kTools[] = {
       {"ip", true, "iproute2: the tun address, the capture routes and the policy rules"},
       {"nft", true, "nftables: egress self-exclusion (without it the daemon's own sockets "
-                    "fall into its own tunnel), the IPv6 and DNS leak floor, the kill switch"},
+                    "fall into its own tunnel), the off-tunnel IPv6 and DNS leak floor, the "
+                    "kill switch"},
       {"resolvectl", false,
        "systemd-resolved: the FIRST of three ways DNS is pointed at the tunnel "
        "(resolvconf and a direct /etc/resolv.conf takeover follow it)"},

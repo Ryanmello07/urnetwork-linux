@@ -10,6 +10,7 @@
 #   src/main.cpp        only the gettext bootstrap and stderr diagnostics
 src/AuthViews.cpp
 src/ConnectDrawer.cpp
+src/IpFamilyHistogram.cpp
 src/ConnectPage.cpp
 src/ContractsSheet.cpp
 src/DnsSheet.cpp

@@ -251,7 +251,9 @@ FilterConfig TunnelHost::FilterConfigForLocked(FilterState state, bool floor) co
   cfg.cgroup = cgroup_;
   cfg.socket_mark_proven = socketMarkerProven_;
   cfg.cgroup_socket_match_supported = cgroupSocketMatchSupported_;
-  cfg.block_ipv6 = true;  // leak prevention is not a preference (§6.3)
+  // off-tunnel v6 is refused in every installed state: v6 leaves through the
+  // tunnel or not at all -- leak prevention is not a preference (§6.3)
+  cfg.block_ipv6 = true;
   cfg.block_offtunnel_dns = false;
   if (state == FilterState::Connecting || state == FilterState::Connected) {
     // By NAME, and set even while the interface does not exist yet: that is
@@ -381,6 +383,7 @@ ctl::StatusReply TunnelHost::Start(const ctl::StartTunnelRequest& config) {
     status_.error_code.clear();
     status_.stop_reason.clear();
     status_.routes_installed = false;
+    status_.ipv6_captured = false;
     status_.egress_protected = false;
     status_.dns_applied = false;
     status_.dns_detail.clear();
@@ -681,11 +684,11 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // dns from the device: the dns settings' unencrypted local servers when
       // set, otherwise the distinct plain-DNS UpgradeMux mask. Always plain
       // :53, never OS-level encrypted DNS: the mux performs the
-      // unencrypted-DNS -> DoH upgrade in-tunnel. The tunnel is ipv4-only.
+      // unencrypted-DNS -> DoH upgrade in-tunnel, for both families.
       //
-      // SANITISED HERE, not inside Tunnel::Open, because Open now refuses the
-      // WHOLE configuration when any resolver is not an IPv4 literal (upstream's
-      // IsIpv4OnlyTunnelConfig floor). Open used to drop a bad resolver silently
+      // SANITISED HERE, not inside Tunnel::Open, because Open refuses the WHOLE
+      // configuration when any resolver is of the wrong family (the
+      // IsDualStackTunnelConfig floor). Open used to drop a bad resolver silently
       // and carry on, so leaving the device's list unfiltered would have turned
       // "the device named one resolver we cannot use" into "the tunnel will not
       // start" — a regression dressed as a fix. Dropping happens where the value
@@ -717,6 +720,44 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
                        fallback.c_str());
         }
       }
+      // --- the v6 half, sanitised the same way (connect/IPV6.md C2). The
+      //     device draws a ULA from the SDK's fixed /48; the fallback is the
+      //     TunnelConfig default (a fixed ULA in the same /48), never nothing:
+      //     the tunnel is dual-stack or it does not start.
+      const std::string deviceAddr6 = device_->tunnelLocalAddressIpv6();
+      if (IsIpv6Address(deviceAddr6) && IsIpv6UniqueLocal(deviceAddr6)) {
+        cfg.local_addr_v6 = deviceAddr6;
+      } else if (!deviceAddr6.empty()) {
+        std::fprintf(stderr, "[tunnel] the device reported an unusable tunnel IPv6 address '%s'\n",
+                     deviceAddr6.c_str());
+      }
+      cfg.prefix_v6 = static_cast<int>(urnet::getTunnelLocalPrefixLengthIpv6());
+      if (cfg.prefix_v6 < 1 || cfg.prefix_v6 > 128) cfg.prefix_v6 = 64;
+      if (auto dns6 = device_->tunnelDnsAddressesIpv6(); dns6) {
+        for (const auto& server : *dns6) {
+          if (IsIpv6Address(server)) {
+            cfg.dns_servers_v6.push_back(server);
+          } else {
+            std::fprintf(stderr, "[tunnel] ignoring an unusable tunnel IPv6 resolver '%s'\n",
+                         server.c_str());
+          }
+        }
+      }
+      if (cfg.dns_servers_v6.empty()) {
+        // The SDK's in-tunnel resolver identity for v6, like the v4 fallback
+        // above. A fallback that is not a v6 literal leaves the v6 half with
+        // no resolver of its own -- the v4 resolver still answers every name,
+        // AAAA records included, so this is a note rather than a refusal.
+        std::string fallback6 = urnet::getDefaultTunnelDnsAddressIpv6();
+        if (IsIpv6Address(fallback6)) {
+          cfg.dns_servers_v6 = {std::move(fallback6)};
+        } else {
+          std::fprintf(stderr,
+                       "[tunnel] the sdk default tunnel IPv6 resolver '%s' is not an IPv6 "
+                       "literal; the v6 half comes up with no resolver of its own\n",
+                       fallback6.c_str());
+        }
+      }
       cfg.require_egress_protection = !allowUnprotectedEgress_;
 
       TunnelError tunError;
@@ -731,6 +772,7 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
         const TunnelReport& report = tunnel_->report();
         std::scoped_lock lock(statusMutex_);
         status_.routes_installed = report.routes_installed;
+        status_.ipv6_captured = report.ipv6_captured;
         status_.egress_protected = report.egress_protected;
         status_.dns_applied = report.dns_applied;
         status_.dns_detail = report.dns_detail;
@@ -801,7 +843,8 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
         // DNS), so it is reported, not swallowed.
         std::fprintf(stderr, "[tunnel] WARNING: leak floor not installed: %s\n",
                      filterError.c_str());
-        PublishError("connected, but the IPv6 and DNS leak floor could not be installed: " +
+        PublishError("connected, but the off-tunnel IPv6 and DNS leak floor could not be "
+                     "installed: " +
                          filterError,
                      ctl::kCodeKillSwitchFailed);
       }
@@ -857,9 +900,11 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
           // status must never throw across the wire
         }
       }
-      std::fprintf(stderr, "[tunnel] up (client=%s rpc=127.0.0.1:%d routes=%d egress=%d dns=%d)\n",
+      std::fprintf(stderr,
+                   "[tunnel] up (client=%s rpc=127.0.0.1:%d routes=%d ipv6=%d egress=%d dns=%d)\n",
                    Status().client_id.c_str(), rpcPort,
                    tunnel_->report().routes_installed ? 1 : 0,
+                   tunnel_->report().ipv6_captured ? 1 : 0,
                    tunnel_->report().egress_protected ? 1 : 0,
                    tunnel_->report().dns_applied ? 1 : 0);
     } catch (const std::exception& e) {
@@ -880,8 +925,8 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // AND THE FIREWALL, which this path used to walk straight past.
       // StopInternalLocked(<empty reason>) deliberately does not touch the
       // filter (it is also the "make room for this start" path), so the
-      // Connecting ruleset installed at step 1 — which blocks ALL global IPv6
-      // machine-wide — survived every failed start: no tunnel, no UI signal,
+      // Connecting ruleset installed at step 1 — which blocks all OFF-TUNNEL
+      // global IPv6 machine-wide — survived every failed start: no tunnel, no UI signal,
       // and nothing that would ever remove it short of a reboot.
       //
       // Where it lands depends only on where the attempt came FROM:
@@ -1039,6 +1084,7 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
     rpcSessionId_.clear();
     activeConfig_ = ctl::StartTunnelRequest();
     status_.routes_installed = false;
+    status_.ipv6_captured = false;
     status_.egress_protected = false;
     status_.dns_applied = false;
     status_.dns_detail.clear();

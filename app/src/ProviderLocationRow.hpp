@@ -27,6 +27,11 @@ struct ProviderLocationRow {
   double lat = 0;
   double lon = 0;
   int64_t connectedSinceMillis = 0;
+  // The provider's proven address-family category as the SDK labels it:
+  // "both" (dualstack), "v4" or "v6" (connect/IPV6.md D2). Empty from an
+  // older peer that predates the field; IpFamilyTag reads that as v4, which
+  // is what such a provider carries.
+  std::string ipFamilyLabel;
 
   // Providers with no coordinates are listed but never plotted.
   bool plottable() const { return hasCoordinates; }
@@ -36,7 +41,8 @@ struct ProviderLocationRow {
            countryCode == other.countryCode && region == other.region && city == other.city &&
            hasLocation == other.hasLocation && hasCoordinates == other.hasCoordinates &&
            lat == other.lat && lon == other.lon &&
-           connectedSinceMillis == other.connectedSinceMillis;
+           connectedSinceMillis == other.connectedSinceMillis &&
+           ipFamilyLabel == other.ipFamilyLabel;
   }
   bool operator!=(const ProviderLocationRow& other) const { return !(*this == other); }
 };
@@ -49,6 +55,11 @@ std::string PlaceLabel(const ProviderLocationRow& row);
 // "37.7749, -122.4194" at 4 decimal places, or an em dash when the provider has
 // no coordinates.
 std::string CoordinatesLabel(const ProviderLocationRow& row);
+
+// The row's address-family tag: exactly one of "both", "v4", "v6". A label
+// this build does not know (or none at all -- an older peer) reads as "v4",
+// so a provider that is carrying traffic is never tagged as carrying nothing.
+std::string IpFamilyTag(const ProviderLocationRow& row);
 
 // The oldest connected provider that has coordinates -- the location-override
 // target. Found by the smallest non-zero connectedSinceMillis, NOT by position:

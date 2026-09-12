@@ -337,6 +337,11 @@ void ConnectDrawer::BuildClientStatsCard() {
   transportBar_ = Gtk::make_managed<TransportBar>();
   transportBar_->on_activate = [this] { transportSheet_->Open(); };
   card->append(*transportBar_);
+  // the ip-version histogram, directly under the transport bar: the added
+  // providers as the canvas's dots under Both / v4 / v6. Decorative -- a tap
+  // on it is a tap on the card (the contract details), like the charts.
+  ipFamilyHistogram_ = Gtk::make_managed<IpFamilyHistogram>();
+  card->append(*ipFamilyHistogram_);
   blockChart_ = Gtk::make_managed<TransferChart>(T_("blocked", "Blocked"),
                                                  TransferChart::Route::Block, kUrCoral,
                                                  kUrMutedCoral);
@@ -758,6 +763,11 @@ void ConnectDrawer::PullThroughput() {
 
 void ConnectDrawer::RefreshTransportBar() {
   if (transportBar_) transportBar_->SetDistribution(host_.ClientTransportDistribution());
+}
+
+void ConnectDrawer::SetProviderGrid(const std::vector<urnet::ProviderGridPoint>& points,
+                                    int64_t gridWidth, int64_t gridHeight) {
+  if (ipFamilyHistogram_) ipFamilyHistogram_->SetGrid(points, gridWidth, gridHeight);
 }
 
 void ConnectDrawer::RefreshSplitRuleCount() {

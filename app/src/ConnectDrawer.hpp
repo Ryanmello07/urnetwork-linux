@@ -9,9 +9,10 @@
 //      in every mode — plus the Kill switch, the inverted device routeLocal,
 //      which is not part of the profile),
 //   3. the three stats cards (Client statistics with the remote chart, the
-//      transport distribution bar (opening the transport settings editor) and
-//      the blocked chart, Local statistics with the local chart + split-rule
-//      count, Custom DNS status), each opening its detail sheet,
+//      transport distribution bar (opening the transport settings editor), the
+//      ip-version histogram (the added providers as dots under Both / v4 / v6)
+//      and the blocked chart, Local statistics with the local chart +
+//      split-rule count, Custom DNS status), each opening its detail sheet,
 //   4. the "Block ads and trackers" switch card, and
 //   5. the plan + usage card (apple ConnectActions:169-204): the Guest/Free/
 //      Pro plan label, the used/pending/available usage bar with the daily
@@ -27,14 +28,17 @@
 // the persisted local state. SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <gtkmm.h>
 
 #include "ContractsSheet.hpp"
 #include "DnsSheet.hpp"
+#include "IpFamilyHistogram.hpp"
 #include "LocationsSheet.hpp"
 #include "PostQuantumIdentity.hpp"
 #include "RedeemCodeSheet.hpp"
@@ -60,6 +64,11 @@ class ConnectDrawer : public Gtk::Box {
   void OnHostEvent(DrawerEvent event);
   // Full resync (device lifecycle changes, window re-shown).
   void RefreshAll();
+  // The live provider grid (LiveStats::gridPoints), on the same push the hero
+  // canvas rides; feeds the ip-version histogram. An empty grid is a normal
+  // reading (no session) and renders as the three bare row labels.
+  void SetProviderGrid(const std::vector<urnet::ProviderGridPoint>& points, int64_t gridWidth,
+                       int64_t gridHeight);
   // The daemon's real DNS verdict (StatusReply::dns_applied / dns_detail),
   // pushed in by MainWindow's 5s daemon poll. The drawer cannot fetch this
   // itself: ControlClient::Status() is a blocking socket round-trip and this
@@ -136,6 +145,7 @@ class ConnectDrawer : public Gtk::Box {
   // stats cards
   TransferChart* remoteChart_ = nullptr;
   TransportBar* transportBar_ = nullptr;  // under the remote chart; opens the transport sheet
+  IpFamilyHistogram* ipFamilyHistogram_ = nullptr;  // under the transport bar
   TransferChart* blockChart_ = nullptr;
   TransferChart* localChart_ = nullptr;
   Gtk::Label* splitRuleCount_ = nullptr;

@@ -189,6 +189,7 @@ executable('urnetwork-gui',
     'src/TransportPresentation.cpp',
     'src/TransportBar.cpp',
     'src/TransportSheet.cpp',
+    'src/IpFamilyHistogram.cpp',
     'src/ConnectDrawer.cpp',
     'src/PostQuantumIdentity.cpp',
     'src/ContractsSheet.cpp',
@@ -461,7 +462,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # ---- unit tests -------------------------------------------------------------
 # The pure-logic modules (orthographic projection math, the TopoJSON decoder,
 # the provider row/label helpers, the location-override state machine, the
-# transport bar's boundary-tween geometry and the
+# transport bar's boundary-tween geometry, the ip-version histogram's
+# grouping, the dual-stack tunnel policy and v6 capture set, and the
 # daemon control protocol: framing, version negotiation in both directions,
 # SDK-build agreement, peer-credential authorization) carry no GTK, libadwaita
 # or SDK dependency on purpose, so this binary builds and runs anywhere a
@@ -482,6 +484,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/HealthTest.cpp',
     'tests/TapSequenceGateTest.cpp',
     'tests/TransportBarGeometryTest.cpp',
+    'tests/IpFamilyHistogramTest.cpp',
     'tests/TransportStatusPresentationTest.cpp',
     'tests/DaemonUnreachableCopyTest.cpp',
     'tests/SsoBridgeTest.cpp',
@@ -497,7 +500,7 @@ urnetwork_tests = executable('urnetwork-tests',
   include_directories : include_directories('src', 'tests'),
   dependencies : [json],
   cpp_args : ['-DUR_ASSETS_DIR="' + meson.project_source_root() / 'assets' + '"',
-              # TunnelPolicyTest reads Tunnel.cpp to prove the IPv4-only guard
+              # TunnelPolicyTest reads Tunnel.cpp to prove the dual-stack guard
               # still has a caller. A predicate with no call site is this
               # project's most-repeated defect, and it is invisible to a test
               # that only exercises the predicate.
