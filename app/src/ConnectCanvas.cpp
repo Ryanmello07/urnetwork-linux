@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Ui.hpp"
 #include "UrMotion.hpp"
 
 namespace urnw {
@@ -40,6 +41,10 @@ constexpr Rgb kGround{0x10 / 255.0, 0x10 / 255.0, 0x10 / 255.0};
 constexpr Rgb kElectric{0x00 / 255.0, 0x39 / 255.0, 0xDE / 255.0};
 constexpr Rgb kFaint{0x5A / 255.0, 0x5A / 255.0, 0x5A / 255.0};
 constexpr Rgb kOffWhite{0xF8 / 255.0, 0xF8 / 255.0, 0xF8 / 255.0};
+// An extender ring whose color the SDK did not fill in (an older SDK, a point
+// built before the colors landed) still draws -- in this neutral. Dropping the
+// ring would hide a live extender, which is the one thing the ring exists for.
+constexpr Rgba kExtenderRingFallback{0xF8 / 255.0, 0xF8 / 255.0, 0xF8 / 255.0, 1.0};
 
 // Lift(ground, amt): per-channel add — #1C1C1C resting, #242424 hovered
 Rgb Lift(Rgb c, int amt) {
@@ -263,10 +268,14 @@ void ConnectCanvas::ApplyGrid() {
       dot.state = dot.previous = parseState(p->State);
       dot.colorProgress = 1.0;
       dot.sizeProgress = animate ? 0.0 : 1.0;  // grow-in, or born settled
-      dots_.emplace(key, dot);
+      dot.extenderColors = extender::PairColors(p->ExtenderIps, p->ExtenderColorHexes);
+      dots_.emplace(key, std::move(dot));
     } else {
       it->second.x = p->X;
       it->second.y = p->Y;
+      // The extender set turns over on transport migration (K1: briefly two),
+      // so it is re-read on every push rather than only at birth.
+      it->second.extenderColors = extender::PairColors(p->ExtenderIps, p->ExtenderColorHexes);
       const PointState next = parseState(p->State);
       if (next != it->second.state) {
         // unanimated, the blend has no frames to run through: land on the new
@@ -665,11 +674,34 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
         if (a <= 0.001 && dot.colorProgress >= 1.0) continue;
         const double scale = EaseInOutCubic(dot.sizeProgress);
         if (scale <= 0.001) continue;
+        // EXTENDER.md K2: one ring per extender ip in its own color, the
+        // outermost pinned to the cell edge, the FILL shrinking to make room.
+        // Radii come out of the pure geometry at full size and are multiplied
+        // by the dot's own grow-in scale here, so rings arrive and leave with
+        // the dot instead of popping in around it.
+        const extender::Rings rings = extender::RingsFor(cell, dot.extenderColors);
+        const double dotCx = ox + dot.x * cell + cell / 2.0;
+        const double dotCy = oy + dot.y * cell + cell / 2.0;
         cr->set_source_rgba(from.r + (to.r - from.r) * t, from.g + (to.g - from.g) * t,
                             from.b + (to.b - from.b) * t, a);
-        cr->arc(ox + dot.x * cell + cell / 2.0, oy + dot.y * cell + cell / 2.0,
-                (cell / 2.0) * scale, 0, 2 * G_PI);
+        cr->arc(dotCx, dotCy, rings.dotRadius * scale, 0, 2 * G_PI);
         cr->fill();
+        for (const auto& ring : rings.rings) {
+          const Rgba color = ParseHexColor(ring.colorHex, kExtenderRingFallback);
+          // the ring fades with the dot (a Removed dot takes its rings with it)
+          cr->set_source_rgba(color.r, color.g, color.b, color.a * a);
+          cr->set_line_width(ring.lineWidth * scale);
+          if (ring.dashed) {
+            cr->set_dash(std::vector<double>{extender::kCollapsedDashOn * scale,
+                                             extender::kCollapsedDashOff * scale},
+                         0.0);
+          } else {
+            cr->unset_dash();
+          }
+          cr->arc(dotCx, dotCy, ring.radius * scale, 0, 2 * G_PI);
+          cr->stroke();
+        }
+        cr->unset_dash();
       }
     }
     cr->pop_group_to_source();

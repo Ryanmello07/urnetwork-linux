@@ -31,17 +31,39 @@ const char* RowLabel(ipfamily::Row row) {
   return "";
 }
 
-// One dot: a filled circle of the canvas's cell size in the Added green.
-Gtk::DrawingArea* MakeAddedDot(int diameter) {
+// An extender ring whose color the SDK did not fill in still draws, in this
+// neutral -- the same rule the connect canvas applies. Dropping the ring would
+// hide a live extender.
+constexpr Rgba kExtenderRingFallback{0xF8 / 255.0, 0xF8 / 255.0, 0xF8 / 255.0, 1.0};
+
+// One dot: a filled circle of the canvas's cell size in the Added green, with
+// one hollow ring per extender carrying this provider (EXTENDER.md K2). The
+// ring geometry is the canvas's, at this row's dot size, so the two surfaces
+// cannot drift; there is no animation here, so every radius is at full size.
+Gtk::DrawingArea* MakeAddedDot(int diameter, const std::vector<std::string>& extenderColors) {
   auto* dot = Gtk::make_managed<Gtk::DrawingArea>();
   dot->set_content_width(diameter);
   dot->set_content_height(diameter);
   dot->set_valign(Gtk::Align::CENTER);
-  dot->set_draw_func([](const Cairo::RefPtr<Cairo::Context>& cr, int w, int h) {
-    const double r = std::min(w, h) / 2.0;
-    cr->arc(w / 2.0, h / 2.0, r, 0, 2 * G_PI);
+  dot->set_draw_func([extenderColors](const Cairo::RefPtr<Cairo::Context>& cr, int w, int h) {
+    const double cell = std::min(w, h);
+    const extender::Rings rings = extender::RingsFor(cell, extenderColors);
+    cr->arc(w / 2.0, h / 2.0, rings.dotRadius, 0, 2 * G_PI);
     cr->set_source_rgba(kAddedDot.r, kAddedDot.g, kAddedDot.b, kAddedDot.a);
     cr->fill();
+    for (const auto& ring : rings.rings) {
+      const Rgba color = ParseHexColor(ring.colorHex, kExtenderRingFallback);
+      cr->set_source_rgba(color.r, color.g, color.b, color.a);
+      cr->set_line_width(ring.lineWidth);
+      if (ring.dashed) {
+        cr->set_dash(
+            std::vector<double>{extender::kCollapsedDashOn, extender::kCollapsedDashOff}, 0.0);
+      } else {
+        cr->unset_dash();
+      }
+      cr->arc(w / 2.0, h / 2.0, ring.radius, 0, 2 * G_PI);
+      cr->stroke();
+    }
   });
   kit::MarkDecorative(*dot);
   return dot;
@@ -84,8 +106,16 @@ void IpFamilyHistogram::SetGrid(const std::vector<urnet::ProviderGridPoint>& poi
                                 int64_t gridWidth, int64_t gridHeight) {
   std::vector<ipfamily::Point> reduced;
   reduced.reserve(points.size());
+  // ...and, in the same pass and the same order, each ADDED provider's
+  // extender colors under its row. GroupPoints stays the count authority: this
+  // list only decorates the dots it already decided exist.
+  std::vector<std::vector<std::string>> extenders[ipfamily::kRowCount];
   for (const auto& point : points) {
     reduced.push_back(ipfamily::Point{point.State, point.IpFamily});
+    if (point.State != "Added") continue;
+    const auto row = static_cast<int>(ipfamily::RowFor(point.IpFamily));
+    extenders[row].push_back(
+        extender::PairColors(point.ExtenderIps, point.ExtenderColorHexes));
   }
   const ipfamily::Rows counts = ipfamily::GroupPoints(reduced);
   const int dotDiameter = ipfamily::DotDiameter(gridWidth, gridHeight);
@@ -95,8 +125,10 @@ void IpFamilyHistogram::SetGrid(const std::vector<urnet::ProviderGridPoint>& poi
   bool anyChanged = sizeChanged;
   for (int i = 0; i < ipfamily::kRowCount; ++i) {
     const auto row = static_cast<ipfamily::Row>(i);
-    if (!sizeChanged && counts.at(row) == counts_.at(row)) continue;
+    const bool rowChanged = counts.at(row) != counts_.at(row) || extenders[i] != rowExtenders_[i];
+    if (!sizeChanged && !rowChanged) continue;
     counts_.counts[i] = counts.counts[i];
+    rowExtenders_[i] = std::move(extenders[i]);
     RebuildRow(row);
     anyChanged = true;
   }
@@ -104,11 +136,20 @@ void IpFamilyHistogram::SetGrid(const std::vector<urnet::ProviderGridPoint>& poi
 }
 
 void IpFamilyHistogram::RebuildRow(ipfamily::Row row) {
-  WrapRow* strip = rows_[static_cast<int>(row)];
+  const int index = static_cast<int>(row);
+  WrapRow* strip = rows_[index];
   if (strip == nullptr) return;
   strip->Clear();
   const int count = counts_.at(row);
-  for (int i = 0; i < count; ++i) strip->Append(*MakeAddedDot(dotDiameter_));
+  static const std::vector<std::string> kNoExtenders;
+  for (int i = 0; i < count; ++i) {
+    // the counts are the authority; a row whose extender list ran short (it
+    // cannot, but a defensive read costs nothing) draws plain dots
+    const auto& colors = static_cast<size_t>(i) < rowExtenders_[index].size()
+                             ? rowExtenders_[index][static_cast<size_t>(i)]
+                             : kNoExtenders;
+    strip->Append(*MakeAddedDot(dotDiameter_, colors));
+  }
   // an empty strip collapses so the label sits alone on its line
   strip->set_visible(0 < count);
 }

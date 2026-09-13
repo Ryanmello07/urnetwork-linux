@@ -7,9 +7,12 @@
 //
 // The dots are the connect canvas's own dots at the connect canvas's own
 // size: one grid cell in iOS's 256pt space (IpFamilyHistogramGeometry.hpp),
-// filled in the canvas's Added green. Which row a provider lands in, and the
-// dot size, are the pure functions in IpFamilyHistogramGeometry.hpp; this
-// widget only draws them. Rows wrap through the transport bar's WrapRow.
+// filled in the canvas's Added green -- INCLUDING the canvas's extender rings
+// (EXTENDER.md K2: "the drawer's ip family histogram draws the same dots and
+// the same rings at its dot size"). Which row a provider lands in, the dot
+// size and the ring radii are the pure functions in
+// IpFamilyHistogramGeometry.hpp and ExtenderRingGeometry.hpp; this widget only
+// draws them. Rows wrap through the transport bar's WrapRow.
 //
 // DECORATIVE: the dots carry no interaction. The whole component names itself
 // to accessibility with its three counts, since a wall of identical circles
@@ -25,6 +28,7 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ExtenderRingGeometry.hpp"
 #include "IpFamilyHistogramGeometry.hpp"
 #include "TransportBar.hpp"
 
@@ -50,6 +54,11 @@ class IpFamilyHistogram : public Gtk::Box {
   // per row: the wrapping dot strip
   WrapRow* rows_[ipfamily::kRowCount] = {nullptr, nullptr, nullptr};
   ipfamily::Rows counts_;
+  // Per row, one entry per dot: that provider's extender colors in the SDK's
+  // order (empty over a direct route). Held because the dots are rebuilt from
+  // it, and compared because a push that changes no count, no dot size and no
+  // extender set must touch no widget.
+  std::vector<std::vector<std::string>> rowExtenders_[ipfamily::kRowCount];
   int dotDiameter_ = 0;
 };
 
