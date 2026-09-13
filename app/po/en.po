@@ -948,6 +948,11 @@ msgctxt "checkout_opened_in_browser"
 msgid "Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed."
 msgstr "Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed."
 
+#. Button on desktop: pick a file that contains a QR code image.
+msgctxt "choose_file"
+msgid "Choose file"
+msgstr "Choose file"
+
 #. Button on desktop: pick an image file that contains a QR code.
 msgctxt "choose_image_file"
 msgid "Choose image file"
@@ -5689,6 +5694,11 @@ msgstr "Share logs"
 msgctxt "share_logs_2"
 msgid "Share Logs"
 msgstr "Share Logs"
+
+#. Confirmation after the share text of an extender code was copied to the clipboard.
+msgctxt "share_text_copied"
+msgid "Share text copied"
+msgstr "Share text copied"
 
 #. Used in Shared/Views/AccountMenu.swift.
 msgctxt "share_urnetwork"

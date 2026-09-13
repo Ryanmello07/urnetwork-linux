@@ -26,6 +26,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -39,6 +40,10 @@ namespace urnw {
 class ExtenderShareSheet : public Gtk::Window {
  public:
   ExtenderShareSheet(Gtk::Window& parent, SdkHost& host);
+
+  // The page's snackbar: a copy that says nothing is indistinguishable from a
+  // copy that did not happen, and this sheet owns no surface of its own.
+  std::function<void(const Glib::ustring& message, bool error)> on_message;
 
  private:
   // Ask the SDK for a payload and repaint everything from it. SYNCHRONOUS --

@@ -212,6 +212,7 @@ ExtenderShareSheet::ExtenderShareSheet(Gtk::Window& parent, SdkHost& host) : hos
   copy_->signal_clicked().connect([this] {
     if (share_.text.empty()) return;  // the button is insensitive anyway
     get_clipboard()->set_text(share_.text);
+    if (on_message) on_message(T_("share_text_copied", "Share text copied"), false);
   });
   actions->append(*copy_);
   auto* close = Gtk::make_managed<Gtk::Button>(T_("close", "Close"));

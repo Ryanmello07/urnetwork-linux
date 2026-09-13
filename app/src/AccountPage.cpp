@@ -2417,6 +2417,9 @@ void AccountPage::ShowExtenderShareSheet() {
   // directory, and a sheet that reopened on a stale one would hand out
   // addresses this device no longer believes in.
   extenderShareSheet_ = std::make_unique<ExtenderShareSheet>(*root, host_);
+  extenderShareSheet_->on_message = [this](const Glib::ustring& message, bool error) {
+    Snack(message, error);
+  };
   WireSheet(*extenderShareSheet_);
   extenderShareSheet_->set_visible(true);
 }
