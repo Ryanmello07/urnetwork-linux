@@ -12,7 +12,7 @@
 using urnw::extender::Entry;
 using urnw::extender::GossipState;
 using urnw::extender::GossipStateFor;
-using urnw::extender::kMaxRings;
+using urnw::extender::kMaxPanelRings;
 using urnw::extender::Panel;
 using urnw::extender::PanelFor;
 using urnw::extender::StatusDot;
@@ -112,11 +112,11 @@ UR_TEST(ExtenderStatus_NegativeCountsClampToZero) {
 // counted, and the figures beside the rings still state the real number.
 UR_TEST(ExtenderStatus_RingsAreCapped) {
   std::vector<Entry> many;
-  for (int i = 0; i < kMaxRings + 5; ++i) many.push_back(Entry{"192.0.2.1", "3cdd67", 1});
-  const Panel panel = PanelFor(true, many, kMaxRings + 5, kMaxRings + 5, "connected", 0);
-  UR_EXPECT_EQ(kMaxRings, static_cast<int>(panel.ringColorHexes.size()));
+  for (int i = 0; i < kMaxPanelRings + 5; ++i) many.push_back(Entry{"192.0.2.1", "3cdd67", 1});
+  const Panel panel = PanelFor(true, many, kMaxPanelRings + 5, kMaxPanelRings + 5, "connected", 0);
+  UR_EXPECT_EQ(kMaxPanelRings, static_cast<int>(panel.ringColorHexes.size()));
   UR_EXPECT_EQ(5, panel.hiddenRings);
-  UR_EXPECT_EQ(kMaxRings + 5, panel.active);
+  UR_EXPECT_EQ(kMaxPanelRings + 5, panel.active);
 }
 
 // An extender with no color still gets its ring: the count of rings must match

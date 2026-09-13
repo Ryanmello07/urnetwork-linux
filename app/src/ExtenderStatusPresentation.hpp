@@ -84,7 +84,11 @@ struct Entry {
 // A malformed or runaway status must not build ten thousand widgets. The
 // overflow is counted, not drawn: the "N of M" figure beside the rings already
 // states the real number.
-inline constexpr int kMaxRings = 32;
+//
+// NOT ExtenderRingGeometry.hpp's kMaxRings, which is the three-ring cap around
+// a single provider dot. These rings are one per live extender across the whole
+// device, and the two headers share a namespace.
+inline constexpr int kMaxPanelRings = 32;
 
 struct Panel {
   // false when there is no status at all (no session, no daemon): the panel
@@ -136,7 +140,7 @@ inline Panel PanelFor(bool haveStatus, const std::vector<Entry>& extenders, int6
   out.eventsPerMinute = std::max<int64_t>(eventCountLastMinute, 0);
   for (const auto& entry : extenders) {
     if (entry.inUse <= 0) continue;  // "active" is carrying traffic right now
-    if (static_cast<int>(out.ringColorHexes.size()) >= kMaxRings) {
+    if (static_cast<int>(out.ringColorHexes.size()) >= kMaxPanelRings) {
       ++out.hiddenRings;
       continue;
     }
