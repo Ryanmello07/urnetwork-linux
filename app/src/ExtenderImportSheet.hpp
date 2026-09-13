@@ -15,6 +15,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <gtkmm.h>
@@ -61,6 +62,10 @@ class ExtenderImportSheet : public Gtk::Window {
   std::unique_ptr<Gtk::Window> confirm_;
 
   std::string payload_;
+  // The SDK's answer for `decodedFor_`, cached: decode_share is a device rpc,
+  // and flipping the settings switch repaints without changing the payload.
+  std::optional<urnet::ExtenderShareDecodeResult> decoded_;
+  std::string decodedFor_;
   extender::ImportPresentation view_;
   bool settingText_ = false;  // re-entry guard on the text buffer
   bool refreshing_ = false;   // re-entry guard on the settings switch

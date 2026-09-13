@@ -271,10 +271,15 @@ void ExtenderImportSheet::Refresh() {
   if (refreshing_) return;
   refreshing_ = true;
   // An empty box is "waiting", not "invalid": a user who has not pasted
-  // anything yet has not made a mistake.
-  const std::optional<urnet::ExtenderShareDecodeResult> decoded =
-      payload_.empty() ? std::optional<urnet::ExtenderShareDecodeResult>()
-                       : host_.DecodeExtenderShare(payload_);
+  // anything yet has not made a mistake. The answer is cached per payload --
+  // decode_share is a device rpc, and the settings switch repaints without
+  // changing a byte of the code.
+  if (payload_ != decodedFor_) {
+    decoded_ = payload_.empty() ? std::optional<urnet::ExtenderShareDecodeResult>()
+                                : host_.DecodeExtenderShare(payload_);
+    decodedFor_ = payload_;
+  }
+  const std::optional<urnet::ExtenderShareDecodeResult>& decoded = decoded_;
   view_ = extender::ImportPresentationFor(
       decoded.has_value(), decoded ? decoded->Ok : false,
       decoded ? decoded->Error : std::string(), decoded ? decoded->NetworkHost : std::string(),
