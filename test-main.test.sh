@@ -46,4 +46,37 @@ for required in '--privileged' '--cgroupns=host' 'cgroup.procs'; do
   fi
 done
 
-echo "linux acceptance cgroup/BPF privilege regression: PASS"
+control_agent_marker='echo "[linux acceptance] building the local SDK control agent"'
+artifact_build_marker='echo "[linux acceptance] building local Linux artifacts"'
+control_agent_line="$(grep -nF "$control_agent_marker" "$runner" | cut -d: -f1 || true)"
+artifact_build_line="$(grep -nF "$artifact_build_marker" "$runner" | cut -d: -f1 || true)"
+if ! [[ "$control_agent_line" =~ ^[0-9]+$ && "$artifact_build_line" =~ ^[0-9]+$ ]]; then
+  echo "could not locate the control-agent and Linux artifact build boundaries" >&2
+  exit 1
+fi
+if [ "$control_agent_line" -ge "$artifact_build_line" ]; then
+  echo "the Linux ARM64 control agent must compile before the expensive artifact build" >&2
+  exit 1
+fi
+
+control_agent_command="$(
+  sed -n "${control_agent_line},$((control_agent_line + 3))p" "$runner"
+)"
+for required in \
+  'CGO_ENABLED=0' \
+  'GOOS=linux' \
+  'GOARCH=arm64' \
+  'timeout 600 go build -mod=readonly -trimpath' \
+  "-o \"\$run_dir/agent\" ."; do
+  count="$(printf '%s\n' "$control_agent_command" | grep -cF -- "$required" || true)"
+  if [ "$count" -ne 1 ]; then
+    echo "Linux control-agent build must carry exactly one $required boundary (found $count)" >&2
+    exit 1
+  fi
+done
+if grep -Eq 'go[[:space:]]+test' "$runner"; then
+  echo "Linux TEST-MAIN must not invoke the unit-test suite" >&2
+  exit 1
+fi
+
+echo "linux acceptance runner regression: PASS"

@@ -167,6 +167,13 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# This module replaces the live sibling SDK and Connect trees. Compile it before
+# the expensive application artifacts, and keep module resolution read-only, so
+# dependency drift fails early without rewriting the source graph being tested.
+echo "[linux acceptance] building the local SDK control agent"
+(cd "$root/build/all/acceptance" && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+  timeout 600 go build -mod=readonly -trimpath -o "$run_dir/agent" .)
+
 if [ "$skip_build" -ne 1 ]; then
   echo "[linux acceptance] building local Linux artifacts"
   SRC_HOME="$root" \
@@ -182,10 +189,6 @@ deb="$out_dir/urnetwork-daemon_${version}_arm64.deb"
 appimage="$out_dir/URnetwork-${version}-arm64.AppImage"
 [ -f "$deb" ] || die "missing locally built daemon package $deb"
 [ -x "$appimage" ] || die "missing locally built AppImage $appimage"
-
-echo "[linux acceptance] building the local SDK control agent"
-(cd "$root/build/all/acceptance" && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-  timeout 600 go build -trimpath -o "$run_dir/agent" .)
 
 echo "[linux acceptance] starting a separate same-platform peer provider"
 timeout 30 docker network create "$network_name" >/dev/null

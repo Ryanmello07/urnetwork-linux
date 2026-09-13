@@ -33,6 +33,19 @@ urnw::TunnelConfig DualStack() {
   return config;
 }
 
+// Keep the genuinely compile-time half of TunnelPolicy on the C++17 boundary.
+// The TunnelConfig validators below consume owning strings and vectors at
+// runtime; compiling this file with the Ubuntu 22.04 GCC 11 toolchain is the
+// regression for accidentally marking that runtime boundary constexpr.
+static_assert(urnw::IsIpv4Literal("192.0.2.1"));
+static_assert(!urnw::IsIpv4Literal("192.0.2.999"));
+static_assert(urnw::IsIpv6Literal("2001:db8::1"));
+static_assert(!urnw::IsIpv6Literal("2001:db8::1::2"));
+static_assert(urnw::Ipv6PrefixContains("fc00::/7", "fd00::1"));
+static_assert(urnw::IsIpv6UniqueLocal("fd00::1"));
+static_assert(urnw::CaptureV6Claims("2001:db8::1"));
+static_assert(!urnw::CaptureV6Claims("fe80::1"));
+
 }  // namespace
 
 // ---- v6 literals -----------------------------------------------------------
@@ -115,6 +128,21 @@ UR_TEST(ipv6PrefixContainsHonoursThePrefixLength) {
 }
 
 // ---- the dual-stack floor --------------------------------------------------
+
+UR_TEST(tunnelPolicyRuntimeValidatorsAcceptOwningStrings) {
+  urnw::TunnelConfig config = DualStack();
+  UR_EXPECT_TRUE(urnw::IsIpv4HalfValid(config));
+  UR_EXPECT_TRUE(urnw::IsIpv6HalfValid(config));
+
+  config.dns_servers_v4.push_back("not-an-address");
+  UR_EXPECT_FALSE(urnw::IsIpv4HalfValid(config));
+  UR_EXPECT_TRUE(urnw::IsIpv6HalfValid(config));
+
+  config = DualStack();
+  config.dns_servers_v6.push_back("not-an-address");
+  UR_EXPECT_TRUE(urnw::IsIpv4HalfValid(config));
+  UR_EXPECT_FALSE(urnw::IsIpv6HalfValid(config));
+}
 
 UR_TEST(tunnelPolicyAcceptsADualStackConfiguration) {
   UR_EXPECT_TRUE(urnw::IsDualStackTunnelConfig(DualStack()));

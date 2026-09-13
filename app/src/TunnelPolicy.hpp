@@ -284,8 +284,11 @@ constexpr bool IsIpv6UniqueLocal(std::string_view address) {
 // The v4 half: a dotted-quad address with a prefix that cannot swallow the
 // default route (/0 on the tun means a CONNECTED route covering the whole
 // space, captured without any of the policy routing that is supposed to decide
-// it), and every v4 resolver a dotted quad.
-constexpr bool IsIpv4HalfValid(const TunnelConfig& config) {
+// it), and every v4 resolver a dotted quad. TunnelConfig owns std::string and
+// std::vector values; their string-to-string_view path is runtime-only under
+// the project's C++17/libstdc++ contract, so the config validators must not be
+// constexpr. The literal parsers they call remain constexpr above.
+inline bool IsIpv4HalfValid(const TunnelConfig& config) {
   if (!IsIpv4Literal(config.local_addr_v4) || config.prefix_v4 < 1 || config.prefix_v4 > 32) {
     return false;
   }
@@ -301,7 +304,7 @@ constexpr bool IsIpv4HalfValid(const TunnelConfig& config) {
 // legal for either half: a tunnel without resolvers of that family is a tunnel
 // whose DNS the other family carries, which the nft DNS floor and
 // status.dns_detail both describe.
-constexpr bool IsIpv6HalfValid(const TunnelConfig& config) {
+inline bool IsIpv6HalfValid(const TunnelConfig& config) {
   if (!IsIpv6UniqueLocal(config.local_addr_v6) || config.prefix_v6 < 1 ||
       config.prefix_v6 > 128) {
     return false;
