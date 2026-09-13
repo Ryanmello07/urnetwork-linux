@@ -217,6 +217,36 @@ modules:
         url: https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
         sha256: 4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187
 
+  # ---- zxing-cpp (QR decoding) -------------------------------------------
+  # The extender import screen reads a share code out of an image file
+  # (connect/EXTENDER.md K8). app/meson.build requires `zxing` whenever the GUI
+  # is required, and this manifest builds with -Dgui=enabled, so without this
+  # module the Flatpak fails at configure time.
+  #
+  # --libdir=lib for the same reason every module above pins it: the SDK's
+  # default resolves to lib64, which is off flatpak-builder's PKG_CONFIG_PATH
+  # and off the loader's search path.
+  #
+  # Tests, the example apps, the python/C bindings and the writer half are all
+  # off: this build decodes, and nothing else. The QR ENCODER is the vendored
+  # MIT single-file app/third_party/qrcodegen and needs no module.
+  - name: zxing-cpp
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=ON
+      - -DZXING_EXAMPLES=OFF
+      - -DZXING_BLACKBOX_TESTS=OFF
+      - -DZXING_UNIT_TESTS=OFF
+      - -DZXING_WRITERS=OFF
+      - -DZXING_C_API=OFF
+      - -DZXING_PYTHON_MODULE=OFF
+    sources:
+      - type: archive
+        url: https://github.com/zxing-cpp/zxing-cpp/archive/refs/tags/v2.3.0.tar.gz
+        sha256: 64e4139103fdbc57752698ee15b5f0b0f7af9a0331ecbdc492047e0772c417ba
+
   # ---- the app ----------------------------------------------------------
   - name: urnetwork
     buildsystem: meson

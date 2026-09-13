@@ -1,0 +1,231 @@
+// The account section's extender logic: the settings form's fields, the share
+// screen's reading of build_share and the import screen's decision from
+// decode_share (EXTENDER.md K6/K7).
+// SPDX-License-Identifier: MPL-2.0
+#include "TestHarness.hpp"
+
+#include <string>
+#include <vector>
+
+#include "ExtenderSharePresentation.hpp"
+
+using urnw::extender::ApplySettingsField;
+using urnw::extender::ImportDecision;
+using urnw::extender::ImportPresentation;
+using urnw::extender::ImportPresentationFor;
+using urnw::extender::JoinHostLines;
+using urnw::extender::SettingsField;
+using urnw::extender::SharePresentation;
+using urnw::extender::SharePresentationFor;
+using urnw::extender::SplitHostLines;
+
+namespace {
+constexpr const char* kPayload = "ur-ext:1:AAECAwQ";
+constexpr const char* kHome = "ur.network";
+constexpr const char* kForeign = "example.test";
+
+// decode_share answered, ok, this network's own host, no settings block
+ImportPresentation Local(int64_t count) {
+  return ImportPresentationFor(true, true, "", kHome, false, count, false, "", false);
+}
+}  // namespace
+
+// ---- the settings form ------------------------------------------------------
+
+// "Empty means the default": a field at its default shows NOTHING and names
+// the default as its placeholder.
+UR_TEST(ExtenderSettings_DefaultFieldIsEmptyWithThePlaceholder) {
+  const SettingsField field = ApplySettingsField({}, "extender.ur.network", true);
+  UR_EXPECT_TRUE(field.text.empty());
+  UR_EXPECT_TRUE(field.defaultValue == "extender.ur.network");
+  UR_EXPECT_TRUE(field.hasDefault());
+}
+
+// An override shows the override -- and keeps the default it learned earlier,
+// so the user can still see what they are overriding.
+UR_TEST(ExtenderSettings_OverrideKeepsTheLearnedDefault) {
+  const SettingsField defaulted = ApplySettingsField({}, "extender.ur.network", true);
+  const SettingsField overridden = ApplySettingsField(defaulted, "ext.example.test", false);
+  UR_EXPECT_TRUE(overridden.text == "ext.example.test");
+  UR_EXPECT_TRUE(overridden.defaultValue == "extender.ur.network");
+}
+
+// A form that opens straight onto an override has no default to show yet, and
+// says nothing rather than inventing one.
+UR_TEST(ExtenderSettings_UnseenDefaultHasNoPlaceholder) {
+  const SettingsField field = ApplySettingsField({}, "ext.example.test", false);
+  UR_EXPECT_TRUE(field.text == "ext.example.test");
+  UR_EXPECT_FALSE(field.hasDefault());
+}
+
+// Clearing the field and saving hands the default back, and the placeholder
+// appears -- which is the path that teaches a form opened on an override.
+UR_TEST(ExtenderSettings_ClearingRestoresTheDefaultPlaceholder) {
+  SettingsField field = ApplySettingsField({}, "ext.example.test", false);
+  field = ApplySettingsField(field, "extender.ur.network", true);
+  UR_EXPECT_TRUE(field.text.empty());
+  UR_EXPECT_TRUE(field.defaultValue == "extender.ur.network");
+}
+
+// One host per line: blanks and stray whitespace go, duplicates collapse to
+// their FIRST occurrence, and the order the user typed survives.
+UR_TEST(ExtenderHosts_LinesAreTrimmedDedupedAndOrdered) {
+  const auto hosts = SplitHostLines("  ext1.example.test \n\n192.0.2.9\r\n\text1.example.test\n  \n");
+  UR_EXPECT_EQ(2, static_cast<int>(hosts.size()));
+  UR_EXPECT_TRUE(hosts[0] == "ext1.example.test");
+  UR_EXPECT_TRUE(hosts[1] == "192.0.2.9");
+  UR_EXPECT_TRUE(JoinHostLines(hosts) == "ext1.example.test\n192.0.2.9");
+}
+
+UR_TEST(ExtenderHosts_EmptyTextIsAnEmptyList) {
+  UR_EXPECT_EQ(0, static_cast<int>(SplitHostLines("").size()));
+  UR_EXPECT_EQ(0, static_cast<int>(SplitHostLines("\n\n  \n").size()));
+  UR_EXPECT_TRUE(JoinHostLines({}).empty());
+}
+
+UR_TEST(ExtenderHosts_RoundTrip) {
+  const std::vector<std::string> hosts = {"a.example.test", "2001:db8::1", "192.0.2.9"};
+  UR_EXPECT_TRUE(SplitHostLines(JoinHostLines(hosts)) == hosts);
+}
+
+// ---- the share screen -------------------------------------------------------
+
+UR_TEST(ExtenderShare_NoResultRendersNothing) {
+  const SharePresentation share = SharePresentationFor(false, kPayload, 12, true);
+  UR_EXPECT_FALSE(share.ready);
+  UR_EXPECT_FALSE(share.canCopy);
+  UR_EXPECT_FALSE(share.canRenderCode);
+  UR_EXPECT_EQ(0, share.count);
+}
+
+UR_TEST(ExtenderShare_PayloadDrivesTheCodeAndTheCopyButton) {
+  const SharePresentation share = SharePresentationFor(true, kPayload, 12, true);
+  UR_EXPECT_TRUE(share.ready);
+  UR_EXPECT_TRUE(share.text == kPayload);
+  UR_EXPECT_EQ(12, share.count);
+  UR_EXPECT_TRUE(share.includesSettings);
+  UR_EXPECT_TRUE(share.canCopy);
+  UR_EXPECT_TRUE(share.canRenderCode);
+}
+
+// A device that has discovered nothing yet still answers: zero is a reading,
+// not a failure. With no payload there is simply nothing to encode or copy.
+UR_TEST(ExtenderShare_EmptyPayloadStillReadsItsCount) {
+  const SharePresentation share = SharePresentationFor(true, "", 0, false);
+  UR_EXPECT_TRUE(share.ready);
+  UR_EXPECT_EQ(0, share.count);
+  UR_EXPECT_FALSE(share.canCopy);
+  UR_EXPECT_FALSE(share.canRenderCode);
+}
+
+// ---- the import screen ------------------------------------------------------
+
+UR_TEST(ExtenderImport_NothingDecodedIsWaiting) {
+  const ImportPresentation view = ImportPresentationFor(false, false, "", "", false, 0, false, "",
+                                                        false);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::Waiting);
+  UR_EXPECT_FALSE(view.showCount);
+  UR_EXPECT_FALSE(view.canImport);
+  UR_EXPECT_TRUE(view.messageKey.empty());
+}
+
+// The SDK's error is a localization KEY, and it is shown as-is.
+UR_TEST(ExtenderImport_SdkErrorKeyIsTheMessage) {
+  const ImportPresentation view = ImportPresentationFor(
+      true, false, "import_extenders_invalid", "", false, 0, false, "", false);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::Invalid);
+  UR_EXPECT_TRUE(view.messageKey == "import_extenders_invalid");
+  UR_EXPECT_FALSE(view.canImport);
+  UR_EXPECT_FALSE(view.showCount);
+}
+
+// A failure with no error string still says something, rather than showing a
+// blank line under a dead button.
+UR_TEST(ExtenderImport_FailureWithoutAnErrorStillSpeaks) {
+  const ImportPresentation view =
+      ImportPresentationFor(true, false, "", kHome, false, 0, false, "", false);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::Invalid);
+  UR_EXPECT_TRUE(view.messageKey == "import_extenders_invalid");
+}
+
+// The ordinary case: this network's own code, no settings, import straight in
+// with no confirmation and no switch.
+UR_TEST(ExtenderImport_LocalCodeImportsDirectly) {
+  const ImportPresentation view = Local(9);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::Ready);
+  UR_EXPECT_TRUE(view.showCount);
+  UR_EXPECT_EQ(9, view.count);
+  UR_EXPECT_TRUE(view.canImport);
+  UR_EXPECT_FALSE(view.confirmBeforeImport);
+  UR_EXPECT_FALSE(view.showUseSettings);
+  UR_EXPECT_TRUE(view.messageKey.empty());
+}
+
+// K7: a foreign host is REFUSED unless "use extender settings" is chosen. The
+// message names the operator the code belongs to.
+UR_TEST(ExtenderImport_ForeignHostIsRefusedUntilSettingsAreChosen) {
+  const ImportPresentation refused =
+      ImportPresentationFor(true, true, "", kForeign, true, 6, true, kForeign, false);
+  UR_EXPECT_TRUE(refused.decision == ImportDecision::NeedsSettings);
+  UR_EXPECT_FALSE(refused.canImport);
+  UR_EXPECT_TRUE(refused.showUseSettings);
+  UR_EXPECT_TRUE(refused.messageKey == "import_extenders_foreign_host");
+  UR_EXPECT_TRUE(refused.messageArg == kForeign);
+  UR_EXPECT_TRUE(refused.showCount);
+  UR_EXPECT_EQ(6, refused.count);
+
+  const ImportPresentation allowed =
+      ImportPresentationFor(true, true, "", kForeign, true, 6, true, kForeign, true);
+  UR_EXPECT_TRUE(allowed.decision == ImportDecision::Confirm);
+  UR_EXPECT_TRUE(allowed.canImport);
+  UR_EXPECT_TRUE(allowed.confirmBeforeImport);
+  UR_EXPECT_TRUE(allowed.messageKey == "import_extenders_confirm_settings");
+  UR_EXPECT_TRUE(allowed.messageArg == kForeign);
+}
+
+// A foreign code with no settings block is a dead end: the switch that would
+// unblock it has nothing to apply, so there is no button to press.
+UR_TEST(ExtenderImport_ForeignHostWithoutSettingsIsADeadEnd) {
+  const ImportPresentation view =
+      ImportPresentationFor(true, true, "", kForeign, true, 4, false, "", true);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::NeedsSettings);
+  UR_EXPECT_FALSE(view.canImport);
+  UR_EXPECT_FALSE(view.showUseSettings);
+  UR_EXPECT_TRUE(view.messageKey == "import_extenders_foreign_host");
+}
+
+// Replacing the dns name, gossip url and root keys is the consequential act,
+// so it confirms even when the code is from this very network.
+UR_TEST(ExtenderImport_ApplyingSettingsAlwaysConfirms) {
+  const ImportPresentation view =
+      ImportPresentationFor(true, true, "", kHome, false, 3, true, kHome, true);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::Confirm);
+  UR_EXPECT_TRUE(view.canImport);
+  UR_EXPECT_TRUE(view.confirmBeforeImport);
+  UR_EXPECT_TRUE(view.messageArg == kHome);
+}
+
+// The switch appears whenever the code carries settings, and leaving it off
+// imports the addresses alone with no confirmation.
+UR_TEST(ExtenderImport_SettingsSwitchIsOptionalOnALocalCode) {
+  const ImportPresentation view =
+      ImportPresentationFor(true, true, "", kHome, false, 3, true, kHome, false);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::Ready);
+  UR_EXPECT_TRUE(view.showUseSettings);
+  UR_EXPECT_TRUE(view.canImport);
+  UR_EXPECT_FALSE(view.confirmBeforeImport);
+}
+
+// An older SDK that leaves the settings host blank still names an operator in
+// the confirmation, falling back to the code's network host.
+UR_TEST(ExtenderImport_ConfirmationFallsBackToTheNetworkHost) {
+  const ImportPresentation view =
+      ImportPresentationFor(true, true, "", kForeign, true, 3, true, "", true);
+  UR_EXPECT_TRUE(view.decision == ImportDecision::Confirm);
+  UR_EXPECT_TRUE(view.messageArg == kForeign);
+}
+
+UR_TEST(ExtenderImport_NegativeCountClampsToZero) {
+  const ImportPresentation view = Local(-5);
+  UR_EXPECT_EQ(0, view.count);
+}

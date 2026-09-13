@@ -122,6 +122,34 @@ if webkit.found() and build_gui
   webkit_args = ['-DUR_HAVE_WEBKIT']
 endif
 
+# QR DECODING for the extender import screen (connect/EXTENDER.md K8: "Windows
+# and linux: the code renders through a vendored single-file encoder, import
+# reads an image file through zxing-cpp plus pasted text, no camera").
+#
+# GUI-ONLY, and required exactly when the GUI is: with -Dgui=enabled (the
+# AppImage and Flatpak builds) a missing zxing-cpp is a hard configure error,
+# so the import screen can never ship silently half-working. A GTK-less or
+# `auto` build without it still compiles -- the "choose image file" button is
+# then absent and the pasted-text path, which needs no library at all, carries
+# the whole feature.
+#
+# >= 2.1 for ReaderOptions (2.0 called it DecodeHints). Ubuntu 24.04 and
+# Fedora 40 ship 2.2.1; the Flatpak builds it from source. The pkg-config
+# module is `zxing`, which is what zxing-cpp installs.
+# ENCODING is NOT this dependency: it is the vendored MIT single-file
+# app/third_party/qrcodegen (see its README for why it is vendored).
+zxing = dependency('zxing', version : '>= 2.1', required : get_option('gui'))
+zxing_args = []
+if zxing.found() and build_gui
+  gui_deps += zxing
+  zxing_args = ['-DUR_HAVE_ZXING']
+endif
+
+# The vendored QR encoder's header (app/third_party/qrcodegen). is_system for
+# the same reason the SDK header is: it is upstream code kept verbatim, and a
+# local warning policy must never become a reason to patch it.
+qrcodegen_inc = include_directories('third_party' / 'qrcodegen', is_system : true)
+
 # Optional WalletConnect Cloud project id -> src/Config.hpp (kWalletConnectProjectId).
 # Empty is valid and is the default: the wallet-connect bridge then drives injected
 # (browser extension) wallets only. Keeps the id out of the source tree, the way
@@ -191,6 +219,11 @@ executable('urnetwork-gui',
     'src/TransportSheet.cpp',
     'src/IpFamilyHistogram.cpp',
     'src/ExtenderPanel.cpp',
+    'src/ExtenderSection.cpp',
+    'src/ExtenderShareSheet.cpp',
+    'src/ExtenderImportSheet.cpp',
+    # the vendored MIT QR encoder behind the extender share code
+    'third_party/qrcodegen/qrcodegen.cpp',
     'src/ConnectDrawer.cpp',
     'src/PostQuantumIdentity.cpp',
     'src/ContractsSheet.cpp',
@@ -216,9 +249,9 @@ executable('urnetwork-gui',
     'src/LocationOverride.cpp',
     'src/LocationOverrideGuide.cpp',
   ],
-  include_directories : [sdk_inc],
+  include_directories : [sdk_inc, qrcodegen_inc],
   dependencies : gui_deps,
-  cpp_args : wc_args + i18n_args + webkit_args + sdk_warn_args + pkgdata_args +
+  cpp_args : wc_args + i18n_args + webkit_args + zxing_args + sdk_warn_args + pkgdata_args +
              version_args + exhaustive_switch_args,
   install : true,
   # AppDir layout: usr/bin/urnetwork-gui next to usr/lib/libURnetworkSdk.so
@@ -464,12 +497,13 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # The pure-logic modules (orthographic projection math, the TopoJSON decoder,
 # the provider row/label helpers, the location-override state machine, the
 # transport bar's boundary-tween geometry, the ip-version histogram's
-# grouping, the dual-stack tunnel policy and v6 capture set, and the
-# daemon control protocol: framing, version negotiation in both directions,
-# SDK-build agreement, peer-credential authorization) carry no GTK, libadwaita
-# or SDK dependency on purpose, so this binary builds and runs anywhere a
-# C++17 compiler does -- including a developer machine that cannot build the
-# app itself.  meson test -C build
+# grouping, the extender ring geometry, the extender panel's reading of
+# ExtenderStatus, the extender share/import decisions, the dual-stack tunnel
+# policy and v6 capture set, and the daemon control protocol: framing, version
+# negotiation in both directions, SDK-build agreement, peer-credential
+# authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
+# binary builds and runs anywhere a C++17 compiler does -- including a
+# developer machine that cannot build the app itself.  meson test -C build
 urnetwork_tests = executable('urnetwork-tests',
   sources : [
     'tests/main.cpp',
@@ -488,6 +522,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/IpFamilyHistogramTest.cpp',
     'tests/ExtenderRingGeometryTest.cpp',
     'tests/ExtenderStatusPresentationTest.cpp',
+    'tests/ExtenderSharePresentationTest.cpp',
     'tests/TransportStatusPresentationTest.cpp',
     'tests/DaemonUnreachableCopyTest.cpp',
     'tests/SsoBridgeTest.cpp',

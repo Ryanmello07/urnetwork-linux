@@ -26,7 +26,8 @@ uncommitted.
 
 ```sh
 sudo apt install libgtkmm-4.0-dev libadwaita-1-dev libglib2.0-dev \
-  nlohmann-json3-dev meson ninja-build g++ pkg-config
+  nlohmann-json3-dev libsecret-1-dev libzxing-cpp-dev \
+  meson ninja-build g++ pkg-config
 cd linux/app
 scripts/fetch-deps.sh /path/to/URnetworkSdkLinux.zip     # stages third_party/
 meson setup build -Dsdk_arch=$(dpkg --print-architecture)
