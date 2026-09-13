@@ -11,6 +11,10 @@
 src/AuthViews.cpp
 src/ConnectDrawer.cpp
 src/IpFamilyHistogram.cpp
+src/ExtenderPanel.cpp
+src/ExtenderSection.cpp
+src/ExtenderShareSheet.cpp
+src/ExtenderImportSheet.cpp
 src/ConnectPage.cpp
 src/ContractsSheet.cpp
 src/DnsSheet.cpp

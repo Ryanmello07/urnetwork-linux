@@ -99,6 +99,7 @@ enum class DrawerEvent {
   ProviderIdentities,  // post-quantum identity set changed (PQI panel + list)
   ProviderLocations,   // connected provider set/locations changed (locations sheet)
   ProviderSelection,   // the globe's selected provider changed (locations sheet)
+  ExtenderStatus,      // extender directory / gossip status changed (drawer panel)
 };
 
 // Outcome of StartTunnel. Everything except Started is a degraded state the
@@ -737,6 +738,48 @@ class SdkHost {
   void SetSelectedProviderClientId(const std::string& clientId);
   void StepProviderSelection(int steps);
 
+  // ---- extenders (EXTENDER.md K4 to K8) -------------------------------------
+  // The extender directory + gossip status, read off the DEVICE (K5: it lives
+  // on DeviceLocal and reaches DeviceRemote over the rpc with the last value
+  // cached, exactly as the provider family transport status), so the drawer
+  // panel reads the DAEMON's directory rather than this process's. nullopt
+  // with no device -- which the panel renders as "hidden", never as zero.
+  // Changes arrive as DrawerEvent::ExtenderStatus, coalesced by the SDK to one
+  // callback per second.
+  std::optional<urnet::ExtenderStatus> GetExtenderStatus();
+
+  // The SDK's shared ExtenderViewController (K7: "encoding, decoding and
+  // applying live in the sdk, one implementation for every app"). Opened with
+  // the rest of the presentation, so every call below returns nullopt with the
+  // window hidden or the tunnel down and the account section renders its
+  // no-device state rather than an empty form.
+  //
+  // Settings are the SPACE's, applied through the controller, which restarts
+  // the space's network client and node in place. On this platform that space
+  // belongs to urnetworkd, which is the correct one: the tunnel's dials are
+  // what the settings steer.
+  std::optional<urnet::ExtenderSettings> GetExtenderSettings();
+  std::optional<urnet::ExtenderSettings> SetExtenderSettings(const std::string& dnsName,
+                                                             const std::string& gossipUrl,
+                                                             const std::vector<std::string>& hosts);
+  std::optional<urnet::ExtenderShareResult> BuildExtenderShare(bool includeSettings);
+  std::optional<urnet::ExtenderShareDecodeResult> DecodeExtenderShare(const std::string& text);
+  std::optional<urnet::ExtenderImportResult> ImportExtenderShare(const std::string& text,
+                                                                 bool useSettings);
+
+  // The LEGACY private extender (F1: NetExtender stays), an advanced override
+  // on the network space values written through updateNetworkSpaceValues --
+  // the same path ApplyNetworkServer uses. Empty ip AND secret clears it.
+  //
+  // KNOWN LIMIT (the daemon split): this writes the GUI's OWN space, which is
+  // the one its api/auth calls dial. urnetworkd builds its space from its own
+  // storage (daemon/TunnelHost.cpp), so the tunnel's provider dials do not see
+  // a private extender set here until the daemon is taught the same value.
+  // Every other extender setting goes through the view controller above and
+  // therefore does reach the daemon.
+  std::optional<urnet::NetExtender> GetPrivateExtender();
+  bool SetPrivateExtender(const std::string& ip, const std::string& secret);
+
   // ---- reliability / exits (Home's Advanced inspector + the Developer page) --
   // The locked, BLOCKING read. Every field behind it is a synchronous device
   // rpc over the loopback mTLS channel to urnetworkd — three for ExitsOnly,
@@ -962,6 +1005,8 @@ class SdkHost {
   std::optional<urnet::PostQuantumIdentityViewController> pqiVc_;
   // the provider globe's selection + scroll wheel, shared across every app
   std::optional<urnet::ProviderLocationsViewController> providerLocationsVc_;
+  // extender settings, share and import (the SDK owns the payload format)
+  std::optional<urnet::ExtenderViewController> extenderVc_;
   // control channel to urnetworkd (tunnel lifecycle + location override)
   ControlClient control_;
   std::string lastTunnelError_;

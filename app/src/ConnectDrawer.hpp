@@ -10,7 +10,9 @@
 //      which is not part of the profile),
 //   3. the three stats cards (Client statistics with the remote chart, the
 //      transport distribution bar (opening the transport settings editor), the
-//      ip-version histogram (the added providers as dots under Both / v4 / v6)
+//      ip-version histogram (the added providers as dots under Both / v4 / v6),
+//      the extender panel (active extender rings, the N-of-M count and the
+//      gossip network's status dot)
 //      and the blocked chart, Local statistics with the local chart +
 //      split-rule count, Custom DNS status), each opening its detail sheet,
 //   4. the "Block ads and trackers" switch card, and
@@ -38,6 +40,7 @@
 
 #include "ContractsSheet.hpp"
 #include "DnsSheet.hpp"
+#include "ExtenderPanel.hpp"
 #include "IpFamilyHistogram.hpp"
 #include "LocationsSheet.hpp"
 #include "PostQuantumIdentity.hpp"
@@ -106,6 +109,7 @@ class ConnectDrawer : public Gtk::Box {
   void ApplyControls();        // performance profile <- control states
   void PullThroughput();       // feed the three charts + the transport bar
   void RefreshTransportBar();  // the window's transport distribution (client)
+  void RefreshExtenderPanel();  // the device's extender directory + gossip status
   void RefreshSplitRuleCount();
   void RefreshDnsCard();
   // The "unapplied recommended settings" nudge pill atop the Custom DNS card:
@@ -146,6 +150,7 @@ class ConnectDrawer : public Gtk::Box {
   TransferChart* remoteChart_ = nullptr;
   TransportBar* transportBar_ = nullptr;  // under the remote chart; opens the transport sheet
   IpFamilyHistogram* ipFamilyHistogram_ = nullptr;  // under the transport bar
+  ExtenderPanel* extenderPanel_ = nullptr;          // under the histogram (EXTENDER.md K4)
   TransferChart* blockChart_ = nullptr;
   TransferChart* localChart_ = nullptr;
   Gtk::Label* splitRuleCount_ = nullptr;

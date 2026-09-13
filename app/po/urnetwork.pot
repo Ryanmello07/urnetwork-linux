@@ -64,6 +64,11 @@ msgctxt "account_needs_verification"
 msgid "This account needs verification. Check your email."
 msgstr ""
 
+#. Accessibility label of the row of rings, one per extender carrying a live connection.
+msgctxt "active_extenders"
+msgid "Active extenders"
+msgstr ""
+
 #. A heading for the list of current block actions.
 msgctxt "activity"
 msgid "Activity"
@@ -858,6 +863,11 @@ msgctxt "bypass_vpn"
 msgid "Bypass VPN"
 msgstr ""
 
+#. Shown when the camera permission was denied on the scan screen.
+msgctxt "camera_permission_needed"
+msgid "Camera access is needed to scan a code."
+msgstr ""
+
 #. Call to action
 msgctxt "cancel"
 msgid "Cancel"
@@ -936,6 +946,21 @@ msgstr ""
 #. Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.
 msgctxt "checkout_opened_in_browser"
 msgid "Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed."
+msgstr ""
+
+#. Button on desktop: pick a file that contains a QR code image.
+msgctxt "choose_file"
+msgid "Choose file"
+msgstr ""
+
+#. Button on desktop: pick an image file that contains a QR code.
+msgctxt "choose_image_file"
+msgid "Choose image file"
+msgstr ""
+
+#. Button: pick a photo that contains a QR code.
+msgctxt "choose_photo"
+msgid "Choose photo"
 msgstr ""
 
 #. Provider list group title for cities
@@ -1265,6 +1290,11 @@ msgstr ""
 #. A label for a context menu item that copies a client ID to the clipboard.
 msgctxt "copy_client_id"
 msgid "Copy client ID"
+msgstr ""
+
+#. Button on the share screen: copy the text form of the code.
+msgctxt "copy_share_text"
+msgid "Copy share text"
 msgstr ""
 
 #. Button text to copy the seedphrase to the clipboard.
@@ -3194,6 +3224,56 @@ msgctxt "export_logs"
 msgid "Export Logs"
 msgstr ""
 
+#. Placeholder shown in an empty extender settings field, naming the default value that applies.
+msgctxt "extender_default_value"
+msgid "Default: {}"
+msgstr ""
+
+#. Label of the extender DNS name field. Empty means the network space default.
+msgctxt "extender_dns_name"
+msgid "Extender DNS name"
+msgstr ""
+
+#. Label of the manual extender list field: hostnames or IP addresses, one per line.
+msgctxt "extender_hosts"
+msgid "Extender hosts"
+msgstr ""
+
+#. Help text under the manual extender list field.
+msgctxt "extender_hosts_hint"
+msgid "One hostname or IP address per line. These are added to the discovered extenders."
+msgstr ""
+
+#. Title of the extender settings form under account > Extenders.
+msgctxt "extender_settings"
+msgid "Extender settings"
+msgstr ""
+
+#. Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.
+msgctxt "extender_settings_next_connect"
+msgid "The tunnel uses new extender settings the next time it connects."
+msgstr ""
+
+#. Confirmation after the extender settings are saved.
+msgctxt "extender_settings_saved"
+msgid "Extender settings saved"
+msgstr ""
+
+#. Title of the extenders panel in the connect drawer and of the Extenders section under account.
+msgctxt "extenders"
+msgid "Extenders"
+msgstr ""
+
+#. The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.
+msgctxt "extenders_active_of_reserve"
+msgid "{0} of {1}"
+msgstr ""
+
+#. Shown in the account Extenders section when there is no signed-in device to manage extenders with.
+msgctxt "extenders_no_session"
+msgid "Sign in and connect to manage extenders."
+msgstr ""
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -3326,6 +3406,28 @@ msgctxt "google_sign_in_method_added"
 msgid "Google sign-in method added"
 msgstr ""
 
+#. Gossip network status: a dial or reconnect is in progress (yellow).
+msgctxt "gossip_connecting"
+msgid "Connecting"
+msgstr ""
+
+#. The count of extender records and revocations applied from the gossip network or the feed in the last minute.
+msgctxt "gossip_events_per_minute"
+msgid "{} event/min"
+msgid_plural "{} events/min"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Label of the gossip network status dot in the extender panel.
+msgctxt "gossip_network"
+msgid "Gossip network"
+msgstr ""
+
+#. Label of the gossip URL field. Empty means the network space default.
+msgctxt "gossip_url"
+msgid "Gossip URL"
+msgstr ""
+
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "got_it"
 msgid "Got it"
@@ -3401,6 +3503,33 @@ msgctxt "ignore_battery_optimizations"
 msgid "Ignore battery optimizations"
 msgstr ""
 
+#. Button and screen title: import extenders from a QR code, a photo, or pasted text.
+msgctxt "import_extenders"
+msgid "Import extenders"
+msgstr ""
+
+#. Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.
+msgctxt "import_extenders_confirm_settings"
+msgid "Use the extender settings from this code? Extender lookups will use {}."
+msgstr ""
+
+#. Error when a share code belongs to another network. The argument is that network's host.
+msgctxt "import_extenders_foreign_host"
+msgid "This code is for {}, not this network. Use extender settings to switch networks."
+msgstr ""
+
+#. Confirmation after an import, with the number of extenders added.
+msgctxt "import_extenders_imported"
+msgid "Imported {} extender"
+msgid_plural "Imported {} extenders"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Error when the scanned or pasted text is not an extender share code.
+msgctxt "import_extenders_invalid"
+msgid "This code is not an extender share."
+msgstr ""
+
 #. Guest mode overlay
 msgctxt "in_guest_mode"
 msgid "You're in guest mode"
@@ -3414,6 +3543,11 @@ msgstr ""
 #. transfer stats and split rules
 msgctxt "include_app_description"
 msgid "Only included apps use the tunnel."
+msgstr ""
+
+#. Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.
+msgctxt "include_extender_settings"
+msgid "Include extender settings"
 msgstr ""
 
 #. App split rules: rule choice routing the app through the VPN.
@@ -4486,6 +4620,11 @@ msgctxt "password_support_txt"
 msgid "Password must be at least 12 characters"
 msgstr ""
 
+#. Button and field label: paste the text form of a share code.
+msgctxt "paste_share_text"
+msgid "Paste share text"
+msgstr ""
+
 #. A placeholder text for the seedphrase field.
 msgctxt "paste_your_24_word_seedphrase_here"
 msgid "Paste your 24-word seedphrase here"
@@ -4722,6 +4861,26 @@ msgctxt "post_quantum_identity_explanation"
 msgid "Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
 msgstr ""
 
+#. Title of the advanced private extender fields: one extender with a secret that replaces discovery.
+msgctxt "private_extender"
+msgid "Private extender"
+msgstr ""
+
+#. Help text under the private extender fields.
+msgctxt "private_extender_hint"
+msgid "A private extender replaces every discovered extender. Leave it empty to use discovery."
+msgstr ""
+
+#. Label of the private extender IP address field.
+msgctxt "private_extender_ip"
+msgid "IP address"
+msgstr ""
+
+#. Label of the private extender secret field.
+msgctxt "private_extender_secret"
+msgid "Secret"
+msgstr ""
+
 #. Network name when privacy is enabled
 msgctxt "private_network"
 msgid "Private Network"
@@ -4898,6 +5057,11 @@ msgstr ""
 #. Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).
 msgctxt "purchase_found_confirming_your_plan"
 msgid "Purchase found. Confirming your plan — it will update automatically."
+msgstr ""
+
+#. Error when a chosen photo or image file holds no QR code.
+msgctxt "qr_code_not_found"
+msgid "No QR code was found in the image."
 msgstr ""
 
 #. Tray menu item that exits the app (tears the tunnel down).
@@ -5314,6 +5478,11 @@ msgctxt "save_logs_2"
 msgid "Save Logs"
 msgstr ""
 
+#. Button: open the camera to scan a QR code.
+msgctxt "scan_qr_code"
+msgid "Scan QR code"
+msgstr ""
+
 #. Locations List
 msgctxt "search_placeholder"
 msgid "Search for all locations"
@@ -5504,6 +5673,28 @@ msgctxt "share"
 msgid "Share"
 msgstr ""
 
+#. Button and screen title: share the known extenders as a QR code.
+msgctxt "share_extenders"
+msgid "Share extenders"
+msgstr ""
+
+#. How many extenders the share code carries.
+msgctxt "share_extenders_count"
+msgid "{} extender"
+msgid_plural "{} extenders"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Help text on the share screen under the QR code.
+msgctxt "share_extenders_hint"
+msgid "Scan this code with another URnetwork app to share these extenders."
+msgstr ""
+
+#. Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.
+msgctxt "share_extenders_too_large"
+msgid "The share code is too large for a QR code. Copy the share text instead."
+msgstr ""
+
 #. Call to action
 msgctxt "share_logs"
 msgid "Share logs"
@@ -5512,6 +5703,11 @@ msgstr ""
 #. Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.
 msgctxt "share_logs_2"
 msgid "Share Logs"
+msgstr ""
+
+#. Confirmation after the share text of an extender code was copied to the clipboard.
+msgctxt "share_text_copied"
+msgid "Share text copied"
 msgstr ""
 
 #. Used in Shared/Views/AccountMenu.swift.
@@ -7789,6 +7985,11 @@ msgstr ""
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "urnetwork_vpn_started"
 msgid "URnetwork VPN started"
+msgstr ""
+
+#. Toggle on the import screen: also apply the extender settings carried by the code.
+msgctxt "use_extender_settings"
+msgid "Use extender settings"
 msgstr ""
 
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.

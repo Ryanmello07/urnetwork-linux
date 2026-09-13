@@ -1192,8 +1192,10 @@ void AccountPage::Load() {
   ReleaseInFlight();
 
   // Local first: the client id is a DEVICE read, correct with no session and
-  // no round trip.
+  // no round trip, and so are the extender settings (the SDK's view
+  // controller, no api call).
   ApplyClientId();
+  if (extenderSection_) extenderSection_->Load();
 
   // Each load gates itself on the session and settles its own panel on
   // NoSession WITHOUT a request — a 401 must never arrive to be mistaken for
@@ -1261,6 +1263,10 @@ void AccountPage::CloseSheets() {
   hide(addAuthSheet_.get());
   hide(authCodeSheet_.get());
   hide(deleteSheet_.get());
+  // the share code is this network's extender list and the import sheet may
+  // hold a pasted payload: neither belongs to the next account
+  hide(extenderShareSheet_.get());
+  hide(extenderImportSheet_.get());
   hide(confirmDialog_.get());
 }
 
@@ -1549,7 +1555,26 @@ void AccountPage::BuildAccountPane() {
   BuildProfileGroup(*paneB_.content);
   BuildSecurityGroup(*paneB_.content);
   BuildReferralsRow(*paneB_.content);
+  BuildExtendersGroup(*paneB_.content);
   BuildDangerGroup(*paneB_.content);
+}
+
+// EXTENDER.md K6: "under account, a section named Extenders". It goes in the
+// ACCOUNT pane rather than in a fourth column of its own -- the fold table
+// above hides the codes pane below 1500 dip and the plan pane below 900, so a
+// fourth pane would put these settings out of reach on an ordinary laptop,
+// and the account pane is the one that is always on screen.
+//
+// Placed after the referrals row and before the DANGER group: sign out and
+// delete account stay the last things on the pane.
+void AccountPage::BuildExtendersGroup(Gtk::Box& host) {
+  extenderSection_ = Gtk::make_managed<ExtenderSection>(host_);
+  extenderSection_->on_snackbar = [this](const Glib::ustring& message, bool error) {
+    Snack(message, error);
+  };
+  extenderSection_->on_share = [this] { ShowExtenderShareSheet(); };
+  extenderSection_->on_import = [this] { ShowExtenderImportSheet(); };
+  host.append(*extenderSection_);
 }
 
 void AccountPage::BuildProfileGroup(Gtk::Box& host) {
@@ -2229,7 +2254,13 @@ void AccountPage::RemoveAuth(const std::string& authType) {
 // the daemon attached and the tunnel is carrying traffic. Deliberately not
 // Load(): re-reading the client id must not re-fire four API round trips or
 // repaint the profile status line.
-void AccountPage::RefreshClientId() { ApplyClientId(); }
+void AccountPage::RefreshClientId() {
+  ApplyClientId();
+  // The Extenders section's view controller is opened with the device, so the
+  // DeviceLifecycle edge is exactly when its form stops being (or becomes) the
+  // no-session state.
+  if (extenderSection_) extenderSection_->Load();
+}
 
 void AccountPage::ApplyClientId() {
   clientId_ = host_.ClientId();  // "" with no device
@@ -2373,6 +2404,44 @@ void AccountPage::ShowAuthCodeSheet() {
     WireSheet(*authCodeSheet_);
   }
   authCodeSheet_->Open();
+}
+
+void AccountPage::ShowExtenderShareSheet() {
+  Gtk::Window* root = RootWindow();
+  if (root == nullptr) {
+    g_warning("account: no window root; the share-extenders sheet was not opened");
+    return;
+  }
+  if (!BeginSheet("share extenders")) return;
+  // Rebuilt each time rather than cached: the payload is a snapshot of the
+  // directory, and a sheet that reopened on a stale one would hand out
+  // addresses this device no longer believes in.
+  extenderShareSheet_ = std::make_unique<ExtenderShareSheet>(*root, host_);
+  extenderShareSheet_->on_message = [this](const Glib::ustring& message, bool error) {
+    Snack(message, error);
+  };
+  WireSheet(*extenderShareSheet_);
+  extenderShareSheet_->set_visible(true);
+}
+
+void AccountPage::ShowExtenderImportSheet() {
+  Gtk::Window* root = RootWindow();
+  if (root == nullptr) {
+    g_warning("account: no window root; the import-extenders sheet was not opened");
+    return;
+  }
+  if (!BeginSheet("import extenders")) return;
+  extenderImportSheet_ = std::make_unique<ExtenderImportSheet>(*root, host_);
+  extenderImportSheet_->on_message = [this](const Glib::ustring& message, bool error) {
+    Snack(message, error);
+  };
+  // an import carrying settings replaces the dns name, gossip url and root
+  // keys, so the form behind the sheet is stale the moment one lands
+  extenderImportSheet_->on_imported = [this] {
+    if (extenderSection_) extenderSection_->Load();
+  };
+  WireSheet(*extenderImportSheet_);
+  extenderImportSheet_->set_visible(true);
 }
 
 void AccountPage::ShowDeleteAccountSheet() {

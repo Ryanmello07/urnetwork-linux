@@ -27,6 +27,8 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ExtenderRingGeometry.hpp"
+
 namespace urnw {
 
 class ConnectCanvas : public Gtk::Widget {
@@ -81,6 +83,13 @@ class ConnectCanvas : public Gtk::Widget {
     PointState previous = PointState::InEvaluation;
     double colorProgress = 1.0;   // previous -> state blend
     double sizeProgress = 0.0;    // grow-in
+    // EXTENDER.md K2: the extender addresses carrying THIS client's live
+    // platform transports to this exit, as the SDK's per-ip colors in the
+    // SDK's order (ProviderGridPoint::ExtenderColorHexes paired with
+    // ExtenderIps). Empty over a direct route, which is the common case.
+    // Drawn as hollow rings around the dot; the dot shrinks to make room,
+    // never the cell (ExtenderRingGeometry.hpp).
+    std::vector<std::string> extenderColors;
   };
 
   // ---- animation clock ------------------------------------------------------

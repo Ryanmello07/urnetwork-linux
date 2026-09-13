@@ -55,6 +55,9 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ExtenderImportSheet.hpp"
+#include "ExtenderSection.hpp"
+#include "ExtenderShareSheet.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "Ui.hpp"
@@ -142,7 +145,8 @@ class AccountPage : public Gtk::Box {
   // DIFFERENT event from the auth change that drives Load(). The window calls
   // this on DrawerEvent::DeviceLifecycle so "Attaching device controls…" is a
   // state the row LEAVES rather than one it is stuck in until the user
-  // navigates away and back.
+  // navigates away and back. The Extenders section rides the same event for
+  // the same reason: its view controller lives only while a device does.
   void RefreshClientId();
 
   // The spec's pane-fold table (window width in dip): 1500 / 900.
@@ -195,6 +199,7 @@ class AccountPage : public Gtk::Box {
   void BuildProfileGroup(Gtk::Box& host);
   void BuildSecurityGroup(Gtk::Box& host);
   void BuildReferralsRow(Gtk::Box& host);
+  void BuildExtendersGroup(Gtk::Box& host);
   void BuildDangerGroup(Gtk::Box& host);
 
   // ---- loads -----------------------------------------------------------------
@@ -232,6 +237,8 @@ class AccountPage : public Gtk::Box {
   void ShowAddAuthSheet();
   void ShowAuthCodeSheet();
   void ShowDeleteAccountSheet();
+  void ShowExtenderShareSheet();
+  void ShowExtenderImportSheet();
 
   // ---- helpers ---------------------------------------------------------------
   // !previewUi && IsLoggedIn(): the gate on every server question AND every
@@ -298,6 +305,9 @@ class AccountPage : public Gtk::Box {
   // ---- pane B: referrals -----------------------------------------------------
   kit::PaneTwoLineRowButton referralsRow_;  // opens the Refer and earn page
 
+  // ---- pane B: extenders (EXTENDER.md K6) -------------------------------------
+  ExtenderSection* extenderSection_ = nullptr;
+
   // ---- pane C ----------------------------------------------------------------
   Gtk::Box* codesPanel_ = nullptr;
   Gtk::Label* codesEmpty_ = nullptr;
@@ -341,6 +351,8 @@ class AccountPage : public Gtk::Box {
   std::unique_ptr<AccountAddAuthSheet> addAuthSheet_;
   std::unique_ptr<AccountAuthCodeSheet> authCodeSheet_;
   std::unique_ptr<AccountDeleteSheet> deleteSheet_;
+  std::unique_ptr<ExtenderShareSheet> extenderShareSheet_;
+  std::unique_ptr<ExtenderImportSheet> extenderImportSheet_;
   std::unique_ptr<Gtk::Window> confirmDialog_;  // the remove-login-method confirm
 };
 

@@ -2346,6 +2346,22 @@ void SdkHost::SubscribeDrawer() {
   // so the sheet dedupes by value before touching widgets.
   presentationSubs_.push_back(device_->addConnectedProviderLocationChangeListener(
       [this] { EmitDrawerEvent(DrawerEvent::ProviderLocations); }));
+
+  // extenders (EXTENDER.md K4/K5): the directory + gossip status, read off the
+  // DEVICE so the drawer panel shows the DAEMON's directory -- the one whose
+  // dials the rings describe -- rather than this process's. The SDK coalesces
+  // to one callback per second, so no throttle is needed here; the panel
+  // dedupes by value anyway.
+  presentationSubs_.push_back(device_->addExtenderStatusChangeListener(
+      [this](std::optional<urnet::ExtenderStatus>) {
+        EmitDrawerEvent(DrawerEvent::ExtenderStatus);
+      }));
+  // ...and the shared view controller behind the account section's settings,
+  // share and import. It is opened with the rest of the presentation and
+  // closed with it, so every accessor is nullopt with the window hidden or the
+  // tunnel down and the section renders its no-device state.
+  extenderVc_ = device_->openExtenderViewController();
+  extenderVc_->start();
 }
 
 void SdkHost::ClosePresentationLocked() {
@@ -2359,8 +2375,17 @@ void SdkHost::ClosePresentationLocked() {
     peerVc_.reset();
     pqiVc_.reset();
     providerLocationsVc_.reset();
+    extenderVc_.reset();
     return;
   }
+  // The extender controller closes ITSELF (the SDK exposes no
+  // device.closeExtenderViewController, unlike the older controllers), so stop
+  // it first and then hand the handle back.
+  if (extenderVc_) {
+    extenderVc_->stop();
+    extenderVc_->close();
+  }
+  extenderVc_.reset();
   if (providerLocationsVc_) {
     device_->closeProviderLocationsViewController(*providerLocationsVc_);
   }
@@ -2914,6 +2939,157 @@ void SdkHost::StepProviderSelection(int steps) {
   std::scoped_lock lock(mutex_);
   if (!providerLocationsVc_ || steps == 0) return;
   providerLocationsVc_->stepSelection(steps);
+}
+
+// ---- extenders (EXTENDER.md K4 to K8) ---------------------------------------
+
+std::optional<urnet::ExtenderStatus> SdkHost::GetExtenderStatus() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return std::nullopt;  // no session: the panel hides, never zeroes
+  try {
+    return device_->getExtenderStatus();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getExtenderStatus failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderSettings> SdkHost::GetExtenderSettings() {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->getSettings();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender getSettings failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderSettings> SdkHost::SetExtenderSettings(
+    const std::string& dnsName, const std::string& gossipUrl,
+    const std::vector<std::string>& hosts) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    // An EMPTY host list is a real edit (the user cleared every manual
+    // bootstrap address), so it is sent as an empty list rather than as "no
+    // opinion" -- passing nullopt would leave the previous list in place and
+    // the form would silently refuse to clear.
+    return extenderVc_->setSettings(dnsName, gossipUrl, urnet::StringList(hosts));
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender setSettings failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderShareResult> SdkHost::BuildExtenderShare(bool includeSettings) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->buildShare(includeSettings);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender buildShare failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderShareDecodeResult> SdkHost::DecodeExtenderShare(
+    const std::string& text) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->decodeShare(text);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender decodeShare failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderImportResult> SdkHost::ImportExtenderShare(const std::string& text,
+                                                                       bool useSettings) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->importShare(text, useSettings);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender importShare failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::NetExtender> SdkHost::GetPrivateExtender() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getNetExtender();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getNetExtender failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secret) {
+  std::scoped_lock lock(mutex_);
+  if (!spaceManager_ || !networkSpace_) return false;
+  try {
+    urnet::NetworkSpaceKey key;
+    key.host_name = networkSpace_->getHostName();
+    key.env_name = networkSpace_->getEnvName();
+
+    // updateNetworkSpaceValues takes the WHOLE value set, not a patch, so every
+    // field is read back off the live space before the one being edited is
+    // changed. Writing only net_extender would silently reset the api/platform
+    // url overrides a custom network server left here (ApplyNetworkServer) and
+    // the extender settings the view controller wrote.
+    urnet::NetworkSpaceValues values;
+    values.bundled = networkSpace_->getBundled();
+    values.net_expose_server_ips = networkSpace_->getNetExposeServerIps();
+    values.net_expose_server_host_names = networkSpace_->getNetExposeServerHostNames();
+    values.link_host_name = networkSpace_->getLinkHostName();
+    values.migration_host_name = networkSpace_->getMigrationHostName();
+    values.wallet = networkSpace_->getWallet();
+    values.sso_google = networkSpace_->getSsoGoogle();
+    values.api_url = networkSpace_->getConfiguredApiUrl();
+    values.platform_url = networkSpace_->getConfiguredPlatformUrl();
+    if (const std::string envSecret = networkSpace_->getEnvSecret(); !envSecret.empty()) {
+      values.env_secret = envSecret;
+    }
+    if (const std::string store = networkSpace_->getStore(); !store.empty()) {
+      values.store = store;
+    }
+    if (const std::string dnsName = networkSpace_->getExtenderDnsName(); !dnsName.empty()) {
+      values.extender_dns_name = dnsName;
+    }
+    if (const std::string gossipUrl = networkSpace_->getGossipUrl(); !gossipUrl.empty()) {
+      values.gossip_url = gossipUrl;
+    }
+    values.extender_hosts = networkSpace_->getExtenderHosts();
+    values.extender_root_public_keys = networkSpace_->getExtenderRootPublicKeys();
+
+    // both fields empty = "no private extender": the advanced override is off
+    // and discovery resumes
+    if (!ip.empty() || !secret.empty()) {
+      urnet::NetExtender netExtender;
+      netExtender.ip = ip;
+      netExtender.secret = secret;
+      values.net_extender = netExtender;
+    }
+
+    networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
+    spaceManager_->setActiveNetworkSpace(*networkSpace_);
+    // ...and re-derive what hangs off the space, exactly as ApplyNetworkServer
+    // does: the handle is new, and a freshly derived Api carries no token.
+    api_ = networkSpace_->getApi();
+    asyncLocalState_ = networkSpace_->getAsyncLocalState();
+    localState_ = asyncLocalState_->getLocalState();
+    if (const std::string byJwt = localState_->getByJwt(); !byJwt.empty()) {
+      api_->setByJwt(byJwt);
+    }
+    return true;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] set private extender failed: %s\n", e.what());
+    return false;
+  }
 }
 
 // ---- reliability / exits ---------------------------------------------------

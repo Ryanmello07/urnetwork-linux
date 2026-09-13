@@ -342,6 +342,13 @@ void ConnectDrawer::BuildClientStatsCard() {
   // on it is a tap on the card (the contract details), like the charts.
   ipFamilyHistogram_ = Gtk::make_managed<IpFamilyHistogram>();
   card->append(*ipFamilyHistogram_);
+  // the extender panel, directly under the histogram (EXTENDER.md K4): the
+  // active extenders as hollow rings in their own colors, the N-of-M count and
+  // the gossip network's status dot. Decorative like the histogram -- K4 is
+  // explicit that tapping does nothing and there is no details panel -- so a
+  // tap on it is a tap on the card.
+  extenderPanel_ = Gtk::make_managed<ExtenderPanel>();
+  card->append(*extenderPanel_);
   blockChart_ = Gtk::make_managed<TransferChart>(T_("blocked", "Blocked"),
                                                  TransferChart::Route::Block, kUrCoral,
                                                  kUrMutedCoral);
@@ -551,6 +558,11 @@ void ConnectDrawer::OnHostEvent(DrawerEvent event) {
       // no provider stats surface in the drawer (the provider bar would live
       // under a provider Local chart); nothing to refresh here
       break;
+    case DrawerEvent::ExtenderStatus:
+      // the SDK coalesces this to one callback per second; the panel drops a
+      // push that changes nothing, so this costs a read and a compare
+      RefreshExtenderPanel();
+      break;
     case DrawerEvent::Blocker:
       RefreshBlocker();
       break;
@@ -614,6 +626,7 @@ void ConnectDrawer::RefreshAll() {
     });
   }
   RefreshPlanCard();
+  RefreshExtenderPanel();
   if (pqiPanel_) pqiPanel_->Refresh();
   if (contractsSheet_->is_visible()) contractsSheet_->Refresh();
   if (splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
@@ -763,6 +776,12 @@ void ConnectDrawer::PullThroughput() {
 
 void ConnectDrawer::RefreshTransportBar() {
   if (transportBar_) transportBar_->SetDistribution(host_.ClientTransportDistribution());
+}
+
+void ConnectDrawer::RefreshExtenderPanel() {
+  // nullopt with no device: the panel hides itself rather than reporting zero
+  // extenders, which is a different statement
+  if (extenderPanel_) extenderPanel_->SetStatus(host_.GetExtenderStatus());
 }
 
 void ConnectDrawer::SetProviderGrid(const std::vector<urnet::ProviderGridPoint>& points,
