@@ -229,9 +229,9 @@ void ExtenderSection::ApplyEnabled() {
   share_->set_sensitive(enabled);
   import_->set_sensitive(enabled);
   if (!enabled) {
-    kit::ApplySupportingText(*status_, T_("dev_no_device",
-                                          "No session. Sign in and connect to use these tools."),
-                             kit::ValidationState::NotChecked);
+    kit::ApplySupportingText(
+        *status_, T_("extenders_no_session", "Sign in and connect to manage extenders."),
+        kit::ValidationState::NotChecked);
   }
 }
 
