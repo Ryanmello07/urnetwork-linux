@@ -66,6 +66,10 @@ bool EncodeShareCode(const std::string& text, std::vector<bool>* modules, int* c
     *count = size;
     return true;
   } catch (const std::exception& e) {
+    // NOT the whole report: the sheet says so on screen
+    // (share_extenders_too_large) and points at the copyable text. This line
+    // exists only because it carries the byte count, which the sentence on
+    // screen deliberately does not.
     g_warning("extender share: the payload does not fit in a QR code (%zu bytes): %s",
               text.size(), e.what());
     return false;
@@ -168,11 +172,12 @@ ExtenderShareSheet::ExtenderShareSheet(Gtk::Window& parent, SdkHost& host) : hos
   kit::MarkDecorative(*code_);
   box->append(*code_);
 
-  // Shown INSTEAD of the code when there is nothing to encode, so the sheet is
-  // never a blank square the user has to interpret.
-  unavailable_ = kit::MakePaneEmptyLine({});
-  unavailable_->set_visible(false);
-  box->append(*unavailable_);
+  // Shown INSTEAD of the code when there is none, so the sheet is never a blank
+  // square the user has to interpret.
+  codeNote_ = kit::MakePaneEmptyLine({});
+  codeNote_->set_wrap(true);
+  codeNote_->set_visible(false);
+  box->append(*codeNote_);
 
   count_ = Gtk::make_managed<Gtk::Label>();
   count_->set_xalign(0);
@@ -237,20 +242,24 @@ void ExtenderShareSheet::Rebuild() {
   // and both of them have to be readable rather than blank.
   // Encoded ONCE per payload, here rather than in the draw function, and the
   // canvas is then sized from the module count so a dense code still gets
-  // whole pixels per module.
+  // whole pixels per module. Cleared first: a payload that does not encode
+  // must not leave the previous one's modules on screen.
+  codeModules_.clear();
+  moduleCount_ = 0;
   const bool encoded =
       share_.canRenderCode && EncodeShareCode(share_.text, &codeModules_, &moduleCount_);
   const int canvasSide = CodeCanvasSide(moduleCount_);
   code_->set_content_width(canvasSide);
   code_->set_content_height(canvasSide);
 
-  // Three distinct readings, none of them a blank square: no answer at all
-  // (no device -- the section's buttons are meant to be disabled before this
-  // can happen, so it is the defensive path), an answer with nothing to encode
-  // (the count says "0 extenders", which is the whole truth), and a payload.
-  code_->set_visible(encoded);
-  unavailable_->set_visible(!share_.ready);
-  if (!share_.ready) unavailable_->set_text(T_("something_went_wrong", "Something went wrong."));
+  // Four distinct readings, none of them a blank square (ShareCodeState):
+  // no answer at all (no device -- the section's buttons are meant to be
+  // disabled before this can happen, so it is the defensive path), an answer
+  // with nothing to encode (the count says "0 extenders", which is the whole
+  // truth), a payload too large for any QR code, and the code itself.
+  const extender::ShareCodeState state = extender::ShareCodeStateFor(share_, encoded);
+  code_->set_visible(state == extender::ShareCodeState::Code);
+  SetCodeNote(state);
   code_->queue_draw();
 
   count_->set_text(Format(TN_("share_extenders_count", "{} extender", "{} extenders",
@@ -268,6 +277,28 @@ void ExtenderShareSheet::Rebuild() {
     rebuilding_ = true;
     includeSettings_->set_active(share_.includesSettings);
     rebuilding_ = false;
+  }
+}
+
+// The sentence that stands in for the code, written out per case so the
+// literals stay greppable here rather than being looked up from the pure
+// header's key id.
+void ExtenderShareSheet::SetCodeNote(extender::ShareCodeState state) {
+  switch (state) {
+    case extender::ShareCodeState::Unavailable:
+      codeNote_->set_text(T_("something_went_wrong", "Something went wrong."));
+      codeNote_->set_visible(true);
+      return;
+    case extender::ShareCodeState::TooLarge:
+      codeNote_->set_text(T_("share_extenders_too_large",
+                             "The share code is too large for a QR code. Copy the share text "
+                             "instead."));
+      codeNote_->set_visible(true);
+      return;
+    case extender::ShareCodeState::Empty:
+    case extender::ShareCodeState::Code:
+      codeNote_->set_visible(false);
+      return;
   }
 }
 

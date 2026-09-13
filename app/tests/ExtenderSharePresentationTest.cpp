@@ -15,6 +15,9 @@ using urnw::extender::ImportPresentation;
 using urnw::extender::ImportPresentationFor;
 using urnw::extender::JoinHostLines;
 using urnw::extender::SettingsField;
+using urnw::extender::ShareCodeMessageKey;
+using urnw::extender::ShareCodeState;
+using urnw::extender::ShareCodeStateFor;
 using urnw::extender::SharePresentation;
 using urnw::extender::SharePresentationFor;
 using urnw::extender::SplitHostLines;
@@ -116,6 +119,43 @@ UR_TEST(ExtenderShare_EmptyPayloadStillReadsItsCount) {
   UR_EXPECT_EQ(0, share.count);
   UR_EXPECT_FALSE(share.canCopy);
   UR_EXPECT_FALSE(share.canRenderCode);
+}
+
+// The four readings of the code area. `canRenderCode` only says there is
+// something to hand the encoder; whether a code appears is decided after it has
+// run.
+UR_TEST(ExtenderShare_CodeAreaHasFourReadings) {
+  const SharePresentation none = SharePresentationFor(false, "", 0, false);
+  UR_EXPECT_TRUE(ShareCodeStateFor(none, false) == ShareCodeState::Unavailable);
+  // ...and an encoder that somehow succeeded cannot override "no answer"
+  UR_EXPECT_TRUE(ShareCodeStateFor(none, true) == ShareCodeState::Unavailable);
+
+  const SharePresentation empty = SharePresentationFor(true, "", 0, false);
+  UR_EXPECT_TRUE(ShareCodeStateFor(empty, false) == ShareCodeState::Empty);
+
+  const SharePresentation payload = SharePresentationFor(true, kPayload, 12, false);
+  UR_EXPECT_TRUE(ShareCodeStateFor(payload, true) == ShareCodeState::Code);
+  UR_EXPECT_TRUE(ShareCodeStateFor(payload, false) == ShareCodeState::TooLarge);
+}
+
+// A payload the encoder refuses says so ON SCREEN and points at the copyable
+// text, which is then the only way to move the addresses. An empty share and a
+// drawn code need no sentence of their own.
+UR_TEST(ExtenderShare_CodeAreaMessages) {
+  UR_EXPECT_TRUE(std::string(ShareCodeMessageKey(ShareCodeState::Unavailable)) ==
+                 "something_went_wrong");
+  UR_EXPECT_TRUE(std::string(ShareCodeMessageKey(ShareCodeState::TooLarge)) ==
+                 "share_extenders_too_large");
+  UR_EXPECT_TRUE(std::string(ShareCodeMessageKey(ShareCodeState::Empty)).empty());
+  UR_EXPECT_TRUE(std::string(ShareCodeMessageKey(ShareCodeState::Code)).empty());
+}
+
+// The copy button survives a payload that cannot be drawn: it is the whole
+// fallback for that case.
+UR_TEST(ExtenderShare_TooLargePayloadStillCopies) {
+  const SharePresentation share = SharePresentationFor(true, kPayload, 48, true);
+  UR_EXPECT_TRUE(ShareCodeStateFor(share, false) == ShareCodeState::TooLarge);
+  UR_EXPECT_TRUE(share.canCopy);
 }
 
 // ---- the import screen ------------------------------------------------------

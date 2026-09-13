@@ -106,6 +106,10 @@ struct SharePresentation {
 // discovered nothing yet), and it must render as a zero count rather than as a
 // failure -- but an EMPTY payload has nothing to encode or copy, so the code
 // and the copy button stand down while the count still reads.
+//
+// `canRenderCode` means "there is something to hand the encoder", NOT "a code
+// will appear": whether the payload actually fits is only known once the
+// encoder has run, which is what ShareCodeStateFor below resolves.
 inline SharePresentation SharePresentationFor(bool haveResult, const std::string& text,
                                               int64_t count, bool includesSettings) {
   SharePresentation out;
@@ -117,6 +121,44 @@ inline SharePresentation SharePresentationFor(bool haveResult, const std::string
   out.canCopy = !text.empty();
   out.canRenderCode = !text.empty();
   return out;
+}
+
+// What the share sheet shows where the code would be. Four distinct readings,
+// none of them a blank square -- and the last two are the reason this is not
+// just `canRenderCode`: a 48-address share WITH a settings block can exceed
+// even version 40-H, and "the encoder refused it" has to be a sentence on the
+// screen rather than a line in the journal, because the copyable text below is
+// then the only way to move the addresses.
+enum class ShareCodeState {
+  // no answer at all (no device): the sheet says something went wrong
+  Unavailable,
+  // an answer carrying nothing: the "0 extenders" count is the whole reading
+  // and the code area stands down without a message of its own
+  Empty,
+  // a payload the encoder refused: share_extenders_too_large, pointing at the
+  // copyable text
+  TooLarge,
+  // the code itself
+  Code,
+};
+
+// `encoded` is what the encoder actually managed with `share.text`.
+inline ShareCodeState ShareCodeStateFor(const SharePresentation& share, bool encoded) {
+  if (!share.ready) return ShareCodeState::Unavailable;
+  if (!share.canRenderCode) return ShareCodeState::Empty;
+  return encoded ? ShareCodeState::Code : ShareCodeState::TooLarge;
+}
+
+// The localization key id for the line under (or instead of) the code, and the
+// English source that key carries. Empty for the states that need no sentence.
+inline const char* ShareCodeMessageKey(ShareCodeState state) {
+  switch (state) {
+    case ShareCodeState::Unavailable: return "something_went_wrong";
+    case ShareCodeState::TooLarge: return "share_extenders_too_large";
+    case ShareCodeState::Empty:
+    case ShareCodeState::Code: return "";
+  }
+  return "";
 }
 
 // ---- the import screen ------------------------------------------------------

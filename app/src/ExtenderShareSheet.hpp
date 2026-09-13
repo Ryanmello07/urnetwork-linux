@@ -50,6 +50,7 @@ class ExtenderShareSheet : public Gtk::Window {
   // buildShare is a local encode over the directory the device already holds,
   // not a round trip -- so there is no in-flight state and no watchdog here.
   void Rebuild();
+  void SetCodeNote(extender::ShareCodeState state);
 
   SdkHost& host_;
 
@@ -62,7 +63,9 @@ class ExtenderShareSheet : public Gtk::Window {
 
   Gtk::DrawingArea* code_ = nullptr;
   Gtk::Label* count_ = nullptr;
-  Gtk::Label* unavailable_ = nullptr;  // "no code to show": the SDK said nothing
+  // Stands in for the code whenever there is none: the SDK said nothing, or
+  // the payload was too large to encode (ShareCodeState).
+  Gtk::Label* codeNote_ = nullptr;
   Gtk::TextView* payload_ = nullptr;
   Gtk::Button* copy_ = nullptr;
   Gtk::Switch* includeSettings_ = nullptr;
