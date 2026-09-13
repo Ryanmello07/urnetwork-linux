@@ -2436,6 +2436,10 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       // MainWindow owns the globe sheet and the location-override tracking, so
       // they must survive with this page unbuilt
       break;
+    case DrawerEvent::ExtenderStatus:
+      // the extender panel is the drawer's, and the hero canvas's rings ride
+      // the provider grid rather than the status
+      break;
   }
 }
 

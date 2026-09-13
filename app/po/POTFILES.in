@@ -11,6 +11,7 @@
 src/AuthViews.cpp
 src/ConnectDrawer.cpp
 src/IpFamilyHistogram.cpp
+src/ExtenderPanel.cpp
 src/ConnectPage.cpp
 src/ContractsSheet.cpp
 src/DnsSheet.cpp
