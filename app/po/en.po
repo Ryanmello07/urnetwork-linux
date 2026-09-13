@@ -3269,6 +3269,11 @@ msgctxt "extenders_active_of_reserve"
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
 
+#. Shown in the account Extenders section when there is no signed-in device to manage extenders with.
+msgctxt "extenders_no_session"
+msgid "Sign in and connect to manage extenders."
+msgstr "Sign in and connect to manage extenders."
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -5684,6 +5689,11 @@ msgstr[1] "{} extenders"
 msgctxt "share_extenders_hint"
 msgid "Scan this code with another URnetwork app to share these extenders."
 msgstr "Scan this code with another URnetwork app to share these extenders."
+
+#. Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.
+msgctxt "share_extenders_too_large"
+msgid "The share code is too large for a QR code. Copy the share text instead."
+msgstr "The share code is too large for a QR code. Copy the share text instead."
 
 #. Call to action
 msgctxt "share_logs"
