@@ -963,6 +963,11 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "साथी"
 
+#. Used in Main/Account/Settings/SettingsView.swift.
+msgctxt "confirm_seeker_token"
+msgid "Confirm Seeker Token"
+msgstr "सीकर टोकन की पुष्टि करें"
+
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"

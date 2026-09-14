@@ -961,6 +961,11 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "对端"
 
+#. Used in Main/Account/Settings/SettingsView.swift.
+msgctxt "confirm_seeker_token"
+msgid "Confirm Seeker Token"
+msgstr "确认 Seeker 令牌"
+
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"
