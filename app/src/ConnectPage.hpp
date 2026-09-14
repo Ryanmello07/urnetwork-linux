@@ -34,6 +34,7 @@
 #include "ConnectCanvas.hpp"
 #include "ContractsSheet.hpp"
 #include "DnsSheet.hpp"
+#include "ExtenderProvidePresentation.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
@@ -153,6 +154,13 @@ class ConnectPage : public Gtk::Box {
   void ApplyProvideControlMode();
   void ApplyBlockerUi();
   void ApplyKillSwitchUi();
+  // The provider extender row under the provide control (EXTENDER.md N7): one
+  // writer that re-reads the status and the setting beside it and draws the
+  // row, dropping a reading that changes nothing; the switch writes the
+  // setting through the device and repaints with the guess.
+  void ApplyExtenderProvideState();
+  void DrawExtenderRow(const extender::ProvideRow& row);
+  void OnExtenderToggled();
   // the selected-provider row (§2.3): stats.locationName with a selected peer
   // resolved to its device name; empty => "Best available provider"
   void ApplyLocationRow();
@@ -381,6 +389,17 @@ class ConnectPage : public Gtk::Box {
   Gtk::ToggleButton* provideNever_ = nullptr;
   bool syncingProvide_ = false;
   Gtk::Label* discoverableText_ = nullptr;
+  // the provider extender row and its description, directly under the provide
+  // control's footer line (N7): hidden, never disabled, while the status is
+  // absent or the role unsupported
+  Gtk::Box* extenderRow_ = nullptr;
+  Gtk::Label* extenderDot_ = nullptr;
+  Gtk::Label* extenderState_ = nullptr;
+  Gtk::Switch* extenderToggle_ = nullptr;
+  Gtk::Label* extenderDescription_ = nullptr;
+  // the reading the row last drew, so a push that changes nothing is dropped
+  extender::ProvideRow extenderRowDrawn_;
+  bool extenderRowApplied_ = false;
   // connect options (§2.8): the 3-item connection-mode segmented control and
   // the three PerformanceProfile toggles, all echo-guarded
   Gtk::ToggleButton* modeAuto_ = nullptr;

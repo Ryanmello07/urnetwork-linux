@@ -2356,6 +2356,15 @@ void SdkHost::SubscribeDrawer() {
       [this](std::optional<urnet::ExtenderStatus>) {
         EmitDrawerEvent(DrawerEvent::ExtenderStatus);
       }));
+  // ...and this device's OWN extender role (N2, N7): the connect page's
+  // extender row, and the earnings page's read-only row and the running state
+  // behind its extender statistics (O4). The SDK coalesces it to one callback
+  // per second and fires it only on a change, so the pages also re-read the
+  // status on DeviceLifecycle.
+  presentationSubs_.push_back(device_->addExtenderProvideStatusChangeListener(
+      [this](std::optional<urnet::ExtenderProvideStatus>) {
+        EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
+      }));
   // ...and the shared view controller behind the account section's settings,
   // share and import. It is opened with the rest of the presentation and
   // closed with it, so every accessor is nullopt with the window hidden or the
@@ -2952,6 +2961,33 @@ std::optional<urnet::ExtenderStatus> SdkHost::GetExtenderStatus() {
     std::fprintf(stderr, "[sdk] getExtenderStatus failed: %s\n", e.what());
     return std::nullopt;
   }
+}
+
+std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return std::nullopt;  // no session: the extender rows hide
+  try {
+    return device_->getExtenderProvideStatus();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getExtenderProvideStatus failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+bool SdkHost::GetProvideExtender() {
+  std::scoped_lock lock(mutex_);
+  // the setting's default with no device (N4); the row is hidden then
+  if (!device_) return true;
+  return device_->getProvideExtender();
+}
+
+void SdkHost::SetProvideExtender(bool on) {
+  std::scoped_lock lock(mutex_);
+  if (!device_) {
+    g_warning("extender: dropping a provide extender write with no device");
+    return;
+  }
+  device_->setProvideExtender(on);
 }
 
 std::optional<urnet::ExtenderSettings> SdkHost::GetExtenderSettings() {

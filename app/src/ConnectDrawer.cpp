@@ -563,6 +563,10 @@ void ConnectDrawer::OnHostEvent(DrawerEvent event) {
       // push that changes nothing, so this costs a read and a compare
       RefreshExtenderPanel();
       break;
+    case DrawerEvent::ExtenderProvideStatus:
+      // this device's own extender role has no surface in the drawer; the
+      // connect page's provide group and the earnings page carry it
+      break;
     case DrawerEvent::Blocker:
       RefreshBlocker();
       break;
