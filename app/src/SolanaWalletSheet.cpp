@@ -121,8 +121,8 @@ SolanaWalletSheet::SolanaWalletSheet(Gtk::Window& parent, SdkHost& host, bool al
 
   // Dismissal is allowed in every state, a round trip out included: whatever
   // is still out is dropped here, the host answers a waiting connect
-  // "superseded" when the next wallet flow starts, and the page reloads the
-  // wallets on its next Load.
+  // "superseded by ..." when the next wallet flow starts, and the page reloads
+  // the wallets on its next Load.
   signal_hide().connect([this] { Abandon(); });
 
   Render();
@@ -142,20 +142,14 @@ void SolanaWalletSheet::Abandon() {
   watchdog_.disconnect();
 }
 
-void SolanaWalletSheet::SetBridgeBusy(bool busy) {
-  if (bridgeBusy_ == busy) return;
-  bridgeBusy_ = busy;
-  Render();
-}
-
 // ---- the bridge ------------------------------------------------------------------
 
 void SolanaWalletSheet::OnProvider(WalletConnect::Provider provider) {
-  // the buttons are already insensitive in each of these; checked again at
-  // press time, out loud
-  if (!allowActions_ || bridgeBusy_) {
-    g_message("earnings: solana wallet provider press refused (actions %s, bridge %s)",
-              allowActions_ ? "allowed" : "off", bridgeBusy_ ? "busy" : "free");
+  // the buttons are already insensitive without actions (the preview);
+  // checked again at press time, out loud. A Bittensor connect still out on
+  // the page does not hold them: this request supersedes it in the host.
+  if (!allowActions_) {
+    g_message("earnings: solana wallet provider press refused (actions off)");
     return;
   }
   if (!machine_.ChooseProvider()) return;  // one round trip at a time
@@ -353,7 +347,7 @@ void SolanaWalletSheet::ArmWatchdog(int timeoutMs) {
 
 void SolanaWalletSheet::Render() {
   const bool input = machine_.AcceptsInput();
-  const bool providers = allowActions_ && input && !bridgeBusy_;
+  const bool providers = allowActions_ && input;
   phantomButton_->set_sensitive(providers);
   solflareButton_->set_sensitive(providers);
   manualToggle_->set_sensitive(input);
@@ -374,11 +368,6 @@ void SolanaWalletSheet::Render() {
     case solana::ConnectState::Ready:
     case solana::ConnectState::Failed:
     case solana::ConnectState::Linked:
-      // the providers are waiting on the page's Bittensor round trip
-      if (bridgeBusy_ && allowActions_ && input) {
-        status = T_("opening_bittensor_wallet_in_browser",
-                    "Opening your Bittensor wallet in the browser…");
-      }
       break;
   }
   kit::SetTextOrCollapse(*statusLine_, status);

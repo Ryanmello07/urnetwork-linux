@@ -129,7 +129,6 @@ struct SnWalletCheck {
 
 class ClaimAlphaSheet;
 class EmojiTagSheet;
-class SolanaWalletSheet;
 
 class EarningsPage : public Gtk::Box {
  public:
@@ -588,7 +587,6 @@ class EarningsPage : public Gtk::Box {
 
   std::shared_ptr<Gtk::Window> sheet_;
   std::weak_ptr<ClaimAlphaSheet> claimSheet_;
-  std::weak_ptr<SolanaWalletSheet> solanaSheet_;
 };
 
 }  // namespace urnw

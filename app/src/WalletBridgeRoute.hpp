@@ -10,6 +10,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 
 namespace urnw::bridge {
@@ -42,5 +43,21 @@ constexpr SignatureRoute RouteSignature(bool signWaiting, bool createWaiting,
   if (createWaiting) return SignatureRoute::FinishCreate;
   return walletSignInWaiting ? SignatureRoute::SignIn : SignatureRoute::Drop;
 }
+
+// The newest wallet flow owns the bridge: its keypair and its browser tab.
+// SdkHost numbers every wallet flow it starts (under its lock), and a step that
+// runs later -- a challenge that arrives after its fetch -- opens the bridge
+// only while its flow is still the newest. A Bittensor connect superseded by a
+// Solana connect while its challenge was being fetched therefore opens no tab,
+// and leaves the Solana keypair (and so its return) intact.
+class FlowCounter {
+ public:
+  constexpr uint64_t Begin() noexcept { return ++latest_; }
+  constexpr uint64_t Latest() const noexcept { return latest_; }
+  constexpr bool IsCurrent(uint64_t flow) const noexcept { return flow != 0 && flow == latest_; }
+
+ private:
+  uint64_t latest_ = 0;
+};
 
 }  // namespace urnw::bridge

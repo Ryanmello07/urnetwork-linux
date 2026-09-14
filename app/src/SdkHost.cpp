@@ -772,10 +772,12 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
 void SdkHost::CreateNetworkWithPendingWallet(const std::string& networkName,
                                              const std::string& referralCode,
                                              std::function<void(AuthResult)> done) {
-  CancelPendingSolanaConnect("superseded");  // this flow signs through the bridge too
+  CancelPendingSolanaConnect("superseded by wallet network creation");
   std::optional<urnet::WalletAuthArgs> walletAuth;
+  uint64_t flow = 0;
   {
     std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();  // this flow signs through the bridge too
     walletAuth = pendingWalletAuth_;
   }
   if (!walletAuth) {
@@ -785,18 +787,23 @@ void SdkHost::CreateNetworkWithPendingWallet(const std::string& networkName,
 
   RequestWalletChallenge(walletAuth->blockchain.value_or(std::string()),
                          walletAuth->wallet_address.value_or(std::string()),
-                         [this, networkName, referralCode, done = std::move(done)](
+                         [this, flow, networkName, referralCode, done = std::move(done)](
                              std::optional<std::string> message, std::string error) mutable {
     if (!message) {
       done({false, false, error.empty() ? "could not fetch wallet challenge" : error});
       return;
     }
 
-    PostToMain([this, networkName, referralCode, message = *message,
+    PostToMain([this, flow, networkName, referralCode, message = *message,
                 done = std::move(done)]() mutable {
       WalletConnect::Provider provider;
       {
         std::scoped_lock lock(mutex_);
+        if (!walletFlows_.IsCurrent(flow)) {
+          // another wallet flow took the bridge while the challenge was fetched
+          done({false, false, "superseded by another wallet flow"});
+          return;
+        }
         if (!pendingWalletAuth_) {
           done({false, false, "no wallet sign-in pending"});
           return;
@@ -951,8 +958,10 @@ void SdkHost::SetupWalletCallbacks() {
   wallet_.on_public_key = [this](std::string publicKey, WalletConnect::Provider provider) {
     std::function<void(SolanaConnectResult)> connectDone;
     bridge::PublicKeyRoute route = bridge::PublicKeyRoute::Drop;
+    uint64_t flow = 0;
     {
       std::scoped_lock lock(mutex_);
+      flow = walletFlows_.Latest();
       route = bridge::RoutePublicKey(provider == WalletConnect::Provider::Bittensor,
                                      static_cast<bool>(walletConnectDone_),
                                      static_cast<bool>(walletAuthDone_));
@@ -979,12 +988,17 @@ void SdkHost::SetupWalletCallbacks() {
         break;
     }
     RequestWalletChallenge(kSolanaBlockchain, publicKey,
-                           [this](std::optional<std::string> message, std::string error) {
+                           [this, flow](std::optional<std::string> message, std::string error) {
       if (!message) {
+        // a newer wallet flow owns the slots now: it is not failed for this one
+        if (!WalletFlowIsCurrent(flow)) return;
         FailWalletOperation(error.empty() ? "could not fetch wallet challenge" : error);
         return;
       }
-      PostToMain([this, message = *message] { wallet_.SignMessage(message); });
+      PostToMain([this, flow, message = *message] {
+        if (!WalletFlowIsCurrent(flow)) return;  // a newer flow owns the bridge now
+        wallet_.SignMessage(message);
+      });
     });
   };
   // Either way the wallet address is on the WalletConnect by now: solana set it
@@ -1122,6 +1136,16 @@ void SdkHost::CancelPendingSolanaConnect(const std::string& reason) {
   connectDone(std::move(out));
 }
 
+bool SdkHost::WalletFlowIsCurrent(uint64_t flow) {
+  {
+    std::scoped_lock lock(mutex_);
+    if (walletFlows_.IsCurrent(flow)) return true;
+  }
+  std::fprintf(stderr, "[wallet] a challenge arrived for a superseded wallet flow; the bridge "
+                       "stays with the newer one\n");
+  return false;
+}
+
 void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
                                   std::function<void(SolanaConnectResult)> done) {
   if (provider == WalletConnect::Provider::Bittensor) {
@@ -1131,7 +1155,23 @@ void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
     if (done) done(std::move(out));
     return;
   }
-  CancelPendingSolanaConnect("superseded");
+  CancelPendingSolanaConnect("superseded by a wallet connect request");
+  // The bridge is this request's now. A Bittensor connect still waiting for its
+  // signature is answered (the page settles it quietly), and its challenge, if
+  // it is still being fetched, will not open the bridge over this one: the flow
+  // number moves on.
+  std::function<void(WalletSignature)> signDone;
+  {
+    std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
+    signDone = std::move(walletSignDone_);
+    walletSignDone_ = nullptr;
+  }
+  if (signDone) {
+    WalletSignature out;
+    out.error = "superseded by a wallet connect request";
+    signDone(std::move(out));
+  }
   {
     std::scoped_lock lock(mutex_);
     walletConnectDone_ = std::move(done);
@@ -1144,9 +1184,10 @@ void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
 
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
                                std::function<void(AuthResult)> done) {
-  CancelPendingSolanaConnect("superseded");
+  CancelPendingSolanaConnect("superseded by a wallet sign-in");
   {
     std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
     pendingWalletAuth_.reset();
     walletAuthDone_ = std::move(done);
   }
@@ -1154,26 +1195,33 @@ void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
 }
 
 void SdkHost::SignInWithBittensor(std::function<void(AuthResult)> done) {
-  CancelPendingSolanaConnect("superseded");
+  CancelPendingSolanaConnect("superseded by a wallet sign-in");
+  uint64_t flow = 0;
   {
     std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();
     pendingWalletAuth_.reset();
     walletAuthDone_ = std::move(done);
   }
   RequestWalletChallenge(urnet::TAO, std::string(),
-                         [this](std::optional<std::string> message, std::string error) {
+                         [this, flow](std::optional<std::string> message, std::string error) {
     if (!message) {
+      // a newer wallet flow owns the slots now: it is not failed for this one
+      if (!WalletFlowIsCurrent(flow)) return;
       FailWalletOperation(error.empty() ? "could not fetch wallet challenge" : error);
       return;
     }
     // one hop: the bridge connects the substrate wallet and signs; the rest
     // continues on the urnetwork://bittensor-sign-message callback
-    PostToMain([this, message = *message] { wallet_.SignInWithBittensor(message); });
+    PostToMain([this, flow, message = *message] {
+      if (!WalletFlowIsCurrent(flow)) return;  // a newer flow owns the bridge now
+      wallet_.SignInWithBittensor(message);
+    });
   });
 }
 
 void SdkHost::SignInWithSso(const std::string& provider, std::function<void(AuthResult)> done) {
-  CancelPendingSolanaConnect("superseded");
+  CancelPendingSolanaConnect("superseded by a wallet sign-in");
   // a fresh state + nonce per attempt, never reused: the return is accepted
   // exactly once and only for this attempt
   std::string state;
@@ -1195,6 +1243,7 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   std::string apiUrl;
   {
     std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
     pendingWalletAuth_.reset();
     pendingSsoAuth_ = false;
     pendingSsoType_.clear();
@@ -1364,9 +1413,11 @@ void SdkHost::FailWalletOperation(const std::string& error) {
 
 void SdkHost::SignBittensorConnect(const std::string& walletAddress,
                                    std::function<void(WalletSignature)> done) {
-  CancelPendingSolanaConnect("superseded");
+  CancelPendingSolanaConnect("superseded by a wallet signature request");
+  uint64_t flow = 0;
   {
     std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();
     walletSignDone_ = std::move(done);
   }
   if (!api_) {
@@ -1376,14 +1427,23 @@ void SdkHost::SignBittensorConnect(const std::string& walletAddress,
   // the challenge is bound to the typed address when there is one, so a wallet
   // that signs for a different account is caught by the page (address mismatch)
   RequestWalletChallenge(urnet::TAO, walletAddress,
-                         [this](std::optional<std::string> message, std::string error) {
+                         [this, flow](std::optional<std::string> message, std::string error) {
     if (!message) {
+      // superseded while the challenge was fetched (the Solana sheet): its slot
+      // was answered already, and a newer request's must not get this error
+      if (!WalletFlowIsCurrent(flow)) return;
       FailWalletOperation(error.empty() ? "could not fetch wallet challenge" : error);
       return;
     }
     // one hop, purpose "connect": the bridge signs and calls back on
     // urnetwork://bittensor-sign-message with the address + signature
-    PostToMain([this, message = *message] { wallet_.SignInWithBittensor(message, "connect"); });
+    PostToMain([this, flow, message = *message] {
+      // A Solana connect that started while this challenge was fetched owns the
+      // bridge now: opening a Bittensor tab would also reset its keypair, so its
+      // Phantom or Solflare return could no longer be read.
+      if (!WalletFlowIsCurrent(flow)) return;
+      wallet_.SignInWithBittensor(message, "connect");
+    });
   });
 }
 

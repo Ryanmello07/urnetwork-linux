@@ -41,10 +41,6 @@ class SolanaWalletSheet : public Gtk::Window {
   // OnSolanaConnected, which makes it the payout wallet and reloads).
   std::function<void(std::string walletId)> on_connected;
 
-  // Another bridge round trip is out (the page's Bittensor connect): the
-  // providers wait for it, and the status line says why.
-  void SetBridgeBusy(bool busy);
-
  private:
   void OnProvider(WalletConnect::Provider provider);
   void OnBridgeAnswer(uint64_t generation, const SdkHost::SolanaConnectResult& result);
@@ -63,7 +59,6 @@ class SolanaWalletSheet : public Gtk::Window {
 
   SdkHost& host_;
   const bool allowActions_;
-  bool bridgeBusy_ = false;
   bool manualOpen_ = false;
   solana::ConnectMachine machine_;
   std::string checkedAddress_;  // the address the server said is valid

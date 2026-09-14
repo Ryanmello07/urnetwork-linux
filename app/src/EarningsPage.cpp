@@ -19,6 +19,7 @@
 #include "LeaderboardIndicator.hpp"
 #include "SolanaWalletSheet.hpp"
 #include "UrTheme.hpp"
+#include "WalletBridgeRoute.hpp"
 
 namespace urnw {
 namespace {
@@ -2250,9 +2251,8 @@ void EarningsPage::RebuildWalletBlock() {
       connecting_ ? Glib::ustring(T_("opening_bittensor_wallet_in_browser",
                                      "Opening your Bittensor wallet in the browser…"))
                   : Glib::ustring());
-  // the overflow stays live while the bridge is out (it opens a sheet, not the
-  // bridge); an open Solana sheet holds its providers until the round trip ends
-  if (auto sheet = solanaSheet_.lock()) sheet->SetBridgeBusy(connecting_);
+  // the overflow stays live while the bridge is out: a Solana connect
+  // supersedes the Bittensor one (SdkHost::ConnectSolanaWallet)
   RebuildSolanaCard();  // the waiting line follows the Bittensor panel it sits in
 }
 
@@ -2692,6 +2692,13 @@ void EarningsPage::OnWalletSigned(uint32_t generation, const SdkHost::WalletSign
   if (!SettleFlow(connectFlow_, generation, "wallet signature")) return;
   if (!signature.ok) {
     FinishConnecting();
+    if (bridge::IsSuperseded(signature.error)) {
+      // the user started another wallet flow (the Solana sheet): this attempt
+      // ended by their choice, and the block is simply ready again
+      g_message("earnings: the Bittensor wallet connect was superseded (%s)",
+                signature.error.c_str());
+      return;
+    }
     Notify(signature.error.empty()
                ? Glib::ustring(T_("wallet_connect_failed", "Failed to connect the wallet."))
                : Glib::ustring(signature.error),
@@ -3040,10 +3047,8 @@ void EarningsPage::OnConnectSolanaWallet() {
   }
   auto sheet = std::make_shared<SolanaWalletSheet>(*root, host_, CanCallApi());
   sheet->on_connected = [this](std::string walletId) { OnSolanaConnected(walletId); };
-  // one bridge round trip at a time: a Bittensor connect still out holds the
-  // sheet's providers until it ends (RebuildWalletBlock keeps this current)
-  sheet->SetBridgeBusy(connecting_);
-  solanaSheet_ = sheet;
+  // a Bittensor connect still out does not hold the providers: pressing one
+  // supersedes it in the host, and OnWalletSigned settles it quietly
   PresentSheet(sheet);
 }
 
@@ -3413,7 +3418,6 @@ void EarningsPage::CloseSheet() {
   if (!sheet_) return;
   sheet_.reset();
   claimSheet_.reset();
-  solanaSheet_.reset();
   if (on_sheet_open_changed) on_sheet_open_changed(false);
 }
 
