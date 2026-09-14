@@ -499,8 +499,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # transport bar's boundary-tween geometry, the ip-version histogram's
 # grouping, the extender ring geometry, the extender panel's reading of
 # ExtenderStatus, the provider extender row's reading of ExtenderProvideStatus
-# and the statistics sections' visibility, the extender share/import
-# decisions, the dual-stack tunnel
+# and the statistics sections' visibility, the compact count and count-rate
+# labels, the extender share/import decisions, the dual-stack tunnel
 # policy and v6 capture set, and the daemon control protocol: framing, version
 # negotiation in both directions, SDK-build agreement, peer-credential
 # authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
@@ -525,6 +525,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ExtenderRingGeometryTest.cpp',
     'tests/ExtenderStatusPresentationTest.cpp',
     'tests/ExtenderProvidePresentationTest.cpp',
+    'tests/CountFormatTest.cpp',
     'tests/ExtenderSharePresentationTest.cpp',
     'tests/TransportStatusPresentationTest.cpp',
     'tests/DaemonUnreachableCopyTest.cpp',

@@ -249,13 +249,4 @@ inline StatsSections StatsSectionsFor(bool providingEnabled, bool hasProviderSta
   return sections;
 }
 
-// A transfer chart's count label, "<compact count> <unit>": "340 reads/s" on
-// the extender chart (O8). Formatters' FormatCountRate fills it from
-// FormatCountCompact and the store's unit; the composition lives here because
-// Formatters.cpp does not link into the unit tests (it needs glib and the SDK
-// header).
-inline std::string CountRateLabel(const std::string& compactCount, const std::string& unit) {
-  return compactCount + " " + unit;
-}
-
 }  // namespace urnw::extender

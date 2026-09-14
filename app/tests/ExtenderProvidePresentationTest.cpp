@@ -15,7 +15,6 @@
 
 #include "ExtenderProvidePresentation.hpp"
 
-using urnw::extender::CountRateLabel;
 using urnw::extender::ProvideDot;
 using urnw::extender::ProvideRow;
 using urnw::extender::ProvideRowFor;
@@ -482,11 +481,4 @@ UR_TEST(ExtenderStats_SectionsForEveryCombination) {
   }
   UR_EXPECT_TRUE(StatsSectionsFor(true, true, true) == StatsSectionsFor(true, true, true));
   UR_EXPECT_TRUE(StatsSectionsFor(true, true, true) != StatsSectionsFor(true, true, false));
-}
-
-// The extender chart's count label.
-UR_TEST(ExtenderStats_CountRateLabel) {
-  UR_EXPECT_TEXT("340 reads/s", CountRateLabel("340", "reads/s"));
-  UR_EXPECT_TEXT("1.2k reads/s", CountRateLabel("1.2k", "reads/s"));
-  UR_EXPECT_TEXT("0 reads/s", CountRateLabel("0", "reads/s"));
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "Formatters.hpp"
 
-#include "ExtenderProvidePresentation.hpp"
 #include "I18n.hpp"
 
 #include <algorithm>
@@ -51,24 +50,8 @@ std::string FormatByteRate(int64_t bytesPerSecond) {
   return FormatByteCountCompact(bytesPerSecond) + "/s";
 }
 
-std::string FormatCountCompact(int64_t count) {
-  const double v = static_cast<double>(count);
-  if (count < 1000) return std::to_string(count);
-  char buf[64];
-  if (v < 1e6) {
-    std::snprintf(buf, sizeof(buf), v < 1e4 ? "%.1fk" : "%.0fk", v / 1000);
-  } else {
-    std::snprintf(buf, sizeof(buf), "%.1fM", v / 1e6);
-  }
-  return buf;
-}
-
 std::string FormatPacketRate(int64_t packetsPerSecond) {
   return FormatCountCompact(packetsPerSecond) + " pkt/s";
-}
-
-std::string FormatCountRate(int64_t countPerSecond, const std::string& unit) {
-  return extender::CountRateLabel(FormatCountCompact(countPerSecond), unit);
 }
 
 std::string FormatBitRate(int64_t bitsPerSecond) {
