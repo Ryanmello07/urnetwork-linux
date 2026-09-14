@@ -16,6 +16,7 @@
 
 #include "IoLoopFd.hpp"
 #include "NetworkSpaceConfig.hpp"
+#include "TunnelPolicy.hpp"
 #include "daemon/DaemonLog.hpp"
 
 namespace urnw {
@@ -579,21 +580,26 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
           config.app_version.empty() ? kUrAppVersionFallback : config.app_version;
       const bool hadStoredMaterial = HasStoredKeyMaterial();
       bool restoreFailed = false;
+      // Both constructions size the device at kDeviceMemoryTargetByteCount
+      // (64 MiB, TunnelPolicy.hpp) instead of the SDK's 20 MiB default, which
+      // is what lets the H3 carrier windows reach their full size.
       if (auto km = LoadKeyMaterial()) {
         try {
-          device_ = urnet::newDeviceLocalWithKeyMaterial(
+          device_ = urnet::newDeviceLocalWithMemoryTarget(
               *networkSpace_, config.by_jwt, UrDeviceDescription(), UrDeviceSpec(), appVersion,
-              config.instance_id, /*enable_rpc=*/false, *km);
+              config.instance_id, /*enable_rpc=*/false, *km,
+              urnw::kDeviceMemoryTargetByteCount);
         } catch (const std::exception& e) {
           restoreFailed = true;
           std::fprintf(stderr, "[tunnel] restore device key material failed: %s\n", e.what());
         }
       }
       if (!device_) {
-        device_ = urnet::newDeviceLocalWithDefaults(*networkSpace_, config.by_jwt,
-                                                    UrDeviceDescription(), UrDeviceSpec(),
-                                                    appVersion, config.instance_id,
-                                                    /*enable_rpc=*/false);
+        // An empty key material (handle 0) is nil in the SDK: new identity.
+        device_ = urnet::newDeviceLocalWithMemoryTarget(
+            *networkSpace_, config.by_jwt, UrDeviceDescription(), UrDeviceSpec(), appVersion,
+            config.instance_id, /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
+            urnw::kDeviceMemoryTargetByteCount);
         // Persist ONLY when nothing was stored. Overwriting after a FAILED
         // restore silently rotates this device's provider identity — peers
         // stop recognising it and its reputation is gone — for what may be a

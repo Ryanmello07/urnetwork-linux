@@ -22,6 +22,15 @@
 
 namespace urnw {
 
+// The per-device memory target the daemon passes to
+// newDeviceLocalWithMemoryTarget (daemon/TunnelHost.cpp). connect sizes the H3
+// carrier windows from the whole device target (stream window
+// max(384 KiB, target / 64 MiB * 3 MiB), the scale capped at the 64 MiB
+// reference), so the SDK's 20 MiB default held the stream window at 960 KiB.
+// At 64 MiB it is the full 3 MiB. urnetworkd.service declares no MemoryMax or
+// MemoryHigh, and the process budget (SdkSetMemoryLimit) is already 64 MiB.
+inline constexpr std::int64_t kDeviceMemoryTargetByteCount = 64 * 1024 * 1024;
+
 // Mirrors sdk.GetDefaultTunnelMtu / connect.DefaultTunnelMtu: the INTERFACE
 // MTU. It is the IPv6 minimum link MTU, because Linux disables IPv6 on an
 // interface whose MTU is below 1280, and the v6 half of the tunnel needs the

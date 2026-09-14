@@ -48,6 +48,45 @@ static_assert(!urnw::CaptureV6Claims("fe80::1"));
 
 }  // namespace
 
+// ---- device memory target --------------------------------------------------
+
+UR_TEST(deviceMemoryTargetIsTheDesktopReference) {
+  UR_EXPECT_EQ(std::int64_t{64} * 1024 * 1024, urnw::kDeviceMemoryTargetByteCount);
+}
+
+// Same shape as the dual-stack guard test below: the constant is worthless if
+// TunnelHost goes back to a constructor that takes no target, so read the
+// source and fail when it does.
+UR_TEST(tunnelHostConstructsEveryDeviceAtTheMemoryTarget) {
+  std::ifstream in(std::string(UR_SRC_DIR) + "/daemon/TunnelHost.cpp");
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+  const std::string source = buffer.str();
+  if (source.empty()) {
+    UR_FAIL("could not read daemon/TunnelHost.cpp to check the device memory target");
+    return;
+  }
+
+  // The constructors without a target fall back to the SDK's 20 MiB default.
+  UR_EXPECT_TRUE_MSG("TunnelHost.cpp still calls newDeviceLocalWithDefaults",
+                     source.find("urnet::newDeviceLocalWithDefaults(") == std::string::npos);
+  UR_EXPECT_TRUE_MSG("TunnelHost.cpp still calls newDeviceLocalWithKeyMaterial",
+                     source.find("urnet::newDeviceLocalWithKeyMaterial(") == std::string::npos);
+
+  // Both constructions (restored identity, new identity) pass the constant.
+  const std::string call = "urnet::newDeviceLocalWithMemoryTarget(";
+  size_t constructions = 0;
+  for (size_t at = source.find(call); at != std::string::npos; at = source.find(call, at + 1)) {
+    ++constructions;
+    const size_t end = source.find(");", at);
+    const std::string args = end == std::string::npos ? std::string() : source.substr(at, end - at);
+    UR_EXPECT_TRUE_MSG(
+        "a newDeviceLocalWithMemoryTarget call does not pass kDeviceMemoryTargetByteCount",
+        args.find("kDeviceMemoryTargetByteCount") != std::string::npos);
+  }
+  UR_EXPECT_EQ(size_t{2}, constructions);
+}
+
 // ---- v6 literals -----------------------------------------------------------
 
 UR_TEST(ipv6LiteralAcceptsTheStandardForms) {
