@@ -2066,16 +2066,8 @@ void ConnectPage::ApplyKillSwitchUi() {
 // takes its position from. No status (no device) and an unsupported role both
 // hide the row, and a row that will not show reads nothing else.
 void ConnectPage::ApplyExtenderProvideState() {
-  const std::optional<urnet::ExtenderProvideStatus> status = host_.GetExtenderProvideStatus();
-  if (!status || !status->Supported) {
-    DrawExtenderRow(extender::ProvideRowFor(status.has_value(), false, {}, {}, {}, false, false,
-                                            false, false));
-    return;
-  }
-  DrawExtenderRow(extender::ProvideRowFor(
-      true, status->Supported, status->State, status->ErrorCase, status->Reason,
-      status->ActivatedV4, status->ActivatedV6, status->LastActivationRefused,
-      host_.GetProvideExtender()));
+  DrawExtenderRow(extender::ProvideRowOf(host_.GetExtenderProvideStatus(),
+                                         [this] { return host_.GetProvideExtender(); }));
 }
 
 void ConnectPage::DrawExtenderRow(const extender::ProvideRow& row) {

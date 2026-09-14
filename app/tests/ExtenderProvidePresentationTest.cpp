@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
+#include <cstdint>
 #include <fstream>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -18,6 +20,7 @@ using urnw::extender::ProvideDot;
 using urnw::extender::ProvideRow;
 using urnw::extender::ProvideRowFor;
 using urnw::extender::ProvideRowGuess;
+using urnw::extender::ProvideRowOf;
 using urnw::extender::StatsSections;
 using urnw::extender::StatsSectionsFor;
 
@@ -51,6 +54,49 @@ ProvideRow Row(const std::string& state, const std::string& errorCase = std::str
                bool activatedV6 = false, bool refused = false, bool provideExtender = true) {
   return ProvideRowFor(true, true, state, errorCase, reason, activatedV4, activatedV6, refused,
                        provideExtender);
+}
+
+// Every field of urnet::ExtenderProvideStatus, by the SDK's names, so the
+// reading is tested with the whole status a widget holds.
+struct FullStatus {
+  bool Supported{};
+  std::string State{};
+  std::string ErrorCase{};
+  std::string Reason{};
+  bool Enabled{};
+  std::string StartError{};
+  bool Listening{};
+  std::string ListenError{};
+  bool ActivatedV4{};
+  bool ActivatedV6{};
+  std::string Ipv4{};
+  std::string Ipv6{};
+  int64_t LastActivationTime{};
+  std::string LastActivationError{};
+  bool LastActivationRefused{};
+  int64_t RevokedTime{};
+  std::string DnsPorts{};
+  int64_t ConnectionCount{};
+};
+
+// A supported status with the fields the reading takes; the other eleven stay
+// at their zero values.
+FullStatus SupportedStatus(const std::string& state, const std::string& errorCase = std::string(),
+                           const std::string& reason = std::string(), bool activatedV4 = false,
+                           bool activatedV6 = false, bool refused = false) {
+  FullStatus status;
+  status.Supported = true;
+  status.State = state;
+  status.ErrorCase = errorCase;
+  status.Reason = reason;
+  status.ActivatedV4 = activatedV4;
+  status.ActivatedV6 = activatedV6;
+  status.LastActivationRefused = refused;
+  return status;
+}
+
+ProvideRow RowOf(const FullStatus& status, bool setting) {
+  return ProvideRowOf(std::optional<FullStatus>(status), [setting] { return setting; });
 }
 
 }  // namespace
@@ -264,6 +310,103 @@ UR_TEST(ExtenderProvide_EqualReadingsCompareEqual) {
                  Row("active", "", "x", true, false, false));
 }
 
+// The reading takes Supported, State, ErrorCase, Reason, ActivatedV4,
+// ActivatedV6 and LastActivationRefused and nothing else: the other eleven
+// fields, set to noise, leave every reading as it was.
+UR_TEST(ExtenderProvide_ReadsOnlyTheContractFields) {
+  FullStatus unsupported = SupportedStatus("active", "", "", true, true);
+  unsupported.Supported = false;
+  const std::vector<FullStatus> readings = {
+      SupportedStatus("off"),
+      SupportedStatus("not_providing"),
+      SupportedStatus("setting_up"),
+      SupportedStatus("active", "", "", true, true),
+      SupportedStatus("active", "", "the operator refused the activation", true, false, true),
+      SupportedStatus("error", "revoked"),
+      SupportedStatus("error", "listen", "tcp: bind: permission denied"),
+      unsupported,
+  };
+  for (const FullStatus& reading : readings) {
+    FullStatus noisy = reading;
+    noisy.Enabled = !reading.Enabled;
+    noisy.StartError = "no extender directory in this network space";
+    noisy.Listening = !reading.Listening;
+    noisy.ListenError = "udp: bind: address already in use";
+    noisy.Ipv4 = "192.0.2.10";
+    noisy.Ipv6 = "2001:db8::10";
+    noisy.LastActivationTime = 1757800000000;
+    noisy.LastActivationError = "context deadline exceeded";
+    noisy.RevokedTime = 1757800000001;
+    noisy.DnsPorts = "53,4053";
+    noisy.ConnectionCount = 42;
+    const std::string label = reading.State + "/" + reading.ErrorCase;
+    UR_EXPECT_TRUE_MSG(label, RowOf(reading, true) == RowOf(noisy, true));
+    UR_EXPECT_TRUE_MSG(label, RowOf(reading, false) == RowOf(noisy, false));
+  }
+}
+
+// Each field the reading takes, and the setting, moves the row on its own, so
+// a swap of the two family flags, or of the refusal and the setting (adjacent
+// bools in the positional call), cannot pass.
+UR_TEST(ExtenderProvide_EachReadFieldMovesTheRow) {
+  FullStatus unsupported = SupportedStatus("active", "", "", true, true);
+  unsupported.Supported = false;
+  UR_EXPECT_TRUE(RowOf(SupportedStatus("active", "", "", true, true), true).visible);
+  UR_EXPECT_FALSE(RowOf(unsupported, true).visible);
+
+  UR_EXPECT_TEXT("off", RowOf(SupportedStatus("off"), true).textKey);
+  UR_EXPECT_TEXT("extender_setting_up", RowOf(SupportedStatus("setting_up"), true).textKey);
+
+  UR_EXPECT_TEXT("extender_start_failed",
+                 RowOf(SupportedStatus("error", "start", "x"), true).textKey);
+  UR_EXPECT_TEXT("extender_listen_failed",
+                 RowOf(SupportedStatus("error", "listen", "x"), true).textKey);
+
+  UR_EXPECT_TEXT(
+      "tcp: bind: permission denied",
+      RowOf(SupportedStatus("error", "listen", "tcp: bind: permission denied"), true).argument);
+
+  UR_EXPECT_TEXT("ipv4", RowOf(SupportedStatus("active", "", "", true, false), true).familiesKey);
+  UR_EXPECT_TEXT("ipv6", RowOf(SupportedStatus("active", "", "", false, true), true).familiesKey);
+
+  const ProvideRow refused = RowOf(
+      SupportedStatus("active", "", "the operator refused the activation", true, false, true),
+      false);
+  UR_EXPECT_TEXT("extender_activation_refused", refused.detailKey);
+  UR_EXPECT_FALSE(refused.on);
+  const ProvideRow failed =
+      RowOf(SupportedStatus("active", "", "context deadline exceeded", true, false, false), true);
+  UR_EXPECT_TEXT("extender_activation_failed", failed.detailKey);
+  UR_EXPECT_TRUE(failed.on);
+
+  UR_EXPECT_TRUE(RowOf(SupportedStatus("off"), true).on);
+  UR_EXPECT_FALSE(RowOf(SupportedStatus("off"), false).on);
+}
+
+// A row that will not show reads nothing else: the setting, an rpc, is read
+// once beside a status that shows and never for a hidden one (N7).
+UR_TEST(ExtenderProvide_HiddenRowReadsNoSetting) {
+  int reads = 0;
+  const auto reader = [&reads] {
+    ++reads;
+    return true;
+  };
+  const ProvideRow none = ProvideRowOf(std::optional<FullStatus>(), reader);
+  UR_EXPECT_FALSE(none.visible);
+  UR_EXPECT_EQ(0, reads);
+
+  FullStatus unsupported = SupportedStatus("active", "", "", true, true);
+  unsupported.Supported = false;
+  const ProvideRow hidden = ProvideRowOf(std::optional<FullStatus>(unsupported), reader);
+  UR_EXPECT_FALSE(hidden.visible);
+  UR_EXPECT_EQ(0, reads);
+
+  const ProvideRow shown = ProvideRowOf(std::optional<FullStatus>(SupportedStatus("off")), reader);
+  UR_EXPECT_TRUE(shown.visible);
+  UR_EXPECT_TRUE(shown.on);
+  UR_EXPECT_EQ(1, reads);
+}
+
 // Every key and English source the row can emit is the catalog's, byte for
 // byte (I18n.hpp: the English text is the msgid the catalog is keyed on).
 UR_TEST(ExtenderProvide_KeysAreTheCatalogs) {
@@ -306,24 +449,37 @@ UR_TEST(ExtenderProvide_KeysAreTheCatalogs) {
   UR_EXPECT_EQ(12, static_cast<int>(keys.size()));
 }
 
-// The O8 rule over every combination of its three inputs.
+// The O8 rule over every combination of its three inputs, as a literal table
+// rather than the expressions it is made of.
 UR_TEST(ExtenderStats_SectionsForEveryCombination) {
-  for (bool providing : {false, true}) {
-    for (bool hasStats : {false, true}) {
-      for (bool running : {false, true}) {
-        const StatsSections sections = StatsSectionsFor(providing, hasStats, running);
-        const std::string label = std::string("providing=") + (providing ? "1" : "0") +
-                                  " stats=" + (hasStats ? "1" : "0") +
-                                  " running=" + (running ? "1" : "0");
-        UR_EXPECT_TRUE_MSG(label, sections.providerVisible == (providing && hasStats));
-        UR_EXPECT_TRUE_MSG(label, sections.extenderVisible == (providing && hasStats && running));
-        UR_EXPECT_TRUE_MSG(label, sections.disabledMeta == !(providing && hasStats));
-      }
-    }
+  struct Case {
+    bool providing;
+    bool hasStats;
+    bool running;
+    bool providerVisible;
+    bool extenderVisible;
+    bool disabledMeta;
+  };
+  const Case cases[] = {
+      // providing, stats, running -> provider rows, extender group, disabled meta
+      {false, false, false, false, false, true},
+      {false, false, true, false, false, true},
+      {false, true, false, false, false, true},
+      {false, true, true, false, false, true},
+      {true, false, false, false, false, true},
+      {true, false, true, false, false, true},
+      {true, true, false, true, false, false},
+      {true, true, true, true, true, false},
+  };
+  for (const Case& c : cases) {
+    const StatsSections sections = StatsSectionsFor(c.providing, c.hasStats, c.running);
+    const std::string label = std::string("providing=") + (c.providing ? "1" : "0") +
+                              " stats=" + (c.hasStats ? "1" : "0") +
+                              " running=" + (c.running ? "1" : "0");
+    UR_EXPECT_TRUE_MSG(label, sections.providerVisible == c.providerVisible);
+    UR_EXPECT_TRUE_MSG(label, sections.extenderVisible == c.extenderVisible);
+    UR_EXPECT_TRUE_MSG(label, sections.disabledMeta == c.disabledMeta);
   }
-  // the extender group never shows without the provider one, running or not
-  UR_EXPECT_FALSE(StatsSectionsFor(false, true, true).extenderVisible);
-  UR_EXPECT_FALSE(StatsSectionsFor(true, false, true).extenderVisible);
   UR_EXPECT_TRUE(StatsSectionsFor(true, true, true) == StatsSectionsFor(true, true, true));
   UR_EXPECT_TRUE(StatsSectionsFor(true, true, true) != StatsSectionsFor(true, true, false));
 }

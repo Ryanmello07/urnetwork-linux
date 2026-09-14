@@ -4639,14 +4639,7 @@ void EarningsPage::PullProviderThroughput(bool forced) {
 // read here.
 void EarningsPage::ApplyExtenderProvideState() {
   const std::optional<urnet::ExtenderProvideStatus> status = host_.GetExtenderProvideStatus();
-  if (status) {
-    DrawExtenderRow(extender::ProvideRowFor(
-        true, status->Supported, status->State, status->ErrorCase, status->Reason,
-        status->ActivatedV4, status->ActivatedV6, status->LastActivationRefused, false));
-  } else {
-    DrawExtenderRow(
-        extender::ProvideRowFor(false, false, {}, {}, {}, false, false, false, false));
-  }
+  DrawExtenderRow(extender::ProvideRowOf(status, [] { return false; }));
   const bool running = status && status->Enabled;
   if (running != extenderRunning_) {
     extenderRunning_ = running;

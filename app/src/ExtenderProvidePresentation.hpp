@@ -19,6 +19,7 @@
 #pragma once
 
 #include <cstring>
+#include <optional>
 #include <string>
 
 namespace urnw::extender {
@@ -172,6 +173,17 @@ inline ProvideRow ProvideRowFor(bool haveStatus, bool supported, const std::stri
     row.argument = reason;
   }
   return row;
+}
+
+// The row's reading of the status as the widgets hold it: the SDK's optional
+// status, and the setting read beside it only when the row will show (N7).
+// Generic so the tests can hand it every field of ExtenderProvideStatus.
+template <typename Status, typename ReadSetting>
+ProvideRow ProvideRowOf(const std::optional<Status>& status, const ReadSetting& readSetting) {
+  if (!status || !status->Supported) return ProvideRow();
+  return ProvideRowFor(true, true, status->State, status->ErrorCase, status->Reason,
+                       status->ActivatedV4, status->ActivatedV6,
+                       status->LastActivationRefused, readSetting());
 }
 
 // The toggle's local repaint (N7), written before the listener answers and
