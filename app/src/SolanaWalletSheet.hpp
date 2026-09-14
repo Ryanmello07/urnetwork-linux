@@ -49,6 +49,10 @@ class SolanaWalletSheet : public Gtk::Window {
   // The wallet was created and the sheet has hidden itself (page:
   // OnSolanaConnected, which makes it the payout wallet and reloads).
   std::function<void(std::string walletId)> on_connected;
+  // The sheet was dismissed while a wallet was being linked: the create call's
+  // answer is dropped with the sheet, so the page reloads the wallets to show
+  // what the server did (page: LoadLegacyWallets with reset).
+  std::function<void()> on_abandoned_link;
 
  private:
   void OnProvider(WalletConnect::Provider provider);

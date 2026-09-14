@@ -26,7 +26,9 @@
 > the public key comes back and nothing is signed), or an address entered by hand (base58 shape
 > checked locally, then `POST /wallet/validate-address` for `SOL`). The wallet is created with
 > `POST /account/wallet {SOL, address, USDC}` and made the payout wallet with
-> `POST /account/payout-wallet` unless it already is. Under the Bittensor block a card shows the
+> `POST /account/payout-wallet` unless a fresh `getPayoutWallet` shows it already is; while that
+> switch or a removal is out, "Connect Solana wallet" waits. Under the Bittensor block a card
+> shows the
 > payout wallet (short address, the DEFAULT chip, the migration note, "N USDC waiting" from the
 > payments neither completed nor canceled) and removes it behind its own overflow and a
 > confirmation. With no payout wallet but held payments, one "N USDC waiting" line sits above the

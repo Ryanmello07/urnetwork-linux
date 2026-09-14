@@ -1168,8 +1168,8 @@ EarningsPage::EarningsPage(SdkHost& host)
   // the wallet overflow menus, built once: one "earnings" action group on the
   // page, one menu per overflow (the popovers resolve the actions up the tree)
   walletActions_ = Gio::SimpleActionGroup::create();
-  walletActions_->add_action("connect-solana",
-                             sigc::mem_fun(*this, &EarningsPage::OnConnectSolanaWallet));
+  connectSolanaAction_ = walletActions_->add_action(
+      "connect-solana", sigc::mem_fun(*this, &EarningsPage::OnConnectSolanaWallet));
   removeSolanaAction_ = walletActions_->add_action(
       "remove-solana", sigc::mem_fun(*this, &EarningsPage::OnRemoveSolanaWallet));
   insert_action_group("earnings", walletActions_);
@@ -2978,7 +2978,12 @@ void EarningsPage::RebuildSolanaCard() {
 
   solanaCard_->set_visible(view.showCard);
   solanaCard_->set_sensitive(!removingSolanaWallet_);
-  removeSolanaAction_->set_enabled(!removingSolanaWallet_);
+  // a removal or a payout switch is out: neither item may start another write,
+  // or the server could take a link and a removal of the same wallet in either
+  // order
+  const bool writing = removingSolanaWallet_ || switchingPayoutWallet_;
+  connectSolanaAction_->set_enabled(!writing);
+  removeSolanaAction_->set_enabled(!writing);
   if (view.showCard) {
     // the short form is visual only: the full address is the tooltip and the name
     solanaAddressLabel_->set_text(view.shortAddress);
@@ -3006,6 +3011,11 @@ void EarningsPage::OnConnectSolanaWallet() {
     g_message("earnings: solana wallet sheet suppressed — a modal is already open");
     return;
   }
+  if (removingSolanaWallet_ || switchingPayoutWallet_) {
+    // the menu item is already insensitive; checked again at press time, out loud
+    g_message("earnings: solana wallet sheet held while a payout wallet write is out");
+    return;
+  }
   // the sheet ends in API writes, so it opens on a signed-in page only; the
   // preview harness opens it with its actions off
   if (!previewMode_ && !CanCallApi()) {
@@ -3019,30 +3029,65 @@ void EarningsPage::OnConnectSolanaWallet() {
   }
   auto sheet = std::make_shared<SolanaWalletSheet>(*root, host_, CanCallApi());
   sheet->on_connected = [this](std::string walletId) { OnSolanaConnected(walletId); };
+  // dismissed while its create call was out: that answer is gone, so look again
+  sheet->on_abandoned_link = [this] { LoadLegacyWallets(/*reset=*/true); };
   // a Bittensor connect still out does not hold the providers: pressing one
   // supersedes it in the host, and OnWalletSigned settles it quietly
   PresentSheet(sheet);
 }
 
 void EarningsPage::OnSolanaConnected(const std::string& walletId) {
-  // the server makes a new wallet the payout wallet on its own only when the
-  // network had none; the reload shows the truth either way
-  if (!solana::NeedsPayoutSwitch(walletId, legacyCommitted_.payoutWalletId)) {
-    Notify(T_("payout_wallet_updated", "Payout wallet updated"), kit::Snackbar::Severity::Success);
-    LoadLegacyWallets(/*reset=*/true);
-    return;
-  }
   if (!CanCallApi()) {
     RefuseNoSession();
     LoadLegacyWallets(/*reset=*/true);
     return;
   }
+  // The switch is decided on a FRESH read of the payout wallet, as android and
+  // apple decide it: the committed id may be stale (another device may have
+  // changed it), and the server adopts a new wallet on its own only when the
+  // network had none. A failed read counts as none, which switches: harmless
+  // for a wallet just linked. Until the flow settles the overflow's items wait.
+  switchingPayoutWallet_ = true;
+  RebuildSolanaCard();
   // the SDK drops setPayoutWallet silently (no callback, ever) when the id is
   // not a UUID: this watchdog is what reports it
   const uint32_t generation = BeginFlow(legacyFlow_, kApiTimeoutMs, [this] {
+    switchingPayoutWallet_ = false;
     Notify(SolanaFailureText({}), kit::Snackbar::Severity::Error);
     LoadLegacyWallets(/*reset=*/true);
   });
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
+  host_.api().getPayoutWallet(
+      [this, epoch, seen, generation, walletId](
+          std::optional<urnet::GetPayoutWalletIdResult> result, std::optional<std::string> err) {
+        std::string current;
+        std::string failure;
+        if (!err && result) {
+          current = result->wallet_id.value_or(std::string());
+        } else {
+          failure = err.value_or(std::string("no result"));
+        }
+        PostToMain([this, epoch, seen, generation, walletId, current, failure] {
+          if (*epoch != seen || legacyFlow_.generation != generation) return;
+          if (!failure.empty()) {
+            g_message("earnings: the payout wallet read before the switch failed (%s); switching",
+                      failure.c_str());
+          }
+          if (!solana::NeedsPayoutSwitch(walletId, current)) {
+            SettleFlow(legacyFlow_, generation, "payout wallet read");
+            switchingPayoutWallet_ = false;
+            Notify(T_("payout_wallet_updated", "Payout wallet updated"),
+                   kit::Snackbar::Severity::Success);
+            LoadLegacyWallets(/*reset=*/true);
+            return;
+          }
+          SwitchPayoutWallet(walletId, generation);
+        });
+      });
+}
+
+void EarningsPage::SwitchPayoutWallet(const std::string& walletId, uint32_t generation) {
   urnet::SetPayoutWalletArgs args;
   args.wallet_id = walletId;
   auto epoch = epoch_;
@@ -3055,6 +3100,7 @@ void EarningsPage::OnSolanaConnected(const std::string& walletId) {
         PostToMain([this, epoch, seen, generation, ok, detail] {
           if (*epoch != seen) return;
           if (!SettleFlow(legacyFlow_, generation, "payout wallet switch")) return;
+          switchingPayoutWallet_ = false;
           if (ok) {
             Notify(T_("payout_wallet_updated", "Payout wallet updated"),
                    kit::Snackbar::Severity::Success);
@@ -3072,7 +3118,8 @@ void EarningsPage::OnSolanaConnected(const std::string& walletId) {
 
 void EarningsPage::OnRemoveSolanaWallet() {
   const solana::CardView card = solana::CardFor(legacyCommitted_);
-  if (removingSolanaWallet_ || !card.showCard) return;  // no card, nothing to remove
+  // no card, nothing to remove; a write out holds the item
+  if (removingSolanaWallet_ || switchingPayoutWallet_ || !card.showCard) return;
   if (sheet_ || (sheet_open && sheet_open())) {
     g_message("earnings: wallet removal suppressed — a modal is already open");
     return;

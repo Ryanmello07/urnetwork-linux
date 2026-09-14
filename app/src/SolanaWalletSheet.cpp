@@ -131,7 +131,8 @@ SolanaWalletSheet::SolanaWalletSheet(Gtk::Window& parent, SdkHost& host, bool al
   // Dismissal is allowed in every state, a round trip out included: whatever
   // is still out is dropped here, the host answers a waiting connect
   // "superseded by ..." when the next wallet flow starts, and the page reloads
-  // the wallets on its next Load.
+  // the wallets at once when a link was out (on_abandoned_link), else on its
+  // next Load.
   signal_hide().connect([this] { Abandon(); });
 
   Render();
@@ -147,6 +148,12 @@ void SolanaWalletSheet::Abandon() {
   ++*epoch_;
   checkDebounce_.disconnect();
   watchdog_.disconnect();
+  // a create call still out may link the wallet after all: the page looks again
+  if (machine_.state == solana::ConnectState::Linking && on_abandoned_link) {
+    const auto reload = std::move(on_abandoned_link);
+    on_abandoned_link = nullptr;
+    reload();
+  }
 }
 
 // ---- the bridge ------------------------------------------------------------------

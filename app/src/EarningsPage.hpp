@@ -346,8 +346,10 @@ class EarningsPage : public Gtk::Box {
   void ApplyLegacyWallets();  // commits a round once all three reads answered
   void RebuildSolanaCard();
   void OnConnectSolanaWallet();  // the overflow's item: the connect sheet
-  // The sheet linked `walletId`: make it the payout wallet unless it already is.
+  // The sheet linked `walletId`: make it the payout wallet unless a fresh read
+  // shows it already is (one 20 s flow over the read and the switch).
   void OnSolanaConnected(const std::string& walletId);
+  void SwitchPayoutWallet(const std::string& walletId, uint32_t generation);
   void OnRemoveSolanaWallet();  // the card's item: the confirmation
   void RemoveSolanaWallet(const std::string& walletId);
 
@@ -431,6 +433,7 @@ class EarningsPage : public Gtk::Box {
   Gtk::MenuButton* solanaMore_ = nullptr;
   // the two overflow menus over the page's "earnings" action group, built once
   Glib::RefPtr<Gio::SimpleActionGroup> walletActions_;
+  Glib::RefPtr<Gio::SimpleAction> connectSolanaAction_;
   Glib::RefPtr<Gio::SimpleAction> removeSolanaAction_;
   Glib::RefPtr<Gio::Menu> connectSolanaMenu_;
   Glib::RefPtr<Gio::Menu> solanaCardMenu_;
@@ -562,6 +565,7 @@ class EarningsPage : public Gtk::Box {
   bool applyingRankingToggle_ = false;  // ECHO GUARD on the public switch
   bool leaderboardRequested_ = false;
   bool removingSolanaWallet_ = false;
+  bool switchingPayoutWallet_ = false;  // the fresh read and the switch after a link
 
   // manual entry validation: the verdict for the address in the box
   std::string checkedAddress_;
@@ -575,7 +579,7 @@ class EarningsPage : public Gtk::Box {
   Flow pointsPublicFlow_;  // 20s: POST /network/points-ranking-visibility
   Flow claimFlow_;     // 180s: chain round trips
   Flow rankingFlow_;   // 20s
-  Flow legacyFlow_;    // 20s: POST /account/payout-wallet after a Solana link
+  Flow legacyFlow_;    // 20s: the payout read and POST /account/payout-wallet after a link
   Flow removeSolanaFlow_;  // 20s: POST /account/wallets/remove
 
   // preview + balance relay
