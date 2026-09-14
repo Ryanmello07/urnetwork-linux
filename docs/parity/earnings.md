@@ -16,6 +16,24 @@
 > The pane-fold table, the flow/gate discipline and the preview harness below still apply
 > (`URNETWORK_PREVIEW_WALLET`, `URNETWORK_PREVIEW_CLAIM`, `URNETWORK_PREVIEW_GAS=low`,
 > `URNETWORK_PREVIEW_MANUAL`, `URNETWORK_PREVIEW_TOP200=bound` extend the sample).
+>
+> **2026-09-14 — the Solana payout wallet is back.** USDC payouts continue until the migration to
+> Bittensor completes, and a network whose payouts are held for want of a wallet is emailed
+> "N USDC waiting", so pane A reaches the Solana payout wallet again. A three-dot overflow
+> (accessible name "Wallet options") sits right of "Connect Bittensor wallet" and, with a coldkey
+> attached, right of "Change"; its one item, "Connect Solana wallet", opens `SolanaWalletSheet`:
+> Phantom or Solflare through the wallet bridge (`SdkHost::ConnectSolanaWallet`, connect only —
+> the public key comes back and nothing is signed), or an address entered by hand (base58 shape
+> checked locally, then `POST /wallet/validate-address` for `SOL`). The wallet is created with
+> `POST /account/wallet {SOL, address, USDC}` and made the payout wallet with
+> `POST /account/payout-wallet` unless it already is. Under the Bittensor block a card shows the
+> payout wallet (short address, the DEFAULT chip, the migration note, "N USDC waiting" from the
+> payments neither completed nor canceled) and removes it behind its own overflow and a
+> confirmation. With no payout wallet but held payments, one "N USDC waiting" line sits above the
+> Bittensor actions. The card's three reads (`getAccountWallets`, `getPayoutWallet`,
+> `getAccountPayments`) settle together and never touch the Bittensor block; the rules are
+> `SolanaWalletPresentation.hpp`, host-tested. `URNETWORK_PREVIEW_SOLANA=1` (the card with 3.87
+> USDC waiting) and `URNETWORK_PREVIEW_USDC_WAITING=1` (the line, no wallet) extend the sample.
 
 Source of truth read in full: `urnetwork-windows/app/src/App/WalletPage.{h,cpp}` (1681+262 lines), `WalletSheets.{h,cpp}` (687+185), plus the markup (`MainWindow.xaml` 1838–2156), the kit (`UrComponents.{h,cpp}`, `App.xaml`), tokens (`UrColors.h`), breakpoints (`MainWindow.xaml.cpp` ApplyBreakpoint ~561–580), balance gating (`MainWindow.xaml.cpp` ~1407–1418), navigation loads (~1351–1375), and the en string table (`Strings/en/Resources.resw`). Doc cross-check: `linux_agent_help.md` §7.10 / §7.3 / §8 — disagreements listed in FLAGS; **the code wins**.
 

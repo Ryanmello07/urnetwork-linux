@@ -2,6 +2,7 @@
 #include "ProvideModeGlyph.hpp"
 #include "EarningsPage.hpp"
 
+#include <adwaita.h>
 #include <gio/gio.h>
 #include <glib.h>
 #include <gtk/gtk.h>
@@ -16,6 +17,7 @@
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "LeaderboardIndicator.hpp"
+#include "SolanaWalletSheet.hpp"
 #include "UrTheme.hpp"
 
 namespace urnw {
@@ -48,6 +50,10 @@ constexpr const char* kExplorerTxUrlFallback = "https://evm.taostats.io/tx/";
 // The preview sample's coldkey: base58-shaped (no 0/O/I/l), 48 characters,
 // short form "5F3s…kQ9v" as in the design review. Obviously synthetic.
 constexpr const char* kSampleColdkey = "5F3sSAMPLEsampeSAMPLEsampeSAMPLEsampeSAMPLE1kQ9v";
+// The preview sample's Solana payout wallet: base58-shaped, 44 characters, short
+// form "7Xk9…3fQa"; and the email's "3.87 USDC waiting". Obviously synthetic.
+constexpr const char* kSampleSolanaAddress = "7Xk9SAMPLEsampeSAMPLEsampeSAMPLEsampeSAM3fQa";
+constexpr int64_t kSamplePendingNanoCents = 3870000000;
 
 // ---- presentation helpers ----------------------------------------------------
 
@@ -1158,6 +1164,19 @@ EarningsPage::EarningsPage(SdkHost& host)
     : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0), host_(host) {
   EnsureBrandCss();
   EnsureDrawerCss();
+  // the wallet overflow menus, built once: one "earnings" action group on the
+  // page, one menu per overflow (the popovers resolve the actions up the tree)
+  walletActions_ = Gio::SimpleActionGroup::create();
+  walletActions_->add_action("connect-solana",
+                             sigc::mem_fun(*this, &EarningsPage::OnConnectSolanaWallet));
+  removeSolanaAction_ = walletActions_->add_action(
+      "remove-solana", sigc::mem_fun(*this, &EarningsPage::OnRemoveSolanaWallet));
+  insert_action_group("earnings", walletActions_);
+  connectSolanaMenu_ = Gio::Menu::create();
+  connectSolanaMenu_->append(T_("connect_solana_wallet", "Connect Solana wallet"),
+                             "earnings.connect-solana");
+  solanaCardMenu_ = Gio::Menu::create();
+  solanaCardMenu_->append(T_("remove", "Remove"), "earnings.remove-solana");
   BuildEarningsPane();
   append(*paneA_.root);
   ruleB_ = kit::MakePaneVRule();
@@ -1198,6 +1217,8 @@ EarningsPage::~EarningsPage() {
   pointsScrollConn_.disconnect();
   ClosePointsBoard(/*deviceAlive=*/true);
   rankingFlow_.timer.disconnect();
+  legacyFlow_.timer.disconnect();
+  removeSolanaFlow_.timer.disconnect();
   sheet_.reset();
 }
 
@@ -1296,6 +1317,7 @@ void EarningsPage::Load() {
   ++*epoch_;  // drop every completion armed for the previous session
   if (samplePinned_) return;
   LoadEarnings();
+  LoadLegacyWallets();  // the Solana payout wallet: its own reads, never chained
   // the leaderboard is a one-shot per LOOK, never per PROCESS
   if (leaderboardTab_ != nullptr && leaderboardTab_->get_active()) {
     leaderboardRequested_ = true;
@@ -1340,6 +1362,10 @@ void EarningsPage::SettleAllEmpty() {
   ApplyHead(std::nullopt, Fetch::Ready);
   ApplyReliability(std::nullopt, Fetch::Ready);
   ApplyRanking(std::nullopt, false);
+  // no Solana payout wallet and nothing waiting: the card and the line hide
+  ++legacyGeneration_;
+  payoutWalletId_.clear();
+  ApplyLegacyWallets(std::vector<solana::LegacyWallet>{}, std::string(), 0, Fetch::Ready);
   // the leaderboard is not this network's data: "no session" is not an answer
   // about it, so it must never be settled Ready+empty here (the preview
   // harness is the only caller that wants the REAL empty state)
@@ -1409,6 +1435,10 @@ void EarningsPage::BuildEarningsPane() {
     auto row = MakePaddedRow(12);
     row.content->set_spacing(6);
     walletConnectedPanel_ = row.root;
+    // the USDC waiting for a network with no Solana payout wallet (RebuildSolanaCard)
+    usdcWaitingLineConnected_ = MakeWrappedNote({}, "ur-row-note");
+    usdcWaitingLineConnected_->set_visible(false);
+    row.content->append(*usdcWaitingLineConnected_);
     auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
     walletAddressLabel_ = Gtk::make_managed<Gtk::Label>();
     walletAddressLabel_->add_css_class("ur-earn-address");
@@ -1422,6 +1452,8 @@ void EarningsPage::BuildEarningsPane() {
     changeWalletButton_->signal_clicked().connect(
         sigc::mem_fun(*this, &EarningsPage::OnChangeWallet));
     line->append(*changeWalletButton_);
+    walletMoreConnected_ = BuildWalletOverflow(connectSolanaMenu_);
+    line->append(*walletMoreConnected_);
     row.content->append(*line);
     row.content->append(*MakeWrappedNote(
         T_("wallet_connected_to_protocol",
@@ -1436,6 +1468,9 @@ void EarningsPage::BuildEarningsPane() {
     auto row = MakePaddedRow(12);
     row.content->set_spacing(10);
     walletConnectPanel_ = row.root;
+    usdcWaitingLine_ = MakeWrappedNote({}, "ur-row-note");
+    usdcWaitingLine_->set_visible(false);
+    row.content->append(*usdcWaitingLine_);
     // plain note (not a link), then a "Learn more" link in the pink accent with
     // an outward arrow that opens the protocol site; inline, so it shares the
     // last line when it fits
@@ -1462,9 +1497,16 @@ void EarningsPage::BuildEarningsPane() {
     connectBridgeButton_ =
         Gtk::make_managed<Gtk::Button>(T_("connect_bittensor_wallet", "Connect Bittensor wallet"));
     connectBridgeButton_->add_css_class("ur-pane-primary");
+    connectBridgeButton_->set_hexpand(true);
     connectBridgeButton_->signal_clicked().connect(
         sigc::mem_fun(*this, &EarningsPage::OnConnectWithBridge));
-    row.content->append(*connectBridgeButton_);
+    // the Bittensor action and, beside it, the overflow that reaches the
+    // Solana payout wallet
+    auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    actions->append(*connectBridgeButton_);
+    walletMoreDisconnected_ = BuildWalletOverflow(connectSolanaMenu_);
+    actions->append(*walletMoreDisconnected_);
+    row.content->append(*actions);
     manualToggleButton_ =
         Gtk::make_managed<Gtk::Button>(T_("enter_address_manually", "Enter address manually"));
     manualToggleButton_->add_css_class("flat");
@@ -1502,6 +1544,41 @@ void EarningsPage::BuildEarningsPane() {
     connectingStatus_ = MakeWrappedNote({}, "ur-row-note");
     connectingStatus_->set_visible(false);
     row.content->append(*connectingStatus_);
+    content->append(*row.root);
+  }
+
+  // 4b. the Solana payout wallet: USDC payouts continue to it until the
+  //     migration to Bittensor completes (hidden until the legacy reads land
+  //     with a payout wallet)
+  {
+    auto row = MakePaddedRow(12);
+    row.content->set_spacing(6);
+    solanaCard_ = row.root;
+    auto* header = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    auto* title = MakeSizedLabel(T_("solana_wallet", "Solana wallet"), 12, "ur-caption");
+    title->set_hexpand(true);
+    title->set_valign(Gtk::Align::CENTER);
+    header->append(*title);
+    // the card only ever shows the payout wallet, so the chip is always there
+    solanaDefaultTag_ =
+        MakeStatusChip(Glib::ustring(T_("default_wallet", "Default")).uppercase());
+    header->append(*solanaDefaultTag_);
+    solanaMore_ = BuildWalletOverflow(solanaCardMenu_);
+    header->append(*solanaMore_);
+    row.content->append(*header);
+    solanaAddressLabel_ = Gtk::make_managed<Gtk::Label>();
+    solanaAddressLabel_->add_css_class("ur-earn-address");
+    solanaAddressLabel_->set_xalign(0);
+    solanaAddressLabel_->set_selectable(true);
+    row.content->append(*solanaAddressLabel_);
+    row.content->append(*MakeWrappedNote(
+        T_("usdc_payouts_until_migration",
+           "USDC payouts continue to this wallet until the migration to Bittensor is complete."),
+        "ur-row-note"));
+    solanaPendingLabel_ = MakeWrappedNote({}, "ur-key");
+    solanaPendingLabel_->set_visible(false);
+    row.content->append(*solanaPendingLabel_);
+    solanaCard_->set_visible(false);
     content->append(*row.root);
   }
 
@@ -2173,6 +2250,10 @@ void EarningsPage::RebuildWalletBlock() {
       connecting_ ? Glib::ustring(T_("opening_bittensor_wallet_in_browser",
                                      "Opening your Bittensor wallet in the browser…"))
                   : Glib::ustring());
+  // the overflow stays live while the bridge is out (it opens a sheet, not the
+  // bridge); an open Solana sheet holds its providers until the round trip ends
+  if (auto sheet = solanaSheet_.lock()) sheet->SetBridgeBusy(connecting_);
+  RebuildSolanaCard();  // the waiting line follows the Bittensor panel it sits in
 }
 
 void EarningsPage::RebuildTop200() {
@@ -2747,6 +2828,372 @@ void EarningsPage::FinishConnecting() {
   RebuildWalletBlock();
 }
 
+// ---- the Solana payout wallet --------------------------------------------------
+// USDC payouts continue to a Solana payout wallet until the migration to
+// Bittensor completes, and a network whose payouts are held for want of one is
+// emailed "N USDC waiting". The overflow beside the Bittensor actions opens the
+// connect sheet; the card under the Bittensor block shows the payout wallet and
+// removes it. What shows, and when, is SolanaWalletPresentation.hpp's.
+
+Gtk::MenuButton* EarningsPage::BuildWalletOverflow(
+    const Glib::RefPtr<const Gio::MenuModel>& menu) {
+  auto* button = Gtk::make_managed<Gtk::MenuButton>();
+  button->set_icon_name("view-more-symbolic");
+  button->add_css_class("flat");
+  button->set_valign(Gtk::Align::CENTER);  // the row keeps its height
+  button->set_menu_model(menu);
+  // icon-only: the glyph names nothing, so the button carries the name
+  kit::SetAccessibleLabel(*button, T_("wallet_options", "Wallet options"));
+  button->set_tooltip_text(T_("wallet_options", "Wallet options"));
+  return button;
+}
+
+// Three independent requests, never chained and never touching the Bittensor
+// block; each is marshaled with PostToMain and dropped when the epoch or a newer
+// reload moved. They settle the card TOGETHER, so neither the card nor the
+// waiting line flashes in and out while the answers arrive.
+void EarningsPage::LoadLegacyWallets() {
+  const uint64_t generation = ++legacyGeneration_;
+  if (!CanCallApi()) {
+    ApplyLegacyWallets(std::vector<solana::LegacyWallet>{}, std::string(), 0, Fetch::Ready);
+    return;
+  }
+  ApplyLegacyWallets(std::nullopt, std::string(), 0, Fetch::Loading);
+
+  struct Answers {
+    int count = 0;
+    bool walletsOk = false;
+    std::vector<solana::LegacyWallet> wallets;
+    std::string payoutWalletId;
+    int64_t pendingNanoCents = 0;
+  };
+  auto answers = std::make_shared<Answers>();
+  // runs on the main loop once per current answer; the third settles the card
+  auto settle = [this, answers] {
+    if (++answers->count < 3) return;
+    if (!answers->walletsOk) {
+      // the card's wallet is unknown: the card and the line stay hidden
+      ApplyLegacyWallets(std::nullopt, std::string(), 0, Fetch::Failed);
+      return;
+    }
+    ApplyLegacyWallets(std::move(answers->wallets), answers->payoutWalletId,
+                       answers->pendingNanoCents, Fetch::Ready);
+  };
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
+
+  // 1. the account wallets
+  host_.api().getAccountWallets(
+      [this, epoch, seen, generation, answers, settle](
+          std::optional<urnet::GetAccountWalletsResult> result, std::optional<std::string> err) {
+        std::optional<std::vector<solana::LegacyWallet>> wallets;
+        if (!err && result) {
+          wallets.emplace();
+          for (const auto& wallet : result->wallets.value_or(urnet::AccountWalletsList{})) {
+            solana::LegacyWallet out;
+            out.id = wallet.wallet_id.value_or(std::string());
+            out.blockchain = wallet.blockchain;
+            out.address = wallet.wallet_address;
+            out.circleWalletId = wallet.circle_wallet_id.value_or(std::string());
+            out.active = wallet.active;
+            wallets->push_back(std::move(out));
+          }
+        }
+        PostToMain([this, epoch, seen, generation, answers, settle, wallets = std::move(wallets),
+                    err = std::move(err)]() mutable {
+          if (*epoch != seen || generation != legacyGeneration_) return;
+          if (wallets) {
+            answers->walletsOk = true;
+            answers->wallets = std::move(*wallets);
+          } else {
+            g_warning("earnings: getAccountWallets failed: %s",
+                      err ? err->c_str() : "(no result)");
+          }
+          settle();
+        });
+      });
+
+  // 2. which of them is the payout wallet (null when the network has none)
+  host_.api().getPayoutWallet(
+      [this, epoch, seen, generation, answers, settle](
+          std::optional<urnet::GetPayoutWalletIdResult> result, std::optional<std::string> err) {
+        PostToMain([this, epoch, seen, generation, answers, settle, result = std::move(result),
+                    err = std::move(err)] {
+          if (*epoch != seen || generation != legacyGeneration_) return;
+          if (err || !result) {
+            // a miss is NOT an error: it is logged and the last known id stands
+            g_message("earnings: getPayoutWallet miss: %s", err ? err->c_str() : "(no result)");
+          } else {
+            answers->payoutWalletId = result->wallet_id.value_or(std::string());
+          }
+          settle();
+        });
+      });
+
+  // 3. the held payouts: every payment neither completed nor canceled
+  host_.api().getAccountPayments(
+      [this, epoch, seen, generation, answers, settle](
+          std::optional<urnet::GetNetworkAccountPaymentsResult> result,
+          std::optional<std::string> err) {
+        std::optional<int64_t> pending;
+        std::string failure = err.value_or(std::string());
+        if (!err && result && !result->error) {
+          std::vector<solana::HeldPayment> payments;
+          for (const auto& payment :
+               result->account_payments.value_or(urnet::AccountPaymentsList{})) {
+            solana::HeldPayment held;
+            held.payoutNanoCents = payment.payout_nano_cents;
+            held.completed = payment.completed.value_or(false);
+            held.canceled = payment.canceled;
+            payments.push_back(held);
+          }
+          pending = solana::PendingUsdcNanoCents(payments);
+        } else if (failure.empty() && result && result->error) {
+          failure = result->error->message;
+        }
+        PostToMain([this, epoch, seen, generation, answers, settle, pending, failure] {
+          if (*epoch != seen || generation != legacyGeneration_) return;
+          if (pending) {
+            answers->pendingNanoCents = *pending;
+          } else {
+            // the figure is unknown: a card still shows, without it
+            g_warning("earnings: getAccountPayments failed: %s",
+                      failure.empty() ? "(no result)" : failure.c_str());
+          }
+          settle();
+        });
+      });
+}
+
+void EarningsPage::ApplyLegacyWallets(std::optional<std::vector<solana::LegacyWallet>> wallets,
+                                     const std::string& payoutWalletId,
+                                     int64_t pendingNanoCents, Fetch state) {
+  legacyState_ = state;
+  if (state == Fetch::Ready) {
+    legacyWallets_ = wallets.value_or(std::vector<solana::LegacyWallet>{});
+    // An EMPTY id is ignored, as the payout pane did: the server answers null
+    // whenever there is none, and a removed wallet leaves the card anyway
+    // because it is inactive.
+    if (!payoutWalletId.empty()) payoutWalletId_ = payoutWalletId;
+    pendingNanoCents_ = pendingNanoCents;
+  } else if (state == Fetch::Failed) {
+    // logged where it failed; the Bittensor block's status line is not touched
+    legacyWallets_.clear();
+    pendingNanoCents_ = 0;
+  }
+  RebuildSolanaCard();
+}
+
+void EarningsPage::RebuildSolanaCard() {
+  if (solanaCard_ == nullptr || usdcWaitingLine_ == nullptr ||
+      usdcWaitingLineConnected_ == nullptr) {
+    return;
+  }
+  const solana::CardView view =
+      solana::CardFor(legacyState_ == Fetch::Ready,
+                      solana::PayoutWalletFor(legacyWallets_, payoutWalletId_), pendingNanoCents_);
+  const Glib::ustring waiting =
+      view.pendingUsd.empty()
+          ? Glib::ustring()
+          : Glib::ustring(Format(T_("usdc_waiting", "{} USDC waiting"), view.pendingUsd));
+
+  solanaCard_->set_visible(view.showCard);
+  solanaCard_->set_sensitive(!removingSolanaWallet_);
+  removeSolanaAction_->set_enabled(!removingSolanaWallet_);
+  if (view.showCard) {
+    // the short form is visual only: the full address is the tooltip and the name
+    solanaAddressLabel_->set_text(view.shortAddress);
+    solanaAddressLabel_->set_tooltip_text(view.address);
+    kit::SetAccessibleLabel(*solanaAddressLabel_,
+                            Glib::ustring(T_("solana_wallet", "Solana wallet")) + ", " +
+                                view.address);
+  }
+  kit::SetTextOrCollapse(*solanaPendingLabel_, view.showPending ? waiting : Glib::ustring());
+
+  // The one waiting line sits in whichever Bittensor panel shows. "Change"
+  // opens the connect panel under a connected wallet, and then the line stays
+  // with the connected panel rather than showing twice.
+  const bool bittensorConnected = wallet_.has_value() && walletState_ == Fetch::Ready;
+  kit::SetTextOrCollapse(*usdcWaitingLine_, view.showWaitingLine && !bittensorConnected
+                                                ? waiting
+                                                : Glib::ustring());
+  kit::SetTextOrCollapse(*usdcWaitingLineConnected_, view.showWaitingLine && bittensorConnected
+                                                         ? waiting
+                                                         : Glib::ustring());
+}
+
+void EarningsPage::OnConnectSolanaWallet() {
+  if (sheet_ || (sheet_open && sheet_open())) {
+    g_message("earnings: solana wallet sheet suppressed — a modal is already open");
+    return;
+  }
+  // the sheet ends in API writes, so it opens on a signed-in page only; the
+  // preview harness opens it with its actions off
+  if (!previewMode_ && !CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  auto* root = dynamic_cast<Gtk::Window*>(get_root());
+  if (root == nullptr) {
+    g_warning("earnings: no window root; the solana wallet sheet was not opened");
+    return;
+  }
+  auto sheet = std::make_shared<SolanaWalletSheet>(*root, host_, CanCallApi());
+  sheet->on_connected = [this](std::string walletId) { OnSolanaConnected(walletId); };
+  // one bridge round trip at a time: a Bittensor connect still out holds the
+  // sheet's providers until it ends (RebuildWalletBlock keeps this current)
+  sheet->SetBridgeBusy(connecting_);
+  solanaSheet_ = sheet;
+  PresentSheet(sheet);
+}
+
+void EarningsPage::OnSolanaConnected(const std::string& walletId) {
+  // the server makes a new wallet the payout wallet on its own only when the
+  // network had none; the reload shows the truth either way
+  if (!solana::NeedsPayoutSwitch(walletId, payoutWalletId_)) {
+    Notify(T_("payout_wallet_updated", "Payout wallet updated"), kit::Snackbar::Severity::Success);
+    LoadLegacyWallets();
+    return;
+  }
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    LoadLegacyWallets();
+    return;
+  }
+  // the SDK drops setPayoutWallet silently (no callback, ever) when the id is
+  // not a UUID: this watchdog is what reports it
+  const uint32_t generation = BeginFlow(legacyFlow_, kApiTimeoutMs, [this] {
+    Notify(T_("something_went_wrong", "Something went wrong."), kit::Snackbar::Severity::Error);
+    LoadLegacyWallets();
+  });
+  urnet::SetPayoutWalletArgs args;
+  args.wallet_id = walletId;
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
+  host_.api().setPayoutWallet(
+      args, [this, epoch, seen, generation](std::optional<urnet::SetPayoutWalletResult> result,
+                                            std::optional<std::string> err) {
+        const bool ok = result.has_value() && !err.has_value();
+        const std::string detail = err.value_or(std::string());
+        PostToMain([this, epoch, seen, generation, ok, detail] {
+          if (*epoch != seen) return;
+          if (!SettleFlow(legacyFlow_, generation, "payout wallet switch")) return;
+          if (ok) {
+            Notify(T_("payout_wallet_updated", "Payout wallet updated"),
+                   kit::Snackbar::Severity::Success);
+          } else {
+            // the wallet exists either way; the server's words VERBATIM
+            g_warning("earnings: setPayoutWallet failed: %s",
+                      detail.empty() ? "(no result)" : detail.c_str());
+            Notify(detail.empty()
+                       ? Glib::ustring(T_("something_went_wrong", "Something went wrong."))
+                       : Glib::ustring(Format(T_("error_setting_default_wallet_with_reason",
+                                                 "Error setting default wallet: {}"),
+                                              detail)),
+                   kit::Snackbar::Severity::Error);
+          }
+          LoadLegacyWallets();
+        });
+      });
+}
+
+void EarningsPage::OnRemoveSolanaWallet() {
+  if (removingSolanaWallet_ || legacyState_ != Fetch::Ready) return;
+  const auto payout = solana::PayoutWalletFor(legacyWallets_, payoutWalletId_);
+  if (!payout) return;  // no card, nothing to remove
+  if (sheet_ || (sheet_open && sheet_open())) {
+    g_message("earnings: wallet removal suppressed — a modal is already open");
+    return;
+  }
+  // CanCallApi BEFORE the confirmation: it ends in an API write
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  auto* root = dynamic_cast<Gtk::Window*>(get_root());
+  if (root == nullptr) {
+    g_warning("earnings: no window root; the wallet removal was not confirmed");
+    return;
+  }
+  // The app's confirmation idiom (MainWindow::OnSolanaChooser). AdwMessageDialog
+  // is deprecated from libadwaita 1.6 in favour of AdwAlertDialog; it stays the
+  // one idiom this app uses, so its warnings are silenced here only.
+  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+  GtkWidget* dialog = adw_message_dialog_new(
+      GTK_WINDOW(root->gobj()), T_("remove_wallet", "Remove wallet"),
+      T_("remove_wallet_holds_payouts",
+         "USDC payouts are held until another wallet is connected."));
+  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
+                                   "remove", T_("remove", "Remove"), nullptr);
+  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "remove",
+                                             ADW_RESPONSE_DESTRUCTIVE);
+  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
+  adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
+  G_GNUC_END_IGNORE_DEPRECATIONS
+  struct Ctx {
+    EarningsPage* self;
+    std::shared_ptr<bool> alive;
+    std::string walletId;
+  };
+  g_signal_connect_data(
+      dialog, "response",
+      G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
+        auto* ctx = static_cast<Ctx*>(data);
+        if (!*ctx->alive || g_strcmp0(response, "remove") != 0) return;
+        ctx->self->RemoveSolanaWallet(ctx->walletId);
+      }),
+      new Ctx{this, alive_, payout->id},
+      +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+void EarningsPage::RemoveSolanaWallet(const std::string& walletId) {
+  if (removingSolanaWallet_ || walletId.empty()) return;
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  removingSolanaWallet_ = true;
+  RebuildSolanaCard();  // the card goes insensitive while the removal is out
+  const uint32_t generation = BeginFlow(removeSolanaFlow_, kApiTimeoutMs, [this] {
+    removingSolanaWallet_ = false;
+    Notify(T_("something_went_wrong", "Something went wrong."), kit::Snackbar::Severity::Error);
+    LoadLegacyWallets();
+  });
+  urnet::RemoveWalletArgs args;
+  args.wallet_id = walletId;
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
+  host_.api().removeWallet(
+      args, [this, epoch, seen, generation](std::optional<urnet::RemoveWalletResult> result,
+                                            std::optional<std::string> err) {
+        const bool ok = !err.has_value() && result.has_value() && result->success;
+        std::string detail;
+        if (result && result->error) detail = result->error->message;
+        if (detail.empty() && err) detail = *err;
+        PostToMain([this, epoch, seen, generation, ok, detail] {
+          if (*epoch != seen) return;
+          if (!SettleFlow(removeSolanaFlow_, generation, "wallet removal")) return;
+          removingSolanaWallet_ = false;
+          if (!ok) {
+            g_warning("earnings: removeWallet failed: %s",
+                      detail.empty() ? "(no detail)" : detail.c_str());
+            Notify(detail.empty()
+                       ? Glib::ustring(T_("something_went_wrong", "Something went wrong."))
+                       : Glib::ustring(Format(T_("error_connecting_wallet_with_reason",
+                                                 "There was an error connecting your wallet: {}"),
+                                              detail)),
+                   kit::Snackbar::Severity::Error);
+            RebuildSolanaCard();
+            return;
+          }
+          // the removal reports itself by the card leaving: the store has no
+          // "wallet removed" sentence, and inventing English is banned
+          LoadLegacyWallets();
+        });
+      });
+}
+
 // ---- claim -------------------------------------------------------------------
 
 void EarningsPage::OnClaim() {
@@ -2966,6 +3413,7 @@ void EarningsPage::CloseSheet() {
   if (!sheet_) return;
   sheet_.reset();
   claimSheet_.reset();
+  solanaSheet_.reset();
   if (on_sheet_open_changed) on_sheet_open_changed(false);
 }
 
@@ -3082,6 +3530,22 @@ void EarningsPage::ApplyPreviewSample() {
   ApplyLeaderboard(sampleEarners, Fetch::Ready);
   ApplyHead(head, Fetch::Ready);
   leaderboardRequested_ = true;  // the sample IS the leaderboard answer
+
+  // URNETWORK_PREVIEW_SOLANA=1: a Solana payout wallet with 3.87 USDC waiting
+  // (the card); URNETWORK_PREVIEW_USDC_WAITING=1: the same figure with no payout
+  // wallet (the waiting line). Through the same applier as the reads.
+  if (g_getenv("URNETWORK_PREVIEW_SOLANA") != nullptr) {
+    solana::LegacyWallet sample;
+    sample.id = "sample-solana-wallet";
+    sample.blockchain = urnet::SOL;
+    sample.address = kSampleSolanaAddress;
+    sample.active = true;
+    ApplyLegacyWallets(std::vector<solana::LegacyWallet>{sample}, sample.id,
+                       kSamplePendingNanoCents, Fetch::Ready);
+  } else if (g_getenv("URNETWORK_PREVIEW_USDC_WAITING") != nullptr) {
+    ApplyLegacyWallets(std::vector<solana::LegacyWallet>{}, std::string(),
+                       kSamplePendingNanoCents, Fetch::Ready);
+  }
 
   if (g_getenv("URNETWORK_PREVIEW_WALLET") == nullptr) {
     ApplySnWallet(std::nullopt, Fetch::Ready);

@@ -9,9 +9,18 @@
 // this device and the settlement vault contract: the SDK builds, signs (with
 // its own gas key) and sends the transaction; no URnetwork API is in the path.
 // Nothing is retroactive — alpha accrues from the first epoch after the wallet
-// is attached; earlier epochs earned points only. There is no USDC, no payout
-// wallet and no payout history anywhere on this surface (support@ur.io holds
-// the old ledger).
+// is attached; earlier epochs earned points only.
+//
+// USDC payouts continue until the migration to Bittensor completes, so the
+// Solana payout wallet stays reachable from here: a three-dot overflow beside
+// the Bittensor actions opens "Connect Solana wallet" (SolanaWalletSheet: the
+// wallet bridge, connect only, or an address entered by hand), a card under the
+// Bittensor block shows the payout wallet with the USDC waiting for it and
+// removes it, and with no payout wallet one "N USDC waiting" line sits above
+// the Bittensor actions. Its three reads (account wallets, payout wallet,
+// account payments) are secondary: they settle the card together and never
+// touch the Bittensor block. There is no payout history on this surface
+// (support@ur.io holds the old ledger).
 //
 // Three panes, folded by the window's ApplyBreakpoint:
 //   >= 1500  earnings(360) | history(*) | network(380)
@@ -23,8 +32,9 @@
 // note with the ur.xyz link, the Unclaimed SN25α tile
 // (wallet only), the Bittensor wallet block (connect through the bridge, or
 // enter an address manually — validated locally and then against
-// /sn/wallet/validate before anything is sent — and still sign it), and the
-// Top 200 head-spot tile / bound status.
+// /sn/wallet/validate before anything is sent — and still sign it), the Solana
+// payout wallet card (only with a payout wallet), and the Top 200 head-spot
+// tile / bound status.
 //
 // Pane B (history): a two-item tab switch over the per-epoch history and the
 // leaderboard. The leaderboard is fetched the FIRST time its tab is looked at.
@@ -54,6 +64,7 @@
 #include "LeaderboardIndicator.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
+#include "SolanaWalletPresentation.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -118,6 +129,7 @@ struct SnWalletCheck {
 
 class ClaimAlphaSheet;
 class EmojiTagSheet;
+class SolanaWalletSheet;
 
 class EarningsPage : public Gtk::Box {
  public:
@@ -185,7 +197,10 @@ class EarningsPage : public Gtk::Box {
   // attached-wallet layer (claims, gas key, alpha column);
   // URNETWORK_PREVIEW_TOP200=bound renders the bound head-spot status;
   // URNETWORK_PREVIEW_MANUAL=1 opens the manual entry on a "new wallet" verdict;
-  // URNETWORK_PREVIEW_GAS=low puts the claim dialog in its needs-gas state.
+  // URNETWORK_PREVIEW_GAS=low puts the claim dialog in its needs-gas state;
+  // URNETWORK_PREVIEW_SOLANA=1 adds a Solana payout wallet with 3.87 USDC
+  // waiting (the card); URNETWORK_PREVIEW_USDC_WAITING=1 the same figure with no
+  // payout wallet (the waiting line above the Bittensor actions).
   void ApplyPreviewSample();
   // URNETWORK_PREVIEW_CLAIM=1: open the claim dialog over the sample.
   void ShowPreviewClaimDialog();
@@ -322,6 +337,20 @@ class EarningsPage : public Gtk::Box {
                                 const std::string& address);
   void FinishConnecting();
 
+  // ---- the Solana payout wallet (USDC until the Bittensor migration) ---------
+  // The three-dot overflow (icon-only, named "Wallet options") over `menu`.
+  Gtk::MenuButton* BuildWalletOverflow(const Glib::RefPtr<const Gio::MenuModel>& menu);
+  void LoadLegacyWallets();
+  void ApplyLegacyWallets(std::optional<std::vector<solana::LegacyWallet>> wallets,
+                          const std::string& payoutWalletId, int64_t pendingNanoCents,
+                          Fetch state);
+  void RebuildSolanaCard();
+  void OnConnectSolanaWallet();  // the overflow's item: the connect sheet
+  // The sheet linked `walletId`: make it the payout wallet unless it already is.
+  void OnSolanaConnected(const std::string& walletId);
+  void OnRemoveSolanaWallet();  // the card's item: the confirmation
+  void RemoveSolanaWallet(const std::string& walletId);
+
   // ---- claim -----------------------------------------------------------------
   void OnClaim();
   void OpenClaimSheet(bool allowActions);
@@ -389,6 +418,22 @@ class EarningsPage : public Gtk::Box {
   Gtk::Label* walletSupportingText_ = nullptr;
   Gtk::Button* connectManualButton_ = nullptr;
   Gtk::Label* connectingStatus_ = nullptr;
+  // the Solana payout wallet: the overflow in both Bittensor states, the one
+  // waiting line (a label in each Bittensor panel) and the card
+  Gtk::MenuButton* walletMoreDisconnected_ = nullptr;
+  Gtk::MenuButton* walletMoreConnected_ = nullptr;
+  Gtk::Label* usdcWaitingLine_ = nullptr;           // in the connect panel
+  Gtk::Label* usdcWaitingLineConnected_ = nullptr;  // in the connected panel
+  Gtk::Box* solanaCard_ = nullptr;
+  Gtk::Label* solanaAddressLabel_ = nullptr;
+  Gtk::Label* solanaDefaultTag_ = nullptr;
+  Gtk::Label* solanaPendingLabel_ = nullptr;
+  Gtk::MenuButton* solanaMore_ = nullptr;
+  // the two overflow menus over the page's "earnings" action group, built once
+  Glib::RefPtr<Gio::SimpleActionGroup> walletActions_;
+  Glib::RefPtr<Gio::SimpleAction> removeSolanaAction_;
+  Glib::RefPtr<Gio::Menu> connectSolanaMenu_;
+  Glib::RefPtr<Gio::Menu> solanaCardMenu_;
   Gtk::Box* top200Card_ = nullptr;
   Gtk::Box* top200Panel_ = nullptr;
   kit::Snackbar walletInfo_;
@@ -503,6 +548,12 @@ class EarningsPage : public Gtk::Box {
   uint64_t ownFlagsClock_ = 0;
   uint64_t ownFlagsEditedAt_ = 0;
   uint64_t ownFlagsAppliedAt_ = 0;
+  // the Solana payout wallet's three reads, settled together
+  std::vector<solana::LegacyWallet> legacyWallets_;
+  std::string payoutWalletId_;  // the last known one: an empty answer is ignored
+  int64_t pendingNanoCents_ = 0;
+  Fetch legacyState_ = Fetch::Loading;
+  uint64_t legacyGeneration_ = 0;  // a reload drops the reads still out
 
   // in-flight gates
   bool connecting_ = false;      // bridge / set-wallet in flight
@@ -512,6 +563,7 @@ class EarningsPage : public Gtk::Box {
   bool settingRankingPublic_ = false;
   bool applyingRankingToggle_ = false;  // ECHO GUARD on the public switch
   bool leaderboardRequested_ = false;
+  bool removingSolanaWallet_ = false;
 
   // manual entry validation: the verdict for the address in the box
   std::string checkedAddress_;
@@ -525,6 +577,8 @@ class EarningsPage : public Gtk::Box {
   Flow pointsPublicFlow_;  // 20s: POST /network/points-ranking-visibility
   Flow claimFlow_;     // 180s: chain round trips
   Flow rankingFlow_;   // 20s
+  Flow legacyFlow_;    // 20s: POST /account/payout-wallet after a Solana link
+  Flow removeSolanaFlow_;  // 20s: POST /account/wallets/remove
 
   // preview + balance relay
   bool previewMode_ = false;
@@ -534,6 +588,7 @@ class EarningsPage : public Gtk::Box {
 
   std::shared_ptr<Gtk::Window> sheet_;
   std::weak_ptr<ClaimAlphaSheet> claimSheet_;
+  std::weak_ptr<SolanaWalletSheet> solanaSheet_;
 };
 
 }  // namespace urnw
