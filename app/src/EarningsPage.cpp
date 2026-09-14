@@ -13,6 +13,7 @@
 
 #include "EmojiKeyboard.hpp"
 #include "EmojiTagSheet.hpp"
+#include "ExtenderProvideRowPaint.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "LeaderboardIndicator.hpp"
@@ -276,28 +277,6 @@ Glib::ustring ProvideModeValueText(const std::string& mode) {
   if (mode == "always") return T_("always", "Always");
   if (mode == "network") return T_("network", "Network");
   return T_("never", "Never");
-}
-
-// The extender row's dot in the provide glyph's palette: grey is the muted
-// text, green and red are the provide glyph's green and coral, yellow is its
-// paused amber, so this row and the provide row above never show two yellows.
-const Rgba& ExtenderDotColor(extender::ProvideDot dot) {
-  switch (dot) {
-    case extender::ProvideDot::Grey: return kUrTextMuted;
-    case extender::ProvideDot::Green: return kUrGreen;
-    case extender::ProvideDot::Yellow: return kUrAmber;
-    case extender::ProvideDot::Red: return kUrCoral;
-  }
-  return kUrTextMuted;
-}
-
-// The extender row's state text in the catalog's words.
-std::string ExtenderStateText(const extender::ProvideRow& row) {
-  return extender::StateTextFor(
-      row, [](const char* key, const char* english) { return std::string(T_(key, english)); },
-      [](const std::string& pattern, const std::string& argument) {
-        return Format(pattern.c_str(), argument);
-      });
 }
 
 // A fixed-height pane row holding a transfer chart in its inset, the way
@@ -4655,16 +4634,7 @@ void EarningsPage::DrawExtenderRow(const extender::ProvideRow& row) {
   extenderRowDrawn_ = row;
   extenderRow_->set_visible(row.visible);
   if (!row.visible) return;
-  const std::string text = ExtenderStateText(row);
-  extenderDot_->set_markup("<span foreground='" + HexForMarkup(ExtenderDotColor(row.dot)) +
-                           "'>●</span>");
-  extenderState_->set_text(text);
-  extenderState_->set_tooltip_text(text);
-  if (row.errorText) {
-    extenderState_->add_css_class("ur-error-text");
-  } else {
-    extenderState_->remove_css_class("ur-error-text");
-  }
+  const std::string text = PaintExtenderProvideRow(*extenderDot_, *extenderState_, row);
   // one element for a screen reader, named the way ExtenderPanel names itself
   kit::SetAccessibleLabel(*extenderRow_, std::string(T_("extender", "Extender")) + ": " + text);
 }

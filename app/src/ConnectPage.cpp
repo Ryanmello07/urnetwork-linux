@@ -9,6 +9,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 
+#include "ExtenderProvideRowPaint.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
@@ -287,28 +288,6 @@ uint64_t LocationSig(const std::optional<urnet::ConnectLocation>& location) {
     h = HashMix(h, location->connect_location_id->best_available.value_or(false) ? 1u : 0u);
   }
   return h;
-}
-
-// The extender row's dot in the provide glyph's palette: grey is the muted
-// text, green and red are the provide glyph's green and coral, yellow is its
-// paused amber, so this row and the provide row above never show two yellows.
-const Rgba& ExtenderDotColor(extender::ProvideDot dot) {
-  switch (dot) {
-    case extender::ProvideDot::Grey: return kUrTextMuted;
-    case extender::ProvideDot::Green: return kUrGreen;
-    case extender::ProvideDot::Yellow: return kUrAmber;
-    case extender::ProvideDot::Red: return kUrCoral;
-  }
-  return kUrTextMuted;
-}
-
-// The extender row's state text in the catalog's words.
-std::string ExtenderStateText(const extender::ProvideRow& row) {
-  return extender::StateTextFor(
-      row, [](const char* key, const char* english) { return std::string(T_(key, english)); },
-      [](const std::string& pattern, const std::string& argument) {
-        return Format(pattern.c_str(), argument);
-      });
 }
 
 }  // namespace
@@ -2079,18 +2058,7 @@ void ConnectPage::DrawExtenderRow(const extender::ProvideRow& row) {
   extenderRow_->set_visible(row.visible);
   extenderDescription_->set_visible(row.visible);
   if (!row.visible) return;
-  const std::string text = ExtenderStateText(row);
-  extenderDot_->set_markup("<span foreground='" + HexForMarkup(ExtenderDotColor(row.dot)) +
-                           "'>●</span>");
-  extenderState_->set_text(text);
-  // one line cut with an ellipsis; the whole text is the tooltip, since a
-  // listen failure names every carrier
-  extenderState_->set_tooltip_text(text);
-  if (row.errorText) {
-    extenderState_->add_css_class("ur-error-text");
-  } else {
-    extenderState_->remove_css_class("ur-error-text");
-  }
+  const std::string text = PaintExtenderProvideRow(*extenderDot_, *extenderState_, row);
   // the switch shows the setting, written under the echo guard
   if (extenderToggle_->get_active() != row.on) {
     updatingControls_ = true;
