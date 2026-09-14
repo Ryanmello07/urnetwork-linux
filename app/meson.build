@@ -500,8 +500,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # transport bar's boundary-tween geometry, the ip-version histogram's
 # grouping, the extender ring geometry, the extender panel's reading of
 # ExtenderStatus, the extender share/import decisions, the Solana payout
-# wallet's card and connect-sheet rules, the dual-stack tunnel policy and v6
-# capture set, and the daemon control protocol: framing, version
+# wallet's card and connect-sheet rules, the wallet bridge's return routing,
+# the dual-stack tunnel policy and v6 capture set, and the daemon control
+# protocol: framing, version
 # negotiation in both directions, SDK-build agreement, peer-credential
 # authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
 # binary builds and runs anywhere a C++17 compiler does -- including a
@@ -532,6 +533,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/OnboardingRoutingTest.cpp',
     'tests/LeaderboardIndicatorTest.cpp',
     'tests/SolanaWalletPresentationTest.cpp',
+    'tests/WalletBridgeRouteTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
