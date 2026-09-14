@@ -2727,6 +2727,17 @@ bool SdkHost::HasProviderStats() {
   return contractVc_ && contractVc_->getProviderPacketStats().has_value();
 }
 
+bool SdkHost::DeviceHasProviderStats() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return false;
+  try {
+    return device_->getProviderPacketStats().has_value();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getProviderPacketStats failed: %s\n", e.what());
+    return false;
+  }
+}
+
 std::optional<urnet::TransportSettings> SdkHost::GetTransportSettings() {
   std::scoped_lock lock(mutex_);
   if (device_) {

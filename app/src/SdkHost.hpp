@@ -680,6 +680,13 @@ class SdkHost {
   // no session. The extender role's running state is not read here: it is the
   // Enabled of the pushed GetExtenderProvideStatus.
   bool HasProviderStats();
+  // The same fact asked of the DEVICE, one device rpc, for the forced re-reads
+  // right after a contract view controller opens (a device arriving, the
+  // window coming back): a new controller's provider stats stay nil until its
+  // first sample, while the device answers at once. Provider presence is fixed
+  // per device, so the two agree once the controller has sampled. false with
+  // no device.
+  bool DeviceHasProviderStats();
   std::optional<urnet::BlockActionList> BlockActions();
   std::optional<urnet::BlockStats> BlockStatsSnapshot();
   std::optional<urnet::BlockActionOverrideList> BlockActionOverrides();

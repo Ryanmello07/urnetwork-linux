@@ -1214,7 +1214,7 @@ EarningsPage::EarningsPage(SdkHost& host)
   // the statistics groups settle on what the host has now (nothing before a
   // session); the drawer feed keeps them current from there
   ApplyExtenderProvideState();
-  PullProviderThroughput();
+  PullProviderThroughput(/*forced=*/true);
   ApplyStatsSections();
 
   // every panel opens on its LOADING state and the stat values on the faint
@@ -4557,10 +4557,10 @@ void EarningsPage::OnHostEvent(DrawerEvent event) {
       // listener fires only on a change and the series controller is new, so
       // both are re-read
       ApplyExtenderProvideState();
-      PullProviderThroughput();
+      PullProviderThroughput(/*forced=*/true);
       break;
     case DrawerEvent::Throughput:
-      PullProviderThroughput();
+      PullProviderThroughput(/*forced=*/false);
       break;
     case DrawerEvent::ExtenderProvideStatus:
       ApplyExtenderProvideState();
@@ -4597,7 +4597,7 @@ void EarningsPage::OnHostEvent(DrawerEvent event) {
 // provider series feeds the Local and Blocked charts, the extender series the
 // extender chart, the distribution the bar, and the provider stats flag the
 // gate. The charts redraw on their own timers.
-void EarningsPage::PullProviderThroughput() {
+void EarningsPage::PullProviderThroughput(bool forced) {
   const double window = static_cast<double>(host_.ThroughputWindowSeconds());
   auto providerPoints = std::make_shared<const urnet::ThroughputPointList>(
       host_.ProviderThroughputPoints().value_or(urnet::ThroughputPointList()));
@@ -4610,7 +4610,12 @@ void EarningsPage::PullProviderThroughput() {
       host_.ProviderTransportDistribution();
   providerDistributionKnown_ = distribution.has_value();
   if (providerTransportBar_) providerTransportBar_->SetDistribution(distribution);
-  const bool hasStats = host_.HasProviderStats();
+  // A forced re-read follows a device arriving or the window coming back; either
+  // way SdkHost has just opened a new contract view controller, whose provider
+  // stats stay nil until its first sample and whose first throughput tick lands
+  // after its second. The device answers now; the tick reads the controller,
+  // which has sampled by then.
+  const bool hasStats = forced ? host_.DeviceHasProviderStats() : host_.HasProviderStats();
   if (hasStats != hasProviderStats_) {
     hasProviderStats_ = hasStats;
     ApplyStatsSections();

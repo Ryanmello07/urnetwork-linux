@@ -318,8 +318,10 @@ class EarningsPage : public Gtk::Box {
   // ---- the extender and provider statistics (pane C; EXTENDER.md O5, O8) ----
   // One pull per throughput tick, the shape of ConnectPage::PullThroughput: the
   // two point lists, the window, the provider distribution and the provider
-  // stats flag.
-  void PullProviderThroughput();
+  // stats flag. `forced` marks a re-read right after SdkHost opened a new
+  // contract view controller, which asks the device for the provider stats
+  // flag rather than the controller, which has not sampled yet.
+  void PullProviderThroughput(bool forced);
   // Re-reads the extender status: the read-only row (N7) and the running state
   // of the role, re-applying the sections when it flips.
   void ApplyExtenderProvideState();
