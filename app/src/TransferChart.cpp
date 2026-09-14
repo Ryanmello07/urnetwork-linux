@@ -7,6 +7,7 @@
 #include <glib.h>
 
 #include "Formatters.hpp"
+#include "I18n.hpp"
 
 namespace urnw {
 namespace {
@@ -91,8 +92,13 @@ bool TransferChart::ScaleEase::Settling(double now) const {
   return now - startTime < kTransitionSeconds;
 }
 
-TransferChart::TransferChart(std::string title, Route route, Rgba byteColor, Rgba packetColor)
-    : title_(std::move(title)), route_(route), byteColor_(byteColor), packetColor_(packetColor) {
+TransferChart::TransferChart(std::string title, Route route, Rgba byteColor, Rgba packetColor,
+                             CountUnit countUnit)
+    : title_(std::move(title)),
+      route_(route),
+      byteColor_(byteColor),
+      packetColor_(packetColor),
+      countUnit_(countUnit) {
   set_content_height(128);
   set_hexpand(true);
   set_draw_func(sigc::mem_fun(*this, &TransferChart::OnDraw));
@@ -155,6 +161,15 @@ int64_t TransferChart::AverageOverRecent(int64_t urnet::ThroughputSample::*field
     sum += entries_[i].sample.*field;
   }
   return sum / static_cast<int64_t>(count);
+}
+
+std::string TransferChart::CountRateText(int64_t countPerSecond) const {
+  switch (countUnit_) {
+    case CountUnit::Packets: return FormatPacketRate(countPerSecond);
+    case CountUnit::Reads:
+      return FormatCountRate(countPerSecond, T_("reads_per_second", "reads/s"));
+  }
+  return FormatPacketRate(countPerSecond);
 }
 
 bool TransferChart::Animated(double now) const {
@@ -234,7 +249,7 @@ void TransferChart::OnDraw(const Cairo::RefPtr<Cairo::Context>& cr, int width, i
       DrawTriangle(cr, x, rowCenterY - triangleSize / 2, triangleSize, pointsUp,
                    (0 < byteValue || 0 < packetValue) ? text : textMuted);
       SelectFont(cr, true, 10);
-      const std::string packetText = FormatPacketRate(packetValue);
+      const std::string packetText = CountRateText(packetValue);
       Cairo::TextExtents te;
       cr->get_text_extents(packetText, te);
       x -= 5 + te.x_advance;

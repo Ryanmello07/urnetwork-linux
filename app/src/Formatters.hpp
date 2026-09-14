@@ -17,6 +17,9 @@ std::string FormatByteRate(int64_t bytesPerSecond);
 std::string FormatCountCompact(int64_t count);
 // "340 pkt/s"
 std::string FormatPacketRate(int64_t packetsPerSecond);
+// "340 reads/s": the compact count with a rate unit the caller takes from the
+// store (the extender chart's reads_per_second, EXTENDER.md O8)
+std::string FormatCountRate(int64_t countPerSecond, const std::string& unit);
 // "1.2 Mbps"
 std::string FormatBitRate(int64_t bitsPerSecond);
 
