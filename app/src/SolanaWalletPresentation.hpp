@@ -190,131 +190,178 @@ inline const char* FailureKey(const std::string& detail) {
   return detail.empty() ? "something_went_wrong" : "error_connecting_wallet_with_reason";
 }
 
+// The connect sheet, on the windows app's model: the manual field's verdict
+// lives BESIDE the flow's state, so a wallet-app round trip and a typed address
+// never write over each other.
+//
+//   state           shows                                 leaves on
+//   Idle            providers, the manual entry           a provider -> OpeningBrowser;
+//                                                         a plausible address -> Checking
+//   OpeningBrowser  opening_wallet_in_browser; providers  the public key -> Linking;
+//                   and Connect off, the manual entry     a bridge error -> Failed(detail);
+//                   still live                            180 s -> Failed
+//   Checking        checking_wallet_address               valid -> Ready; invalid or
+//                                                         unanswered -> Idle, with its line
+//   Ready           Connect on                            Connect -> Linking
+//   Linking         connecting_to_wallet; everything off  a wallet id -> Linked;
+//                                                         an error -> Failed(detail); 20 s -> Failed
+//   Failed          the failure line; controls on         a provider, Connect, a new address
+//   Linked          everything off                        (the sheet closes)
+//
+// Every round trip is numbered: ChooseProvider and Submit return the attempt's
+// number and its answers (PublicKey, BridgeError, CreateResult, Timeout) carry
+// it, so an answer for an attempt that was given up or replaced -- the host's
+// "superseded by a wallet connect request" for the first of two presses -- is
+// refused. A server verdict carries the address it is about, so a verdict for
+// text that has since changed is refused too.
 enum class ConnectState { Idle, OpeningBrowser, Checking, Ready, Linking, Failed, Linked };
 
 // The answer of the server's validate call for the typed address.
 enum class AddressVerdict { Valid, Invalid, Unavailable };
 
-// What the manual field's supporting line says.
-enum class Supporting { None, Checking, Invalid, Unavailable };
+// The manual field's verdict, beside the state: nothing yet, checking with the
+// server, accepted, refused, or the check itself failed.
+enum class AddressCheck { None, Checking, Valid, Invalid, Unavailable };
 
-// The sheet's one state, driven by events. Every event answers whether it was
-// taken; an event the state does not expect -- a public key after the user
-// moved on, a verdict for text that has since changed -- changes nothing and
-// the sheet must act on nothing.
+// Every event answers whether it was taken; an event the machine does not
+// expect changes nothing, and the sheet must act on nothing.
 struct ConnectMachine {
   ConnectState state = ConnectState::Idle;
   std::string detail;  // Failed: the bridge's or server's words, "" when none came back
-  Supporting supporting = Supporting::None;
-  bool addressChecked = false;  // the address in the field passed the server check
-  std::string walletId;         // Linked
+  AddressCheck check = AddressCheck::None;
+  std::string address;   // the trimmed typed address `check` is about
+  uint64_t attempt = 0;  // the newest round trip's number (0: none yet)
+  std::string walletId;  // Linked
 
-  // A round trip is out (the browser or the create call): one at a time.
-  bool Busy() const {
-    return state == ConnectState::OpeningBrowser || state == ConnectState::Linking;
+  // A round trip is out, or the wallet is linked: the providers and Connect wait.
+  bool InFlight() const {
+    return state == ConnectState::OpeningBrowser || state == ConnectState::Linking ||
+           state == ConnectState::Linked;
   }
-  // The states that take a new attempt: the providers, the manual toggle and
-  // the field are live in these and only these.
-  bool AcceptsInput() const {
-    return state == ConnectState::Idle || state == ConnectState::Checking ||
-           state == ConnectState::Ready || state == ConnectState::Failed;
+  bool ProvidersEnabled() const { return !InFlight(); }
+  // The manual toggle and the field: live while the browser is out, off once a
+  // wallet is being linked.
+  bool EntryEnabled() const {
+    return state != ConnectState::Linking && state != ConnectState::Linked;
   }
-  // Connect is live for a checked address; after a failed attempt the same
-  // checked address may be sent again.
-  bool ConnectAllowed() const {
-    return state == ConnectState::Ready || (state == ConnectState::Failed && addressChecked);
-  }
+  // Connect: an accepted address, and no round trip out.
+  bool ConnectAllowed() const { return check == AddressCheck::Valid && !InFlight(); }
 
-  // Phantom or Solflare pressed: the browser opens.
-  bool ChooseProvider() {
-    if (!AcceptsInput()) return false;
+  // Phantom or Solflare pressed: the browser opens. Returns the attempt's
+  // number, 0 when a round trip is already out. The field's verdict, and a
+  // check still out for it, are left alone.
+  uint64_t ChooseProvider() {
+    if (InFlight()) return 0;
     state = ConnectState::OpeningBrowser;
     detail.clear();
-    supporting = Supporting::None;
-    return true;
+    return ++attempt;
   }
-  // The bridge came back with the wallet's public key: link it.
-  bool PublicKey() {
-    if (state != ConnectState::OpeningBrowser) return false;
+  // The bridge came back with the wallet's public key for `round`: link it.
+  bool PublicKey(uint64_t round) {
+    if (state != ConnectState::OpeningBrowser || round != attempt) return false;
     state = ConnectState::Linking;
     return true;
   }
-  // The bridge came back with an error (or the browser never opened).
-  bool BridgeError(const std::string& why) {
-    if (state != ConnectState::OpeningBrowser) return false;
-    state = ConnectState::Failed;
-    detail = why;
+  // The bridge came back with an error for `round`, or the browser never opened.
+  bool BridgeError(uint64_t round, const std::string& why) {
+    if (state != ConnectState::OpeningBrowser || round != attempt) return false;
+    Fail(why);
     return true;
   }
-  // A watchdog gave up: 180 s on the browser, 20 s on the create call. No words
-  // came back, so it reads something_went_wrong.
-  bool Timeout() {
-    if (!Busy()) return false;
-    state = ConnectState::Failed;
-    detail.clear();
+  // A watchdog gave up on `round`: 180 s on the browser, 20 s on the create
+  // call. No words came back, so it reads something_went_wrong.
+  bool Timeout(uint64_t round) {
+    if (state != ConnectState::OpeningBrowser && state != ConnectState::Linking) return false;
+    if (round != attempt) return false;
+    Fail(std::string());
     return true;
   }
-  // The field's text changed: the verdict is forgotten.
+  // A keystroke: the verdict belonged to the old text. A failure stays on
+  // screen until the new text is debounced.
   bool Typed() {
-    if (!AcceptsInput()) return false;
-    state = ConnectState::Idle;
-    detail.clear();
-    supporting = Supporting::None;
-    addressChecked = false;
+    if (!EntryEnabled()) return false;
+    address.clear();
+    SettleCheck(AddressCheck::None);
     return true;
   }
   // The debounced text failed the local check: said at once, nothing is sent.
-  bool Malformed() {
-    if (state != ConnectState::Idle) return false;
-    supporting = Supporting::Invalid;
+  bool Malformed(const std::string& text) {
+    if (!EntryEnabled()) return false;
+    NewAddress(text);
+    SettleCheck(AddressCheck::Invalid);
     return true;
   }
-  // The debounced text passed the local check: the server check goes out.
-  bool Check() {
-    if (state != ConnectState::Idle) return false;
-    state = ConnectState::Checking;
-    supporting = Supporting::Checking;
+  // The debounced text passed the local check: the server check goes out. While
+  // the browser is out, the check runs without ending that round trip.
+  bool Check(const std::string& text) {
+    if (!EntryEnabled()) return false;
+    NewAddress(text);
+    check = AddressCheck::Checking;
+    if (state != ConnectState::OpeningBrowser) state = ConnectState::Checking;
     return true;
   }
-  bool Verdict(AddressVerdict verdict) {
-    if (state != ConnectState::Checking) return false;
+  // The server's answer for `text`: refused unless that text is being checked.
+  bool Verdict(const std::string& text, AddressVerdict verdict) {
+    if (check != AddressCheck::Checking || text != address) return false;
     switch (verdict) {
       case AddressVerdict::Valid:
-        state = ConnectState::Ready;
-        supporting = Supporting::None;
-        addressChecked = true;
+        check = AddressCheck::Valid;
         break;
       case AddressVerdict::Invalid:
-        state = ConnectState::Idle;
-        supporting = Supporting::Invalid;
+        check = AddressCheck::Invalid;
         break;
       case AddressVerdict::Unavailable:
-        state = ConnectState::Idle;
-        supporting = Supporting::Unavailable;
+        check = AddressCheck::Unavailable;
         break;
+    }
+    if (state == ConnectState::Checking) {
+      state = check == AddressCheck::Valid ? ConnectState::Ready : ConnectState::Idle;
     }
     return true;
   }
-  // Connect pressed for the checked address.
-  bool Submit() {
-    if (!ConnectAllowed()) return false;
+  // Connect pressed for the accepted address. Returns the attempt's number, 0
+  // when there is no accepted address or a round trip is out.
+  uint64_t Submit() {
+    if (!ConnectAllowed()) return 0;
     state = ConnectState::Linking;
     detail.clear();
-    return true;
+    return ++attempt;
   }
-  // POST /account/wallet answered. Success is a result carrying a non-empty
-  // wallet id; anything else is a failure with whatever words came back.
-  bool CreateResult(bool ok, const std::string& newWalletId, const std::string& why) {
-    if (state != ConnectState::Linking) return false;
+  // POST /account/wallet answered for `round`. Success is a result carrying a
+  // non-empty wallet id; anything else fails with whatever words came back.
+  bool CreateResult(uint64_t round, bool ok, const std::string& newWalletId,
+                    const std::string& why) {
+    if (state != ConnectState::Linking || round != attempt) return false;
     if (ok && !newWalletId.empty()) {
       state = ConnectState::Linked;
       walletId = newWalletId;
+      detail.clear();
       return true;
     }
-    state = ConnectState::Failed;
-    detail = why;
+    Fail(why);
     return true;
   }
-};
 
+ private:
+  void Fail(const std::string& why) {
+    state = ConnectState::Failed;
+    detail = why;
+  }
+  // Checking and Ready are the field's own states: once its verdict is gone or
+  // refused they fall back to Idle. A round trip's state is left alone.
+  void SettleCheck(AddressCheck verdict) {
+    check = verdict;
+    if (state == ConnectState::Checking || state == ConnectState::Ready) {
+      state = ConnectState::Idle;
+    }
+  }
+  // A newly debounced address is a new attempt: the last failure no longer applies.
+  void NewAddress(const std::string& text) {
+    address = text;
+    if (state == ConnectState::Failed) {
+      state = ConnectState::Idle;
+      detail.clear();
+    }
+  }
+};
 }  // namespace urnw::solana

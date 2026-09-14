@@ -145,8 +145,6 @@ SolanaWalletSheet::~SolanaWalletSheet() {
 
 void SolanaWalletSheet::Abandon() {
   ++*epoch_;
-  ++flowGeneration_;
-  ++checkGeneration_;
   checkDebounce_.disconnect();
   watchdog_.disconnect();
 }
@@ -161,45 +159,48 @@ void SolanaWalletSheet::OnProvider(WalletConnect::Provider provider) {
     g_message("earnings: solana wallet provider press refused (actions off)");
     return;
   }
-  if (!machine_.ChooseProvider()) return;  // one round trip at a time
-  ++checkGeneration_;                      // a check still out no longer matters
-  checkDebounce_.disconnect();
-  const uint64_t generation = ++flowGeneration_;
+  // one round trip at a time; a check of the typed address keeps going
+  const uint64_t round = machine_.ChooseProvider();
+  if (round == 0) return;
   // 180 s, not 20 s: the bridge answers only when a deep link comes BACK, and
   // a closed browser tab produces nothing, ever
-  ArmWatchdog(kBridgeTimeoutMs);
+  ArmWatchdog(kBridgeTimeoutMs, round);
   Render();
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   host_.ConnectSolanaWallet(
-      provider, [this, epoch, seen, generation](SdkHost::SolanaConnectResult result) {
-        PostToMain([this, epoch, seen, generation, result = std::move(result)] {
+      provider, [this, epoch, seen, round](SdkHost::SolanaConnectResult result) {
+        PostToMain([this, epoch, seen, round, result = std::move(result)] {
           if (*epoch != seen) return;  // dismissed or destroyed
-          OnBridgeAnswer(generation, result);
+          OnBridgeAnswer(round, result);
         });
       });
 }
 
-void SolanaWalletSheet::OnBridgeAnswer(uint64_t generation,
+void SolanaWalletSheet::OnBridgeAnswer(uint64_t round,
                                        const SdkHost::SolanaConnectResult& result) {
-  if (generation != flowGeneration_) {
-    g_message("earnings: dropping a solana wallet bridge answer for an abandoned round trip");
-    return;
-  }
-  const std::string address = solana::Trim(result.address);
-  if (!result.ok || address.empty()) {
+  const std::string key = solana::Trim(result.address);
+  if (!result.ok || key.empty()) {
+    // an answer for a round trip that was given up or replaced (the host's
+    // "superseded by ..." for the first of two presses) is refused here
+    if (!machine_.BridgeError(round, result.error)) {
+      g_message("earnings: dropping a solana wallet bridge answer for an abandoned round trip");
+      return;
+    }
     g_warning("earnings: solana wallet connect failed: %s",
               result.error.empty() ? "(no public key)" : result.error.c_str());
-    if (machine_.BridgeError(result.error)) {
-      watchdog_.disconnect();
-      Render();
-    }
+    watchdog_.disconnect();
+    Render();
     return;
   }
-  if (!machine_.PublicKey()) return;
-  // not checked client side (android and apple did not either): the server
-  // validates the key when the wallet is created
-  CreateWallet(address);
+  if (!machine_.PublicKey(round)) {
+    g_message("earnings: dropping a solana wallet public key for an abandoned round trip");
+    return;
+  }
+  // Not checked client side (android and apple did not either): the server
+  // validates the key when the wallet is created. The key is linked by itself;
+  // an address typed meanwhile keeps its own verdict and is not what is sent.
+  CreateWallet(round, key);
 }
 
 // ---- the manual address --------------------------------------------------------------
@@ -211,10 +212,9 @@ void SolanaWalletSheet::OnToggleManual() {
 }
 
 void SolanaWalletSheet::OnAddressChanged() {
-  // every keystroke: forget the verdict and drop the answer still out
-  ++checkGeneration_;
+  // every keystroke: forget the verdict (the machine refuses a verdict still out
+  // for the old text) and start the debounce again
   checkDebounce_.disconnect();
-  checkedAddress_.clear();
   if (!machine_.Typed()) {
     Render();
     return;
@@ -228,19 +228,19 @@ void SolanaWalletSheet::OnAddressChanged() {
       kValidateDebounceMs);
 }
 
-// The shape first, locally, before ANY network call; then the server.
+// The shape first, locally, before ANY network call; then the server. A check
+// may run while the browser round trip is out without ending it.
 void SolanaWalletSheet::ValidateAddress() {
   const std::string address = solana::Trim(entry_->get_text().raw());
   if (address.empty()) return;  // nothing typed: silent
   if (!solana::LooksLikeSolanaAddress(address)) {
-    if (machine_.Malformed()) Render();
+    if (machine_.Malformed(address)) Render();
     return;
   }
   // The one affordance allowed to decline SILENTLY: the user did not ask for
   // anything, so without actions (the preview) the field says nothing more.
   if (!allowActions_) return;
-  if (!machine_.Check()) return;
-  const uint64_t generation = ++checkGeneration_;
+  if (!machine_.Check(address)) return;
   Render();
   urnet::WalletValidateAddressArgs args;
   args.address = address;
@@ -248,9 +248,8 @@ void SolanaWalletSheet::ValidateAddress() {
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   host_.api().walletValidateAddress(
-      args, [this, epoch, seen, generation, address](
-                std::optional<urnet::WalletValidateAddressResult> result,
-                std::optional<std::string> err) {
+      args, [this, epoch, seen, address](std::optional<urnet::WalletValidateAddressResult> result,
+                                         std::optional<std::string> err) {
         solana::AddressVerdict verdict = solana::AddressVerdict::Unavailable;
         if (!err && result) {
           verdict = result->valid.value_or(false) ? solana::AddressVerdict::Valid
@@ -259,18 +258,15 @@ void SolanaWalletSheet::ValidateAddress() {
           g_warning("earnings: walletValidateAddress(SOL) failed: %s",
                     err ? err->c_str() : "(no result)");
         }
-        PostToMain([this, epoch, seen, generation, address, verdict] {
+        PostToMain([this, epoch, seen, address, verdict] {
           if (*epoch != seen) return;
-          OnVerdict(generation, address, verdict);
+          OnVerdict(address, verdict);
         });
       });
 }
 
-void SolanaWalletSheet::OnVerdict(uint64_t generation, const std::string& address,
-                                  solana::AddressVerdict verdict) {
-  if (generation != checkGeneration_) return;  // the text moved on
-  if (!machine_.Verdict(verdict)) return;
-  if (verdict == solana::AddressVerdict::Valid) checkedAddress_ = address;
+void SolanaWalletSheet::OnVerdict(const std::string& address, solana::AddressVerdict verdict) {
+  if (!machine_.Verdict(address, verdict)) return;  // the text moved on
   Render();
 }
 
@@ -278,19 +274,19 @@ void SolanaWalletSheet::OnConnectPressed() {
   if (!allowActions_) return;
   const std::string address = solana::Trim(entry_->get_text().raw());
   if (address.empty()) return;
-  if (address != checkedAddress_) {
+  if (address != machine_.address || machine_.check != solana::AddressCheck::Valid) {
     ValidateAddress();  // the verdict is stale: ask again, never send unchecked
     return;
   }
-  if (!machine_.Submit()) return;
-  CreateWallet(address);
+  const uint64_t round = machine_.Submit();  // 0 while a round trip is out
+  if (round == 0) return;
+  CreateWallet(round, address);
 }
 
 // ---- linking ---------------------------------------------------------------------
 
-void SolanaWalletSheet::CreateWallet(const std::string& address) {
-  const uint64_t generation = ++flowGeneration_;
-  ArmWatchdog(kApiTimeoutMs);
+void SolanaWalletSheet::CreateWallet(uint64_t round, const std::string& address) {
+  ArmWatchdog(kApiTimeoutMs, round);
   Render();
   urnet::CreateAccountWalletArgs args;
   args.blockchain = urnet::SOL;
@@ -299,33 +295,30 @@ void SolanaWalletSheet::CreateWallet(const std::string& address) {
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   host_.api().createAccountWallet(
-      args, [this, epoch, seen, generation](std::optional<urnet::CreateAccountWalletResult> result,
-                                            std::optional<std::string> err) {
+      args, [this, epoch, seen, round](std::optional<urnet::CreateAccountWalletResult> result,
+                                       std::optional<std::string> err) {
         // success = a result carrying a NON-EMPTY wallet id
         const std::string walletId =
             result && result->wallet_id ? *result->wallet_id : std::string();
         const bool ok = !err.has_value() && result.has_value() && !walletId.empty();
         const std::string detail = err.value_or(std::string());
-        PostToMain([this, epoch, seen, generation, ok, walletId, detail] {
+        PostToMain([this, epoch, seen, round, ok, walletId, detail] {
           if (*epoch != seen) return;
-          OnCreated(generation, ok, walletId, detail);
+          OnCreated(round, ok, walletId, detail);
         });
       });
 }
 
-void SolanaWalletSheet::OnCreated(uint64_t generation, bool ok, const std::string& walletId,
+void SolanaWalletSheet::OnCreated(uint64_t round, bool ok, const std::string& walletId,
                                   const std::string& detail) {
-  if (generation != flowGeneration_) {
+  if (!machine_.CreateResult(round, ok, walletId, detail)) {
     g_message("earnings: dropping a solana wallet create answer for an abandoned request");
     return;
   }
   watchdog_.disconnect();
-  if (!ok) {
+  if (machine_.state != solana::ConnectState::Linked) {
     g_warning("earnings: createAccountWallet(SOL) failed: %s",
               detail.empty() ? "(no wallet id)" : detail.c_str());
-  }
-  if (!machine_.CreateResult(ok, walletId, detail)) return;
-  if (machine_.state != solana::ConnectState::Linked) {
     Render();
     return;
   }
@@ -336,17 +329,16 @@ void SolanaWalletSheet::OnCreated(uint64_t generation, bool ok, const std::strin
   if (connected) connected(linkedId);
 }
 
-void SolanaWalletSheet::ArmWatchdog(int timeoutMs) {
+void SolanaWalletSheet::ArmWatchdog(int timeoutMs, uint64_t round) {
   watchdog_.disconnect();
-  const uint64_t generation = flowGeneration_;
   watchdog_ = Glib::signal_timeout().connect(
-      [this, generation]() -> bool {
-        if (generation != flowGeneration_) return false;  // already answered
-        // bump AGAIN so the give-up is final: a late answer must not undo what
-        // the user was already told
-        ++flowGeneration_;
-        g_warning("earnings: a solana wallet request never answered - giving up on it");
-        if (machine_.Timeout()) Render();
+      [this, round]() -> bool {
+        // taken only for the round trip still out; the machine refuses that
+        // round trip's answers from here on, so the give-up is final
+        if (machine_.Timeout(round)) {
+          g_warning("earnings: a solana wallet request never answered - giving up on it");
+          Render();
+        }
         return false;
       },
       timeoutMs);
@@ -355,13 +347,14 @@ void SolanaWalletSheet::ArmWatchdog(int timeoutMs) {
 // ---- drawing ---------------------------------------------------------------------
 
 void SolanaWalletSheet::Render() {
-  const bool input = machine_.AcceptsInput();
-  const bool providers = allowActions_ && input;
+  // the providers and Connect wait while a round trip is out; the manual entry
+  // stays live until a wallet is being linked
+  const bool providers = allowActions_ && machine_.ProvidersEnabled();
   phantomButton_->set_sensitive(providers);
   solflareButton_->set_sensitive(providers);
-  manualToggle_->set_sensitive(input);
+  manualToggle_->set_sensitive(machine_.EntryEnabled());
   manualPanel_->set_visible(manualOpen_);
-  entry_->set_sensitive(input);
+  entry_->set_sensitive(machine_.EntryEnabled());
   connectButton_->set_sensitive(allowActions_ && machine_.ConnectAllowed());
 
   Glib::ustring status;
@@ -381,23 +374,25 @@ void SolanaWalletSheet::Render() {
   }
   kit::SetTextOrCollapse(*statusLine_, status);
 
-  switch (machine_.supporting) {
-    case solana::Supporting::None:
+  switch (machine_.check) {
+    case solana::AddressCheck::None:
+    case solana::AddressCheck::Valid:
+      // an accepted address needs no line: Connect says it
       kit::SetTextOrCollapse(*supportingLine_, {});
       break;
-    case solana::Supporting::Checking:
+    case solana::AddressCheck::Checking:
       kit::ApplySupportingText(*supportingLine_,
                                T_("checking_wallet_address", "Checking address…"),
                                kit::ValidationState::Validating);
       supportingLine_->set_visible(true);
       break;
-    case solana::Supporting::Invalid:
+    case solana::AddressCheck::Invalid:
       kit::ApplySupportingText(*supportingLine_,
                                T_("invalid_solana_address", "That is not a valid Solana address."),
                                kit::ValidationState::Invalid);
       supportingLine_->set_visible(true);
       break;
-    case solana::Supporting::Unavailable:
+    case solana::AddressCheck::Unavailable:
       // the check itself failed: nothing is sent until it can be checked;
       // retyping retries
       kit::ApplySupportingText(*supportingLine_,

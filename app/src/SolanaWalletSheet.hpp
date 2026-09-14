@@ -11,7 +11,10 @@
 // the wallet is created with POST /account/wallet {SOL, address, USDC}; the
 // page then makes it the payout wallet when the server did not.
 //
-// Every failure renders ON THE SHEET: a snackbar behind a modal is unreadable.
+// The address field stays live while the browser round trip is out; the two
+// never write over each other (the machine numbers every round trip and ties
+// every verdict to its text). Every failure renders ON THE SHEET: a snackbar
+// behind a modal is unreadable.
 // The states and their transitions are SolanaWalletPresentation.hpp's
 // ConnectMachine (tested on the host); this class runs the requests, the
 // debounce and the watchdogs, and draws what the machine says.
@@ -49,16 +52,16 @@ class SolanaWalletSheet : public Gtk::Window {
 
  private:
   void OnProvider(WalletConnect::Provider provider);
-  void OnBridgeAnswer(uint64_t generation, const SdkHost::SolanaConnectResult& result);
+  void OnBridgeAnswer(uint64_t round, const SdkHost::SolanaConnectResult& result);
   void OnToggleManual();
   void OnAddressChanged();
   void ValidateAddress();
-  void OnVerdict(uint64_t generation, const std::string& address, solana::AddressVerdict verdict);
+  void OnVerdict(const std::string& address, solana::AddressVerdict verdict);
   void OnConnectPressed();
-  void CreateWallet(const std::string& address);
-  void OnCreated(uint64_t generation, bool ok, const std::string& walletId,
+  void CreateWallet(uint64_t round, const std::string& address);
+  void OnCreated(uint64_t round, bool ok, const std::string& walletId,
                  const std::string& detail);
-  void ArmWatchdog(int timeoutMs);
+  void ArmWatchdog(int timeoutMs, uint64_t round);
   // The sheet was dismissed (or linked): everything still out is dropped.
   void Abandon();
   void Render();
@@ -67,14 +70,11 @@ class SolanaWalletSheet : public Gtk::Window {
   const bool allowActions_;
   bool manualOpen_ = false;
   solana::ConnectMachine machine_;
-  std::string checkedAddress_;  // the address the server said is valid
 
-  // stale-async guards: epoch_ drops everything once the sheet is dismissed or
-  // destroyed; flowGeneration_ drops an answer from a superseded or given-up
-  // round trip; checkGeneration_ drops a verdict for text that has changed
+  // stale-async guards: epoch_ drops every answer once the sheet is dismissed
+  // or destroyed; within its life the machine refuses an answer for a round
+  // trip that was given up or replaced, and a verdict for text that changed
   std::shared_ptr<uint64_t> epoch_ = std::make_shared<uint64_t>(0);
-  uint64_t flowGeneration_ = 0;
-  uint64_t checkGeneration_ = 0;
   sigc::connection checkDebounce_;
   sigc::connection watchdog_;
 

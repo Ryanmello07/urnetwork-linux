@@ -10,6 +10,7 @@
 
 #include "SolanaWalletPresentation.hpp"
 
+using urnw::solana::AddressCheck;
 using urnw::solana::AddressVerdict;
 using urnw::solana::CardFor;
 using urnw::solana::CardView;
@@ -24,7 +25,6 @@ using urnw::solana::NeedsPayoutSwitch;
 using urnw::solana::PayoutWalletFor;
 using urnw::solana::PendingUsdcNanoCents;
 using urnw::solana::ShortAddress;
-using urnw::solana::Supporting;
 
 namespace {
 
@@ -50,12 +50,12 @@ HeldPayment Payment(int64_t nanoCents, bool completed, bool canceled) {
   return payment;
 }
 
-// A machine that has a checked address in the field.
+// A machine whose field holds an address the server accepted.
 ConnectMachine CheckedAddress() {
   ConnectMachine m;
   m.Typed();
-  m.Check();
-  m.Verdict(AddressVerdict::Valid);
+  m.Check(kSample);
+  m.Verdict(kSample, AddressVerdict::Valid);
   return m;
 }
 
@@ -223,53 +223,55 @@ UR_TEST(SolanaWallet_WaitingLineWithoutAWallet) {
 UR_TEST(SolanaWallet_ProviderOpensTheBrowserThenLinksTheKey) {
   ConnectMachine m;
   UR_EXPECT_TRUE(m.state == ConnectState::Idle);
-  UR_EXPECT_TRUE(m.AcceptsInput());
-  UR_EXPECT_TRUE(m.ChooseProvider());
+  UR_EXPECT_TRUE(m.ProvidersEnabled());
+  const uint64_t round = m.ChooseProvider();
+  UR_EXPECT_TRUE(round != 0);
   UR_EXPECT_TRUE(m.state == ConnectState::OpeningBrowser);
-  UR_EXPECT_TRUE(m.Busy());
-  UR_EXPECT_FALSE(m.AcceptsInput());
+  UR_EXPECT_FALSE(m.ProvidersEnabled());
+  UR_EXPECT_TRUE(m.EntryEnabled());  // the manual entry stays live while the browser is out
   UR_EXPECT_FALSE(m.ConnectAllowed());
   // the key goes straight to linking: it is not checked client side
-  UR_EXPECT_TRUE(m.PublicKey());
+  UR_EXPECT_TRUE(m.PublicKey(round));
   UR_EXPECT_TRUE(m.state == ConnectState::Linking);
-  UR_EXPECT_TRUE(m.Busy());
-  UR_EXPECT_TRUE(m.CreateResult(true, "w-new", ""));
+  UR_EXPECT_FALSE(m.EntryEnabled());
+  UR_EXPECT_TRUE(m.CreateResult(round, true, "w-new", ""));
   UR_EXPECT_TRUE(m.state == ConnectState::Linked);
   UR_EXPECT_TRUE(m.walletId == "w-new");
-  UR_EXPECT_FALSE(m.Busy());
+  UR_EXPECT_FALSE(m.ProvidersEnabled());
+  UR_EXPECT_FALSE(m.EntryEnabled());
 }
 
-// One bridge round trip at a time: a second press while one is out, or while
-// the key is being linked, starts nothing.
+// One round trip at a time: a second press while one is out, or while a wallet
+// is being linked, starts nothing.
 UR_TEST(SolanaWallet_NoSecondRoundTripWhileOneIsOut) {
   ConnectMachine m;
-  m.ChooseProvider();
-  UR_EXPECT_FALSE(m.ChooseProvider());
-  UR_EXPECT_FALSE(m.Typed());
-  UR_EXPECT_FALSE(m.Submit());
+  const uint64_t round = m.ChooseProvider();
+  UR_EXPECT_EQ(0, m.ChooseProvider());
+  UR_EXPECT_EQ(0, m.Submit());
   UR_EXPECT_TRUE(m.state == ConnectState::OpeningBrowser);
-  m.PublicKey();
-  UR_EXPECT_FALSE(m.ChooseProvider());
-  UR_EXPECT_FALSE(m.Typed());
+  m.PublicKey(round);
+  UR_EXPECT_EQ(0, m.ChooseProvider());
+  UR_EXPECT_FALSE(m.Typed());  // the entry is off while linking
   UR_EXPECT_TRUE(m.state == ConnectState::Linking);
 }
 
 UR_TEST(SolanaWallet_BridgeErrorFailsWithItsWords) {
   ConnectMachine m;
-  m.ChooseProvider();
-  UR_EXPECT_TRUE(m.BridgeError("User rejected the request."));
+  const uint64_t round = m.ChooseProvider();
+  UR_EXPECT_TRUE(m.BridgeError(round, "User rejected the request."));
   UR_EXPECT_TRUE(m.state == ConnectState::Failed);
   UR_EXPECT_TRUE(m.detail == "User rejected the request.");
   UR_EXPECT_TRUE(std::string(FailureKey(m.detail)) == "error_connecting_wallet_with_reason");
-  UR_EXPECT_TRUE(m.AcceptsInput());  // the controls come back
+  UR_EXPECT_TRUE(m.ProvidersEnabled());  // the controls come back
+  UR_EXPECT_TRUE(m.EntryEnabled());
 }
 
 // A give-up has no words: it reads something_went_wrong, like any failure
 // without a detail (the cross-app wording rule).
 UR_TEST(SolanaWallet_BridgeTimeoutIsSomethingWentWrong) {
   ConnectMachine m;
-  m.ChooseProvider();
-  UR_EXPECT_TRUE(m.Timeout());
+  const uint64_t round = m.ChooseProvider();
+  UR_EXPECT_TRUE(m.Timeout(round));
   UR_EXPECT_TRUE(m.state == ConnectState::Failed);
   UR_EXPECT_TRUE(m.detail.empty());
   UR_EXPECT_TRUE(std::string(FailureKey(m.detail)) == "something_went_wrong");
@@ -277,9 +279,9 @@ UR_TEST(SolanaWallet_BridgeTimeoutIsSomethingWentWrong) {
 
 UR_TEST(SolanaWallet_LinkingTimeoutIsSomethingWentWrong) {
   ConnectMachine m;
-  m.ChooseProvider();
-  m.PublicKey();
-  UR_EXPECT_TRUE(m.Timeout());
+  const uint64_t round = m.ChooseProvider();
+  m.PublicKey(round);
+  UR_EXPECT_TRUE(m.Timeout(round));
   UR_EXPECT_TRUE(m.state == ConnectState::Failed);
   UR_EXPECT_TRUE(m.detail.empty());
   UR_EXPECT_TRUE(std::string(FailureKey(m.detail)) == "something_went_wrong");
@@ -288,18 +290,39 @@ UR_TEST(SolanaWallet_LinkingTimeoutIsSomethingWentWrong) {
 // The user moved on (or never asked): a late answer changes nothing.
 UR_TEST(SolanaWallet_LateBridgeAnswersAreIgnored) {
   ConnectMachine idle;
-  UR_EXPECT_FALSE(idle.PublicKey());
-  UR_EXPECT_FALSE(idle.BridgeError("late"));
-  UR_EXPECT_FALSE(idle.Timeout());
-  UR_EXPECT_FALSE(idle.CreateResult(true, "w-late", ""));
+  UR_EXPECT_FALSE(idle.PublicKey(1));
+  UR_EXPECT_FALSE(idle.BridgeError(1, "late"));
+  UR_EXPECT_FALSE(idle.Timeout(1));
+  UR_EXPECT_FALSE(idle.CreateResult(1, true, "w-late", ""));
   UR_EXPECT_TRUE(idle.state == ConnectState::Idle);
   UR_EXPECT_TRUE(idle.detail.empty());
 
   ConnectMachine failed;
-  failed.ChooseProvider();
-  failed.Timeout();
-  UR_EXPECT_FALSE(failed.PublicKey());  // the give-up is final
+  const uint64_t round = failed.ChooseProvider();
+  failed.Timeout(round);
+  UR_EXPECT_FALSE(failed.PublicKey(round));  // the give-up is final
+  UR_EXPECT_FALSE(failed.BridgeError(round, "late"));
   UR_EXPECT_TRUE(failed.state == ConnectState::Failed);
+}
+
+// The first of two presses was given up on, and the host answers it
+// "superseded by a wallet connect request" when the second starts: that answer
+// must not fail the second round trip, nor may a stale create answer link.
+UR_TEST(SolanaWallet_SupersededAnswerNeverLands) {
+  ConnectMachine m;
+  const uint64_t first = m.ChooseProvider();
+  UR_EXPECT_TRUE(m.Timeout(first));
+  const uint64_t second = m.ChooseProvider();
+  UR_EXPECT_TRUE(second != 0 && second != first);
+  UR_EXPECT_FALSE(m.BridgeError(first, "superseded by a wallet connect request"));
+  UR_EXPECT_FALSE(m.PublicKey(first));
+  UR_EXPECT_FALSE(m.Timeout(first));
+  UR_EXPECT_TRUE(m.state == ConnectState::OpeningBrowser);
+  UR_EXPECT_TRUE(m.detail.empty());
+  UR_EXPECT_TRUE(m.PublicKey(second));
+  UR_EXPECT_FALSE(m.CreateResult(first, true, "w-stale", ""));
+  UR_EXPECT_TRUE(m.CreateResult(second, true, "w-new", ""));
+  UR_EXPECT_TRUE(m.walletId == "w-new");
 }
 
 // ---- the connect sheet: the manual address -----------------------------------------
@@ -308,36 +331,40 @@ UR_TEST(SolanaWallet_ManualCheckedAddressLinks) {
   ConnectMachine m;
   UR_EXPECT_TRUE(m.Typed());
   UR_EXPECT_FALSE(m.ConnectAllowed());  // nothing checked yet
-  UR_EXPECT_TRUE(m.Check());
+  UR_EXPECT_TRUE(m.Check(kSample));
   UR_EXPECT_TRUE(m.state == ConnectState::Checking);
-  UR_EXPECT_TRUE(m.supporting == Supporting::Checking);
+  UR_EXPECT_TRUE(m.check == AddressCheck::Checking);
   UR_EXPECT_FALSE(m.ConnectAllowed());
-  UR_EXPECT_TRUE(m.Verdict(AddressVerdict::Valid));
+  UR_EXPECT_TRUE(m.Verdict(kSample, AddressVerdict::Valid));
   UR_EXPECT_TRUE(m.state == ConnectState::Ready);
-  UR_EXPECT_TRUE(m.supporting == Supporting::None);  // the line clears
+  UR_EXPECT_TRUE(m.check == AddressCheck::Valid);
   UR_EXPECT_TRUE(m.ConnectAllowed());
-  UR_EXPECT_TRUE(m.Submit());
+  const uint64_t round = m.Submit();
+  UR_EXPECT_TRUE(round != 0);
   UR_EXPECT_TRUE(m.state == ConnectState::Linking);
-  UR_EXPECT_FALSE(m.AcceptsInput());  // field, providers and Connect are off
-  UR_EXPECT_TRUE(m.CreateResult(true, "w-typed", ""));
+  UR_EXPECT_FALSE(m.EntryEnabled());  // field, providers and Connect are off
+  UR_EXPECT_FALSE(m.ProvidersEnabled());
+  UR_EXPECT_FALSE(m.ConnectAllowed());
+  UR_EXPECT_TRUE(m.address == kSample);  // the accepted address is the one being linked
+  UR_EXPECT_TRUE(m.CreateResult(round, true, "w-typed", ""));
   UR_EXPECT_TRUE(m.state == ConnectState::Linked);
 }
 
 UR_TEST(SolanaWallet_ManualVerdicts) {
   ConnectMachine invalid;
   invalid.Typed();
-  invalid.Check();
-  UR_EXPECT_TRUE(invalid.Verdict(AddressVerdict::Invalid));
+  invalid.Check(kSample);
+  UR_EXPECT_TRUE(invalid.Verdict(kSample, AddressVerdict::Invalid));
   UR_EXPECT_TRUE(invalid.state == ConnectState::Idle);
-  UR_EXPECT_TRUE(invalid.supporting == Supporting::Invalid);
+  UR_EXPECT_TRUE(invalid.check == AddressCheck::Invalid);
   UR_EXPECT_FALSE(invalid.ConnectAllowed());
 
   ConnectMachine unavailable;
   unavailable.Typed();
-  unavailable.Check();
-  UR_EXPECT_TRUE(unavailable.Verdict(AddressVerdict::Unavailable));
+  unavailable.Check(kSample);
+  UR_EXPECT_TRUE(unavailable.Verdict(kSample, AddressVerdict::Unavailable));
   UR_EXPECT_TRUE(unavailable.state == ConnectState::Idle);
-  UR_EXPECT_TRUE(unavailable.supporting == Supporting::Unavailable);
+  UR_EXPECT_TRUE(unavailable.check == AddressCheck::Unavailable);
   UR_EXPECT_FALSE(unavailable.ConnectAllowed());
 }
 
@@ -345,10 +372,11 @@ UR_TEST(SolanaWallet_ManualVerdicts) {
 UR_TEST(SolanaWallet_MalformedAddressSendsNothing) {
   ConnectMachine m;
   m.Typed();
-  UR_EXPECT_TRUE(m.Malformed());
+  UR_EXPECT_TRUE(m.Malformed("7Xk9"));
   UR_EXPECT_TRUE(m.state == ConnectState::Idle);
-  UR_EXPECT_TRUE(m.supporting == Supporting::Invalid);
+  UR_EXPECT_TRUE(m.check == AddressCheck::Invalid);
   UR_EXPECT_FALSE(m.ConnectAllowed());
+  UR_EXPECT_FALSE(m.Verdict("7Xk9", AddressVerdict::Valid));  // nothing went out to answer
 }
 
 // Typing forgets the verdict, and an answer for the old text is dropped.
@@ -356,84 +384,153 @@ UR_TEST(SolanaWallet_TypingResetsTheVerdict) {
   ConnectMachine ready = CheckedAddress();
   UR_EXPECT_TRUE(ready.Typed());
   UR_EXPECT_TRUE(ready.state == ConnectState::Idle);
-  UR_EXPECT_FALSE(ready.addressChecked);
+  UR_EXPECT_TRUE(ready.check == AddressCheck::None);
   UR_EXPECT_FALSE(ready.ConnectAllowed());
 
   ConnectMachine checking;
   checking.Typed();
-  checking.Check();
+  checking.Check(kSample);
   checking.Typed();
-  UR_EXPECT_FALSE(checking.Verdict(AddressVerdict::Valid));
+  UR_EXPECT_FALSE(checking.Verdict(kSample, AddressVerdict::Valid));
   UR_EXPECT_TRUE(checking.state == ConnectState::Idle);
-  UR_EXPECT_TRUE(checking.supporting == Supporting::None);
+  UR_EXPECT_TRUE(checking.check == AddressCheck::None);
 }
 
-// A provider pressed while a check is out drops the check's answer.
-UR_TEST(SolanaWallet_ProviderSupersedesACheck) {
+// The text changed and was checked again while the first check was out: only
+// the verdict for the text in the field lands.
+UR_TEST(SolanaWallet_VerdictForOtherTextIsDropped) {
+  const std::string other(32, '1');
   ConnectMachine m;
   m.Typed();
-  m.Check();
-  UR_EXPECT_TRUE(m.ChooseProvider());
-  UR_EXPECT_TRUE(m.supporting == Supporting::None);
-  UR_EXPECT_FALSE(m.Verdict(AddressVerdict::Valid));
-  UR_EXPECT_FALSE(m.Malformed());
-  UR_EXPECT_FALSE(m.Check());
+  m.Check(kSample);
+  m.Typed();
+  m.Check(other);
+  UR_EXPECT_FALSE(m.Verdict(kSample, AddressVerdict::Valid));
+  UR_EXPECT_TRUE(m.check == AddressCheck::Checking);
+  UR_EXPECT_FALSE(m.ConnectAllowed());
+  UR_EXPECT_TRUE(m.Verdict(other, AddressVerdict::Invalid));
+  UR_EXPECT_TRUE(m.check == AddressCheck::Invalid);
+}
+
+// ---- the connect sheet: a round trip and a typed address side by side --------------
+
+// The manual entry stays live while the browser is out: the address is checked
+// without ending that round trip, Connect waits for it to end, and a failed
+// round trip leaves the accepted address ready to send.
+UR_TEST(SolanaWallet_TypingWhileTheBrowserIsOutKeepsThatRoundTrip) {
+  ConnectMachine m;
+  const uint64_t round = m.ChooseProvider();
+  UR_EXPECT_TRUE(m.Typed());
   UR_EXPECT_TRUE(m.state == ConnectState::OpeningBrowser);
+  UR_EXPECT_TRUE(m.Check(kSample));
+  UR_EXPECT_TRUE(m.state == ConnectState::OpeningBrowser);
+  UR_EXPECT_TRUE(m.Verdict(kSample, AddressVerdict::Valid));
+  UR_EXPECT_TRUE(m.state == ConnectState::OpeningBrowser);
+  UR_EXPECT_TRUE(m.check == AddressCheck::Valid);
+  UR_EXPECT_FALSE(m.ConnectAllowed());  // Connect waits for the round trip
+  UR_EXPECT_EQ(0, m.Submit());
+  UR_EXPECT_TRUE(m.BridgeError(round, "User rejected the request."));
+  UR_EXPECT_TRUE(m.state == ConnectState::Failed);
+  UR_EXPECT_TRUE(m.ConnectAllowed());
+}
+
+// A provider pressed while a check is out keeps that check and its verdict.
+UR_TEST(SolanaWallet_AProviderKeepsTheCheckInFlight) {
+  ConnectMachine m;
+  m.Typed();
+  m.Check(kSample);
+  const uint64_t round = m.ChooseProvider();
+  UR_EXPECT_TRUE(round != 0);
+  UR_EXPECT_TRUE(m.check == AddressCheck::Checking);
+  UR_EXPECT_TRUE(m.Verdict(kSample, AddressVerdict::Valid));
+  UR_EXPECT_TRUE(m.check == AddressCheck::Valid);
+  UR_EXPECT_TRUE(m.state == ConnectState::OpeningBrowser);
+}
+
+// The wallet app's key and the typed address never write over each other: the
+// key links without touching the field's address or verdict, a verdict arriving
+// while the key is linked leaves the link alone, and a typed address being
+// linked takes no key.
+UR_TEST(SolanaWallet_ABridgeKeyAndATypedAddressStaySeparate) {
+  ConnectMachine m;
+  m.Typed();
+  m.Check(kSample);
+  const uint64_t round = m.ChooseProvider();
+  UR_EXPECT_TRUE(m.PublicKey(round));
+  UR_EXPECT_TRUE(m.state == ConnectState::Linking);
+  UR_EXPECT_TRUE(m.address == kSample);
+  UR_EXPECT_TRUE(m.Verdict(kSample, AddressVerdict::Invalid));
+  UR_EXPECT_TRUE(m.state == ConnectState::Linking);  // the link goes on
+  UR_EXPECT_FALSE(m.Typed());                       // and the field is off meanwhile
+  UR_EXPECT_TRUE(m.CreateResult(round, true, "w-app", ""));
+  UR_EXPECT_TRUE(m.state == ConnectState::Linked);
+
+  ConnectMachine typed = CheckedAddress();
+  const uint64_t link = typed.Submit();
+  UR_EXPECT_TRUE(link != 0);
+  UR_EXPECT_FALSE(typed.PublicKey(link));  // no browser round trip is out
+  UR_EXPECT_EQ(0, typed.ChooseProvider());
+  UR_EXPECT_TRUE(typed.state == ConnectState::Linking);
+  UR_EXPECT_TRUE(typed.CreateResult(link, true, "w-typed", ""));
 }
 
 // ---- the connect sheet: failure and retry -------------------------------------------
 
 UR_TEST(SolanaWallet_CreateFailures) {
   ConnectMachine refused = CheckedAddress();
-  refused.Submit();
-  UR_EXPECT_TRUE(refused.CreateResult(false, "", "Invalid wallet address."));
+  const uint64_t round = refused.Submit();
+  UR_EXPECT_TRUE(refused.CreateResult(round, false, "", "Invalid wallet address."));
   UR_EXPECT_TRUE(refused.state == ConnectState::Failed);
   UR_EXPECT_TRUE(std::string(FailureKey(refused.detail)) == "error_connecting_wallet_with_reason");
 
   // a result without a wallet id is not a success
   ConnectMachine noId = CheckedAddress();
-  noId.Submit();
-  UR_EXPECT_TRUE(noId.CreateResult(true, "", ""));
+  const uint64_t link = noId.Submit();
+  UR_EXPECT_TRUE(noId.CreateResult(link, true, "", ""));
   UR_EXPECT_TRUE(noId.state == ConnectState::Failed);
   UR_EXPECT_TRUE(noId.walletId.empty());
   UR_EXPECT_TRUE(std::string(FailureKey(noId.detail)) == "something_went_wrong");
 }
 
-// Any new attempt clears the failure; the checked address may be sent again.
+// Any new attempt clears the failure; the accepted address may be sent again.
 UR_TEST(SolanaWallet_AnyNewAttemptClearsTheFailure) {
   ConnectMachine retry = CheckedAddress();
-  retry.Submit();
-  retry.CreateResult(false, "", "network down");
+  const uint64_t first = retry.Submit();
+  retry.CreateResult(first, false, "", "network down");
   UR_EXPECT_TRUE(retry.ConnectAllowed());
-  UR_EXPECT_TRUE(retry.Submit());
+  const uint64_t second = retry.Submit();
+  UR_EXPECT_TRUE(second != 0 && second != first);
   UR_EXPECT_TRUE(retry.state == ConnectState::Linking);
   UR_EXPECT_TRUE(retry.detail.empty());
 
   ConnectMachine provider;
-  provider.ChooseProvider();
-  provider.BridgeError("closed");
-  UR_EXPECT_FALSE(provider.ConnectAllowed());  // nothing typed was checked
-  UR_EXPECT_TRUE(provider.ChooseProvider());
+  const uint64_t trip = provider.ChooseProvider();
+  provider.BridgeError(trip, "closed");
+  UR_EXPECT_FALSE(provider.ConnectAllowed());  // nothing typed was accepted
+  UR_EXPECT_TRUE(provider.ChooseProvider() != 0);
   UR_EXPECT_TRUE(provider.detail.empty());
 
+  // a new address is a new attempt once it is debounced
   ConnectMachine typed;
-  typed.ChooseProvider();
-  typed.BridgeError("closed");
+  const uint64_t again = typed.ChooseProvider();
+  typed.BridgeError(again, "closed");
   UR_EXPECT_TRUE(typed.Typed());
-  UR_EXPECT_TRUE(typed.state == ConnectState::Idle);
+  UR_EXPECT_TRUE(typed.state == ConnectState::Failed);
+  UR_EXPECT_TRUE(typed.Check(kSample));
+  UR_EXPECT_TRUE(typed.state == ConnectState::Checking);
   UR_EXPECT_TRUE(typed.detail.empty());
 }
 
 UR_TEST(SolanaWallet_LinkedIsFinal) {
   ConnectMachine m;
-  m.ChooseProvider();
-  m.PublicKey();
-  m.CreateResult(true, "w-new", "");
-  UR_EXPECT_FALSE(m.ChooseProvider());
+  const uint64_t round = m.ChooseProvider();
+  m.PublicKey(round);
+  m.CreateResult(round, true, "w-new", "");
+  UR_EXPECT_EQ(0, m.ChooseProvider());
   UR_EXPECT_FALSE(m.Typed());
-  UR_EXPECT_FALSE(m.Submit());
-  UR_EXPECT_FALSE(m.Timeout());
-  UR_EXPECT_FALSE(m.CreateResult(false, "", "late"));
+  UR_EXPECT_EQ(0, m.Submit());
+  UR_EXPECT_FALSE(m.Timeout(round));
+  UR_EXPECT_FALSE(m.CreateResult(round, false, "", "late"));
   UR_EXPECT_TRUE(m.state == ConnectState::Linked);
   UR_EXPECT_TRUE(m.walletId == "w-new");
 }
