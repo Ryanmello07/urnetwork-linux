@@ -2238,6 +2238,9 @@ void EarningsPage::RebuildWalletBlock() {
   }
   const bool offerConnect = walletState_ != Fetch::Loading && (!connected || changingWallet_);
   walletConnectPanel_->set_visible(offerConnect);
+  // "Change" opens the connect panel under a connected wallet: its overflow
+  // would repeat the one beside "Change"
+  walletMoreDisconnected_->set_visible(!connected);
   // a link label keeps its markup; only its visibility follows the wallet state
   walletConnectNote_->set_visible(!connected);
   connectBridgeButton_->set_sensitive(!connecting_);
@@ -2850,9 +2853,17 @@ Gtk::MenuButton* EarningsPage::BuildWalletOverflow(
   button->add_css_class("flat");
   button->set_valign(Gtk::Align::CENTER);  // the row keeps its height
   button->set_menu_model(menu);
-  // icon-only: the glyph names nothing, so the button carries the name
-  kit::SetAccessibleLabel(*button, T_("wallet_options", "Wallet options"));
-  button->set_tooltip_text(T_("wallet_options", "Wallet options"));
+  // Icon-only: the glyph names nothing, so the button carries the name. A
+  // GtkMenuButton hands keyboard focus to the toggle button inside it and does
+  // not pass its own label on, so the name goes on that inner button too: it is
+  // the control a keyboard or screen-reader user actually reaches.
+  const Glib::ustring name = T_("wallet_options", "Wallet options");
+  kit::SetAccessibleLabel(*button, name);
+  for (auto* child = button->get_first_child(); child != nullptr;
+       child = child->get_next_sibling()) {
+    if (GTK_IS_TOGGLE_BUTTON(child->gobj())) kit::SetAccessibleLabel(*child, name);
+  }
+  button->set_tooltip_text(name);
   return button;
 }
 
