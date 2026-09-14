@@ -197,6 +197,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     balance_.SetWindowVisible(windowVisible_);
     UpdateCarouselRunning();
     if (connectPage_) connectPage_->SetPresentationActive(windowVisible_);
+    if (earningsPage_) earningsPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
     if (windowVisible_) {
       status_.set_text(lastStatus_);
@@ -206,9 +207,6 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       ApplyConnectReading(host_.CurrentConnectReading());
       ApplyStats(lastStats_);
       if (drawer_) drawer_->RefreshAll();  // drawer events are dropped while hidden
-      // ...and so were the earnings page's: a device torn down while the window
-      // was hidden announces nothing on re-show, so the page re-reads
-      if (earningsPage_) earningsPage_->OnHostEvent(DrawerEvent::DeviceLifecycle);
     }
   };
   property_visible().signal_changed().connect(reconcilePresentation);

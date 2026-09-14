@@ -4593,6 +4593,18 @@ void EarningsPage::OnHostEvent(DrawerEvent event) {
   }
 }
 
+void EarningsPage::SetPresentationActive(bool active) {
+  if (!active) {
+    // a sheet may not outlive the surface that feeds it
+    // (ConnectPage::SetPresentationActive): the window only hides to the tray
+    if (providerTransportSheet_) providerTransportSheet_->hide();
+    return;
+  }
+  // every drawer event was dropped while hidden, and with no device the host
+  // announces nothing on re-show
+  OnHostEvent(DrawerEvent::DeviceLifecycle);
+}
+
 // One pull per throughput tick, the shape of ConnectPage::PullThroughput: the
 // provider series feeds the Local and Blocked charts, the extender series the
 // extender chart, the distribution the bar, and the provider stats flag the

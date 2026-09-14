@@ -151,6 +151,12 @@ class EarningsPage : public Gtk::Box {
   // the extender status repaints the read-only extender row and the running
   // state behind the extender statistics (EXTENDER.md N7, O5, O8).
   void OnHostEvent(DrawerEvent event);
+  // The window presenting or hiding to the tray (MainWindow's
+  // reconcilePresentation), by ConnectPage::SetPresentationActive's rule that a
+  // sheet may not outlive the surface that feeds it: hiding closes the provider
+  // transport sheet, and showing re-reads the statistics and the extender row,
+  // since every drawer event was dropped while hidden.
+  void SetPresentationActive(bool active);
 
   // The points board's row and stat tile (public: a free helper in the .cpp builds rows).
   struct PointsRowUi {
