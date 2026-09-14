@@ -3304,6 +3304,11 @@ msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
 msgstr "Extender settings saved"
 
+#. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
+msgctxt "extender_start_failed"
+msgid "Could not start: {}"
+msgstr "Could not start: {}"
+
 #. Title of the section that shows statistics about the extender, directly above the provider statistics section.
 msgctxt "extender_statistics"
 msgid "Extender statistics"
