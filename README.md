@@ -53,8 +53,8 @@ meson compile -C build
 ```
 
 Dev deps: `libgtkmm-4.0-dev libadwaita-1-dev libglib2.0-dev nlohmann-json3-dev
-libsecret-1-dev libzxing-cpp-dev meson ninja-build g++ pkg-config`.
-(`libzxing-cpp-dev` decodes the extender share QR from an image file; the
+libsecret-1-dev libzxing-dev meson ninja-build g++ pkg-config`.
+(`libzxing-dev` decodes the extender share QR from an image file; the
 encoder is vendored in `app/third_party/qrcodegen`.)
 
 ## Build (release snap)

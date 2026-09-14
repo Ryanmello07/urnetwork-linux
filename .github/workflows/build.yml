@@ -179,7 +179,7 @@ jobs:
             build-essential meson ninja-build pkg-config gettext \
             libglib2.0-dev nlohmann-json3-dev \
             libgtkmm-4.0-dev libadwaita-1-dev libsecret-1-dev \
-            libzxing-cpp-dev \
+            libzxing-dev \
             appstream
 
       - name: Configure and build the GUI
