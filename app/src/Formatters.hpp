@@ -7,14 +7,15 @@
 #include <string>
 #include <vector>
 
+// FormatCountCompact and FormatCountRate, pure so the unit tests reach them
+#include "CountFormat.hpp"
+
 namespace urnw {
 
 // IEC base-1024: "996 B", "1.2 KiB", "3.4 MiB", "1.1 GiB".
 std::string FormatByteCountCompact(int64_t byteCount);
 // "1.2 KiB/s"
 std::string FormatByteRate(int64_t bytesPerSecond);
-// Decimal base-1000: "996", "1.2k", "340k", "3.4M".
-std::string FormatCountCompact(int64_t count);
 // "340 pkt/s"
 std::string FormatPacketRate(int64_t packetsPerSecond);
 // "1.2 Mbps"

@@ -100,6 +100,9 @@ enum class DrawerEvent {
   ProviderLocations,   // connected provider set/locations changed (locations sheet)
   ProviderSelection,   // the globe's selected provider changed (locations sheet)
   ExtenderStatus,      // extender directory / gossip status changed (drawer panel)
+  // this device's own extender role changed state or setting (the connect
+  // page's extender row, the earnings page's read-only row and statistics)
+  ExtenderProvideStatus,
 };
 
 // Outcome of StartTunnel. Everything except Started is a degraded state the
@@ -665,6 +668,25 @@ class SdkHost {
   // Throughput tick as the points; nullopt with the tunnel down.
   std::optional<urnet::TransportDistribution> ClientTransportDistribution();
   std::optional<urnet::TransportDistribution> ProviderTransportDistribution();
+  // The provider and the extender series of the same controller, read on the
+  // same Throughput tick as ThroughputPoints (EXTENDER.md O3, O5): the provider
+  // points carry the provider's Local and Block routes, the extender points
+  // the traffic this device's extender role relayed, in the Remote route only.
+  // nullopt with no session.
+  std::optional<urnet::ThroughputPointList> ProviderThroughputPoints();
+  std::optional<urnet::ThroughputPointList> ExtenderThroughputPoints();
+  // The device reports provider packet stats: the half of the provider
+  // statistics gate (O8) the provide control mode does not decide. false with
+  // no session. The extender role's running state is not read here: it is the
+  // Enabled of the pushed GetExtenderProvideStatus.
+  bool HasProviderStats();
+  // The same fact asked of the DEVICE, one device rpc, for the forced re-reads
+  // right after a contract view controller opens (a device arriving, the
+  // window coming back): a new controller's provider stats stay nil until its
+  // first sample, while the device answers at once. Provider presence is fixed
+  // per device, so the two agree once the controller has sampled. false with
+  // no device.
+  bool DeviceHasProviderStats();
   std::optional<urnet::BlockActionList> BlockActions();
   std::optional<urnet::BlockStats> BlockStatsSnapshot();
   std::optional<urnet::BlockActionOverrideList> BlockActionOverrides();
@@ -747,6 +769,28 @@ class SdkHost {
   // Changes arrive as DrawerEvent::ExtenderStatus, coalesced by the SDK to one
   // callback per second.
   std::optional<urnet::ExtenderStatus> GetExtenderStatus();
+
+  // The status of this device's OWN extender role (EXTENDER.md N2, N3), read
+  // off the DEVICE like GetExtenderStatus, because the role runs in the
+  // daemon's DeviceLocal. DeviceRemote reads it through the rpc with the last
+  // value cached, and answers the unsupported status against a device process
+  // that lacks the method. nullopt with no device, which the extender rows
+  // render as hidden. Changes arrive as DrawerEvent::ExtenderProvideStatus: the
+  // SDK coalesces them to one callback per epoch (a second) after any change of
+  // the setting, the provide state or the role, and fires none on
+  // registration, so the pages re-read the status on DeviceLifecycle.
+  std::optional<urnet::ExtenderProvideStatus> GetExtenderProvideStatus();
+  // The provider extender setting of the daemon's space, through the device:
+  // the queued or last-known value while the daemon is out of contact, so the
+  // toggle never snaps back during a daemon restart (N2). With no device, the
+  // setting's default, on (N4) -- nothing draws it then, the row is hidden.
+  bool GetProvideExtender();
+  // Writes the setting through the device, which persists and applies it at
+  // once; queued and replayed at the next sync while the daemon is unreachable
+  // (N2, N4). The GUI's own LocalState is not the daemon's space and is never
+  // written. With no device the write is dropped: the row is hidden then, and
+  // the setter is never called while the row is hidden (N1).
+  void SetProvideExtender(bool on);
 
   // The SDK's shared ExtenderViewController (K7: "encoding, decoding and
   // applying live in the sdk, one implementation for every app"). Opened with

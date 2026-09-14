@@ -3224,6 +3224,26 @@ msgctxt "export_logs"
 msgid "Export Logs"
 msgstr ""
 
+#. Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.
+msgctxt "extender"
+msgid "Extender"
+msgstr ""
+
+#. Extender status when the last activation failed and no family is active. The argument is the error.
+msgctxt "extender_activation_failed"
+msgid "Activation failed: {}"
+msgstr ""
+
+#. Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.
+msgctxt "extender_activation_refused"
+msgid "Activation refused: {}"
+msgstr ""
+
+#. Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.
+msgctxt "extender_active"
+msgid "Active · {}"
+msgstr ""
+
 #. Placeholder shown in an empty extender settings field, naming the default value that applies.
 msgctxt "extender_default_value"
 msgid "Default: {}"
@@ -3244,6 +3264,31 @@ msgctxt "extender_hosts_hint"
 msgid "One hostname or IP address per line. These are added to the discovered extenders."
 msgstr ""
 
+#. Extender status when no carrier could bind. The argument is the carrier errors.
+msgctxt "extender_listen_failed"
+msgid "Could not listen: {}"
+msgstr ""
+
+#. Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.
+msgctxt "extender_not_providing"
+msgid "Not providing"
+msgstr ""
+
+#. Extender status when the operator revoked this device's extender key.
+msgctxt "extender_revoked"
+msgid "Revoked by the operator"
+msgstr ""
+
+#. Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.
+msgctxt "extender_setting_description"
+msgid "While you are providing, this device also relays for people whose access to the network is blocked, on TCP and UDP 443 and UDP 4053."
+msgstr ""
+
+#. Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.
+msgctxt "extender_setting_up"
+msgid "Setting up"
+msgstr ""
+
 #. Title of the extender settings form under account > Extenders.
 msgctxt "extender_settings"
 msgid "Extender settings"
@@ -3257,6 +3302,16 @@ msgstr ""
 #. Confirmation after the extender settings are saved.
 msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
+msgstr ""
+
+#. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
+msgctxt "extender_start_failed"
+msgid "Could not start: {}"
+msgstr ""
+
+#. Title of the section that shows statistics about the extender, directly above the provider statistics section.
+msgctxt "extender_statistics"
+msgid "Extender statistics"
 msgstr ""
 
 #. Title of the extenders panel in the connect drawer and of the Extenders section under account.
@@ -5077,6 +5132,11 @@ msgstr ""
 #. Points leaderboard: how many networks hold a rank. {count} is preformatted with separators.
 msgctxt "ranked_networks_count"
 msgid "{} ranked networks"
+msgstr ""
+
+#. Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.
+msgctxt "reads_per_second"
+msgid "reads/s"
 msgstr ""
 
 #. Call to action

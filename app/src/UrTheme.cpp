@@ -179,6 +179,10 @@ button.link:hover label { color: #8AA9FF; }
 .ur-row-title.ur-value-on, .ur-row-title.dim-label.ur-value-on { color: #87FB67; }
 .ur-value.ur-danger-text, .ur-value.dim-label.ur-danger-text,
 .ur-row-title.ur-danger-text, .ur-row-title.dim-label.ur-danger-text { color: #F8523B; }
+/* ...and the error voice on a row's note line, the extender row's state in
+   its error state: .ur-row-note comes after .ur-error-text in this sheet and
+   wins the tie, so the pair takes the coral here and keeps the note's 11px. */
+.ur-row-note.ur-error-text { color: #FF6C58; }
 /* the signed-in user's own row in the earnings leaderboard: card fill against
    the pane, never an accent — the rank is the emphasis, not the row */
 .ur-earn-own-row { background-color: #1C1C1C; }

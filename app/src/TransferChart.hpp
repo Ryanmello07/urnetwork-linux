@@ -23,9 +23,14 @@ namespace urnw {
 class TransferChart : public Gtk::DrawingArea {
  public:
   enum class Route { Remote, Local, Block };
+  // What the count series counts, which only the count label's unit says:
+  // packets on the client and provider routes, relay reads on the extender
+  // series (EXTENDER.md O1: a relayed byte stream has no packet boundary in
+  // userspace, so the relay counts the chunks it copied).
+  enum class CountUnit { Packets, Reads };
 
   TransferChart(std::string title, Route route, Rgba byteColor = kUrGreen,
-                Rgba packetColor = kUrPink);
+                Rgba packetColor = kUrPink, CountUnit countUnit = CountUnit::Packets);
   ~TransferChart() override;
 
   // Feed the latest throughput window (the point list is shared across the
@@ -56,6 +61,8 @@ class TransferChart : public Gtk::DrawingArea {
   void DrawTriangle(const Cairo::RefPtr<Cairo::Context>& cr, double x, double y, double size,
                     bool pointsUp, const Rgba& color) const;
   int64_t AverageOverRecent(int64_t urnet::ThroughputSample::*field) const;
+  // the count row's label in the chart's unit: "340 pkt/s" or "340 reads/s"
+  std::string CountRateText(int64_t countPerSecond) const;
   bool Animated(double now) const;
   void EnsureTimer();
   bool OnTick();
@@ -64,6 +71,7 @@ class TransferChart : public Gtk::DrawingArea {
   Route route_;
   Rgba byteColor_;
   Rgba packetColor_;
+  CountUnit countUnit_;
 
   // route samples extracted from the shared point list, oldest first, time in
   // unix seconds

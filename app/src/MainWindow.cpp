@@ -197,6 +197,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     balance_.SetWindowVisible(windowVisible_);
     UpdateCarouselRunning();
     if (connectPage_) connectPage_->SetPresentationActive(windowVisible_);
+    if (earningsPage_) earningsPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
     if (windowVisible_) {
       status_.set_text(lastStatus_);
@@ -327,6 +328,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       // stats, overrides, contracts, DNS settings, blocker, routeLocal and
       // location changes would never reach the page at all.
       if (windowVisible_ && connectPage_) connectPage_->OnHostEvent(event);
+      // ...and so do the earnings page's provider and extender statistics and
+      // its read-only extender row (EXTENDER.md N7, O5), under the same gate
+      if (windowVisible_ && earningsPage_) earningsPage_->OnHostEvent(event);
       if (event == DrawerEvent::Peers || event == DrawerEvent::DeviceLifecycle) {
         RefreshPeersStatus();
       }

@@ -13,6 +13,7 @@
 
 #include "EmojiKeyboard.hpp"
 #include "EmojiTagSheet.hpp"
+#include "ExtenderProvideRowPaint.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "LeaderboardIndicator.hpp"
@@ -33,6 +34,10 @@ constexpr int kValidateDebounceMs = 300;
 constexpr int kSheetMinWidth = 480;
 constexpr int kClaimSheetMaxHeight = 560;
 constexpr int kReliabilityChartHeight = 110;
+// the provider and extender statistics' chart rows (EXTENDER.md O8): the
+// pane's 132 px chart rows, and the Blocked chart at half that
+constexpr int kStatsChartHeight = 132;
+constexpr int kBlockedChartHeight = 66;
 constexpr int kCopiedResetMs = 1800;
 constexpr double kMultiplierHighlight = 2.0;   // a country multiplier goes lime at >= 2.0
 constexpr double kMinGasTao = 0.001;           // below this the gas key cannot pay a claim
@@ -272,6 +277,16 @@ Glib::ustring ProvideModeValueText(const std::string& mode) {
   if (mode == "always") return T_("always", "Always");
   if (mode == "network") return T_("network", "Network");
   return T_("never", "Never");
+}
+
+// A fixed-height pane row holding a transfer chart in its inset, the way
+// ConnectPage::BuildPaneC adds its charts.
+Gtk::Box* MakeChartRow(int height, TransferChart* chart) {
+  auto* row = kit::MakePaneRow(height);
+  chart->set_hexpand(true);
+  chart->set_vexpand(true);
+  if (auto* inner = dynamic_cast<Gtk::Box*>(row->get_first_child())) inner->append(*chart);
+  return row;
 }
 
 // A label whose text is a link: the whole line opens `url` in the browser.
@@ -1175,6 +1190,11 @@ EarningsPage::EarningsPage(SdkHost& host)
 
   BuildNetworkPane();
   append(*paneC_.root);
+  // the statistics groups settle on what the host has now (nothing before a
+  // session); the drawer feed keeps them current from there
+  ApplyExtenderProvideState();
+  PullProviderThroughput(/*forced=*/true);
+  ApplyStatsSections();
 
   // every panel opens on its LOADING state and the stat values on the faint
   // dash: an unloaded blank destination would read "there is nothing"
@@ -1668,8 +1688,47 @@ void EarningsPage::BuildNetworkPane() {
   leaderboardInfo_.root().set_margin_bottom(8);
   content->append(leaderboardInfo_.root());
 
-  // 5b. provide mode: the connect page's indicator + label with the current
-  // mode; the whole row opens the connect page where it is changed
+  // 6 + 7. network reliability
+  {
+    auto group = kit::MakePaneGroupHeader(
+        T_("site_app_network_reliability", "Network reliability"), T_("loading", "Loading..."));
+    reliabilityStatus_ = group.meta;
+    content->append(*group.root);
+  }
+  {
+    auto row = MakePaddedRow(10);
+    row.content->set_spacing(8);
+    reliabilityCard_ = row.root;
+    reliabilityPanel_ = row.content;
+    reliabilityCard_->set_visible(false);
+    content->append(*row.root);
+  }
+
+  // 8. extender statistics (EXTENDER.md O4, O8): the traffic this device's
+  // extender role relayed, egress toward clients above the axis and ingress
+  // toward the operator below. Shown only with the provider statistics and a
+  // running role; hidden otherwise with no placeholder, since the extender row
+  // in the provider group already says why.
+  extenderStatsHeader_ =
+      kit::MakePaneGroupHeader(T_("extender_statistics", "Extender statistics"));
+  content->append(*extenderStatsHeader_.root);
+  extenderChart_ = Gtk::make_managed<TransferChart>(
+      T_("extender", "Extender"), TransferChart::Route::Remote, kUrLightBlue, kUrPink,
+      TransferChart::CountUnit::Reads);
+  extenderChartRow_ = MakeChartRow(kStatsChartHeight, extenderChart_);
+  content->append(*extenderChartRow_);
+
+  // 9. provider statistics (O5, O8). The header is static: this platform has
+  // no provider contracts feed yet. While the statistics are not visible its
+  // meta says providing_disabled and the chart rows collapse; the provide mode
+  // row and the extender row stay, which is when their text matters.
+  providerStatsHeader_ =
+      kit::MakePaneGroupHeader(T_("provider_statistics", "Provider statistics"));
+  content->append(*providerStatsHeader_.root);
+
+  // 9a. provide mode, moved here from above the reliability group as macOS
+  // keeps it (EXTENDER.md O8): the connect page's indicator + label with the
+  // current mode; the whole row opens the connect page where it is changed
   {
     auto* rowBox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
     provideModeDot_.set_valign(Gtk::Align::CENTER);
@@ -1696,21 +1755,78 @@ void EarningsPage::BuildNetworkPane() {
     content->append(*provideModeRow_);
   }
 
-  // 6 + 7. network reliability
+  // 9b. the read-only extender row (N7): the connect page's row with the
+  // provide mode row's chevron in place of the switch, opening the same page
   {
-    auto group = kit::MakePaneGroupHeader(
-        T_("site_app_network_reliability", "Network reliability"), T_("loading", "Loading..."));
-    reliabilityStatus_ = group.meta;
-    content->append(*group.root);
+    auto* rowBox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    extenderDot_ = Gtk::make_managed<Gtk::Label>();
+    extenderDot_->set_valign(Gtk::Align::CENTER);
+    kit::MarkDecorative(*extenderDot_);
+    rowBox->append(*extenderDot_);
+    auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 1);
+    text->set_hexpand(true);
+    text->set_valign(Gtk::Align::CENTER);
+    auto* title = Gtk::make_managed<Gtk::Label>(T_("extender", "Extender"));
+    title->add_css_class("ur-row-title");
+    title->set_xalign(0);
+    kit::MarkDecorative(*title);  // the button carries the name
+    text->append(*title);
+    extenderState_ = Gtk::make_managed<Gtk::Label>();
+    extenderState_->add_css_class("ur-row-note");
+    extenderState_->set_xalign(0);
+    extenderState_->set_single_line_mode(true);
+    extenderState_->set_ellipsize(Pango::EllipsizeMode::END);
+    // the 380 rail holds only if a long listen failure does not ask for more;
+    // the tooltip carries the whole text
+    extenderState_->set_max_width_chars(34);
+    kit::MarkDecorative(*extenderState_);
+    text->append(*extenderState_);
+    rowBox->append(*text);
+    auto* chevron = Gtk::make_managed<Gtk::Image>();
+    chevron->set_from_icon_name("go-next-symbolic");
+    chevron->add_css_class("dim-label");
+    rowBox->append(*chevron);
+    extenderRow_ = Gtk::make_managed<Gtk::Button>();
+    extenderRow_->set_child(*rowBox);
+    extenderRow_->add_css_class("flat");
+    extenderRow_->set_has_frame(false);
+    extenderRow_->set_margin_bottom(8);
+    extenderRow_->signal_clicked().connect([this] {
+      if (on_open_provide_settings) on_open_provide_settings();
+    });
+    extenderRow_->set_visible(false);
+    content->append(*extenderRow_);
   }
-  {
-    auto row = MakePaddedRow(10);
-    row.content->set_spacing(8);
-    reliabilityCard_ = row.root;
-    reliabilityPanel_ = row.content;
-    reliabilityCard_->set_visible(false);
-    content->append(*row.root);
+
+  // 9c. the Local chart of the provider series
+  localChart_ = Gtk::make_managed<TransferChart>(T_("local", "Local"), TransferChart::Route::Local,
+                                                 kUrGreen, kUrPink);
+  localChartRow_ = MakeChartRow(kStatsChartHeight, localChart_);
+  content->append(*localChartRow_);
+
+  // 9d. the provider's relayed traffic by transport, the connect page's pane B
+  // bar in its provider kind; its click opens the provider transport settings
+  providerTransportRow_ = kit::MakePaneRow(-1);
+  providerTransportBar_ = Gtk::make_managed<TransportBar>();
+  providerTransportBar_->set_hexpand(true);
+  providerTransportBar_->set_margin_top(10);
+  providerTransportBar_->set_margin_bottom(10);
+  providerTransportBar_->SetSurfaceColor(kUrBackground);  // the pane fill, not the card
+  providerTransportBar_->on_activate = [this] { OpenProviderTransportSheet(); };
+  if (auto* inner = dynamic_cast<Gtk::Box*>(providerTransportRow_->get_first_child())) {
+    inner->append(*providerTransportBar_);
   }
+  content->append(*providerTransportRow_);
+
+  // 9e. the Blocked chart at half height
+  blockedChart_ = Gtk::make_managed<TransferChart>(
+      T_("blocked", "Blocked"), TransferChart::Route::Block, kUrCoral, kUrMutedCoral);
+  // a drawing area's content height is its minimum height too, so the
+  // half-height chart is fitted inside its row's hairline, or the row would
+  // grow to the chart's default 128
+  blockedChart_->set_content_height(kBlockedChartHeight - 1);
+  blockedChartRow_ = MakeChartRow(kBlockedChartHeight, blockedChart_);
+  content->append(*blockedChartRow_);
 }
 
 // ---- loads -------------------------------------------------------------------
@@ -4408,6 +4524,161 @@ void EarningsPage::ApplyProvideState(const LiveStats& stats) {
   if (enabled == providingEnabled_) return;
   providingEnabled_ = enabled;
   ApplyReliability(lastReliability_, lastReliabilityState_);  // repaint under the new gate
+  ApplyStatsSections();  // the provider statistics share the gate (O8)
+}
+
+// ---- the extender and provider statistics (EXTENDER.md N7, O5, O8) ------------
+
+void EarningsPage::OnHostEvent(DrawerEvent event) {
+  switch (event) {
+    case DrawerEvent::DeviceLifecycle:
+      // a device arriving or leaving, or the window coming back: the status
+      // listener fires nothing on registration and the series controller is
+      // new, so both are re-read
+      ApplyExtenderProvideState();
+      PullProviderThroughput(/*forced=*/true);
+      break;
+    case DrawerEvent::Throughput:
+      PullProviderThroughput(/*forced=*/false);
+      break;
+    case DrawerEvent::ExtenderProvideStatus:
+      ApplyExtenderProvideState();
+      break;
+    case DrawerEvent::ProviderTransportSettings:
+      // the enabled flags behind the provider bar's unused footer follow the
+      // policy; re-read the distribution so the footer does not wait for a tick
+      if (providerTransportBar_) {
+        providerTransportBar_->SetDistribution(host_.ProviderTransportDistribution());
+      }
+      break;
+    case DrawerEvent::BlockActions:
+    case DrawerEvent::BlockStats:
+    case DrawerEvent::Overrides:
+    case DrawerEvent::DnsSettings:
+    case DrawerEvent::TransportSettings:
+    case DrawerEvent::Blocker:
+    case DrawerEvent::RouteLocal:
+    case DrawerEvent::Contracts:
+    case DrawerEvent::Location:
+    case DrawerEvent::Profile:
+    case DrawerEvent::Locations:
+    case DrawerEvent::Peers:
+    case DrawerEvent::ProviderIdentities:
+    case DrawerEvent::ProviderLocations:
+    case DrawerEvent::ProviderSelection:
+    case DrawerEvent::ExtenderStatus:
+      // the connect page's and the window's surfaces
+      break;
+  }
+}
+
+void EarningsPage::SetPresentationActive(bool active) {
+  if (!active) {
+    // a sheet may not outlive the surface that feeds it
+    // (ConnectPage::SetPresentationActive): the window only hides to the tray
+    if (providerTransportSheet_) providerTransportSheet_->hide();
+    return;
+  }
+  // every drawer event was dropped while hidden, and with no device the host
+  // announces nothing on re-show
+  OnHostEvent(DrawerEvent::DeviceLifecycle);
+}
+
+// One pull per throughput tick, the shape of ConnectPage::PullThroughput: the
+// provider series feeds the Local and Blocked charts, the extender series the
+// extender chart, the distribution the bar, and the provider stats flag the
+// gate. The charts redraw on their own timers.
+void EarningsPage::PullProviderThroughput(bool forced) {
+  const double window = static_cast<double>(host_.ThroughputWindowSeconds());
+  auto providerPoints = std::make_shared<const urnet::ThroughputPointList>(
+      host_.ProviderThroughputPoints().value_or(urnet::ThroughputPointList()));
+  auto extenderPoints = std::make_shared<const urnet::ThroughputPointList>(
+      host_.ExtenderThroughputPoints().value_or(urnet::ThroughputPointList()));
+  if (localChart_) localChart_->SetPoints(providerPoints, window);
+  if (blockedChart_) blockedChart_->SetPoints(providerPoints, window);
+  if (extenderChart_) extenderChart_->SetPoints(extenderPoints, window);
+  const std::optional<urnet::TransportDistribution> distribution =
+      host_.ProviderTransportDistribution();
+  providerDistributionKnown_ = distribution.has_value();
+  if (providerTransportBar_) providerTransportBar_->SetDistribution(distribution);
+  // A forced re-read follows a device arriving or the window coming back; either
+  // way SdkHost has just opened a new contract view controller, whose provider
+  // stats stay nil until its first sample and whose first throughput tick lands
+  // after its second. The device answers now; the tick reads the controller,
+  // which has sampled by then.
+  const bool hasStats = forced ? host_.DeviceHasProviderStats() : host_.HasProviderStats();
+  if (hasStats != hasProviderStats_) {
+    hasProviderStats_ = hasStats;
+    ApplyStatsSections();
+  }
+}
+
+// The read-only row's reading (N7) and the running state of the role (O4),
+// both from the pushed status. This row draws no switch, so the setting is not
+// read here.
+void EarningsPage::ApplyExtenderProvideState() {
+  const std::optional<urnet::ExtenderProvideStatus> status = host_.GetExtenderProvideStatus();
+  DrawExtenderRow(extender::ProvideRowOf(status, [] { return false; }));
+  const bool running = status && status->Enabled;
+  if (running != extenderRunning_) {
+    extenderRunning_ = running;
+    ApplyStatsSections();
+  }
+}
+
+void EarningsPage::DrawExtenderRow(const extender::ProvideRow& row) {
+  if (!extenderRow_) return;
+  // a push that changes nothing is dropped
+  if (extenderRowApplied_ && row == extenderRowDrawn_) return;
+  extenderRowApplied_ = true;
+  extenderRowDrawn_ = row;
+  extenderRow_->set_visible(row.visible);
+  if (!row.visible) return;
+  const std::string text = PaintExtenderProvideRow(*extenderDot_, *extenderState_, row);
+  // one element for a screen reader, named the way ExtenderPanel names itself
+  kit::SetAccessibleLabel(*extenderRow_, std::string(T_("extender", "Extender")) + ": " + text);
+}
+
+// O8 over its three inputs: the provide control mode's gate, the provider
+// packet stats of the throughput tick, and the role's running state from the
+// pushed status. Each input re-applies it when it flips.
+void EarningsPage::ApplyStatsSections() {
+  if (!extenderStatsHeader_.root || !providerStatsHeader_.meta) return;
+  const extender::StatsSections sections =
+      extender::StatsSectionsFor(providingEnabled_, hasProviderStats_, extenderRunning_);
+  if (statsSectionsApplied_ && sections == statsSections_) return;
+  const bool providerRowsAppear =
+      sections.providerVisible && !(statsSectionsApplied_ && statsSections_.providerVisible);
+  statsSectionsApplied_ = true;
+  statsSections_ = sections;
+  extenderStatsHeader_.root->set_visible(sections.extenderVisible);
+  extenderChartRow_->set_visible(sections.extenderVisible);
+  kit::SetTextOrCollapse(*providerStatsHeader_.meta,
+                         sections.disabledMeta
+                             ? Glib::ustring(T_("providing_disabled", "Providing is disabled"))
+                             : Glib::ustring());
+  localChartRow_->set_visible(sections.providerVisible);
+  providerTransportRow_->set_visible(sections.providerVisible);
+  blockedChartRow_->set_visible(sections.providerVisible);
+  // the bar's legend line is a skeleton while its row shows before the first
+  // distribution, and settles when the row hides
+  if (!sections.providerVisible) {
+    providerTransportBar_->SettleEmpty();
+  } else if (providerRowsAppear && !providerDistributionKnown_) {
+    providerTransportBar_->BeginLoading();
+  }
+}
+
+void EarningsPage::OpenProviderTransportSheet() {
+  auto* parent = dynamic_cast<Gtk::Window*>(get_root());
+  if (!parent) return;
+  if (!providerTransportSheet_) {
+    providerTransportSheet_ =
+        std::make_unique<TransportSheet>(*parent, host_, TransportSheet::Kind::Provider);
+  }
+  // always presentable: with no device the draft comes from the GUI's mirror
+  // or the SDK default, and the edit applies at the next tunnel start
+  providerTransportSheet_->Open();
 }
 
 }  // namespace urnw

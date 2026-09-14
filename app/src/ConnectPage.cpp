@@ -9,6 +9,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 
+#include "ExtenderProvideRowPaint.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
@@ -557,6 +558,63 @@ void ConnectPage::BuildPaneA() {
   discoverableText_->set_wrap(true);
   CapNatural(discoverableText_, 32);
   moreOptionsHost_->append(*discoverableText_);
+
+  // The provider extender row (EXTENDER.md N7), after the provide control's
+  // own footer line so the segmented control keeps it. Hand built like the
+  // provide row above, since the kit's two-line rows have no leading slot: the
+  // dot, the title over the one-line state, and the switch. Hidden, never
+  // disabled, until a device reports the role supported.
+  extenderRow_ = kit::MakePaneRow(44);
+  {
+    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    line->set_hexpand(true);
+    extenderDot_ = Gtk::make_managed<Gtk::Label>();
+    extenderDot_->set_valign(Gtk::Align::CENTER);
+    kit::MarkDecorative(*extenderDot_);
+    line->append(*extenderDot_);
+    auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 1);
+    text->set_hexpand(true);
+    text->set_valign(Gtk::Align::CENTER);
+    auto* title = Gtk::make_managed<Gtk::Label>(T_("extender", "Extender"));
+    title->add_css_class("ur-row-title");
+    title->set_xalign(0);
+    text->append(*title);
+    extenderState_ = Gtk::make_managed<Gtk::Label>();
+    extenderState_->add_css_class("ur-row-note");
+    extenderState_->set_xalign(0);
+    extenderState_->set_single_line_mode(true);
+    extenderState_->set_ellipsize(Pango::EllipsizeMode::END);
+    // the 330 rail holds only if a long listen failure does not ask for more;
+    // the tooltip carries the whole text
+    CapNatural(extenderState_, 30);
+    text->append(*extenderState_);
+    line->append(*text);
+    extenderToggle_ = Gtk::make_managed<Gtk::Switch>();
+    extenderToggle_->set_valign(Gtk::Align::CENTER);
+    kit::SetAccessibleLabel(*extenderToggle_, T_("extender", "Extender"));
+    extenderToggle_->property_active().signal_changed().connect([this] {
+      // echo guard: a feed-driven write must not travel back to the SDK
+      if (updatingControls_) return;
+      OnExtenderToggled();
+    });
+    line->append(*extenderToggle_);
+    if (auto* inner = RowInner(extenderRow_)) inner->append(*line);
+  }
+  extenderRow_->set_visible(false);
+  moreOptionsHost_->append(*extenderRow_);
+  extenderDescription_ = Gtk::make_managed<Gtk::Label>(
+      T_("extender_setting_description",
+         "While you are providing, this device also relays for people whose access to the "
+         "network is blocked, on TCP and UDP 443 and UDP 4053."));
+  extenderDescription_->add_css_class("ur-caption");
+  extenderDescription_->set_xalign(0);
+  extenderDescription_->set_margin_start(12);
+  extenderDescription_->set_margin_end(12);
+  extenderDescription_->set_margin_bottom(8);
+  extenderDescription_->set_wrap(true);
+  CapNatural(extenderDescription_, 32);
+  extenderDescription_->set_visible(false);
+  moreOptionsHost_->append(*extenderDescription_);
 
   // connect options: the four toggle rows, each writing through SdkHost with
   // an echo guard (the load writes the same control)
@@ -1981,6 +2039,50 @@ void ConnectPage::ApplyKillSwitchUi() {
                               Glib::Markup::escape_text(copy.line) + "</span>");
 }
 
+// ---- the provider extender row (EXTENDER.md N7) -------------------------------
+
+// Re-reads the status, and beside a status that shows, the setting the switch
+// takes its position from. No status (no device) and an unsupported role both
+// hide the row, and a row that will not show reads nothing else.
+void ConnectPage::ApplyExtenderProvideState() {
+  DrawExtenderRow(extender::ProvideRowOf(host_.GetExtenderProvideStatus(),
+                                         [this] { return host_.GetProvideExtender(); }));
+}
+
+void ConnectPage::DrawExtenderRow(const extender::ProvideRow& row) {
+  if (!extenderRow_ || !extenderDescription_) return;
+  // a push that changes nothing is dropped
+  if (extenderRowApplied_ && row == extenderRowDrawn_) return;
+  extenderRowApplied_ = true;
+  extenderRowDrawn_ = row;
+  extenderRow_->set_visible(row.visible);
+  extenderDescription_->set_visible(row.visible);
+  if (!row.visible) return;
+  const std::string text = PaintExtenderProvideRow(*extenderDot_, *extenderState_, row);
+  // the switch shows the setting, written under the echo guard
+  if (extenderToggle_->get_active() != row.on) {
+    updatingControls_ = true;
+    extenderToggle_->set_active(row.on);
+    updatingControls_ = false;
+  }
+  // the switch is named Extender and carries the state as its description (N7)
+  Glib::Value<Glib::ustring> description;
+  description.init(Glib::Value<Glib::ustring>::value_type());
+  description.set(text);
+  extenderToggle_->update_property(Gtk::Accessible::Property::DESCRIPTION, description);
+}
+
+// The switch writes the setting at once and repaints the row with the guess
+// before the listener answers; the next status replaces the guess (N7).
+void ConnectPage::OnExtenderToggled() {
+  if (!extenderToggle_) return;
+  // never while hidden: a device that cannot take the write shows no row (N1)
+  if (!extenderRowDrawn_.visible) return;
+  const bool on = extenderToggle_->get_active();
+  host_.SetProvideExtender(on);
+  DrawExtenderRow(extender::ProvideRowGuess(on, stats_.provideEnabled));
+}
+
 // ---- connect options: the performance profile (§2.8) ---------------------------
 // ConnectDrawer::RefreshControls/ApplyControls, reused verbatim: the Linux
 // SdkHost has exposed GetPerformanceProfile/SetPerformanceProfile since the
@@ -2272,6 +2374,9 @@ void ConnectPage::RefreshFeeds(bool force) {
   ApplyKillSwitchUi();
   if (force) {
     PullThroughput();
+    // the extender row's listener fires nothing on registration, so a device
+    // arriving, a re-show and the build all re-read the status
+    ApplyExtenderProvideState();
     ApplyInspectorVisibility();
     ApplyInspector();
     // Ask urnetworkd what floor is REALLY installed. There is no push for
@@ -2439,6 +2544,9 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::ExtenderStatus:
       // the extender panel is the drawer's, and the hero canvas's rings ride
       // the provider grid rather than the status
+      break;
+    case DrawerEvent::ExtenderProvideStatus:
+      ApplyExtenderProvideState();
       break;
   }
 }
