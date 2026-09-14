@@ -771,6 +771,7 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
 void SdkHost::CreateNetworkWithPendingWallet(const std::string& networkName,
                                              const std::string& referralCode,
                                              std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded");  // this flow signs through the bridge too
   std::optional<urnet::WalletAuthArgs> walletAuth;
   {
     std::scoped_lock lock(mutex_);
@@ -940,6 +941,21 @@ void SdkHost::SetupWalletCallbacks() {
   // Solana is a two-hop flow: connect first, then ask the wallet to sign the
   // challenge. (Bittensor never fires this — it signs in a single hop.)
   wallet_.on_public_key = [this](std::string publicKey, WalletConnect::Provider) {
+    // a plain connect (ConnectSolanaWallet) wants the key itself: no challenge,
+    // no signature
+    std::function<void(SolanaConnectResult)> connectDone;
+    {
+      std::scoped_lock lock(mutex_);
+      connectDone = std::move(walletConnectDone_);
+      walletConnectDone_ = nullptr;
+    }
+    if (connectDone) {
+      SolanaConnectResult out;
+      out.ok = true;
+      out.address = std::move(publicKey);
+      connectDone(std::move(out));
+      return;
+    }
     RequestWalletChallenge(kSolanaBlockchain, publicKey,
                            [this](std::optional<std::string> message, std::string error) {
       if (!message) {
@@ -1018,21 +1034,35 @@ void SdkHost::SetupWalletCallbacks() {
   wallet_.on_error = [this](std::string err) {
     // walletAuthDone_ is set on the UI thread and consumed on wallet/SDK
     // callback threads: take it under the lock, invoke it outside
+    std::function<void(SolanaConnectResult)> connectDone;
     std::function<void(WalletSignature)> signDone;
     std::function<void(AuthResult)> done;
     {
       std::scoped_lock lock(mutex_);
-      signDone = std::move(walletSignDone_);
-      walletSignDone_ = nullptr;
-      if (walletCreateDone_) {
-        done = std::move(walletCreateDone_);
-        pendingWalletNetworkName_.clear();
-        pendingWalletReferralCode_.clear();
-      } else {
-        done = std::move(walletAuthDone_);
+      // a plain connect is answered first, and alone: every other wallet flow
+      // cancels a waiting connect when it starts, so a connect still waiting
+      // is the flow that opened the bridge last
+      connectDone = std::move(walletConnectDone_);
+      walletConnectDone_ = nullptr;
+      if (!connectDone) {
+        signDone = std::move(walletSignDone_);
+        walletSignDone_ = nullptr;
+        if (walletCreateDone_) {
+          done = std::move(walletCreateDone_);
+          pendingWalletNetworkName_.clear();
+          pendingWalletReferralCode_.clear();
+        } else {
+          done = std::move(walletAuthDone_);
+        }
+        walletAuthDone_ = nullptr;
+        walletCreateDone_ = nullptr;
       }
-      walletAuthDone_ = nullptr;
-      walletCreateDone_ = nullptr;
+    }
+    if (connectDone) {
+      SolanaConnectResult out;
+      out.error = err;
+      connectDone(std::move(out));
+      return;
     }
     if (signDone) {
       WalletSignature out;
@@ -1044,8 +1074,42 @@ void SdkHost::SetupWalletCallbacks() {
   };
 }
 
+void SdkHost::CancelPendingSolanaConnect(const std::string& reason) {
+  std::function<void(SolanaConnectResult)> connectDone;
+  {
+    std::scoped_lock lock(mutex_);
+    connectDone = std::move(walletConnectDone_);
+    walletConnectDone_ = nullptr;
+  }
+  if (!connectDone) return;
+  SolanaConnectResult out;
+  out.error = reason;
+  connectDone(std::move(out));
+}
+
+void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
+                                  std::function<void(SolanaConnectResult)> done) {
+  if (provider == WalletConnect::Provider::Bittensor) {
+    // Bittensor has no connect hop on the bridge (it signs in one)
+    SolanaConnectResult out;
+    out.error = "not a solana wallet provider";
+    if (done) done(std::move(out));
+    return;
+  }
+  CancelPendingSolanaConnect("superseded");
+  {
+    std::scoped_lock lock(mutex_);
+    walletConnectDone_ = std::move(done);
+  }
+  // opens the browser; the key comes back on the urnetwork://<provider>-connect
+  // callback (on_public_key) and a failure on on_error -- a browser that cannot
+  // be opened is answered before this returns
+  wallet_.Connect(provider);
+}
+
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
                                std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded");
   {
     std::scoped_lock lock(mutex_);
     pendingWalletAuth_.reset();
@@ -1055,6 +1119,7 @@ void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
 }
 
 void SdkHost::SignInWithBittensor(std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded");
   {
     std::scoped_lock lock(mutex_);
     pendingWalletAuth_.reset();
@@ -1073,6 +1138,7 @@ void SdkHost::SignInWithBittensor(std::function<void(AuthResult)> done) {
 }
 
 void SdkHost::SignInWithSso(const std::string& provider, std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded");
   // a fresh state + nonce per attempt, never reused: the return is accepted
   // exactly once and only for this attempt
   std::string state;
@@ -1263,6 +1329,7 @@ void SdkHost::FailWalletOperation(const std::string& error) {
 
 void SdkHost::SignBittensorConnect(const std::string& walletAddress,
                                    std::function<void(WalletSignature)> done) {
+  CancelPendingSolanaConnect("superseded");
   {
     std::scoped_lock lock(mutex_);
     walletSignDone_ = std::move(done);

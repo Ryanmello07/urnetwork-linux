@@ -462,6 +462,23 @@ class SdkHost {
   void SignBittensorConnect(const std::string& walletAddress,
                             std::function<void(WalletSignature)> done);
 
+  // The same bridge as a plain CONNECT for a Solana wallet (Phantom / Solflare):
+  // no challenge and no signature. The bridge connects the wallet and the
+  // urnetwork://<provider>-connect return hands back its base58 public key,
+  // which `done` receives as-is (the server validates it on POST /account/wallet,
+  // which takes no signature -- android's MWA connect and apple's
+  // connectPhantomWallet did the same). The Earnings page links it as the USDC
+  // payout wallet. A connect still waiting when any other wallet flow starts,
+  // or another connect, is answered with error "superseded". `done` runs on the
+  // deep-link thread; callers marshal with PostToMain.
+  struct SolanaConnectResult {
+    bool ok = false;
+    std::string address;  // base58 public key
+    std::string error;
+  };
+  void ConnectSolanaWallet(WalletConnect::Provider provider,
+                           std::function<void(SolanaConnectResult)> done);
+
   // Route a urnetwork:// deep link (wallet callback, later OAuth) into the host.
   void HandleDeepLink(const std::string& url);
 
@@ -892,6 +909,9 @@ class SdkHost {
   // auth (Logout clears auth too; the guest upgrade only swaps the device).
   void TeardownDeviceLocked();
   void SetupWalletCallbacks();
+  // Answers a ConnectSolanaWallet that is still waiting with `reason` (another
+  // wallet flow is taking the bridge). Takes mutex_: never call it holding it.
+  void CancelPendingSolanaConnect(const std::string& reason);
   void RequestWalletChallenge(
       const std::string& blockchain, const std::string& walletAddress,
       std::function<void(std::optional<std::string> message, std::string error)> done);
@@ -1091,6 +1111,10 @@ class SdkHost {
   std::string pendingWalletReferralCode_;
   std::function<void(AuthResult)> walletCreateDone_;
   std::function<void(WalletSignature)> walletSignDone_;  // SignBittensorConnect
+  // ConnectSolanaWallet (guarded by mutex_, like walletSignDone_): consumed by the
+  // connect return (on_public_key) or a bridge error (on_error), or answered
+  // "superseded" by the next wallet flow.
+  std::function<void(SolanaConnectResult)> walletConnectDone_;
   // The sso attempt in flight (guarded by mutex_): the provider it was opened
   // for and the state + nonce minted for it; cleared by the first return that
   // echoes the state. walletAuthDone_ carries its completion, so the shared
