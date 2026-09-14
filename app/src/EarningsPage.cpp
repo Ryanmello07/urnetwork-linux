@@ -4533,8 +4533,8 @@ void EarningsPage::OnHostEvent(DrawerEvent event) {
   switch (event) {
     case DrawerEvent::DeviceLifecycle:
       // a device arriving or leaving, or the window coming back: the status
-      // listener fires only on a change and the series controller is new, so
-      // both are re-read
+      // listener fires nothing on registration and the series controller is
+      // new, so both are re-read
       ApplyExtenderProvideState();
       PullProviderThroughput(/*forced=*/true);
       break;

@@ -775,8 +775,10 @@ class SdkHost {
   // daemon's DeviceLocal. DeviceRemote reads it through the rpc with the last
   // value cached, and answers the unsupported status against a device process
   // that lacks the method. nullopt with no device, which the extender rows
-  // render as hidden. Changes arrive as DrawerEvent::ExtenderProvideStatus,
-  // coalesced by the SDK to one callback per second and fired only on a change.
+  // render as hidden. Changes arrive as DrawerEvent::ExtenderProvideStatus: the
+  // SDK coalesces them to one callback per epoch (a second) after any change of
+  // the setting, the provide state or the role, and fires none on
+  // registration, so the pages re-read the status on DeviceLifecycle.
   std::optional<urnet::ExtenderProvideStatus> GetExtenderProvideStatus();
   // The provider extender setting of the daemon's space, through the device:
   // the queued or last-known value while the daemon is out of contact, so the

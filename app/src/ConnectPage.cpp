@@ -2374,7 +2374,7 @@ void ConnectPage::RefreshFeeds(bool force) {
   ApplyKillSwitchUi();
   if (force) {
     PullThroughput();
-    // the extender row's listener fires only on a change, so a device
+    // the extender row's listener fires nothing on registration, so a device
     // arriving, a re-show and the build all re-read the status
     ApplyExtenderProvideState();
     ApplyInspectorVisibility();

@@ -2359,8 +2359,9 @@ void SdkHost::SubscribeDrawer() {
   // ...and this device's OWN extender role (N2, N7): the connect page's
   // extender row, and the earnings page's read-only row and the running state
   // behind its extender statistics (O4). The SDK coalesces it to one callback
-  // per second and fires it only on a change, so the pages also re-read the
-  // status on DeviceLifecycle.
+  // per epoch (a second) after any change of the setting, the provide state or
+  // the role, and fires none on registration, so the pages re-read the status
+  // on DeviceLifecycle.
   presentationSubs_.push_back(device_->addExtenderProvideStatusChangeListener(
       [this](std::optional<urnet::ExtenderProvideStatus>) {
         EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
