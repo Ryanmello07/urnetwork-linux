@@ -1363,10 +1363,11 @@ void EarningsPage::SettleAllEmpty() {
   ApplyHead(std::nullopt, Fetch::Ready);
   ApplyReliability(std::nullopt, Fetch::Ready);
   ApplyRanking(std::nullopt, false);
-  // no Solana payout wallet and nothing waiting: the card and the line hide
-  ++legacyGeneration_;
-  payoutWalletId_.clear();
-  ApplyLegacyWallets(std::vector<solana::LegacyWallet>{}, std::string(), 0, Fetch::Ready);
+  // no session: nothing is known about any network's Solana payout wallet, and
+  // the reads still out are refused
+  legacyLoad_.Abandon();
+  legacyCommitted_ = solana::LegacyCommitted{};
+  RebuildSolanaCard();
   // the leaderboard is not this network's data: "no session" is not an answer
   // about it, so it must never be settled Ready+empty here (the preview
   // harness is the only caller that wants the REAL empty state)
@@ -2856,43 +2857,30 @@ Gtk::MenuButton* EarningsPage::BuildWalletOverflow(
 }
 
 // Three independent requests, never chained and never touching the Bittensor
-// block; each is marshaled with PostToMain and dropped when the epoch or a newer
-// reload moved. They settle the card TOGETHER, so neither the card nor the
-// waiting line flashes in and out while the answers arrive.
-void EarningsPage::LoadLegacyWallets() {
-  const uint64_t generation = ++legacyGeneration_;
+// block; each is marshaled with PostToMain and refused when the epoch moved or a
+// newer round began. The round lands when all three have answered
+// (solana::LegacyLoad), so the card never flashes in and out, and each read
+// fails on its own terms (solana::CardFor). A plain reload keeps what is shown
+// while the reads are out; a write passes `reset` and hides the card until they
+// land, and so does another network.
+void EarningsPage::LoadLegacyWallets(bool reset) {
   if (!CanCallApi()) {
-    ApplyLegacyWallets(std::vector<solana::LegacyWallet>{}, std::string(), 0, Fetch::Ready);
+    legacyLoad_.Abandon();
+    legacyCommitted_ = solana::LegacyCommitted{};
+    RebuildSolanaCard();
     return;
   }
-  ApplyLegacyWallets(std::nullopt, std::string(), 0, Fetch::Loading);
-
-  struct Answers {
-    int count = 0;
-    bool walletsOk = false;
-    std::vector<solana::LegacyWallet> wallets;
-    std::string payoutWalletId;
-    int64_t pendingNanoCents = 0;
-  };
-  auto answers = std::make_shared<Answers>();
-  // runs on the main loop once per current answer; the third settles the card
-  auto settle = [this, answers] {
-    if (++answers->count < 3) return;
-    if (!answers->walletsOk) {
-      // the card's wallet is unknown: the card and the line stay hidden
-      ApplyLegacyWallets(std::nullopt, std::string(), 0, Fetch::Failed);
-      return;
-    }
-    ApplyLegacyWallets(std::move(answers->wallets), answers->payoutWalletId,
-                       answers->pendingNanoCents, Fetch::Ready);
-  };
+  std::string networkId;
+  if (auto jwt = host_.ParseByJwt()) networkId = jwt->NetworkId.value_or(std::string());
+  const uint64_t round = legacyLoad_.Begin(legacyCommitted_, networkId, reset);
+  RebuildSolanaCard();
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
 
   // 1. the account wallets
   host_.api().getAccountWallets(
-      [this, epoch, seen, generation, answers, settle](
-          std::optional<urnet::GetAccountWalletsResult> result, std::optional<std::string> err) {
+      [this, epoch, seen, round](std::optional<urnet::GetAccountWalletsResult> result,
+                                 std::optional<std::string> err) {
         std::optional<std::vector<solana::LegacyWallet>> wallets;
         if (!err && result) {
           wallets.emplace();
@@ -2906,42 +2894,44 @@ void EarningsPage::LoadLegacyWallets() {
             wallets->push_back(std::move(out));
           }
         }
-        PostToMain([this, epoch, seen, generation, answers, settle, wallets = std::move(wallets),
+        PostToMain([this, epoch, seen, round, wallets = std::move(wallets),
                     err = std::move(err)]() mutable {
-          if (*epoch != seen || generation != legacyGeneration_) return;
-          if (wallets) {
-            answers->walletsOk = true;
-            answers->wallets = std::move(*wallets);
-          } else {
+          if (*epoch != seen) return;
+          const bool ok = wallets.has_value();
+          if (!ok) {
             g_warning("earnings: getAccountWallets failed: %s",
                       err ? err->c_str() : "(no result)");
           }
-          settle();
+          if (!legacyLoad_.AnswerWallets(
+                  round, ok, ok ? std::move(*wallets) : std::vector<solana::LegacyWallet>{})) {
+            return;
+          }
+          ApplyLegacyWallets();
         });
       });
 
   // 2. which of them is the payout wallet (null when the network has none)
   host_.api().getPayoutWallet(
-      [this, epoch, seen, generation, answers, settle](
-          std::optional<urnet::GetPayoutWalletIdResult> result, std::optional<std::string> err) {
-        PostToMain([this, epoch, seen, generation, answers, settle, result = std::move(result),
-                    err = std::move(err)] {
-          if (*epoch != seen || generation != legacyGeneration_) return;
-          if (err || !result) {
-            // a miss is NOT an error: it is logged and the last known id stands
-            g_message("earnings: getPayoutWallet miss: %s", err ? err->c_str() : "(no result)");
-          } else {
-            answers->payoutWalletId = result->wallet_id.value_or(std::string());
+      [this, epoch, seen, round](std::optional<urnet::GetPayoutWalletIdResult> result,
+                                 std::optional<std::string> err) {
+        PostToMain([this, epoch, seen, round, result = std::move(result), err = std::move(err)] {
+          if (*epoch != seen) return;
+          const bool ok = !err && result.has_value();
+          if (!ok) {
+            // the last known id stands (LegacyLoad::Commit)
+            g_message("earnings: getPayoutWallet failed: %s", err ? err->c_str() : "(no result)");
           }
-          settle();
+          const std::string payoutWalletId =
+              ok ? result->wallet_id.value_or(std::string()) : std::string();
+          if (!legacyLoad_.AnswerPayout(round, ok, payoutWalletId)) return;
+          ApplyLegacyWallets();
         });
       });
 
   // 3. the held payouts: every payment neither completed nor canceled
   host_.api().getAccountPayments(
-      [this, epoch, seen, generation, answers, settle](
-          std::optional<urnet::GetNetworkAccountPaymentsResult> result,
-          std::optional<std::string> err) {
+      [this, epoch, seen, round](std::optional<urnet::GetNetworkAccountPaymentsResult> result,
+                                 std::optional<std::string> err) {
         std::optional<int64_t> pending;
         std::string failure = err.value_or(std::string());
         if (!err && result && !result->error) {
@@ -2958,37 +2948,21 @@ void EarningsPage::LoadLegacyWallets() {
         } else if (failure.empty() && result && result->error) {
           failure = result->error->message;
         }
-        PostToMain([this, epoch, seen, generation, answers, settle, pending, failure] {
-          if (*epoch != seen || generation != legacyGeneration_) return;
-          if (pending) {
-            answers->pendingNanoCents = *pending;
-          } else {
+        PostToMain([this, epoch, seen, round, pending, failure] {
+          if (*epoch != seen) return;
+          if (!pending) {
             // the figure is unknown: a card still shows, without it
             g_warning("earnings: getAccountPayments failed: %s",
                       failure.empty() ? "(no result)" : failure.c_str());
           }
-          settle();
+          if (!legacyLoad_.AnswerPayments(round, pending.has_value(), pending.value_or(0))) return;
+          ApplyLegacyWallets();
         });
       });
 }
 
-void EarningsPage::ApplyLegacyWallets(std::optional<std::vector<solana::LegacyWallet>> wallets,
-                                     const std::string& payoutWalletId,
-                                     int64_t pendingNanoCents, Fetch state) {
-  legacyState_ = state;
-  if (state == Fetch::Ready) {
-    legacyWallets_ = wallets.value_or(std::vector<solana::LegacyWallet>{});
-    // An EMPTY id is ignored, as the payout pane did: the server answers null
-    // whenever there is none, and a removed wallet leaves the card anyway
-    // because it is inactive.
-    if (!payoutWalletId.empty()) payoutWalletId_ = payoutWalletId;
-    pendingNanoCents_ = pendingNanoCents;
-  } else if (state == Fetch::Failed) {
-    // logged where it failed; the Bittensor block's status line is not touched
-    legacyWallets_.clear();
-    pendingNanoCents_ = 0;
-  }
-  RebuildSolanaCard();
+void EarningsPage::ApplyLegacyWallets() {
+  if (legacyLoad_.Commit(legacyCommitted_)) RebuildSolanaCard();
 }
 
 void EarningsPage::RebuildSolanaCard() {
@@ -2996,9 +2970,7 @@ void EarningsPage::RebuildSolanaCard() {
       usdcWaitingLineConnected_ == nullptr) {
     return;
   }
-  const solana::CardView view =
-      solana::CardFor(legacyState_ == Fetch::Ready,
-                      solana::PayoutWalletFor(legacyWallets_, payoutWalletId_), pendingNanoCents_);
+  const solana::CardView view = solana::CardFor(legacyCommitted_);
   const Glib::ustring waiting =
       view.pendingUsd.empty()
           ? Glib::ustring()
@@ -3055,21 +3027,21 @@ void EarningsPage::OnConnectSolanaWallet() {
 void EarningsPage::OnSolanaConnected(const std::string& walletId) {
   // the server makes a new wallet the payout wallet on its own only when the
   // network had none; the reload shows the truth either way
-  if (!solana::NeedsPayoutSwitch(walletId, payoutWalletId_)) {
+  if (!solana::NeedsPayoutSwitch(walletId, legacyCommitted_.payoutWalletId)) {
     Notify(T_("payout_wallet_updated", "Payout wallet updated"), kit::Snackbar::Severity::Success);
-    LoadLegacyWallets();
+    LoadLegacyWallets(/*reset=*/true);
     return;
   }
   if (!CanCallApi()) {
     RefuseNoSession();
-    LoadLegacyWallets();
+    LoadLegacyWallets(/*reset=*/true);
     return;
   }
   // the SDK drops setPayoutWallet silently (no callback, ever) when the id is
   // not a UUID: this watchdog is what reports it
   const uint32_t generation = BeginFlow(legacyFlow_, kApiTimeoutMs, [this] {
     Notify(SolanaFailureText({}), kit::Snackbar::Severity::Error);
-    LoadLegacyWallets();
+    LoadLegacyWallets(/*reset=*/true);
   });
   urnet::SetPayoutWalletArgs args;
   args.wallet_id = walletId;
@@ -3093,15 +3065,14 @@ void EarningsPage::OnSolanaConnected(const std::string& walletId) {
                       detail.empty() ? "(no result)" : detail.c_str());
             Notify(SolanaFailureText(detail), kit::Snackbar::Severity::Error);
           }
-          LoadLegacyWallets();
+          LoadLegacyWallets(/*reset=*/true);
         });
       });
 }
 
 void EarningsPage::OnRemoveSolanaWallet() {
-  if (removingSolanaWallet_ || legacyState_ != Fetch::Ready) return;
-  const auto payout = solana::PayoutWalletFor(legacyWallets_, payoutWalletId_);
-  if (!payout) return;  // no card, nothing to remove
+  const solana::CardView card = solana::CardFor(legacyCommitted_);
+  if (removingSolanaWallet_ || !card.showCard) return;  // no card, nothing to remove
   if (sheet_ || (sheet_open && sheet_open())) {
     g_message("earnings: wallet removal suppressed — a modal is already open");
     return;
@@ -3143,7 +3114,7 @@ void EarningsPage::OnRemoveSolanaWallet() {
         if (!*ctx->alive || g_strcmp0(response, "remove") != 0) return;
         ctx->self->RemoveSolanaWallet(ctx->walletId);
       }),
-      new Ctx{this, alive_, payout->id},
+      new Ctx{this, alive_, card.walletId},
       +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
   gtk_window_present(GTK_WINDOW(dialog));
 }
@@ -3185,7 +3156,7 @@ void EarningsPage::RemoveSolanaWallet(const std::string& walletId) {
           }
           // the removal reports itself by the card leaving: the store has no
           // "wallet removed" sentence, and inventing English is banned
-          LoadLegacyWallets();
+          LoadLegacyWallets(/*reset=*/true);
         });
       });
 }
@@ -3528,18 +3499,23 @@ void EarningsPage::ApplyPreviewSample() {
 
   // URNETWORK_PREVIEW_SOLANA=1: a Solana payout wallet with 3.87 USDC waiting
   // (the card); URNETWORK_PREVIEW_USDC_WAITING=1: the same figure with no payout
-  // wallet (the waiting line). Through the same applier as the reads.
-  if (g_getenv("URNETWORK_PREVIEW_SOLANA") != nullptr) {
+  // wallet (the waiting line). Through the same round of reads the server's
+  // answers take.
+  const bool previewSolana = g_getenv("URNETWORK_PREVIEW_SOLANA") != nullptr;
+  if (previewSolana || g_getenv("URNETWORK_PREVIEW_USDC_WAITING") != nullptr) {
     solana::LegacyWallet sample;
     sample.id = "sample-solana-wallet";
     sample.blockchain = urnet::SOL;
     sample.address = kSampleSolanaAddress;
     sample.active = true;
-    ApplyLegacyWallets(std::vector<solana::LegacyWallet>{sample}, sample.id,
-                       kSamplePendingNanoCents, Fetch::Ready);
-  } else if (g_getenv("URNETWORK_PREVIEW_USDC_WAITING") != nullptr) {
-    ApplyLegacyWallets(std::vector<solana::LegacyWallet>{}, std::string(),
-                       kSamplePendingNanoCents, Fetch::Ready);
+    const uint64_t round =
+        legacyLoad_.Begin(legacyCommitted_, ownNetworkId_, /*reset=*/true);
+    legacyLoad_.AnswerWallets(round, true,
+                              previewSolana ? std::vector<solana::LegacyWallet>{sample}
+                                            : std::vector<solana::LegacyWallet>{});
+    legacyLoad_.AnswerPayout(round, true, previewSolana ? sample.id : std::string());
+    legacyLoad_.AnswerPayments(round, true, kSamplePendingNanoCents);
+    ApplyLegacyWallets();
   }
 
   if (g_getenv("URNETWORK_PREVIEW_WALLET") == nullptr) {

@@ -19,6 +19,9 @@ using urnw::solana::ConnectState;
 using urnw::solana::FailureKey;
 using urnw::solana::FormatUsd;
 using urnw::solana::HeldPayment;
+using urnw::solana::LegacyCommitted;
+using urnw::solana::LegacyLoad;
+using urnw::solana::LegacyReads;
 using urnw::solana::LegacyWallet;
 using urnw::solana::LooksLikeSolanaAddress;
 using urnw::solana::NeedsPayoutSwitch;
@@ -30,6 +33,9 @@ namespace {
 
 // 44 characters, base58 only (no 0/O/I/l), short form "7Xk9…3fQa".
 constexpr const char* kSample = "7Xk9SAMPLEsampeSAMPLEsampeSAMPLEsampeSAM3fQa";
+
+// every read answered
+const LegacyReads kAllReads{true, true, true};
 
 LegacyWallet Wallet(const std::string& id, const std::string& chain, bool active = true,
                     const std::string& circle = std::string()) {
@@ -177,17 +183,17 @@ UR_TEST(SolanaWallet_FormatUsdIsTwoDecimals) {
 
 UR_TEST(SolanaWallet_NothingShowsUntilTheReadsAreIn) {
   const auto payout = PayoutWalletFor({Wallet("w-sol", "SOL")}, "w-sol");
-  const CardView loading = CardFor(false, payout, 3'870'000'000LL);
+  const CardView loading = CardFor(false, kAllReads, payout, 3'870'000'000LL);
   UR_EXPECT_FALSE(loading.showCard);
   UR_EXPECT_FALSE(loading.showPending);
   UR_EXPECT_FALSE(loading.showWaitingLine);
-  const CardView noWallet = CardFor(false, std::nullopt, 3'870'000'000LL);
+  const CardView noWallet = CardFor(false, kAllReads, std::nullopt, 3'870'000'000LL);
   UR_EXPECT_FALSE(noWallet.showWaitingLine);
 }
 
 UR_TEST(SolanaWallet_CardShowsTheWalletAndWhatIsWaiting) {
   const auto payout = PayoutWalletFor({Wallet("w-sol", "SOL")}, "w-sol");
-  const CardView view = CardFor(true, payout, 3'870'000'000LL);
+  const CardView view = CardFor(true, kAllReads, payout, 3'870'000'000LL);
   UR_EXPECT_TRUE(view.showCard);
   UR_EXPECT_TRUE(view.showPending);
   UR_EXPECT_FALSE(view.showWaitingLine);  // the card carries the figure itself
@@ -198,24 +204,194 @@ UR_TEST(SolanaWallet_CardShowsTheWalletAndWhatIsWaiting) {
 
 UR_TEST(SolanaWallet_CardHidesThePendingLineAtZero) {
   const auto payout = PayoutWalletFor({Wallet("w-sol", "SOL")}, "w-sol");
-  const CardView zero = CardFor(true, payout, 0);
+  const CardView zero = CardFor(true, kAllReads, payout, 0);
   UR_EXPECT_TRUE(zero.showCard);
   UR_EXPECT_FALSE(zero.showPending);
   UR_EXPECT_TRUE(zero.pendingUsd.empty());
   // a figure that rounds to 0.00 is no figure
-  const CardView dust = CardFor(true, payout, 4'999'999LL);
+  const CardView dust = CardFor(true, kAllReads, payout, 4'999'999LL);
   UR_EXPECT_FALSE(dust.showPending);
 }
 
 // The emailed user: no payout wallet, payouts held.
 UR_TEST(SolanaWallet_WaitingLineWithoutAWallet) {
-  const CardView view = CardFor(true, std::nullopt, 3'870'000'000LL);
+  const CardView view = CardFor(true, kAllReads, std::nullopt, 3'870'000'000LL);
   UR_EXPECT_FALSE(view.showCard);
   UR_EXPECT_TRUE(view.showWaitingLine);
   UR_EXPECT_TRUE(view.pendingUsd == "3.87");
-  const CardView none = CardFor(true, std::nullopt, 0);
+  const CardView none = CardFor(true, kAllReads, std::nullopt, 0);
   UR_EXPECT_FALSE(none.showCard);
   UR_EXPECT_FALSE(none.showWaitingLine);
+}
+
+// ---- the three reads -----------------------------------------------------------------
+
+// The waiting line claims two things: that there is no payout wallet, and how
+// much is waiting. It needs all three reads; the card needs the wallets read.
+UR_TEST(SolanaWallet_AFailedPaymentsReadKeepsTheCardWithoutItsFigure) {
+  const auto payout = PayoutWalletFor({Wallet("w-sol", "SOL")}, "w-sol");
+  const CardView view = CardFor(true, LegacyReads{true, true, false}, payout, 3'870'000'000LL);
+  UR_EXPECT_TRUE(view.showCard);
+  UR_EXPECT_FALSE(view.showPending);
+  UR_EXPECT_FALSE(view.showWaitingLine);
+}
+
+UR_TEST(SolanaWallet_AFailedPayoutReadKeepsTheKnownWallet) {
+  // the wallet found by the last known id
+  const auto payout = PayoutWalletFor({Wallet("w-sol", "SOL")}, "w-sol");
+  const CardView view = CardFor(true, LegacyReads{true, false, true}, payout, 3'870'000'000LL);
+  UR_EXPECT_TRUE(view.showCard);
+  UR_EXPECT_TRUE(view.showPending);
+  UR_EXPECT_FALSE(view.showWaitingLine);
+}
+
+// The first-load bug: a failed payout-wallet read with no known id must not put
+// "N USDC waiting" beside the Bittensor actions -- that line says no payout
+// wallet is connected.
+UR_TEST(SolanaWallet_AFailedPayoutReadWithNoKnownWalletClaimsNothing) {
+  const CardView view =
+      CardFor(true, LegacyReads{true, false, true}, std::nullopt, 3'870'000'000LL);
+  UR_EXPECT_FALSE(view.showCard);
+  UR_EXPECT_FALSE(view.showWaitingLine);
+}
+
+UR_TEST(SolanaWallet_AFailedWalletsReadShowsNothing) {
+  const auto payout = PayoutWalletFor({Wallet("w-sol", "SOL")}, "w-sol");
+  const CardView view = CardFor(true, LegacyReads{false, true, true}, payout, 3'870'000'000LL);
+  UR_EXPECT_FALSE(view.showCard);
+  UR_EXPECT_FALSE(view.showPending);
+  UR_EXPECT_FALSE(view.showWaitingLine);
+  const CardView noWallet =
+      CardFor(true, LegacyReads{false, true, true}, std::nullopt, 3'870'000'000LL);
+  UR_EXPECT_FALSE(noWallet.showWaitingLine);
+}
+
+// ---- one round of reads -----------------------------------------------------------------
+
+namespace {
+
+void AnswerRound(LegacyLoad& load, uint64_t round, std::vector<LegacyWallet> wallets,
+                 const std::string& payoutId, int64_t pendingNanoCents) {
+  load.AnswerWallets(round, true, std::move(wallets));
+  load.AnswerPayout(round, true, payoutId);
+  load.AnswerPayments(round, true, pendingNanoCents);
+}
+
+}  // namespace
+
+UR_TEST(SolanaWallet_NothingCommitsBeforeAllThreeReadsAnswer) {
+  LegacyCommitted committed;
+  LegacyLoad load;
+  const uint64_t round = load.Begin(committed, "net-1", false);
+  UR_EXPECT_TRUE(load.AnswerPayments(round, true, 3'870'000'000LL));
+  UR_EXPECT_FALSE(load.Commit(committed));
+  UR_EXPECT_TRUE(load.AnswerWallets(round, true, {Wallet("w-sol", "SOL")}));
+  UR_EXPECT_FALSE(load.Commit(committed));
+  UR_EXPECT_FALSE(committed.ready);
+  UR_EXPECT_FALSE(CardFor(committed).showCard);
+  UR_EXPECT_TRUE(load.AnswerPayout(round, true, "w-sol"));
+  UR_EXPECT_TRUE(load.Commit(committed));
+  UR_EXPECT_TRUE(committed.ready);
+  const CardView view = CardFor(committed);
+  UR_EXPECT_TRUE(view.showCard);
+  UR_EXPECT_TRUE(view.walletId == "w-sol");
+  UR_EXPECT_TRUE(view.pendingUsd == "3.87");
+}
+
+// A newer round (a reload, a write) refuses the answers still out for an older
+// one, each read answers once per round, and a page that lost its session
+// refuses everything still out.
+UR_TEST(SolanaWallet_AnAnswerForAnOlderRoundIsDropped) {
+  LegacyCommitted committed;
+  LegacyLoad load;
+  const uint64_t first = load.Begin(committed, "net-1", false);
+  const uint64_t second = load.Begin(committed, "net-1", false);
+  UR_EXPECT_TRUE(second != first);
+  UR_EXPECT_FALSE(load.AnswerWallets(first, true, {Wallet("w-old", "SOL")}));
+  UR_EXPECT_FALSE(load.AnswerPayout(first, true, "w-old"));
+  UR_EXPECT_FALSE(load.AnswerPayments(first, true, 1));
+  AnswerRound(load, second, {Wallet("w-sol", "SOL")}, "w-sol", 0);
+  UR_EXPECT_TRUE(load.Commit(committed));
+  UR_EXPECT_TRUE(committed.payoutWalletId == "w-sol");
+  UR_EXPECT_FALSE(load.AnswerPayout(second, true, "w-other"));
+
+  const uint64_t third = load.Begin(committed, "net-1", false);
+  load.Abandon();
+  UR_EXPECT_FALSE(load.AnswerWallets(third, true, {}));
+}
+
+// The server answers null when a network has no payout wallet, and a removed
+// wallet leaves the card as inactive: an empty payout id keeps the known one,
+// and so does a failed read.
+UR_TEST(SolanaWallet_AnEmptyOrFailedPayoutReadKeepsTheKnownId) {
+  LegacyCommitted committed;
+  LegacyLoad load;
+  AnswerRound(load, load.Begin(committed, "net-1", false), {Wallet("w-sol", "SOL")}, "w-sol", 0);
+  load.Commit(committed);
+
+  AnswerRound(load, load.Begin(committed, "net-1", false), {Wallet("w-sol", "SOL")}, "", 0);
+  load.Commit(committed);
+  UR_EXPECT_TRUE(committed.payoutWalletId == "w-sol");
+  UR_EXPECT_TRUE(CardFor(committed).showCard);
+
+  const uint64_t round = load.Begin(committed, "net-1", false);
+  load.AnswerWallets(round, true, {Wallet("w-sol", "SOL")});
+  load.AnswerPayout(round, false, "");
+  load.AnswerPayments(round, true, 3'870'000'000LL);
+  load.Commit(committed);
+  UR_EXPECT_TRUE(committed.payoutWalletId == "w-sol");
+  const CardView view = CardFor(committed);
+  UR_EXPECT_TRUE(view.showCard);
+  UR_EXPECT_TRUE(view.showPending);
+}
+
+// Another network's payout wallet says nothing about this one.
+UR_TEST(SolanaWallet_AnotherNetworkForgetsTheLastOnesWallet) {
+  LegacyCommitted committed;
+  LegacyLoad load;
+  AnswerRound(load, load.Begin(committed, "net-1", false), {Wallet("w-sol", "SOL")}, "w-sol", 0);
+  load.Commit(committed);
+  UR_EXPECT_TRUE(CardFor(committed).showCard);
+  const uint64_t round = load.Begin(committed, "net-2", false);
+  UR_EXPECT_FALSE(committed.ready);
+  UR_EXPECT_TRUE(committed.payoutWalletId.empty());
+  UR_EXPECT_TRUE(committed.wallets.empty());
+  UR_EXPECT_FALSE(CardFor(committed).showCard);  // hidden until net-2's reads land
+  load.AnswerWallets(round, true, {Wallet("w-sol", "SOL")});
+  load.AnswerPayout(round, false, "");
+  load.AnswerPayments(round, true, 0);
+  load.Commit(committed);
+  UR_EXPECT_FALSE(CardFor(committed).showCard);  // net-1's id does not come back
+}
+
+// A plain reload keeps what is shown while its reads are out; a write resets
+// the view until the round lands.
+UR_TEST(SolanaWallet_APlainReloadKeepsTheCardAndAWriteHidesIt) {
+  LegacyCommitted committed;
+  LegacyLoad load;
+  AnswerRound(load, load.Begin(committed, "net-1", false), {Wallet("w-sol", "SOL")}, "w-sol",
+              3'870'000'000LL);
+  load.Commit(committed);
+  load.Begin(committed, "net-1", /*reset=*/false);
+  UR_EXPECT_TRUE(CardFor(committed).showCard);
+  UR_EXPECT_TRUE(CardFor(committed).showPending);
+  load.Begin(committed, "net-1", /*reset=*/true);
+  UR_EXPECT_FALSE(CardFor(committed).showCard);
+}
+
+// The first-load bug, end to end: wallets and payments answer, the payout read
+// fails, and nothing was known before.
+UR_TEST(SolanaWallet_AFirstLoadWithAFailedPayoutReadShowsNoWaitingLine) {
+  LegacyCommitted committed;
+  LegacyLoad load;
+  const uint64_t round = load.Begin(committed, "net-1", false);
+  load.AnswerWallets(round, true, {Wallet("w-sol", "SOL")});
+  load.AnswerPayout(round, false, "");
+  load.AnswerPayments(round, true, 1'200'000'000LL);
+  UR_EXPECT_TRUE(load.Commit(committed));
+  const CardView view = CardFor(committed);
+  UR_EXPECT_FALSE(view.showCard);
+  UR_EXPECT_FALSE(view.showWaitingLine);
 }
 
 // ---- the connect sheet: the bridge -------------------------------------------------

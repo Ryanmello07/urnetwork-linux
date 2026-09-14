@@ -31,9 +31,13 @@
 > payments neither completed nor canceled) and removes it behind its own overflow and a
 > confirmation. With no payout wallet but held payments, one "N USDC waiting" line sits above the
 > Bittensor actions. The card's three reads (`getAccountWallets`, `getPayoutWallet`,
-> `getAccountPayments`) settle together and never touch the Bittensor block; the rules are
-> `SolanaWalletPresentation.hpp`, host-tested. `URNETWORK_PREVIEW_SOLANA=1` (the card with 3.87
-> USDC waiting) and `URNETWORK_PREVIEW_USDC_WAITING=1` (the line, no wallet) extend the sample.
+> `getAccountPayments`) settle together and never touch the Bittensor block. A failed wallets
+> read shows nothing, a failed payout-wallet read keeps the last known wallet, a failed payments
+> read keeps the card without its figure, and the waiting line needs all three. A plain reload
+> keeps the card while its reads are out; a write, or another network, hides it until they land.
+> The rules are `SolanaWalletPresentation.hpp`, host-tested. `URNETWORK_PREVIEW_SOLANA=1` (the
+> card with 3.87 USDC waiting) and `URNETWORK_PREVIEW_USDC_WAITING=1` (the line, no wallet)
+> extend the sample.
 
 Source of truth read in full: `urnetwork-windows/app/src/App/WalletPage.{h,cpp}` (1681+262 lines), `WalletSheets.{h,cpp}` (687+185), plus the markup (`MainWindow.xaml` 1838–2156), the kit (`UrComponents.{h,cpp}`, `App.xaml`), tokens (`UrColors.h`), breakpoints (`MainWindow.xaml.cpp` ApplyBreakpoint ~561–580), balance gating (`MainWindow.xaml.cpp` ~1407–1418), navigation loads (~1351–1375), and the en string table (`Strings/en/Resources.resw`). Doc cross-check: `linux_agent_help.md` §7.10 / §7.3 / §8 — disagreements listed in FLAGS; **the code wins**.
 

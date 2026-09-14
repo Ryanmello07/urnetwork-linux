@@ -18,9 +18,10 @@
 // Bittensor block shows the payout wallet with the USDC waiting for it and
 // removes it, and with no payout wallet one "N USDC waiting" line sits above
 // the Bittensor actions. Its three reads (account wallets, payout wallet,
-// account payments) are secondary: they settle the card together and never
-// touch the Bittensor block. There is no payout history on this surface
-// (support@ur.io holds the old ledger).
+// account payments) are secondary: they settle the card together, never touch
+// the Bittensor block, and a plain reload keeps the card while they are out.
+// There is no payout history on this surface (support@ur.io holds the old
+// ledger).
 //
 // Three panes, folded by the window's ApplyBreakpoint:
 //   >= 1500  earnings(360) | history(*) | network(380)
@@ -339,10 +340,10 @@ class EarningsPage : public Gtk::Box {
   // ---- the Solana payout wallet (USDC until the Bittensor migration) ---------
   // The three-dot overflow (icon-only, named "Wallet options") over `menu`.
   Gtk::MenuButton* BuildWalletOverflow(const Glib::RefPtr<const Gio::MenuModel>& menu);
-  void LoadLegacyWallets();
-  void ApplyLegacyWallets(std::optional<std::vector<solana::LegacyWallet>> wallets,
-                          const std::string& payoutWalletId, int64_t pendingNanoCents,
-                          Fetch state);
+  // A plain reload keeps the card while the reads are out; `reset` (after a
+  // write) hides it until they land.
+  void LoadLegacyWallets(bool reset = false);
+  void ApplyLegacyWallets();  // commits a round once all three reads answered
   void RebuildSolanaCard();
   void OnConnectSolanaWallet();  // the overflow's item: the connect sheet
   // The sheet linked `walletId`: make it the payout wallet unless it already is.
@@ -547,12 +548,10 @@ class EarningsPage : public Gtk::Box {
   uint64_t ownFlagsClock_ = 0;
   uint64_t ownFlagsEditedAt_ = 0;
   uint64_t ownFlagsAppliedAt_ = 0;
-  // the Solana payout wallet's three reads, settled together
-  std::vector<solana::LegacyWallet> legacyWallets_;
-  std::string payoutWalletId_;  // the last known one: an empty answer is ignored
-  int64_t pendingNanoCents_ = 0;
-  Fetch legacyState_ = Fetch::Loading;
-  uint64_t legacyGeneration_ = 0;  // a reload drops the reads still out
+  // the Solana payout wallet: the reads the card is drawn from, and the round
+  // of reads in flight (SolanaWalletPresentation.hpp LegacyLoad)
+  solana::LegacyCommitted legacyCommitted_;
+  solana::LegacyLoad legacyLoad_;
 
   // in-flight gates
   bool connecting_ = false;      // bridge / set-wallet in flight

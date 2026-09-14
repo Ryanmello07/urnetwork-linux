@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace urnw::solana {
@@ -147,37 +148,149 @@ inline std::string FormatUsd(int64_t nanoCents) {
   return cents < 0 ? "-" + text : text;
 }
 
+// ---- the three reads ---------------------------------------------------------------
+
+// Which of the three reads behind the card succeeded: GET /account/wallets,
+// GET /account/payout-wallet and GET /account/payments.
+struct LegacyReads {
+  bool wallets = false;
+  bool payout = false;
+  bool payments = false;
+};
+
+// What the card is drawn from: the last round of reads folded in, for one network.
+struct LegacyCommitted {
+  bool ready = false;                 // a round has landed since the last reset
+  LegacyReads reads;                  // which reads of that round succeeded
+  std::vector<LegacyWallet> wallets;  // from the last successful wallets read
+  std::string payoutWalletId;         // the last known payout wallet id
+  int64_t pendingNanoCents = 0;       // from the last successful payments read
+  std::string networkId;              // the network all of it belongs to
+};
+
+// One round of the three reads: Begin, one answer per read in any order, then
+// Commit folds the round into what the card is drawn from. Each read fails on
+// its own terms (CardFor): a failed wallets read shows nothing, a failed
+// payout-wallet read keeps the last known id, a failed payments read keeps the
+// card without its figure.
+class LegacyLoad {
+ public:
+  // Starts a round for `networkId` and refuses every answer still out for an
+  // older one. Another network's reads say nothing about this one: they are
+  // forgotten, and the card hides until the round lands. `reset` (after a
+  // write) hides it the same way; a plain reload keeps what is shown meanwhile.
+  uint64_t Begin(LegacyCommitted& committed, const std::string& networkId, bool reset) {
+    if (committed.networkId != networkId) {
+      committed = LegacyCommitted{};
+      committed.networkId = networkId;
+    } else if (reset) {
+      committed.ready = false;
+    }
+    answeredWallets_ = false;
+    answeredPayout_ = false;
+    answeredPayments_ = false;
+    ok_ = LegacyReads{};
+    wallets_.clear();
+    payoutWalletId_.clear();
+    pendingNanoCents_ = 0;
+    return ++round_;
+  }
+  // Refuses every answer still out (the page lost its session).
+  void Abandon() { ++round_; }
+
+  // One read's answer for `round`. False, and nothing kept, for another round's
+  // answer or a read that already answered.
+  bool AnswerWallets(uint64_t round, bool ok, std::vector<LegacyWallet> wallets) {
+    if (round != round_ || answeredWallets_) return false;
+    answeredWallets_ = true;
+    ok_.wallets = ok;
+    if (ok) wallets_ = std::move(wallets);
+    return true;
+  }
+  bool AnswerPayout(uint64_t round, bool ok, const std::string& payoutWalletId) {
+    if (round != round_ || answeredPayout_) return false;
+    answeredPayout_ = true;
+    ok_.payout = ok;
+    if (ok) payoutWalletId_ = payoutWalletId;
+    return true;
+  }
+  bool AnswerPayments(uint64_t round, bool ok, int64_t pendingNanoCents) {
+    if (round != round_ || answeredPayments_) return false;
+    answeredPayments_ = true;
+    ok_.payments = ok;
+    if (ok) pendingNanoCents_ = pendingNanoCents;
+    return true;
+  }
+
+  // With all three answers in, folds the round into `committed` and returns
+  // true: each read only when it succeeded, and an empty payout id keeps the
+  // known one (the server answers null when there is none, and a removed wallet
+  // leaves the card anyway, as inactive). Before that it changes nothing.
+  bool Commit(LegacyCommitted& committed) const {
+    if (!answeredWallets_ || !answeredPayout_ || !answeredPayments_) return false;
+    committed.ready = true;
+    committed.reads = ok_;
+    if (ok_.wallets) committed.wallets = wallets_;
+    if (ok_.payout && !payoutWalletId_.empty()) committed.payoutWalletId = payoutWalletId_;
+    if (ok_.payments) committed.pendingNanoCents = pendingNanoCents_;
+    return true;
+  }
+
+ private:
+  uint64_t round_ = 0;
+  bool answeredWallets_ = false;
+  bool answeredPayout_ = false;
+  bool answeredPayments_ = false;
+  LegacyReads ok_;
+  std::vector<LegacyWallet> wallets_;
+  std::string payoutWalletId_;
+  int64_t pendingNanoCents_ = 0;
+};
+
 // ---- the page's reading ----------------------------------------------------------
 
 // The Solana card under the Bittensor block, and the one "N USDC waiting" line
-// beside the wallet actions when there is no card. Nothing shows until the
-// legacy reads are in (loading and failed hide both: the reads are secondary
-// and never disturb the Bittensor block), and a figure that rounds to 0.00 is
-// no figure.
+// beside the wallet actions when there is no card. Nothing shows before a round
+// of reads lands, or when the wallets read failed. The card needs the payout
+// wallet among the wallets (by the last known id when that read failed); its
+// figure needs the payments read; the waiting line claims that there is no
+// payout wallet and how much is waiting, so it needs all three reads. A figure
+// that rounds to 0.00 is no figure.
 struct CardView {
   bool showCard = false;
   bool showPending = false;      // the card's own "N USDC waiting" line
   bool showWaitingLine = false;  // no card: the line beside the wallet actions
+  std::string walletId;          // the card's wallet (what Remove removes)
   std::string address;           // full: tooltip, accessible name
   std::string shortAddress;      // the visible form
   std::string pendingUsd;        // "3.87"; empty when nothing is waiting
 };
 
-inline CardView CardFor(bool ready, const std::optional<LegacyWallet>& payoutWallet,
+inline CardView CardFor(bool ready, const LegacyReads& reads,
+                        const std::optional<LegacyWallet>& payoutWallet,
                         int64_t pendingNanoCents) {
   CardView view;
-  if (!ready) return view;
-  const bool waiting = RoundedCents(pendingNanoCents) > 0;
+  if (!ready || !reads.wallets) return view;
+  const bool waiting = reads.payments && RoundedCents(pendingNanoCents) > 0;
   if (waiting) view.pendingUsd = FormatUsd(pendingNanoCents);
   if (payoutWallet) {
     view.showCard = true;
+    view.walletId = payoutWallet->id;
     view.address = payoutWallet->address;
     view.shortAddress = ShortAddress(payoutWallet->address);
     view.showPending = waiting;
     return view;
   }
-  view.showWaitingLine = waiting;
+  view.showWaitingLine = reads.payout && waiting;
   return view;
+}
+
+// The card from what is committed: the payout wallet among the committed
+// wallets, by the last known payout wallet id.
+inline CardView CardFor(const LegacyCommitted& committed) {
+  return CardFor(committed.ready, committed.reads,
+                 PayoutWalletFor(committed.wallets, committed.payoutWalletId),
+                 committed.pendingNanoCents);
 }
 
 // ---- the connect sheet -----------------------------------------------------------
