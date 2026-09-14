@@ -206,6 +206,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       ApplyConnectReading(host_.CurrentConnectReading());
       ApplyStats(lastStats_);
       if (drawer_) drawer_->RefreshAll();  // drawer events are dropped while hidden
+      // ...and so were the earnings page's: a device torn down while the window
+      // was hidden announces nothing on re-show, so the page re-reads
+      if (earningsPage_) earningsPage_->OnHostEvent(DrawerEvent::DeviceLifecycle);
     }
   };
   property_visible().signal_changed().connect(reconcilePresentation);
@@ -327,6 +330,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       // stats, overrides, contracts, DNS settings, blocker, routeLocal and
       // location changes would never reach the page at all.
       if (windowVisible_ && connectPage_) connectPage_->OnHostEvent(event);
+      // ...and so do the earnings page's provider and extender statistics and
+      // its read-only extender row (EXTENDER.md N7, O5), under the same gate
+      if (windowVisible_ && earningsPage_) earningsPage_->OnHostEvent(event);
       if (event == DrawerEvent::Peers || event == DrawerEvent::DeviceLifecycle) {
         RefreshPeersStatus();
       }

@@ -668,6 +668,18 @@ class SdkHost {
   // Throughput tick as the points; nullopt with the tunnel down.
   std::optional<urnet::TransportDistribution> ClientTransportDistribution();
   std::optional<urnet::TransportDistribution> ProviderTransportDistribution();
+  // The provider and the extender series of the same controller, read on the
+  // same Throughput tick as ThroughputPoints (EXTENDER.md O3, O5): the provider
+  // points carry the provider's Local and Block routes, the extender points
+  // the traffic this device's extender role relayed, in the Remote route only.
+  // nullopt with no session.
+  std::optional<urnet::ThroughputPointList> ProviderThroughputPoints();
+  std::optional<urnet::ThroughputPointList> ExtenderThroughputPoints();
+  // The device reports provider packet stats: the half of the provider
+  // statistics gate (O8) the provide control mode does not decide. false with
+  // no session. The extender role's running state is not read here: it is the
+  // Enabled of the pushed GetExtenderProvideStatus.
+  bool HasProviderStats();
   std::optional<urnet::BlockActionList> BlockActions();
   std::optional<urnet::BlockStats> BlockStatsSnapshot();
   std::optional<urnet::BlockActionOverrideList> BlockActionOverrides();

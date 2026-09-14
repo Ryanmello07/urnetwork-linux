@@ -2710,6 +2710,23 @@ std::optional<urnet::TransportDistribution> SdkHost::ProviderTransportDistributi
   return contractVc_->getProviderTransportDistribution();
 }
 
+std::optional<urnet::ThroughputPointList> SdkHost::ProviderThroughputPoints() {
+  std::scoped_lock lock(mutex_);
+  if (!contractVc_) return std::nullopt;
+  return contractVc_->getProviderThroughputPoints();
+}
+
+std::optional<urnet::ThroughputPointList> SdkHost::ExtenderThroughputPoints() {
+  std::scoped_lock lock(mutex_);
+  if (!contractVc_) return std::nullopt;
+  return contractVc_->getExtenderThroughputPoints();
+}
+
+bool SdkHost::HasProviderStats() {
+  std::scoped_lock lock(mutex_);
+  return contractVc_ && contractVc_->getProviderPacketStats().has_value();
+}
+
 std::optional<urnet::TransportSettings> SdkHost::GetTransportSettings() {
   std::scoped_lock lock(mutex_);
   if (device_) {

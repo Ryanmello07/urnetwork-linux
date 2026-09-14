@@ -29,8 +29,10 @@
 // Pane B (history): a two-item tab switch over the per-epoch history and the
 // leaderboard. The leaderboard is fetched the FIRST time its tab is looked at.
 //
-// Pane C (network): own ranking, the public-leaderboard switch (echo-guarded)
-// and the reliability window.
+// Pane C (network): own ranking, the public-leaderboard switch (echo-guarded),
+// the reliability window, and under it the extender statistics and the
+// provider statistics with the provide mode row and the read-only extender row
+// (EXTENDER.md N7, O5, O8).
 //
 // Every panel settles on exactly one of Loading / Ready-empty / Failed, and
 // every server write AND every server question is gated by CanCallApi(); the
@@ -51,9 +53,13 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ExtenderProvidePresentation.hpp"
 #include "LeaderboardIndicator.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
+#include "TransferChart.hpp"
+#include "TransportBar.hpp"
+#include "TransportSheet.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -133,9 +139,18 @@ class EarningsPage : public Gtk::Box {
   // current mode) and the providing gate: with providing off the reliability
   // chart hides and the group says so, the same gate and message as the stats
   // widget. Fed from the same live stats the connect page paints.
+  // The provider statistics share the gate (EXTENDER.md O8).
   void ApplyProvideState(const LiveStats& stats);
   // the provide mode is changed on the connect page; the row opens it there
+  // (and so does the read-only extender row, whose switch lives there too)
   std::function<void()> on_open_provide_settings;
+
+  // The drawer's change feed (SdkHost::DrawerEvent), relayed by MainWindow
+  // under the same visibility gate as the connect page's: the throughput tick
+  // feeds the provider and extender charts and the provider transport bar, and
+  // the extender status repaints the read-only extender row and the running
+  // state behind the extender statistics (EXTENDER.md N7, O5, O8).
+  void OnHostEvent(DrawerEvent event);
 
   // The points board's row and stat tile (public: a free helper in the .cpp builds rows).
   struct PointsRowUi {
@@ -299,6 +314,19 @@ class EarningsPage : public Gtk::Box {
   void RebuildHistory();
   void RebuildLeaderboard();
   void RebuildReliabilityCard();
+
+  // ---- the extender and provider statistics (pane C; EXTENDER.md O5, O8) ----
+  // One pull per throughput tick, the shape of ConnectPage::PullThroughput: the
+  // two point lists, the window, the provider distribution and the provider
+  // stats flag.
+  void PullProviderThroughput();
+  // Re-reads the extender status: the read-only row (N7) and the running state
+  // of the role, re-applying the sections when it flips.
+  void ApplyExtenderProvideState();
+  void DrawExtenderRow(const extender::ProvideRow& row);
+  // The O8 rule over its three inputs, applied to the two groups' rows.
+  void ApplyStatsSections();
+  void OpenProviderTransportSheet();
   void ApplyLedgerMeta();
   void OnLedgerTabChanged();
 
@@ -437,6 +465,35 @@ class EarningsPage : public Gtk::Box {
   Gtk::Label* reliabilityStatus_ = nullptr;
   Gtk::Box* reliabilityCard_ = nullptr;
   Gtk::Box* reliabilityPanel_ = nullptr;
+  // the extender statistics group (O4, O8): its header and chart row show only
+  // with the provider statistics and a running role
+  kit::PaneGroupHeader extenderStatsHeader_;
+  Gtk::Box* extenderChartRow_ = nullptr;
+  TransferChart* extenderChart_ = nullptr;
+  // the provider statistics group (O5, O8): the header's meta says
+  // providing_disabled while the chart rows are collapsed; the provide mode
+  // row and the read-only extender row stay
+  kit::PaneGroupHeader providerStatsHeader_;
+  Gtk::Button* extenderRow_ = nullptr;
+  Gtk::Label* extenderDot_ = nullptr;
+  Gtk::Label* extenderState_ = nullptr;
+  Gtk::Box* localChartRow_ = nullptr;
+  TransferChart* localChart_ = nullptr;
+  Gtk::Box* providerTransportRow_ = nullptr;
+  TransportBar* providerTransportBar_ = nullptr;
+  Gtk::Box* blockedChartRow_ = nullptr;
+  TransferChart* blockedChart_ = nullptr;
+  std::unique_ptr<TransportSheet> providerTransportSheet_;
+  // the reading the extender row last drew, so a push that changes nothing is
+  // dropped
+  extender::ProvideRow extenderRowDrawn_;
+  bool extenderRowApplied_ = false;
+  // the rule's inputs beside providingEnabled_, and the sections last applied
+  bool extenderRunning_ = false;
+  bool hasProviderStats_ = false;
+  bool providerDistributionKnown_ = false;
+  extender::StatsSections statsSections_;
+  bool statsSectionsApplied_ = false;
 
   // ---- state -----------------------------------------------------------------
   urnet::AccountPointsList points_;
