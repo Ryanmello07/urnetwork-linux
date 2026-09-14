@@ -1016,6 +1016,11 @@ msgctxt "connect_urnetwork_vpn"
 msgid "Connect URnetwork VPN"
 msgstr "Hubungkan URnetwork VPN"
 
+#. Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.
+msgctxt "connect_wallet"
+msgid "Connect Wallet"
+msgstr "Hubungkan Dompet"
+
 #. Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.
 msgctxt "connected"
 msgid "Connected"
@@ -1300,6 +1305,11 @@ msgstr "Pembayaran {}"
 
 #. Generic default choice label, e.g. the app split rule combo state meaning no rule.
 msgctxt "default_option"
+msgid "Default"
+msgstr "Default"
+
+#. Call to action
+msgctxt "default_wallet"
 msgid "Default"
 msgstr "Default"
 
@@ -2033,6 +2043,10 @@ msgctxt "enter_a_password"
 msgid "Enter a password"
 msgstr "Masukkan kata sandi"
 
+msgctxt "enter_a_solana_usdc_wallet_address"
+msgid "Enter a Solana USDC wallet address"
+msgstr "Masukkan alamat dompet USDC Solana"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "enter_balance_code"
 msgid "Enter balance code"
@@ -2073,6 +2087,11 @@ msgctxt "error_connecting_wallet"
 msgid "There was an error connecting your wallet."
 msgstr "Terjadi kesalahan saat menghubungkan dompet Anda."
 
+#. Snackbar shown when connecting a wallet fails, with the underlying error message. Used in Main/Account/Wallets/WalletsView.swift.
+msgctxt "error_connecting_wallet_with_reason"
+msgid "There was an error connecting your wallet: {}"
+msgstr "Terjadi kesalahan saat menghubungkan dompet Anda: {}"
+
 #. Snackbar shown when creating the user's network fails. Used in ContentView.swift, Main/Account/AccountRootView.swift and Main/Connect/ConnectView-iOS.swift.
 msgctxt "error_creating_network"
 msgid "There was an error creating your network. Please try again later."
@@ -2107,6 +2126,11 @@ msgstr "Kesalahan saat mengirim tautan atur ulang kata sandi"
 msgctxt "error_sending_verification_code"
 msgid "There was an error sending the verification code."
 msgstr "Terjadi kesalahan saat mengirim kode verifikasi."
+
+#. Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.
+msgctxt "error_setting_default_wallet_with_reason"
+msgid "Error setting default wallet: {}"
+msgstr "Kesalahan saat mengatur dompet default: {}"
 
 #. Snackbar shown when saving the device name fails. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "error_updating_device_name"
@@ -2665,6 +2689,11 @@ msgstr "Runtutan terpanjang"
 msgctxt "low_user_ip_ratio"
 msgid "Lowest user/IP ratio to access content"
 msgstr "Rasio pengguna/IP terendah untuk mengakses konten"
+
+#. Wallet Screen
+msgctxt "make_default"
+msgid "Make default"
+msgstr "Jadikan default"
 
 #. Split tunnel settings: button opening the app split rules sheet.
 msgctxt "manage_apps"
@@ -3298,6 +3327,11 @@ msgctxt "payment_problem"
 msgid "Payment problem"
 msgstr "Masalah pembayaran"
 
+#. Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.
+msgctxt "payout_wallet_updated"
+msgid "Payout wallet updated"
+msgstr "Dompet pembayaran diperbarui"
+
 #. Post quantum identity panel: peer identity count indicator, singular.
 msgctxt "peer_count_one"
 msgid "1 peer"
@@ -3889,6 +3923,11 @@ msgstr "Hapus aturan"
 msgctxt "remove_this_sign_in_method"
 msgid "Remove this sign-in method?"
 msgstr "Hapus metode masuk ini?"
+
+#. Used in Main/Account/AccountNavStackView.swift.
+msgctxt "remove_wallet"
+msgid "Remove wallet"
+msgstr "Hapus dompet"
 
 #. Reset link sent
 msgctxt "resend_reset_link"
@@ -5074,6 +5113,10 @@ msgstr "URnetwork VPN terputus"
 msgctxt "urnetwork_vpn_started"
 msgid "URnetwork VPN started"
 msgstr "URnetwork VPN dimulai"
+
+msgctxt "usdc_wallet_address"
+msgid "USDC wallet address"
+msgstr "Alamat dompet USDC"
 
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"

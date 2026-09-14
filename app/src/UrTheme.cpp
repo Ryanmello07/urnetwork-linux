@@ -174,11 +174,17 @@ button.link:hover label { color: #8AA9FF; }
 .ur-row-title.ur-label-faint { color: #5A5A5A; }
 /* ...and a STATE beats a tone. A lime figure (money that arrived, the payout
    wallet's total) or a danger figure carries a third class, so it outranks
-   the muted default it is layered on. */
+   the muted default it is layered on. The same holds for a supporting line
+   built on the note or key face (kit::ApplySupportingText's verdicts under an
+   address field): .ur-row-note and .ur-key come later in this sheet than the
+   bare state classes, so without a two-class rule an invalid verdict rendered
+   in the note's grey. */
 .ur-value.ur-value-on, .ur-value.dim-label.ur-value-on,
-.ur-row-title.ur-value-on, .ur-row-title.dim-label.ur-value-on { color: #87FB67; }
+.ur-row-title.ur-value-on, .ur-row-title.dim-label.ur-value-on,
+.ur-row-note.ur-value-on, .ur-key.ur-value-on { color: #87FB67; }
 .ur-value.ur-danger-text, .ur-value.dim-label.ur-danger-text,
-.ur-row-title.ur-danger-text, .ur-row-title.dim-label.ur-danger-text { color: #F8523B; }
+.ur-row-title.ur-danger-text, .ur-row-title.dim-label.ur-danger-text,
+.ur-row-note.ur-danger-text, .ur-key.ur-danger-text { color: #F8523B; }
 /* ...and the error voice on a row's note line, the extender row's state in
    its error state: .ur-row-note comes after .ur-error-text in this sheet and
    wins the tie, so the pair takes the coral here and keeps the note's 11px. */

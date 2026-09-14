@@ -207,6 +207,7 @@ executable('urnetwork-gui',
     'src/SettingsPage.cpp',
     'src/DeveloperPage.cpp',
     'src/EarningsPage.cpp',
+    'src/SolanaWalletSheet.cpp',
     'src/EmojiTagSheet.cpp',
     'src/AccountPage.cpp',
     'src/LogTailClient.cpp',
@@ -500,8 +501,10 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # grouping, the extender ring geometry, the extender panel's reading of
 # ExtenderStatus, the provider extender row's reading of ExtenderProvideStatus
 # and the statistics sections' visibility, the compact count and count-rate
-# labels, the extender share/import decisions, the dual-stack tunnel
-# policy and v6 capture set, and the daemon control protocol: framing, version
+# labels, the extender share/import decisions, the Solana payout wallet's card
+# and connect-sheet rules, the wallet bridge's return routing, the dual-stack
+# tunnel policy and v6 capture set, and the daemon control protocol: framing,
+# version
 # negotiation in both directions, SDK-build agreement, peer-credential
 # authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
 # binary builds and runs anywhere a C++17 compiler does -- including a
@@ -533,6 +536,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/PricePresentationTest.cpp',
     'tests/OnboardingRoutingTest.cpp',
     'tests/LeaderboardIndicatorTest.cpp',
+    'tests/SolanaWalletPresentationTest.cpp',
+    'tests/WalletBridgeRouteTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
