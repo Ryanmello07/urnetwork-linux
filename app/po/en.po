@@ -3304,6 +3304,11 @@ msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
 msgstr "Extender settings saved"
 
+#. Title of the section that shows statistics about the extender, directly above the provider statistics section.
+msgctxt "extender_statistics"
+msgid "Extender statistics"
+msgstr "Extender statistics"
+
 #. Title of the extenders panel in the connect drawer and of the Extenders section under account.
 msgctxt "extenders"
 msgid "Extenders"
@@ -5123,6 +5128,11 @@ msgstr "Quit URnetwork"
 msgctxt "ranked_networks_count"
 msgid "{} ranked networks"
 msgstr "{} ranked networks"
+
+#. Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.
+msgctxt "reads_per_second"
+msgid "reads/s"
+msgstr "reads/s"
 
 #. Call to action
 msgctxt "ready_to_connect"

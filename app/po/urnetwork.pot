@@ -3304,6 +3304,11 @@ msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
 msgstr ""
 
+#. Title of the section that shows statistics about the extender, directly above the provider statistics section.
+msgctxt "extender_statistics"
+msgid "Extender statistics"
+msgstr ""
+
 #. Title of the extenders panel in the connect drawer and of the Extenders section under account.
 msgctxt "extenders"
 msgid "Extenders"
@@ -5122,6 +5127,11 @@ msgstr ""
 #. Points leaderboard: how many networks hold a rank. {count} is preformatted with separators.
 msgctxt "ranked_networks_count"
 msgid "{} ranked networks"
+msgstr ""
+
+#. Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.
+msgctxt "reads_per_second"
+msgid "reads/s"
 msgstr ""
 
 #. Call to action
