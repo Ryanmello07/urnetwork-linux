@@ -1177,7 +1177,7 @@ EarningsPage::EarningsPage(SdkHost& host)
   connectSolanaMenu_->append(T_("connect_solana_wallet", "Connect Solana wallet"),
                              "earnings.connect-solana");
   solanaCardMenu_ = Gio::Menu::create();
-  solanaCardMenu_->append(T_("remove", "Remove"), "earnings.remove-solana");
+  solanaCardMenu_->append(T_("remove_wallet", "Remove wallet"), "earnings.remove-solana");
   BuildEarningsPane();
   append(*paneA_.root);
   ruleB_ = kit::MakePaneVRule();
@@ -3140,8 +3140,11 @@ void EarningsPage::OnRemoveSolanaWallet() {
     g_message("earnings: wallet removal suppressed — a modal is already open");
     return;
   }
-  // CanCallApi BEFORE the confirmation: it ends in an API write
-  if (!CanCallApi()) {
+  // CanCallApi BEFORE the confirmation: it ends in an API write. The preview
+  // harness opens the confirmation anyway, to be looked at, with Remove disabled
+  // (RemoveSolanaWallet is gated again).
+  const bool allowActions = CanCallApi();
+  if (!allowActions && !previewMode_) {
     RefuseNoSession();
     return;
   }
@@ -3164,6 +3167,9 @@ void EarningsPage::OnRemoveSolanaWallet() {
                                              ADW_RESPONSE_DESTRUCTIVE);
   adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
   adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
+  if (!allowActions) {
+    adw_message_dialog_set_response_enabled(ADW_MESSAGE_DIALOG(dialog), "remove", FALSE);
+  }
   G_GNUC_END_IGNORE_DEPRECATIONS
   struct Ctx {
     EarningsPage* self;
