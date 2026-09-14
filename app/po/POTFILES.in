@@ -40,5 +40,6 @@ src/Tray.cpp
 src/UpgradeSheet.cpp
 src/UsageBar.cpp
 src/EarningsPage.cpp
+src/SolanaWalletSheet.cpp
 src/AccountPage.cpp
 src/ReferralRoyalty.cpp
