@@ -18,7 +18,6 @@ using urnw::solana::ConnectState;
 using urnw::solana::FailureKey;
 using urnw::solana::FormatUsd;
 using urnw::solana::HeldPayment;
-using urnw::solana::kTimeoutDetail;
 using urnw::solana::LegacyWallet;
 using urnw::solana::LooksLikeSolanaAddress;
 using urnw::solana::NeedsPayoutSwitch;
@@ -265,21 +264,25 @@ UR_TEST(SolanaWallet_BridgeErrorFailsWithItsWords) {
   UR_EXPECT_TRUE(m.AcceptsInput());  // the controls come back
 }
 
-UR_TEST(SolanaWallet_BridgeTimeoutIsWalletConnectFailed) {
+// A give-up has no words: it reads something_went_wrong, like any failure
+// without a detail (the cross-app wording rule).
+UR_TEST(SolanaWallet_BridgeTimeoutIsSomethingWentWrong) {
   ConnectMachine m;
   m.ChooseProvider();
   UR_EXPECT_TRUE(m.Timeout());
   UR_EXPECT_TRUE(m.state == ConnectState::Failed);
-  UR_EXPECT_TRUE(std::string(FailureKey(m.detail)) == "wallet_connect_failed");
+  UR_EXPECT_TRUE(m.detail.empty());
+  UR_EXPECT_TRUE(std::string(FailureKey(m.detail)) == "something_went_wrong");
 }
 
-UR_TEST(SolanaWallet_LinkingTimeoutIsWalletConnectFailed) {
+UR_TEST(SolanaWallet_LinkingTimeoutIsSomethingWentWrong) {
   ConnectMachine m;
   m.ChooseProvider();
   m.PublicKey();
   UR_EXPECT_TRUE(m.Timeout());
   UR_EXPECT_TRUE(m.state == ConnectState::Failed);
-  UR_EXPECT_TRUE(std::string(FailureKey(m.detail)) == "wallet_connect_failed");
+  UR_EXPECT_TRUE(m.detail.empty());
+  UR_EXPECT_TRUE(std::string(FailureKey(m.detail)) == "something_went_wrong");
 }
 
 // The user moved on (or never asked): a late answer changes nothing.
@@ -435,8 +438,13 @@ UR_TEST(SolanaWallet_LinkedIsFinal) {
   UR_EXPECT_TRUE(m.walletId == "w-new");
 }
 
-UR_TEST(SolanaWallet_FailureKeys) {
-  UR_EXPECT_TRUE(std::string(FailureKey(kTimeoutDetail)) == "wallet_connect_failed");
-  UR_EXPECT_TRUE(std::string(FailureKey("superseded")) == "error_connecting_wallet_with_reason");
+UR_TEST(SolanaWallet_AFailureWithWordsShowsThem) {
+  UR_EXPECT_TRUE(std::string(FailureKey("Invalid wallet address.")) ==
+                 "error_connecting_wallet_with_reason");
+  UR_EXPECT_TRUE(std::string(FailureKey("superseded by a wallet connect request")) ==
+                 "error_connecting_wallet_with_reason");
+}
+
+UR_TEST(SolanaWallet_AFailureWithoutWordsIsSomethingWentWrong) {
   UR_EXPECT_TRUE(std::string(FailureKey("")) == "something_went_wrong");
 }

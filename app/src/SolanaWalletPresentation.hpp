@@ -182,16 +182,12 @@ inline CardView CardFor(bool ready, const std::optional<LegacyWallet>& payoutWal
 
 // ---- the connect sheet -----------------------------------------------------------
 
-// The detail a watchdog gives up with. Deliberately not human text: no bridge,
-// wallet or server message can equal it, so FailureKey can tell a give-up from
-// a failure that carries its own words.
-inline constexpr const char* kTimeoutDetail = "urnw.solana.timeout";
-
-// The store key of the sheet's error line for a failure's detail.
+// The store key a connect, link or remove failure renders with -- one rule on
+// every platform: the words that came back, in
+// error_connecting_wallet_with_reason, and something_went_wrong only when none
+// did (a watchdog's give-up included).
 inline const char* FailureKey(const std::string& detail) {
-  if (detail == kTimeoutDetail) return "wallet_connect_failed";
-  if (!detail.empty()) return "error_connecting_wallet_with_reason";
-  return "something_went_wrong";
+  return detail.empty() ? "something_went_wrong" : "error_connecting_wallet_with_reason";
 }
 
 enum class ConnectState { Idle, OpeningBrowser, Checking, Ready, Linking, Failed, Linked };
@@ -208,7 +204,7 @@ enum class Supporting { None, Checking, Invalid, Unavailable };
 // the sheet must act on nothing.
 struct ConnectMachine {
   ConnectState state = ConnectState::Idle;
-  std::string detail;  // Failed: the bridge's or server's words, kTimeoutDetail, or ""
+  std::string detail;  // Failed: the bridge's or server's words, "" when none came back
   Supporting supporting = Supporting::None;
   bool addressChecked = false;  // the address in the field passed the server check
   std::string walletId;         // Linked
@@ -250,11 +246,12 @@ struct ConnectMachine {
     detail = why;
     return true;
   }
-  // A watchdog gave up: 180 s on the browser, 20 s on the create call.
+  // A watchdog gave up: 180 s on the browser, 20 s on the create call. No words
+  // came back, so it reads something_went_wrong.
   bool Timeout() {
     if (!Busy()) return false;
     state = ConnectState::Failed;
-    detail = kTimeoutDetail;
+    detail.clear();
     return true;
   }
   // The field's text changed: the verdict is forgotten.

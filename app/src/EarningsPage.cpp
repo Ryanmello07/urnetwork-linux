@@ -3068,7 +3068,7 @@ void EarningsPage::OnSolanaConnected(const std::string& walletId) {
   // the SDK drops setPayoutWallet silently (no callback, ever) when the id is
   // not a UUID: this watchdog is what reports it
   const uint32_t generation = BeginFlow(legacyFlow_, kApiTimeoutMs, [this] {
-    Notify(T_("something_went_wrong", "Something went wrong."), kit::Snackbar::Severity::Error);
+    Notify(SolanaFailureText({}), kit::Snackbar::Severity::Error);
     LoadLegacyWallets();
   });
   urnet::SetPayoutWalletArgs args;
@@ -3087,15 +3087,11 @@ void EarningsPage::OnSolanaConnected(const std::string& walletId) {
             Notify(T_("payout_wallet_updated", "Payout wallet updated"),
                    kit::Snackbar::Severity::Success);
           } else {
-            // the wallet exists either way; the server's words VERBATIM
+            // the wallet exists either way; the switch is the second half of
+            // linking, so it fails in linking's words
             g_warning("earnings: setPayoutWallet failed: %s",
                       detail.empty() ? "(no result)" : detail.c_str());
-            Notify(detail.empty()
-                       ? Glib::ustring(T_("something_went_wrong", "Something went wrong."))
-                       : Glib::ustring(Format(T_("error_setting_default_wallet_with_reason",
-                                                 "Error setting default wallet: {}"),
-                                              detail)),
-                   kit::Snackbar::Severity::Error);
+            Notify(SolanaFailureText(detail), kit::Snackbar::Severity::Error);
           }
           LoadLegacyWallets();
         });
@@ -3162,7 +3158,7 @@ void EarningsPage::RemoveSolanaWallet(const std::string& walletId) {
   RebuildSolanaCard();  // the card goes insensitive while the removal is out
   const uint32_t generation = BeginFlow(removeSolanaFlow_, kApiTimeoutMs, [this] {
     removingSolanaWallet_ = false;
-    Notify(T_("something_went_wrong", "Something went wrong."), kit::Snackbar::Severity::Error);
+    Notify(SolanaFailureText({}), kit::Snackbar::Severity::Error);
     LoadLegacyWallets();
   });
   urnet::RemoveWalletArgs args;
@@ -3183,12 +3179,7 @@ void EarningsPage::RemoveSolanaWallet(const std::string& walletId) {
           if (!ok) {
             g_warning("earnings: removeWallet failed: %s",
                       detail.empty() ? "(no detail)" : detail.c_str());
-            Notify(detail.empty()
-                       ? Glib::ustring(T_("something_went_wrong", "Something went wrong."))
-                       : Glib::ustring(Format(T_("error_connecting_wallet_with_reason",
-                                                 "There was an error connecting your wallet: {}"),
-                                              detail)),
-                   kit::Snackbar::Severity::Error);
+            Notify(SolanaFailureText(detail), kit::Snackbar::Severity::Error);
             RebuildSolanaCard();
             return;
           }

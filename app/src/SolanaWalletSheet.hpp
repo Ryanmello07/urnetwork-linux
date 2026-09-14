@@ -30,6 +30,12 @@
 
 namespace urnw {
 
+// One wording for every Solana connect, link and remove failure, on the sheet
+// and on the Earnings page: the words that came back, VERBATIM (often the only
+// diagnostic), in error_connecting_wallet_with_reason, and something_went_wrong
+// only when none did. solana::FailureKey decides which.
+Glib::ustring SolanaFailureText(const std::string& detail);
+
 class SolanaWalletSheet : public Gtk::Window {
  public:
   // allowActions=false (the preview harness): the provider and Connect buttons

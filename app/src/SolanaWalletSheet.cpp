@@ -33,6 +33,15 @@ Gtk::Label* MakeWrappedNote(const Glib::ustring& text, const char* cssClass) {
 
 }  // namespace
 
+Glib::ustring SolanaFailureText(const std::string& detail) {
+  if (std::string(solana::FailureKey(detail)) == "error_connecting_wallet_with_reason") {
+    return Format(T_("error_connecting_wallet_with_reason",
+                     "There was an error connecting your wallet: {}"),
+                  detail);
+  }
+  return T_("something_went_wrong", "Something went wrong.");
+}
+
 SolanaWalletSheet::SolanaWalletSheet(Gtk::Window& parent, SdkHost& host, bool allowActions)
     : host_(host), allowActions_(allowActions) {
   set_transient_for(parent);
@@ -398,21 +407,9 @@ void SolanaWalletSheet::Render() {
       break;
   }
 
-  Glib::ustring error;
-  if (machine_.state == solana::ConnectState::Failed) {
-    const std::string key = solana::FailureKey(machine_.detail);
-    if (key == "wallet_connect_failed") {
-      error = T_("wallet_connect_failed", "Failed to connect the wallet.");
-    } else if (key == "error_connecting_wallet_with_reason") {
-      // the words that came back VERBATIM: often the only diagnostic
-      error = Format(T_("error_connecting_wallet_with_reason",
-                        "There was an error connecting your wallet: {}"),
-                     machine_.detail);
-    } else {
-      error = T_("something_went_wrong", "Something went wrong.");
-    }
-  }
-  kit::SetTextOrCollapse(*errorLine_, error);
+  kit::SetTextOrCollapse(*errorLine_, machine_.state == solana::ConnectState::Failed
+                                          ? SolanaFailureText(machine_.detail)
+                                          : Glib::ustring());
 }
 
 }  // namespace urnw
