@@ -2105,11 +2105,11 @@ void ConnectPage::DrawExtenderRow(const extender::ProvideRow& row) {
     extenderToggle_->set_active(row.on);
     updatingControls_ = false;
   }
-  // the switch is named Extender; the row carries the state for a screen reader
+  // the switch is named Extender and carries the state as its description (N7)
   Glib::Value<Glib::ustring> description;
   description.init(Glib::Value<Glib::ustring>::value_type());
   description.set(text);
-  extenderRow_->update_property(Gtk::Accessible::Property::DESCRIPTION, description);
+  extenderToggle_->update_property(Gtk::Accessible::Property::DESCRIPTION, description);
 }
 
 // The switch writes the setting at once and repaints the row with the guess
