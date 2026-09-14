@@ -678,6 +678,11 @@ msgctxt "connect_urnetwork_vpn"
 msgid "Connect URnetwork VPN"
 msgstr "Conectar la VPN de URnetwork"
 
+#. Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.
+msgctxt "connect_wallet"
+msgid "Connect Wallet"
+msgstr "Conectar billetera"
+
 #. Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.
 msgctxt "connected"
 msgid "Connected"
@@ -929,6 +934,11 @@ msgstr "Pago de {}"
 
 #. Generic default choice label, e.g. the app split rule combo state meaning no rule.
 msgctxt "default_option"
+msgid "Default"
+msgstr "Predeterminado"
+
+#. Call to action
+msgctxt "default_wallet"
 msgid "Default"
 msgstr "Predeterminado"
 
@@ -1612,6 +1622,10 @@ msgctxt "enter_a_password"
 msgid "Enter a password"
 msgstr "Ingresa una contraseña"
 
+msgctxt "enter_a_solana_usdc_wallet_address"
+msgid "Enter a Solana USDC wallet address"
+msgstr "Ingresa una dirección de billetera USDC en Solana"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "enter_balance_code"
 msgid "Enter balance code"
@@ -1652,6 +1666,11 @@ msgctxt "error_connecting_wallet"
 msgid "There was an error connecting your wallet."
 msgstr "Se produjo un error al conectar tu billetera."
 
+#. Snackbar shown when connecting a wallet fails, with the underlying error message. Used in Main/Account/Wallets/WalletsView.swift.
+msgctxt "error_connecting_wallet_with_reason"
+msgid "There was an error connecting your wallet: {}"
+msgstr "Se produjo un error al conectar tu billetera: {}"
+
 #. Snackbar shown when creating the user's network fails. Used in ContentView.swift, Main/Account/AccountRootView.swift and Main/Connect/ConnectView-iOS.swift.
 msgctxt "error_creating_network"
 msgid "There was an error creating your network. Please try again later."
@@ -1686,6 +1705,11 @@ msgstr "Error al enviar el enlace para restablecer la contraseña"
 msgctxt "error_sending_verification_code"
 msgid "There was an error sending the verification code."
 msgstr "Ocurrió un error al enviar el código de verificación."
+
+#. Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.
+msgctxt "error_setting_default_wallet_with_reason"
+msgid "Error setting default wallet: {}"
+msgstr "Error al establecer la billetera predeterminada: {}"
 
 #. Snackbar shown when saving the device name fails. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "error_updating_device_name"
@@ -2211,6 +2235,11 @@ msgstr "Tienes correo"
 msgctxt "low_user_ip_ratio"
 msgid "Lowest user/IP ratio to access content"
 msgstr "La menor proporción de usuarios/IP para acceder a contenido"
+
+#. Wallet Screen
+msgctxt "make_default"
+msgid "Make default"
+msgstr "Hacer predeterminado"
 
 #. Split tunnel settings: button opening the app split rules sheet.
 msgctxt "manage_apps"
@@ -2836,6 +2865,11 @@ msgctxt "payment_problem"
 msgid "Payment problem"
 msgstr "Problema con el pago"
 
+#. Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.
+msgctxt "payout_wallet_updated"
+msgid "Payout wallet updated"
+msgstr "Cartera de pago actualizada"
+
 #. Post quantum identity panel: peer identity count indicator, singular.
 msgctxt "peer_count_one"
 msgid "1 peer"
@@ -3408,6 +3442,11 @@ msgstr "Eliminar regla"
 msgctxt "remove_this_sign_in_method"
 msgid "Remove this sign-in method?"
 msgstr "¿Quitar este método de inicio de sesión?"
+
+#. Used in Main/Account/AccountNavStackView.swift.
+msgctxt "remove_wallet"
+msgid "Remove wallet"
+msgstr "Eliminar billetera"
 
 #. Reset link sent
 msgctxt "resend_reset_link"
@@ -4515,6 +4554,10 @@ msgstr "URnetwork VPN desconectada"
 msgctxt "urnetwork_vpn_started"
 msgid "URnetwork VPN started"
 msgstr "URnetwork VPN iniciada"
+
+msgctxt "usdc_wallet_address"
+msgid "USDC wallet address"
+msgstr "Dirección de la billetera USDC"
 
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"
