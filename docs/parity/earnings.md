@@ -28,8 +28,8 @@
 > `POST /account/wallet {SOL, address, USDC}` and made the payout wallet with
 > `POST /account/payout-wallet` unless a fresh `getPayoutWallet` shows it already is; while that
 > switch or a removal is out, "Connect Solana wallet" waits. Under the Bittensor block a card
-> shows the
-> payout wallet (short address, the DEFAULT chip, the migration note, "N USDC waiting" from the
+> shows the payout wallet (titled "Wallet" for a legacy Polygon one; short address, the DEFAULT
+> chip, the migration note, "N USDC waiting" from the
 > payments neither completed nor canceled) and removes it behind its own overflow and a
 > confirmation. With no payout wallet but held payments, one "N USDC waiting" line sits above the
 > Bittensor actions. The card's three reads (`getAccountWallets`, `getPayoutWallet`,

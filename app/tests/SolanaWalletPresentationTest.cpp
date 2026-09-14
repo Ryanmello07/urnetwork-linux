@@ -224,6 +224,20 @@ UR_TEST(SolanaWallet_WaitingLineWithoutAWallet) {
   UR_EXPECT_FALSE(none.showWaitingLine);
 }
 
+// A legacy Polygon payout wallet keeps its card (hiding it would bring back the
+// waiting line and invite replacing a working wallet), titled plainly rather
+// than under a chain it is not on.
+UR_TEST(SolanaWallet_APolygonPayoutWalletIsNotTitledSolana) {
+  const CardView polygon =
+      CardFor(true, kAllReads, PayoutWalletFor({Wallet("w-matic", "MATIC")}, "w-matic"), 0);
+  UR_EXPECT_TRUE(polygon.showCard);
+  UR_EXPECT_FALSE(polygon.solana);
+  const CardView solana =
+      CardFor(true, kAllReads, PayoutWalletFor({Wallet("w-sol", "SOL")}, "w-sol"), 0);
+  UR_EXPECT_TRUE(solana.showCard);
+  UR_EXPECT_TRUE(solana.solana);
+}
+
 // ---- the three reads -----------------------------------------------------------------
 
 // The waiting line claims two things: that there is no payout wallet, and how

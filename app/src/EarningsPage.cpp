@@ -1557,10 +1557,11 @@ void EarningsPage::BuildEarningsPane() {
     row.content->set_spacing(6);
     solanaCard_ = row.root;
     auto* header = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-    auto* title = MakeSizedLabel(T_("solana_wallet", "Solana wallet"), 12, "ur-caption");
-    title->set_hexpand(true);
-    title->set_valign(Gtk::Align::CENTER);
-    header->append(*title);
+    // "Solana wallet", or "Wallet" for a legacy Polygon payout wallet (RebuildSolanaCard)
+    solanaTitle_ = MakeSizedLabel(T_("solana_wallet", "Solana wallet"), 12, "ur-caption");
+    solanaTitle_->set_hexpand(true);
+    solanaTitle_->set_valign(Gtk::Align::CENTER);
+    header->append(*solanaTitle_);
     // the card only ever shows the payout wallet, so the chip is always there
     solanaDefaultTag_ =
         MakeStatusChip(Glib::ustring(T_("default_wallet", "Default")).uppercase());
@@ -1571,7 +1572,6 @@ void EarningsPage::BuildEarningsPane() {
     solanaAddressLabel_ = Gtk::make_managed<Gtk::Label>();
     solanaAddressLabel_->add_css_class("ur-earn-address");
     solanaAddressLabel_->set_xalign(0);
-    solanaAddressLabel_->set_selectable(true);
     row.content->append(*solanaAddressLabel_);
     row.content->append(*MakeWrappedNote(
         T_("usdc_payouts_until_migration",
@@ -2996,12 +2996,17 @@ void EarningsPage::RebuildSolanaCard() {
   connectSolanaAction_->set_enabled(!writing);
   removeSolanaAction_->set_enabled(!writing);
   if (view.showCard) {
-    // the short form is visual only: the full address is the tooltip and the name
+    // a legacy Polygon payout wallet still receives USDC and keeps its card,
+    // under the plain "Wallet" rather than a chain it is not on
+    const Glib::ustring title = view.solana
+                                    ? Glib::ustring(T_("solana_wallet", "Solana wallet"))
+                                    : Glib::ustring(T_("wallet", "Wallet"));
+    solanaTitle_->set_text(title);
+    // the short form is visual only, and not selectable (copying it would not
+    // give an address): the full address is the tooltip and the name
     solanaAddressLabel_->set_text(view.shortAddress);
     solanaAddressLabel_->set_tooltip_text(view.address);
-    kit::SetAccessibleLabel(*solanaAddressLabel_,
-                            Glib::ustring(T_("solana_wallet", "Solana wallet")) + ", " +
-                                view.address);
+    kit::SetAccessibleLabel(*solanaAddressLabel_, title + ", " + view.address);
   }
   kit::SetTextOrCollapse(*solanaPendingLabel_, view.showPending ? waiting : Glib::ustring());
 

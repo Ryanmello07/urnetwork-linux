@@ -70,6 +70,8 @@ inline std::string ShortAddress(const std::string& address) {
 
 // urnet::TAO, mirrored so this header stays SDK-free.
 inline constexpr const char* kChainBittensor = "TAO";
+// urnet::MATIC, mirrored: a legacy Polygon payout wallet.
+inline constexpr const char* kChainPolygon = "MATIC";
 
 // One account wallet (urnet::AccountWallet), reduced to what the card reads.
 struct LegacyWallet {
@@ -261,6 +263,7 @@ struct CardView {
   bool showPending = false;      // the card's own "N USDC waiting" line
   bool showWaitingLine = false;  // no card: the line beside the wallet actions
   std::string walletId;          // the card's wallet (what Remove removes)
+  bool solana = true;            // false: a legacy Polygon payout wallet, titled "Wallet"
   std::string address;           // full: tooltip, accessible name
   std::string shortAddress;      // the visible form
   std::string pendingUsd;        // "3.87"; empty when nothing is waiting
@@ -276,6 +279,7 @@ inline CardView CardFor(bool ready, const LegacyReads& reads,
   if (payoutWallet) {
     view.showCard = true;
     view.walletId = payoutWallet->id;
+    view.solana = payoutWallet->blockchain != kChainPolygon;
     view.address = payoutWallet->address;
     view.shortAddress = ShortAddress(payoutWallet->address);
     view.showPending = waiting;

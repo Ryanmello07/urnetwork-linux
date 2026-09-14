@@ -427,6 +427,7 @@ class EarningsPage : public Gtk::Box {
   Gtk::Label* usdcWaitingLine_ = nullptr;           // in the connect panel
   Gtk::Label* usdcWaitingLineConnected_ = nullptr;  // in the connected panel
   Gtk::Box* solanaCard_ = nullptr;
+  Gtk::Label* solanaTitle_ = nullptr;
   Gtk::Label* solanaAddressLabel_ = nullptr;
   Gtk::Label* solanaDefaultTag_ = nullptr;
   Gtk::Label* solanaPendingLabel_ = nullptr;
