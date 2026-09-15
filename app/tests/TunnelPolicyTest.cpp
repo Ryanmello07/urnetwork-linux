@@ -71,7 +71,12 @@ UR_TEST(theMemoryTierIsChosenFromMeasuredHostMemory) {
       {2 * gib, urnw::kDeviceMemoryTargetByteCount},       // a small vps
       {8 * gib, urnw::kDeviceMemoryTargetByteCount},       // an ordinary laptop
       {16 * gib - 1, urnw::kDeviceMemoryTargetByteCount},  // just under the bar
+      // 16 GiB IS a large host for urnetworkd, and deliberately is NOT one for
+      // the desktop apps, whose bar is 32: this is the build that runs on
+      // servers and in containers, and the cgroup half of the measurement is
+      // what makes the lower bar safe. See the bar's note in TunnelPolicy.hpp.
       {16 * gib, urnw::kLargeHostDeviceMemoryTargetByteCount},
+      {32 * gib, urnw::kLargeHostDeviceMemoryTargetByteCount},
       {64 * gib, urnw::kLargeHostDeviceMemoryTargetByteCount},
   };
   for (const auto& row : rows) {

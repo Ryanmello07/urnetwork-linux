@@ -54,6 +54,38 @@ inline constexpr std::int64_t kDeviceMemoryTargetByteCount = 128LL * 1024 * 1024
 inline constexpr std::int64_t kProcessMemoryBudgetByteCount = 384LL * 1024 * 1024;
 inline constexpr std::int64_t kLargeHostDeviceMemoryTargetByteCount = 256LL * 1024 * 1024;
 inline constexpr std::int64_t kLargeHostProcessMemoryBudgetByteCount = 768LL * 1024 * 1024;
+// THE BAR IS 16 GiB HERE AND 32 ON THE DESKTOP APPS, DELIBERATELY.
+//
+// What justifies a 256 MiB device target is sustained multi-hundred-megabit
+// throughput, which is the only thing a 24 MiB stream window buys, and host
+// memory is a weak proxy for that. On macOS and Windows the proxy is weakest
+// exactly at 16 GiB, where the population is laptops on wireless whose window
+// is not the binding constraint: they would pay the memory and get nothing
+// back. They would pay it continuously, because the process budget is the go
+// soft limit, and a soft limit is not a ceiling a process avoids -- it is the
+// level the collector lets live heap climb to before it works hard. A
+// steady-state daemon near 768 MiB resident is behaving as designed, and on a
+// 16 GiB laptop that is nearly five percent of the machine for something the
+// user experiences as an on-off switch. The failure mode is not a crash we
+// would see; it is this daemon being blamed for a slow machine.
+//
+// urnetworkd is the build where that reasoning does NOT hold, which is why its
+// bar is lower. It is the build that genuinely runs on servers and in
+// containers, where 16 GiB is a machine doing one job rather than a laptop
+// running a browser, an IDE and a container runtime -- and where the link is
+// the kind that makes the window bind. What makes the lower bar safe is the
+// measurement itself: HostMemoryByteCountCached takes the smaller of physical
+// memory and the cgroup limit, so a containerised daemon on a large host reads
+// as the small host it actually is.
+//
+// The GUI (src/SdkHost.cpp) is a desktop app and takes the desktop bar by
+// having no tier at all: it owns a DeviceRemote and no data plane, so it sizes
+// no device and keeps its own small fixed budget. If it ever gains one, 32 GiB
+// is its bar, not this one.
+//
+// The way to reach a 16 GiB DESKTOP on a fast link is not a lower bar there --
+// that changes nothing about what is measured. It is an explicit opt-in, or
+// promotion on measured throughput; both are deliberately a different change.
 inline constexpr std::int64_t kLargeHostMemoryByteCount = 16LL * 1024 * 1024 * 1024;
 
 // The parts the two constraints are written in, so a pair cannot drift apart
