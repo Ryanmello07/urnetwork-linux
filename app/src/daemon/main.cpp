@@ -43,6 +43,7 @@
 #include "Tunnel.hpp"
 #include "daemon/ControlServer.hpp"
 #include "daemon/DaemonLog.hpp"
+#include "daemon/HostMemory.hpp"
 #include "daemon/TunnelHost.hpp"
 #include "TunnelPolicy.hpp"
 
@@ -57,11 +58,14 @@
 namespace {
 
 // The daemon's process budget: the message pools and the go soft limit
-// (setMemoryLimit -> connect defaults). It backs the per-device memory target
-// TunnelHost creates its DeviceLocal with, and the two must be set together --
-// see TunnelPolicy.hpp for the backing and collector constraints, which are
-// asserted there against this value.
-constexpr int64_t kMemoryLimit = urnw::kProcessMemoryBudgetByteCount;
+// (setMemoryLimit -> connect defaults), and nothing else. The per-device memory
+// target TunnelHost creates its DeviceLocal with is a separate surface, chosen
+// from the SAME cached host measurement so the two are always one tier -- see
+// TunnelPolicy.hpp for the backing and collector constraints, asserted there
+// for both tiers.
+int64_t ProcessMemoryBudgetByteCount() {
+  return urnw::MemoryTierForHost(urnw::HostMemoryByteCountCached()).process_budget_byte_count;
+}
 
 // State (device identity + SDK storage) and log locations. systemd's
 // StateDirectory=/LogsDirectory= set the env vars; the fallbacks match the
@@ -1033,7 +1037,14 @@ int main(int argc, char** argv) {
   urnw::DaemonLog::Instance().SetSdkLogDir(logDir);
   urnw::DaemonLog::Instance().StartSdkLogPolling();
   urnw::DaemonLogf("[daemon] urnetworkd %s starting (log dir %s)\n", UR_APP_VERSION, logDir.c_str());
-  urnet::setMemoryLimit(kMemoryLimit);
+  const int64_t hostMemoryByteCount = urnw::HostMemoryByteCountCached();
+  const urnw::MemoryTier memoryTier = urnw::MemoryTierForHost(hostMemoryByteCount);
+  urnw::DaemonLogf(
+      "[daemon] memory: host %lld MiB -> device target %lld MiB in a %lld MiB process budget\n",
+      static_cast<long long>(hostMemoryByteCount / (1024 * 1024)),
+      static_cast<long long>(memoryTier.device_target_byte_count / (1024 * 1024)),
+      static_cast<long long>(memoryTier.process_budget_byte_count / (1024 * 1024)));
+  urnet::setMemoryLimit(ProcessMemoryBudgetByteCount());
 
   // Clear a location override left behind by a previous run BEFORE serving any
   // client: nothing else on the system ever reverts /etc/geolocation, so an

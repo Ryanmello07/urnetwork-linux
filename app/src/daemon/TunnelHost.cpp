@@ -17,6 +17,7 @@
 #include "IoLoopFd.hpp"
 #include "NetworkSpaceConfig.hpp"
 #include "TunnelPolicy.hpp"
+#include "daemon/HostMemory.hpp"
 #include "daemon/DaemonLog.hpp"
 
 namespace urnw {
@@ -580,15 +581,19 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
           config.app_version.empty() ? kUrAppVersionFallback : config.app_version;
       const bool hadStoredMaterial = HasStoredKeyMaterial();
       bool restoreFailed = false;
-      // Both constructions size the device at kDeviceMemoryTargetByteCount
-      // (64 MiB, TunnelPolicy.hpp) instead of the SDK's 20 MiB default, which
-      // is what lets the H3 carrier windows reach their full size.
+      // Both constructions size the device at the measured host's memory tier
+      // (TunnelPolicy.hpp) instead of the SDK's 20 MiB default, which is what
+      // lets the H3 carrier windows reach their full size. The SAME cached
+      // measurement chose the process budget at startup, so the target and the
+      // budget backing it are always one tier.
+      const urnw::MemoryTier memoryTier =
+          urnw::MemoryTierForHost(urnw::HostMemoryByteCountCached());
       if (auto km = LoadKeyMaterial()) {
         try {
           device_ = urnet::newDeviceLocalWithMemoryTarget(
               *networkSpace_, config.by_jwt, UrDeviceDescription(), UrDeviceSpec(), appVersion,
               config.instance_id, /*enable_rpc=*/false, *km,
-              urnw::kDeviceMemoryTargetByteCount);
+              memoryTier.device_target_byte_count);
         } catch (const std::exception& e) {
           restoreFailed = true;
           std::fprintf(stderr, "[tunnel] restore device key material failed: %s\n", e.what());
@@ -599,7 +604,7 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
         device_ = urnet::newDeviceLocalWithMemoryTarget(
             *networkSpace_, config.by_jwt, UrDeviceDescription(), UrDeviceSpec(), appVersion,
             config.instance_id, /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
-            urnw::kDeviceMemoryTargetByteCount);
+            memoryTier.device_target_byte_count);
         // Persist ONLY when nothing was stored. Overwriting after a FAILED
         // restore silently rotates this device's provider identity — peers
         // stop recognising it and its reputation is gone — for what may be a

@@ -50,26 +50,90 @@ static_assert(!urnw::CaptureV6Claims("fe80::1"));
 
 // ---- device memory target --------------------------------------------------
 
-UR_TEST(deviceMemoryTargetAndProcessBudgetAreTheDesktopPair) {
+UR_TEST(deviceMemoryTargetAndProcessBudgetAreTheDesktopPairs) {
   UR_EXPECT_EQ(std::int64_t{128} * 1024 * 1024, urnw::kDeviceMemoryTargetByteCount);
   UR_EXPECT_EQ(std::int64_t{384} * 1024 * 1024, urnw::kProcessMemoryBudgetByteCount);
+  UR_EXPECT_EQ(std::int64_t{256} * 1024 * 1024, urnw::kLargeHostDeviceMemoryTargetByteCount);
+  UR_EXPECT_EQ(std::int64_t{768} * 1024 * 1024, urnw::kLargeHostProcessMemoryBudgetByteCount);
+  UR_EXPECT_EQ(std::int64_t{16} * 1024 * 1024 * 1024, urnw::kLargeHostMemoryByteCount);
 }
 
-// The two constraints the pair has to satisfy. The header static_asserts them,
-// which fails the build rather than a test; this states them where a reader
-// looking for the rule will find it, and catches a header that drops them.
-UR_TEST(theDeviceMemoryTargetIsBackedAndCollectorSafe) {
-  // backing: the target is at most 20/34 of the budget, the pools taking 14
-  UR_EXPECT_TRUE_MSG(
-      "the device memory target is not backed by the process budget",
-      urnw::kDeviceMemoryTargetByteCount * urnw::kMemoryBudgetRatioParts <=
-          urnw::kProcessMemoryBudgetByteCount *
-              (urnw::kMemoryBudgetRatioParts - urnw::kMemoryPoolRatioParts));
-  // collector: the budget is at least three times the target
-  UR_EXPECT_TRUE_MSG(
-      "the process budget is too close to the device memory target",
-      urnw::kCollectorBudgetMultiple * urnw::kDeviceMemoryTargetByteCount <=
-          urnw::kProcessMemoryBudgetByteCount);
+// The gate over the measurement, including the failure case: an unknown host
+// takes the base tier, because an unknown host is not a large host.
+UR_TEST(theMemoryTierIsChosenFromMeasuredHostMemory) {
+  constexpr std::int64_t gib = std::int64_t{1024} * 1024 * 1024;
+  const struct {
+    std::int64_t host;
+    std::int64_t target;
+  } rows[] = {
+      {0, urnw::kDeviceMemoryTargetByteCount},             // unmeasurable
+      {-1, urnw::kDeviceMemoryTargetByteCount},            // a failed read
+      {2 * gib, urnw::kDeviceMemoryTargetByteCount},       // a small vps
+      {8 * gib, urnw::kDeviceMemoryTargetByteCount},       // an ordinary laptop
+      {16 * gib - 1, urnw::kDeviceMemoryTargetByteCount},  // just under the bar
+      {16 * gib, urnw::kLargeHostDeviceMemoryTargetByteCount},
+      {64 * gib, urnw::kLargeHostDeviceMemoryTargetByteCount},
+  };
+  for (const auto& row : rows) {
+    UR_EXPECT_EQ(row.target, urnw::MemoryTierForHost(row.host).device_target_byte_count);
+  }
+  // The budget always moves with the target it backs.
+  UR_EXPECT_EQ(urnw::kProcessMemoryBudgetByteCount,
+               urnw::MemoryTierForHost(8 * gib).process_budget_byte_count);
+  UR_EXPECT_EQ(urnw::kLargeHostProcessMemoryBudgetByteCount,
+               urnw::MemoryTierForHost(32 * gib).process_budget_byte_count);
+}
+
+// The two constraints, on BOTH tiers. The header static_asserts them, which
+// fails the build rather than a test; this states them where a reader looking
+// for the rule will find it, and catches a header that drops them.
+UR_TEST(everyMemoryTierIsBackedAndCollectorSafe) {
+  constexpr std::int64_t gib = std::int64_t{1024} * 1024 * 1024;
+  for (const std::int64_t host : {std::int64_t{0}, 8 * gib, 16 * gib, 128 * gib}) {
+    const urnw::MemoryTier tier = urnw::MemoryTierForHost(host);
+    // backing: the target is at most 20/34 of the budget, the pools taking 14
+    UR_EXPECT_TRUE_MSG("a device memory target is not backed by its process budget",
+                       urnw::MemoryTierIsBacked(tier));
+    // collector: the budget is at least three times the target
+    UR_EXPECT_TRUE_MSG("a process budget is too close to its device memory target",
+                       urnw::MemoryTierIsCollectorSafe(tier));
+  }
+}
+
+// The pure halves of the measurement (daemon/HostMemory.cpp does the reads).
+UR_TEST(hostMemoryIsParsedFromMeminfoAndTheCgroupLimit) {
+  const std::string meminfo =
+      "MemTotal:       16305456 kB\nMemFree:         1234 kB\nSwapTotal:  0 kB\n";
+  UR_EXPECT_EQ(std::int64_t{16305456} * 1024, urnw::ParseMeminfoTotalByteCount(meminfo));
+  UR_EXPECT_EQ(std::int64_t{0}, urnw::ParseMeminfoTotalByteCount(""));
+  UR_EXPECT_EQ(std::int64_t{0}, urnw::ParseMeminfoTotalByteCount("MemFree: 100 kB\n"));
+  UR_EXPECT_EQ(std::int64_t{0}, urnw::ParseMeminfoTotalByteCount("MemTotal:       kB\n"));
+  // MemTotal need not be the first line.
+  UR_EXPECT_EQ(std::int64_t{8} * 1024 * 1024,
+               urnw::ParseMeminfoTotalByteCount("MemFree: 1 kB\nMemTotal: 8192 kB"));
+
+  // cgroup v2 "max" and the v1 page-rounded sentinel are no limit at all.
+  UR_EXPECT_EQ(std::int64_t{2} * 1024 * 1024 * 1024,
+               urnw::ParseCgroupMemoryLimitByteCount("2147483648\n"));
+  UR_EXPECT_EQ(std::int64_t{0}, urnw::ParseCgroupMemoryLimitByteCount("max\n"));
+  UR_EXPECT_EQ(std::int64_t{0}, urnw::ParseCgroupMemoryLimitByteCount(""));
+  UR_EXPECT_EQ(std::int64_t{0}, urnw::ParseCgroupMemoryLimitByteCount("9223372036854771712"));
+
+  // A container limit below physical memory is what the daemon may use.
+  constexpr std::int64_t gib = std::int64_t{1024} * 1024 * 1024;
+  UR_EXPECT_EQ(2 * gib, urnw::EffectiveHostMemoryByteCount(64 * gib, 2 * gib));
+  UR_EXPECT_EQ(64 * gib, urnw::EffectiveHostMemoryByteCount(64 * gib, 0));
+  UR_EXPECT_EQ(2 * gib, urnw::EffectiveHostMemoryByteCount(0, 2 * gib));
+  UR_EXPECT_EQ(std::int64_t{0}, urnw::EffectiveHostMemoryByteCount(0, 0));
+}
+
+// A 64 GiB machine in a 2 GiB container is a SMALL host: the tier follows what
+// this process may use, not what the machine has.
+UR_TEST(aContainerLimitDecidesTheTierRatherThanTheMachine) {
+  constexpr std::int64_t gib = std::int64_t{1024} * 1024 * 1024;
+  const std::int64_t usable = urnw::EffectiveHostMemoryByteCount(64 * gib, 2 * gib);
+  UR_EXPECT_EQ(urnw::kDeviceMemoryTargetByteCount,
+               urnw::MemoryTierForHost(usable).device_target_byte_count);
 }
 
 // The budget is only real if the daemon passes it to the SDK, and it is a
@@ -85,10 +149,12 @@ UR_TEST(theDaemonSetsTheProcessBudgetFromThePolicy) {
     return;
   }
   UR_EXPECT_TRUE_MSG(
-      "daemon/main.cpp does not take its memory limit from kProcessMemoryBudgetByteCount",
-      source.find("kMemoryLimit = urnw::kProcessMemoryBudgetByteCount") != std::string::npos);
-  UR_EXPECT_TRUE_MSG("daemon/main.cpp does not call setMemoryLimit(kMemoryLimit)",
-                     source.find("setMemoryLimit(kMemoryLimit)") != std::string::npos);
+      "daemon/main.cpp does not take its process budget from the measured memory tier",
+      source.find("urnw::MemoryTierForHost(urnw::HostMemoryByteCountCached())"
+                  ".process_budget_byte_count") != std::string::npos);
+  UR_EXPECT_TRUE_MSG(
+      "daemon/main.cpp does not call setMemoryLimit with the tier's budget",
+      source.find("setMemoryLimit(ProcessMemoryBudgetByteCount())") != std::string::npos);
 }
 
 // Same shape as the dual-stack guard test below: the constant is worthless if
@@ -118,10 +184,17 @@ UR_TEST(tunnelHostConstructsEveryDeviceAtTheMemoryTarget) {
     const size_t end = source.find(");", at);
     const std::string args = end == std::string::npos ? std::string() : source.substr(at, end - at);
     UR_EXPECT_TRUE_MSG(
-        "a newDeviceLocalWithMemoryTarget call does not pass kDeviceMemoryTargetByteCount",
-        args.find("kDeviceMemoryTargetByteCount") != std::string::npos);
+        "a newDeviceLocalWithMemoryTarget call does not pass the tier's device target",
+        args.find("memoryTier.device_target_byte_count") != std::string::npos);
   }
   UR_EXPECT_EQ(size_t{2}, constructions);
+
+  // ...and the tier comes from the same cached measurement the budget used, so
+  // a large target can never be paired with a small budget.
+  UR_EXPECT_TRUE_MSG(
+      "TunnelHost.cpp does not take its device target from the cached host measurement",
+      source.find("urnw::MemoryTierForHost(urnw::HostMemoryByteCountCached())") !=
+          std::string::npos);
 }
 
 // ---- v6 literals -----------------------------------------------------------

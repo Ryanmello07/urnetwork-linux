@@ -41,26 +41,141 @@ namespace urnw {
 //              three times the target: 384 MiB = 3 * 128 MiB.
 //
 // urnetworkd.service declares no MemoryMax or MemoryHigh, so nothing below
-// these values caps the daemon. A host-memory gate raising the target to
-// 256 MiB on machines with 16 GiB or more is a follow-up; the daemon measures
-// no host memory today. The GUI (src/SdkHost.cpp) keeps its own, smaller bound:
-// it owns a DeviceRemote and no data plane.
-inline constexpr std::int64_t kDeviceMemoryTargetByteCount = 128 * 1024 * 1024;
-inline constexpr std::int64_t kProcessMemoryBudgetByteCount = 384 * 1024 * 1024;
+// these values caps the daemon. The GUI (src/SdkHost.cpp) keeps its own,
+// smaller bound: it owns a DeviceRemote and no data plane.
+//
+// There are two tiers. The base pair is the floor every host gets; a host with
+// kLargeHostMemoryByteCount or more of usable memory gets the large pair, which
+// doubles both numbers and so doubles the H3 stream window again. The tier is
+// chosen from MEASURED host memory (daemon/HostMemory.hpp reads /proc/meminfo
+// and any cgroup limit), never from an assumption, and an unmeasurable host
+// takes the base pair: an unknown host is not a large host.
+inline constexpr std::int64_t kDeviceMemoryTargetByteCount = 128LL * 1024 * 1024;
+inline constexpr std::int64_t kProcessMemoryBudgetByteCount = 384LL * 1024 * 1024;
+inline constexpr std::int64_t kLargeHostDeviceMemoryTargetByteCount = 256LL * 1024 * 1024;
+inline constexpr std::int64_t kLargeHostProcessMemoryBudgetByteCount = 768LL * 1024 * 1024;
+inline constexpr std::int64_t kLargeHostMemoryByteCount = 16LL * 1024 * 1024 * 1024;
 
-// The parts the two constraints are written in, so the pair cannot drift apart
+// The parts the two constraints are written in, so a pair cannot drift apart
 // silently.
 inline constexpr std::int64_t kMemoryPoolRatioParts = 14;
 inline constexpr std::int64_t kMemoryBudgetRatioParts = 34;
 inline constexpr std::int64_t kCollectorBudgetMultiple = 3;
 
-static_assert(kDeviceMemoryTargetByteCount * kMemoryBudgetRatioParts <=
-                  kProcessMemoryBudgetByteCount *
-                      (kMemoryBudgetRatioParts - kMemoryPoolRatioParts),
-              "the device memory target is not backed by the process budget");
-static_assert(kCollectorBudgetMultiple * kDeviceMemoryTargetByteCount <=
-                  kProcessMemoryBudgetByteCount,
-              "the process budget is too close to the device memory target for the collector");
+// One tier: the device target and the process budget that backs it, which are
+// only ever chosen together.
+struct MemoryTier {
+  std::int64_t device_target_byte_count;
+  std::int64_t process_budget_byte_count;
+};
+
+// The tier for a host with `hostMemoryByteCount` usable bytes. A nonpositive
+// (unknown) measurement takes the base tier.
+constexpr MemoryTier MemoryTierForHost(std::int64_t hostMemoryByteCount) {
+  if (kLargeHostMemoryByteCount <= hostMemoryByteCount) {
+    return MemoryTier{kLargeHostDeviceMemoryTargetByteCount,
+                      kLargeHostProcessMemoryBudgetByteCount};
+  }
+  return MemoryTier{kDeviceMemoryTargetByteCount, kProcessMemoryBudgetByteCount};
+}
+
+constexpr bool MemoryTierIsBacked(MemoryTier tier) {
+  return tier.device_target_byte_count * kMemoryBudgetRatioParts <=
+         tier.process_budget_byte_count * (kMemoryBudgetRatioParts - kMemoryPoolRatioParts);
+}
+
+constexpr bool MemoryTierIsCollectorSafe(MemoryTier tier) {
+  return kCollectorBudgetMultiple * tier.device_target_byte_count <=
+         tier.process_budget_byte_count;
+}
+
+// Both constraints, on both tiers, at compile time: raising one number without
+// the other fails the build rather than the fleet.
+static_assert(MemoryTierIsBacked(MemoryTierForHost(0)),
+              "the base device memory target is not backed by its process budget");
+static_assert(MemoryTierIsCollectorSafe(MemoryTierForHost(0)),
+              "the base process budget is too close to its device memory target");
+static_assert(MemoryTierIsBacked(MemoryTierForHost(kLargeHostMemoryByteCount)),
+              "the large-host device memory target is not backed by its process budget");
+static_assert(MemoryTierIsCollectorSafe(MemoryTierForHost(kLargeHostMemoryByteCount)),
+              "the large-host process budget is too close to its device memory target");
+// An unknown host takes the base tier, and the gate is a floor rather than a
+// window: everything at or above the threshold is large.
+static_assert(MemoryTierForHost(0).device_target_byte_count == kDeviceMemoryTargetByteCount,
+              "an unknown host must take the base memory tier");
+static_assert(MemoryTierForHost(-1).device_target_byte_count == kDeviceMemoryTargetByteCount,
+              "an unmeasurable host must take the base memory tier");
+static_assert(MemoryTierForHost(kLargeHostMemoryByteCount - 1).device_target_byte_count ==
+                  kDeviceMemoryTargetByteCount,
+              "a host just under the threshold must take the base memory tier");
+
+// ---- host memory measurement (pure halves) ---------------------------------
+//
+// The daemon's probe does the file reads (daemon/HostMemory.cpp); everything
+// that decides anything is here, where the unit tests can reach it. Same shape
+// as the provider's own host-memory helper (sn/miner/provider_memory.go).
+
+// MemTotal (KiB) from /proc/meminfo content, in bytes. 0 when absent or
+// unparseable.
+inline std::int64_t ParseMeminfoTotalByteCount(std::string_view meminfo) {
+  constexpr std::string_view kKey = "MemTotal:";
+  for (std::size_t at = 0; at < meminfo.size();) {
+    const std::size_t end = meminfo.find('\n', at);
+    const std::string_view line =
+        meminfo.substr(at, end == std::string_view::npos ? std::string_view::npos : end - at);
+    at = (end == std::string_view::npos) ? meminfo.size() : end + 1;
+    if (line.substr(0, kKey.size()) != kKey) continue;
+
+    std::int64_t kib = 0;
+    bool anyDigit = false;
+    for (const char c : line.substr(kKey.size())) {
+      if (c == ' ' || c == '\t') {
+        if (anyDigit) break;
+        continue;
+      }
+      if (c < '0' || '9' < c) break;
+      anyDigit = true;
+      // A malformed line with absurd digits must not wrap into a large host.
+      if (kib > (std::int64_t{1} << 52)) return 0;
+      kib = kib * 10 + (c - '0');
+    }
+    return anyDigit && 0 < kib ? kib * 1024 : 0;
+  }
+  return 0;
+}
+
+// A cgroup v2 memory.max or v1 memory.limit_in_bytes. "max" and the v1
+// unlimited sentinel (a page-rounded int64 max) mean no limit, which is 0.
+inline std::int64_t ParseCgroupMemoryLimitByteCount(std::string_view content) {
+  std::size_t begin = 0;
+  std::size_t end = content.size();
+  while (begin < end && (content[begin] == ' ' || content[begin] == '\n' || content[begin] == '\t'))
+    ++begin;
+  while (begin < end &&
+         (content[end - 1] == ' ' || content[end - 1] == '\n' || content[end - 1] == '\t'))
+    --end;
+  const std::string_view value = content.substr(begin, end - begin);
+  if (value.empty() || value == "max") return 0;
+
+  std::int64_t byteCount = 0;
+  for (const char c : value) {
+    if (c < '0' || '9' < c) return 0;
+    if (byteCount > (std::int64_t{1} << 62)) return 0;
+    byteCount = byteCount * 10 + (c - '0');
+  }
+  if (byteCount <= 0 || (std::int64_t{1} << 62) <= byteCount) return 0;
+  return byteCount;
+}
+
+// What this process can actually use: the smaller of physical memory and any
+// cgroup limit, so a daemon in a memory-limited container sizes itself to the
+// container rather than to the machine.
+constexpr std::int64_t EffectiveHostMemoryByteCount(std::int64_t physicalByteCount,
+                                                   std::int64_t limitByteCount) {
+  if (physicalByteCount <= 0) return limitByteCount > 0 ? limitByteCount : 0;
+  if (0 < limitByteCount && limitByteCount < physicalByteCount) return limitByteCount;
+  return physicalByteCount;
+}
 
 // Mirrors sdk.GetDefaultTunnelMtu / connect.DefaultTunnelMtu: the INTERFACE
 // MTU. It is the IPv6 minimum link MTU, because Linux disables IPv6 on an
