@@ -23,13 +23,44 @@
 namespace urnw {
 
 // The per-device memory target the daemon passes to
-// newDeviceLocalWithMemoryTarget (daemon/TunnelHost.cpp). connect sizes the H3
-// carrier windows from the whole device target (stream window
-// max(384 KiB, target / 64 MiB * 3 MiB), the scale capped at the 64 MiB
-// reference), so the SDK's 20 MiB default held the stream window at 960 KiB.
-// At 64 MiB it is the full 3 MiB. urnetworkd.service declares no MemoryMax or
-// MemoryHigh, and the process budget (SdkSetMemoryLimit) is already 64 MiB.
-inline constexpr std::int64_t kDeviceMemoryTargetByteCount = 64 * 1024 * 1024;
+// newDeviceLocalWithMemoryTarget (daemon/TunnelHost.cpp), and the process
+// budget it passes to setMemoryLimit (daemon/main.cpp). The two are one
+// decision: connect draws the H3 carrier windows from the device target (the
+// stream window is three quarters of the carrier's eighth, so 3 * target / 32),
+// while the device target itself has to be backed by the process budget.
+//
+// Two constraints bind the pair, and this one satisfies both (asserted below):
+//
+//   backing    the device targets plus the message pools must fit the process
+//              budget, and the pools take 14 of 34 parts, so a target may be at
+//              most 20/34 of the budget. 128 MiB <= 20/34 * 384 MiB = 225.9.
+//   collector  setMemoryLimit is also the go soft limit, and live heap
+//              amplifies about threefold at the runtime; a target too close to
+//              its soft limit reproduces the measured mobile collection storm
+//              (23.6 collections per second). The budget is therefore at least
+//              three times the target: 384 MiB = 3 * 128 MiB.
+//
+// urnetworkd.service declares no MemoryMax or MemoryHigh, so nothing below
+// these values caps the daemon. A host-memory gate raising the target to
+// 256 MiB on machines with 16 GiB or more is a follow-up; the daemon measures
+// no host memory today. The GUI (src/SdkHost.cpp) keeps its own, smaller bound:
+// it owns a DeviceRemote and no data plane.
+inline constexpr std::int64_t kDeviceMemoryTargetByteCount = 128 * 1024 * 1024;
+inline constexpr std::int64_t kProcessMemoryBudgetByteCount = 384 * 1024 * 1024;
+
+// The parts the two constraints are written in, so the pair cannot drift apart
+// silently.
+inline constexpr std::int64_t kMemoryPoolRatioParts = 14;
+inline constexpr std::int64_t kMemoryBudgetRatioParts = 34;
+inline constexpr std::int64_t kCollectorBudgetMultiple = 3;
+
+static_assert(kDeviceMemoryTargetByteCount * kMemoryBudgetRatioParts <=
+                  kProcessMemoryBudgetByteCount *
+                      (kMemoryBudgetRatioParts - kMemoryPoolRatioParts),
+              "the device memory target is not backed by the process budget");
+static_assert(kCollectorBudgetMultiple * kDeviceMemoryTargetByteCount <=
+                  kProcessMemoryBudgetByteCount,
+              "the process budget is too close to the device memory target for the collector");
 
 // Mirrors sdk.GetDefaultTunnelMtu / connect.DefaultTunnelMtu: the INTERFACE
 // MTU. It is the IPv6 minimum link MTU, because Linux disables IPv6 on an

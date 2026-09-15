@@ -44,6 +44,7 @@
 #include "daemon/ControlServer.hpp"
 #include "daemon/DaemonLog.hpp"
 #include "daemon/TunnelHost.hpp"
+#include "TunnelPolicy.hpp"
 
 // The release version, threaded in via the -Dapp_version meson option (the
 // pipeline passes $VERSION). This is what the hello reply's daemon_version
@@ -55,9 +56,12 @@
 
 namespace {
 
-// Same bound the app used in-process: the data plane's memory target scales
-// from it (SetMemoryLimit -> connect defaults).
-constexpr int64_t kMemoryLimit = 64ll * 1024 * 1024;
+// The daemon's process budget: the message pools and the go soft limit
+// (setMemoryLimit -> connect defaults). It backs the per-device memory target
+// TunnelHost creates its DeviceLocal with, and the two must be set together --
+// see TunnelPolicy.hpp for the backing and collector constraints, which are
+// asserted there against this value.
+constexpr int64_t kMemoryLimit = urnw::kProcessMemoryBudgetByteCount;
 
 // State (device identity + SDK storage) and log locations. systemd's
 // StateDirectory=/LogsDirectory= set the env vars; the fallbacks match the

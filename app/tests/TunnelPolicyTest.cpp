@@ -50,8 +50,45 @@ static_assert(!urnw::CaptureV6Claims("fe80::1"));
 
 // ---- device memory target --------------------------------------------------
 
-UR_TEST(deviceMemoryTargetIsTheDesktopReference) {
-  UR_EXPECT_EQ(std::int64_t{64} * 1024 * 1024, urnw::kDeviceMemoryTargetByteCount);
+UR_TEST(deviceMemoryTargetAndProcessBudgetAreTheDesktopPair) {
+  UR_EXPECT_EQ(std::int64_t{128} * 1024 * 1024, urnw::kDeviceMemoryTargetByteCount);
+  UR_EXPECT_EQ(std::int64_t{384} * 1024 * 1024, urnw::kProcessMemoryBudgetByteCount);
+}
+
+// The two constraints the pair has to satisfy. The header static_asserts them,
+// which fails the build rather than a test; this states them where a reader
+// looking for the rule will find it, and catches a header that drops them.
+UR_TEST(theDeviceMemoryTargetIsBackedAndCollectorSafe) {
+  // backing: the target is at most 20/34 of the budget, the pools taking 14
+  UR_EXPECT_TRUE_MSG(
+      "the device memory target is not backed by the process budget",
+      urnw::kDeviceMemoryTargetByteCount * urnw::kMemoryBudgetRatioParts <=
+          urnw::kProcessMemoryBudgetByteCount *
+              (urnw::kMemoryBudgetRatioParts - urnw::kMemoryPoolRatioParts));
+  // collector: the budget is at least three times the target
+  UR_EXPECT_TRUE_MSG(
+      "the process budget is too close to the device memory target",
+      urnw::kCollectorBudgetMultiple * urnw::kDeviceMemoryTargetByteCount <=
+          urnw::kProcessMemoryBudgetByteCount);
+}
+
+// The budget is only real if the daemon passes it to the SDK, and it is a
+// separate surface from the device target: setMemoryLimit sizes the pools and
+// the go soft limit, never the device.
+UR_TEST(theDaemonSetsTheProcessBudgetFromThePolicy) {
+  std::ifstream in(std::string(UR_SRC_DIR) + "/daemon/main.cpp");
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+  const std::string source = buffer.str();
+  if (source.empty()) {
+    UR_FAIL("could not read daemon/main.cpp to check the process budget");
+    return;
+  }
+  UR_EXPECT_TRUE_MSG(
+      "daemon/main.cpp does not take its memory limit from kProcessMemoryBudgetByteCount",
+      source.find("kMemoryLimit = urnw::kProcessMemoryBudgetByteCount") != std::string::npos);
+  UR_EXPECT_TRUE_MSG("daemon/main.cpp does not call setMemoryLimit(kMemoryLimit)",
+                     source.find("setMemoryLimit(kMemoryLimit)") != std::string::npos);
 }
 
 // Same shape as the dual-stack guard test below: the constant is worthless if
