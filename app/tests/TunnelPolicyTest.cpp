@@ -55,40 +55,62 @@ UR_TEST(deviceMemoryTargetAndProcessBudgetAreTheDesktopPairs) {
   UR_EXPECT_EQ(std::int64_t{384} * 1024 * 1024, urnw::kProcessMemoryBudgetByteCount);
   UR_EXPECT_EQ(std::int64_t{256} * 1024 * 1024, urnw::kLargeHostDeviceMemoryTargetByteCount);
   UR_EXPECT_EQ(std::int64_t{768} * 1024 * 1024, urnw::kLargeHostProcessMemoryBudgetByteCount);
-  UR_EXPECT_EQ(std::int64_t{8} * 1024 * 1024 * 1024, urnw::kLargeHostMemoryByteCount);
+  UR_EXPECT_EQ(std::int64_t{7} * 1024 * 1024 * 1024, urnw::kLargeHostMemoryByteCount);
 }
 
 // The gate over the measurement, including the failure case. With the bar this
 // low nearly every real machine is on one side of it, so an off-by-one in the
-// comparison would be invisible in practice: the three rows around 8 GiB are
-// the only thing that would catch it.
+// comparison would be invisible in practice: the three rows around 7 GiB are
+// the only thing that would catch it. The two rows after them are the machines
+// the decision is about, and fail if the bar is rounded up to 8.
 UR_TEST(theMemoryTierIsChosenFromMeasuredHostMemory) {
   constexpr std::int64_t gib = std::int64_t{1024} * 1024 * 1024;
   const struct {
     std::int64_t host;
     std::int64_t target;
   } rows[] = {
-      {0, urnw::kDeviceMemoryTargetByteCount},                // unmeasurable
-      {-1, urnw::kDeviceMemoryTargetByteCount},               // a failed read
-      {2 * gib, urnw::kDeviceMemoryTargetByteCount},          // a small vps
-      {4 * gib, urnw::kDeviceMemoryTargetByteCount},          // a small container
-      {8 * gib - 1, urnw::kDeviceMemoryTargetByteCount},      // one byte under the bar
-      {8 * gib, urnw::kDeviceMemoryTargetByteCount},          // exactly at it: strict
-      {8 * gib + 1, urnw::kLargeHostDeviceMemoryTargetByteCount},  // one byte over
-      {12 * gib, urnw::kLargeHostDeviceMemoryTargetByteCount},
+      {0, urnw::kDeviceMemoryTargetByteCount},                     // unmeasurable
+      {-1, urnw::kDeviceMemoryTargetByteCount},                    // a failed read
+      {2 * gib, urnw::kDeviceMemoryTargetByteCount},               // a small vps
+      {4 * gib, urnw::kDeviceMemoryTargetByteCount},               // a small container
+      {7 * gib - 1, urnw::kDeviceMemoryTargetByteCount},           // one byte under the bar
+      {7 * gib, urnw::kDeviceMemoryTargetByteCount},               // exactly at it: strict
+      {7 * gib + 1, urnw::kLargeHostDeviceMemoryTargetByteCount},  // one byte over
+      {urnw::kNominal8GiBHostMemoryByteCount,                      // an exact 8 GiB reading
+       urnw::kLargeHostDeviceMemoryTargetByteCount},
+      {urnw::kUsable8GiBHostMemoryByteCount,  // an 8 GiB machine's usable ~7.68 GiB
+       urnw::kLargeHostDeviceMemoryTargetByteCount},
       {64 * gib, urnw::kLargeHostDeviceMemoryTargetByteCount},
   };
   for (const auto& row : rows) {
     UR_EXPECT_EQ(row.target, urnw::MemoryTierForHost(row.host).device_target_byte_count);
   }
   // The budget always moves with the target it backs, including on the rare
-  // unknown-host path.
+  // unknown-host path and for the machines the bar exists to include.
   UR_EXPECT_EQ(urnw::kProcessMemoryBudgetByteCount,
                urnw::MemoryTierForHost(0).process_budget_byte_count);
   UR_EXPECT_EQ(urnw::kProcessMemoryBudgetByteCount,
-               urnw::MemoryTierForHost(8 * gib).process_budget_byte_count);
+               urnw::MemoryTierForHost(7 * gib).process_budget_byte_count);
   UR_EXPECT_EQ(urnw::kLargeHostProcessMemoryBudgetByteCount,
-               urnw::MemoryTierForHost(8 * gib + 1).process_budget_byte_count);
+               urnw::MemoryTierForHost(7 * gib + 1).process_budget_byte_count);
+  UR_EXPECT_EQ(urnw::kLargeHostProcessMemoryBudgetByteCount,
+               urnw::MemoryTierForHost(urnw::kUsable8GiBHostMemoryByteCount)
+                   .process_budget_byte_count);
+}
+
+// End to end through the probe's own parser: the /proc/meminfo an 8 GiB machine
+// actually produces lands in the large tier, and a 6 GiB machine's does not.
+UR_TEST(aMachineSoldAs8GiBTakesTheLargeTierThroughTheMeminfoParser) {
+  const std::string eightGiB = "MemTotal:        8048972 kB\nMemFree:         1024 kB\n";
+  UR_EXPECT_EQ(urnw::kLargeHostDeviceMemoryTargetByteCount,
+               urnw::MemoryTierForHost(urnw::EffectiveHostMemoryByteCount(
+                                           urnw::ParseMeminfoTotalByteCount(eightGiB), 0))
+                   .device_target_byte_count);
+  const std::string sixGiB = "MemTotal:        6021340 kB\nMemFree:         1024 kB\n";
+  UR_EXPECT_EQ(urnw::kDeviceMemoryTargetByteCount,
+               urnw::MemoryTierForHost(urnw::EffectiveHostMemoryByteCount(
+                                           urnw::ParseMeminfoTotalByteCount(sixGiB), 0))
+                   .device_target_byte_count);
 }
 
 // The two constraints, on BOTH tiers and at the bar itself. The header
@@ -98,7 +120,7 @@ UR_TEST(theMemoryTierIsChosenFromMeasuredHostMemory) {
 UR_TEST(everyMemoryTierIsBackedAndCollectorSafe) {
   constexpr std::int64_t gib = std::int64_t{1024} * 1024 * 1024;
   for (const std::int64_t host :
-       {std::int64_t{0}, 8 * gib - 1, 8 * gib, 8 * gib + 1, 128 * gib}) {
+       {std::int64_t{0}, 7 * gib - 1, 7 * gib, 7 * gib + 1, 8 * gib, 128 * gib}) {
     const urnw::MemoryTier tier = urnw::MemoryTierForHost(host);
     // backing: the target is at most 20/34 of the budget, the pools taking 14
     UR_EXPECT_TRUE_MSG("a device memory target is not backed by its process budget",

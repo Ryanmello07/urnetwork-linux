@@ -1,9 +1,11 @@
 // How much memory this daemon may actually use, measured once.
 //
 // The memory tier (TunnelPolicy.hpp) is chosen from this number: a host
-// measuring more than 8 GiB takes the large device target and process budget,
-// anything else -- INCLUDING a host whose memory cannot be determined -- takes
-// the base pair. An unknown host is not a large host.
+// measuring more than 7 GiB -- which every machine sold as 8 GiB does, once the
+// firmware, kernel and graphics reservations that keep MemTotal below nominal
+// are taken off -- gets the large device target and process budget, and
+// anything else, INCLUDING a host whose memory cannot be determined, takes the
+// base pair. An unknown host is not a large host.
 //
 // The measurement is cached for the life of the process, and that is the point
 // rather than an optimisation: the process budget is set at startup
