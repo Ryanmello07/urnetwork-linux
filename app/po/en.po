@@ -7404,8 +7404,8 @@ msgstr "Resume subscription"
 
 #. Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.
 msgctxt "site_sub_solana_no_renew"
-msgid "Does not renew. Pay again with USDC when it ends."
-msgstr "Does not renew. Pay again with USDC when it ends."
+msgid "Does not renew. Pay again with USDC on Solana when it ends."
+msgstr "Does not renew. Pay again with USDC on Solana when it ends."
 
 #. Subscription: Stripe-billed body
 msgctxt "site_sub_stripe_body"
@@ -7454,8 +7454,8 @@ msgstr "Solana"
 
 #. Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.
 msgctxt "solana_one_time_payment"
-msgid "Paying with Solana is a one-time yearly payment, with no free trial."
-msgstr "Paying with Solana is a one-time yearly payment, with no free trial."
+msgid "Paying with USDC on Solana is a one-time yearly payment, with no free trial."
+msgstr "Paying with USDC on Solana is a one-time yearly payment, with no free trial."
 
 #. Call to action
 msgctxt "solana_sign_in"
@@ -8120,6 +8120,11 @@ msgstr "URnetwork VPN started"
 msgctxt "usdc_payouts_until_migration"
 msgid "USDC payouts continue to this wallet until the migration to Bittensor is complete."
 msgstr "USDC payouts continue to this wallet until the migration to Bittensor is complete."
+
+#. Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.
+msgctxt "usdc_solana_network_only"
+msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
+msgstr "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
 
 #. The pending USDC payout total waiting to be sent to the Solana payout wallet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions. Mirrors the email headline.
 msgctxt "usdc_waiting"

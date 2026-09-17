@@ -7404,7 +7404,7 @@ msgstr ""
 
 #. Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.
 msgctxt "site_sub_solana_no_renew"
-msgid "Does not renew. Pay again with USDC when it ends."
+msgid "Does not renew. Pay again with USDC on Solana when it ends."
 msgstr ""
 
 #. Subscription: Stripe-billed body
@@ -7454,7 +7454,7 @@ msgstr ""
 
 #. Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.
 msgctxt "solana_one_time_payment"
-msgid "Paying with Solana is a one-time yearly payment, with no free trial."
+msgid "Paying with USDC on Solana is a one-time yearly payment, with no free trial."
 msgstr ""
 
 #. Call to action
@@ -8119,6 +8119,11 @@ msgstr ""
 #. Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.
 msgctxt "usdc_payouts_until_migration"
 msgid "USDC payouts continue to this wallet until the migration to Bittensor is complete."
+msgstr ""
+
+#. Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.
+msgctxt "usdc_solana_network_only"
+msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
 msgstr ""
 
 #. The pending USDC payout total waiting to be sent to the Solana payout wallet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions. Mirrors the email headline.

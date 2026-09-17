@@ -5569,8 +5569,8 @@ msgstr "استئناف الاشتراك"
 
 #. Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.
 msgctxt "site_sub_solana_no_renew"
-msgid "Does not renew. Pay again with USDC when it ends."
-msgstr "لا يتجدد. ادفع مجددًا بـ USDC عند انتهائه."
+msgid "Does not renew. Pay again with USDC on Solana when it ends."
+msgstr "لا يتجدد. ادفع مجددًا بـ USDC على Solana عند انتهائه."
 
 #. Subscription: Stripe-billed body
 msgctxt "site_sub_stripe_body"
@@ -6118,6 +6118,11 @@ msgstr "URnetwork VPN غير متصل"
 msgctxt "urnetwork_vpn_started"
 msgid "URnetwork VPN started"
 msgstr "تم تشغيل URnetwork VPN"
+
+#. Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.
+msgctxt "usdc_solana_network_only"
+msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
+msgstr "أرسل USDC على شبكة Solana فقط. لن تصل عملات USDC المُرسَلة عبر أي شبكة أخرى."
 
 msgctxt "usdc_wallet_address"
 msgid "USDC wallet address"
