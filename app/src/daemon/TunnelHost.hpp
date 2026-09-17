@@ -50,6 +50,7 @@
 #include <urnetwork_sdk.hpp>
 
 #include "ControlProtocol.hpp"
+#include "NetworkQuality.hpp"
 #include "Tunnel.hpp"
 
 namespace urnw {
@@ -414,6 +415,8 @@ class TunnelHost {
   // /etc/resolv.conf) does not tear down a working tunnel.
   int dnsVerifyFailures_ = 0;
   int filterVerifyFailures_ = 0;
+
+  LinuxNetworkQualityTracker networkQualityTracker_;
 
   guint reaperId_ = 0;
   guint resolvedWatchId_ = 0;

@@ -9,6 +9,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -1063,6 +1064,7 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
     device_->close();
     device_.reset();
   }
+  networkQualityTracker_.Reset();
   // AFTER the device is gone, so no SDK socket is ever created unmarked while
   // the capture routes could still be up. The mark is inert once the `ip rule`
   // is removed (nothing consults it), so the ordering costs nothing and the
@@ -1454,6 +1456,36 @@ uint64_t ReadIfaceCounter(const std::string& iface, const char* which) {
   return 0;
 }
 
+std::string ReadTextFile(const std::string& path) {
+  std::ifstream in(path);
+  if (!in) return {};
+  return std::string(std::istreambuf_iterator<char>(in),
+                     std::istreambuf_iterator<char>());
+}
+
+LinuxNetworkQualitySnapshot ReadNetworkQuality(const std::string& tunnelInterface) {
+  LinuxNetworkQualitySnapshot snapshot;
+  snapshot.interface_name = LinuxDefaultRouteInterface(
+      ReadTextFile("/proc/net/route"), tunnelInterface);
+  if (snapshot.interface_name.empty()) return snapshot;
+
+  const std::string prefix = "/sys/class/net/" + snapshot.interface_name + "/";
+  {
+    std::istringstream value(ReadTextFile(prefix + "carrier"));
+    value >> snapshot.carrier;
+  }
+  std::int64_t speed = 0;
+  {
+    std::istringstream value(ReadTextFile(prefix + "speed"));
+    value >> speed;
+  }
+  snapshot.speed_bucket_mbps =
+      LinuxNetworkSpeedBucket(speed > 0 ? static_cast<std::uint64_t>(speed) : 0);
+  snapshot.wireless_signal_level = LinuxWirelessSignalLevel(
+      ReadTextFile("/proc/net/wireless"), snapshot.interface_name);
+  return snapshot;
+}
+
 }  // namespace
 
 // A tunnel that transmits megabytes while receiving essentially nothing is not
@@ -1588,6 +1620,23 @@ void TunnelHost::Reap() {
 
   std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
   if (!lock.owns_lock()) return;  // next tick
+
+  if (device_) {
+    const std::string tunnelInterface = tunnel_ ? tunnel_->name() : std::string();
+    const LinuxNetworkChange networkChange =
+        networkQualityTracker_.Observe(ReadNetworkQuality(tunnelInterface));
+    try {
+      if (networkChange == LinuxNetworkChange::Path) {
+        DaemonLogf("[tunnel] physical network path changed; refreshing transports\n");
+        device_->networkChanged();
+      } else if (networkChange == LinuxNetworkChange::Quality) {
+        DaemonLogf("[tunnel] physical network quality changed; remeasuring transfer pacing\n");
+        device_->networkQualityChanged();
+      }
+    } catch (const std::exception& e) {
+      DaemonLogf("[tunnel] network change notification failed: %s\n", e.what());
+    }
+  }
 
   const bool died = ioLoopDied_.load();
   const int orphanTimeout = orphanTimeoutSeconds_.load();
