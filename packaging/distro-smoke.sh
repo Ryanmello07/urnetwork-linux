@@ -383,7 +383,7 @@ elif [ -n "${FUSE2}" ]; then
 else
     check 2.3 WARN "AppImage runtime (libfuse2)" "libfuse.so.2 not found -- the GUI AppImage will not mount"
     note "Fix per family:  apt install libfuse2t64 (or libfuse2)  |  dnf install fuse-libs"
-    note "Fix per family:  pacman -S fuse2"
+    note "                  pacman -S fuse2"
     note "Or run the AppImage with --appimage-extract-and-run. The .deb and the pacman"
     note "package declare this dependency for you; the tarball and the bare AppImage"
     note "cannot."

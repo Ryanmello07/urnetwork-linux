@@ -114,6 +114,7 @@ std::vector<ProviderLocationRow> MapConnectedProviderLocations(
       row.lon = location.RegionLon;
     }
     row.connectedSinceMillis = location.ConnectedSinceMillis;
+    row.ipFamilyLabel = location.IpFamilyLabel;
     rows.push_back(std::move(row));
   }
   return rows;
@@ -438,6 +439,14 @@ Gtk::Widget* ProviderLocationsSheet::BuildRow(size_t index, RowWidgets& out) {
     out.pqBadge = badge;
     idRow->append(*badge);
   }
+  // the address-family tag, trailing: what this exit can carry (the drawer's
+  // ip-version histogram is the same reading over the whole window)
+  out.ipFamily = Gtk::make_managed<Gtk::Label>(IpFamilyTag(row));
+  out.ipFamily->add_css_class("ur-mono-11");
+  out.ipFamily->add_css_class("dim-label");
+  out.ipFamily->set_valign(Gtk::Align::CENTER);
+  out.ipFamily->set_tooltip_text(T_("ip_families", "IP versions"));
+  idRow->append(*out.ipFamily);
   column->append(*idRow);
 
   out.place = Gtk::make_managed<Gtk::Label>();

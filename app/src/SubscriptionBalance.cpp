@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "SubscriptionBalance.hpp"
 
+#include <cmath>
+
+#include "ReferralRoyalty.hpp"
+
+#include "AppPrefs.hpp"
+
 #include <algorithm>
 #include <cstdio>
 
@@ -55,6 +61,7 @@ void SubscriptionBalanceStore::Start() {
     } else {
       FetchNow();  // Pro networks don't poll (mac parity), but the bar needs data once
     }
+    EnsureReferralPolling();  // referrals poll for Pro networks too
   }
   Emit();
 }
@@ -63,6 +70,7 @@ void SubscriptionBalanceStore::Stop() {
   ++*epoch_;  // drop in-flight results
   started_ = false;
   StopPolling();
+  referralTimer_.disconnect();
   isLoading_ = false;
   isLoadingReferral_ = false;
   hasFetched_ = false;
@@ -91,9 +99,11 @@ void SubscriptionBalanceStore::SetWindowVisible(bool visible) {
     }
     backgroundTimer_.disconnect();
     pollingTimer_.disconnect();
+    referralTimer_.disconnect();
     return;
   }
   if (!started_ || wasVisible) return;
+  EnsureReferralPolling();
   if (isPolling_) {
     ResumeConfirmationPolling();  // immediate poll; the banked budget re-arms
     return;
@@ -142,9 +152,13 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
   isLoading_ = true;
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
-  host_.api().subscriptionBalance(
-      [this, epoch, issued](std::optional<urnet::SubscriptionBalanceResult> result,
-                            std::optional<std::string> err) {
+  // the storefront variant of the balance call: the same balance plus the
+  // price tier, the welcome offer and the experiment assignments. There is no
+  // storefront on the desktop, so the server resolves the tier from billing
+  // or the request's country (an estimate until the card's country is known).
+  host_.api().subscriptionBalanceForStorefront(
+      "", [this, epoch, issued](std::optional<urnet::SubscriptionBalanceResult> result,
+                                std::optional<std::string> err) {
         PostToMain([this, epoch, issued, result = std::move(result), err = std::move(err)] {
           if (*epoch != issued) return;  // logged out (or re-logged-in) since
           isLoading_ = false;
@@ -159,6 +173,22 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
             usedByteCount_ =
                 result->start_balance_byte_count - availableByteCount_ - pendingByteCount_;
             startBalanceByteCount_ = result->start_balance_byte_count;
+            if (result->price_tier) {
+              tier_.name = result->price_tier->name.empty() ? kPriceTierStandard
+                                                            : result->price_tier->name;
+              if (0 < result->price_tier->yearly_usd) tier_.yearly = result->price_tier->yearly_usd;
+              if (0 < result->price_tier->monthly_usd) tier_.monthly = result->price_tier->monthly_usd;
+              if (!result->price_tier->currency.empty()) tier_.currency = result->price_tier->currency;
+            }
+            if (result->onboarding_offer) {
+              SetOffer(*result->onboarding_offer);
+            } else {
+              offer_.active = false;
+            }
+            experiments_.clear();
+            if (result->experiments) {
+              for (const auto& a : *result->experiments) experiments_.push_back(a);
+            }
 
             // The server is the source of truth for Pro: `current_subscription`
             // is non-nil exactly when the network is Pro. The jwt's Pro claim
@@ -203,6 +233,31 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
       });
 }
 
+void SubscriptionBalanceStore::SetOffer(const urnet::OnboardingOffer& offer) {
+  offer_.active = offer.state == "active";
+  if (0 < offer.percent_off) offer_.percentOff = offer.percent_off;
+  if (0 < offer.months_free) offer_.monthsFree = offer.months_free;
+  if (0 < offer.regular_year_usd) offer_.regularYear = offer.regular_year_usd;
+  offer_.firstYear = 0 < offer.first_year_usd ? offer.first_year_usd
+                                              : OfferFirstYear(offer_.regularYear, offer_.percentOff);
+  if (!offer.currency.empty()) offer_.currency = offer.currency;
+  offer_.expiresAt = offer.expires_at;
+}
+
+std::string SubscriptionBalanceStore::ExperimentVariant(const std::string& surface) const {
+  for (const auto& a : experiments_) {
+    if (a.surface == surface) return a.variant;
+  }
+  return "";
+}
+
+std::string SubscriptionBalanceStore::ExperimentId(const std::string& surface) const {
+  for (const auto& a : experiments_) {
+    if (a.surface == surface) return a.experiment_id;
+  }
+  return "";
+}
+
 // The referral row of the usage bar (mac ReferralLinkViewModel, folded into
 // this store's poll). Api only: ReferralCodeViewController streams just the
 // code string and needs an open device — total_referrals comes from this call.
@@ -220,9 +275,66 @@ void SubscriptionBalanceStore::FetchReferralCode() {
           if (err || !result || result->error) return;  // the row just keeps its last value
           totalReferrals_ = result->total_referrals;
           referralCode_ = result->referral_code.value_or(std::string());
+          // the program terms ride along (server pro.yml); zero means the
+          // server reported none, so the display defaults stay
+          auto gibPerDay = [](int64_t bytes, int64_t periodSeconds) -> int64_t {
+            if (bytes <= 0 || periodSeconds <= 0) return 0;
+            const double perDay = static_cast<double>(bytes) * 86400.0 / periodSeconds;
+            return static_cast<int64_t>(std::llround(perDay / (1024.0 * 1024.0 * 1024.0)));
+          };
+          if (0 < result->max_referrals) maxReferrals_ = result->max_referrals;
+          if (const int64_t gib = gibPerDay(result->bonus_per_referral_bytes, result->bonus_period_seconds); 0 < gib) {
+            bonusGibPerDay_ = gib;
+          }
+          if (const int64_t gib = gibPerDay(result->referred_bonus_bytes, result->bonus_period_seconds); 0 < gib) {
+            referredBonusGibPerDay_ = gib;
+          }
+          SetCurrentReferralTerms(ReferralTerms{maxReferrals_, bonusGibPerDay_, referredBonusGibPerDay_});
+          MaybeCelebrateReferrals(result->total_referrals);
           Emit();
         });
       });
+}
+
+// The celebration baseline is the count the last celebration (or the first
+// observation) left behind, persisted per network in the app prefs so an
+// increment observed on this machine celebrates exactly once.
+void SubscriptionBalanceStore::MaybeCelebrateReferrals(int64_t count) {
+  auto byJwt = host_.ParseByJwt();
+  if (!byJwt || !byJwt->NetworkId) return;
+  const std::string key = "referral_celebrated_count_" + *byJwt->NetworkId;
+
+  const nlohmann::json all = prefs::ReadAll();
+  if (all.find(key) == all.end()) {
+    // first observation for this network on this machine: baseline only --
+    // pre-existing referrals (reinstall, second machine) are old news
+    prefs::Set<int64_t>(key.c_str(), count);
+    return;
+  }
+
+  const int64_t previous = prefs::Get<int64_t>(key.c_str(), 0);
+  if (count > previous) {
+    ReferralCelebration celebration{count - previous, previous == 0};
+    prefs::Set<int64_t>(key.c_str(), count);
+    if (onReferralCelebration_) onReferralCelebration_(celebration);
+  } else if (count < previous) {
+    // referrals can be unlinked; re-baseline quietly
+    prefs::Set<int64_t>(key.c_str(), count);
+  }
+}
+
+// Unlike the balance poll, referral polling never stops for a Pro network:
+// referrals keep landing either way, and the crowning should fire while the
+// user is looking at the app rather than a session later.
+void SubscriptionBalanceStore::EnsureReferralPolling() {
+  referralTimer_.disconnect();
+  if (!started_ || !windowVisible_) return;
+  referralTimer_ = Glib::signal_timeout().connect_seconds(
+      [this]() -> bool {
+        FetchReferralCode();
+        return true;
+      },
+      kBackgroundPollingSeconds);
 }
 
 void SubscriptionBalanceStore::StartBackgroundPolling() {

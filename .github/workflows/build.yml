@@ -179,6 +179,7 @@ jobs:
             build-essential meson ninja-build pkg-config gettext \
             libglib2.0-dev nlohmann-json3-dev \
             libgtkmm-4.0-dev libadwaita-1-dev libsecret-1-dev \
+            libzxing-dev \
             appstream
 
       - name: Configure and build the GUI
@@ -194,8 +195,7 @@ jobs:
       # app/meson.build stamps the release version and date into the metainfo
       # from -Dapp_version, so this validates the GENERATED file, not the
       # template. appstreamcli is the same validator Flathub gates on, and
-      # nothing checked this file before -- which is how it sat at 2026.8.19
-      # while the pipeline shipped 2026.8.20.
+      # nothing checked this file before.
       - name: Validate the AppStream metainfo
         working-directory: app
         run: appstreamcli validate --no-net --pedantic build/com.bringyour.network.metainfo.xml

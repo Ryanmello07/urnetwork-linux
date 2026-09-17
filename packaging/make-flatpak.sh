@@ -92,9 +92,10 @@ fi
 # there is valid AppStream, so no validator catches it -- it just shows up on
 # the store page.
 #
-# This used to live in .github/workflows/beta-build.yml as a CI-only sed, which
-# meant a local `make-flatpak.sh --install` shipped 0.0.0 while CI shipped the
-# real version. Doing it here covers both, since CI calls this script.
+# Stamped by the SCRIPT and not by the release workflow, deliberately. A
+# CI-only sed would leave a local `make-flatpak.sh --install` shipping 0.0.0
+# while CI shipped the real version; doing it here covers both cases, because
+# CI reaches the Flatpak through this script too.
 BUILD_MANIFEST="$MANIFEST"
 if [[ -n "$VERSION" ]]; then
   anchor='      - -Dhost_integration=false'
@@ -129,8 +130,9 @@ if [[ "$DO_BUNDLE" == 1 ]]; then
   VERSION="${VERSION:-0.0.0-dev}"  # filename only; the stamp happened above
   # ARCH IS PART OF THE NAME. Without it the amd64 and arm64 legs write the same
   # file and one silently overwrites the other wherever the artifacts are merged.
-  # This used to be a rename step in beta-build.yml; the rule everywhere else is
-  # that the script names its own artifact, so it lives here now.
+  # The rule everywhere else in packaging/ is that the build script names its
+  # own artifact rather than leaving a workflow to rename it afterwards, so the
+  # arch suffix is applied here.
   BUNDLE="$OUT_DIR/URnetwork-${VERSION}-${ARCH}.flatpak"
   echo "==> exporting $BUNDLE"
   flatpak build-bundle "$BUILD_DIR-repo" "$BUNDLE" "$APP_ID" \

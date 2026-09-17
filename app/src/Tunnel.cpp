@@ -37,6 +37,11 @@ namespace {
 // nothing can listen there — and since the witness only ever connect()s, which
 // sends no packet, nothing is ever addressed to it on the wire either.
 constexpr const char* kEgressProbeAddress = "192.0.2.1";
+// The v6 twin: RFC 3849 documentation prefix, routed nowhere, inside the v6
+// capture set (::/1), so a connect() to it exercises exactly the v6 capture
+// policy without naming anyone's real host. Like its v4 twin it is only ever
+// RESOLVED by the witness, never sent to.
+constexpr const char* kEgressProbeAddressV6 = "2001:db8::1";
 
 // Byte-identical to ctl::kCodeEgressUnprotected / ctl::kCodeRouteInstallFailed.
 // Literals and not an include, exactly like kFilterCode* in the header: this
@@ -135,7 +140,8 @@ struct FilterDerived {
   bool dns_floor = false;  // pin :53 to the tunnel resolvers and close the rest
   bool block_v6 = false;
   bool helper_dns = false;
-  std::vector<std::string> resolvers;  // only those that passed inet_pton
+  std::vector<std::string> resolvers;   // the v4 resolvers that passed inet_pton
+  std::vector<std::string> resolvers6;  // the v6 resolvers that passed inet_pton
 };
 
 FilterDerived DeriveFilter(const FilterConfig& cfg) {
@@ -144,15 +150,24 @@ FilterDerived DeriveFilter(const FilterConfig& cfg) {
   d.tun_named = !cfg.tun_name.empty() && ValidInterfaceName(cfg.tun_name) &&
                 (cfg.state == FilterState::Connecting || cfg.state == FilterState::Connected);
   for (const auto& r : cfg.tunnel_resolvers) {
-    if (IsIpv4Address(r)) d.resolvers.push_back(r);
+    if (IsIpv4Address(r)) {
+      d.resolvers.push_back(r);
+    } else if (IsIpv6Address(r)) {
+      d.resolvers6.push_back(r);
+    }
   }
   // Gated on dns_applied by the CALLER (block_offtunnel_dns) and on a
-  // surviving resolver here: closing :53 with no permitted path is a total
-  // resolution outage, which is worse than the leak it would prevent.
+  // surviving resolver of EITHER family here: closing :53 with no permitted
+  // path is a total resolution outage, which is worse than the leak it would
+  // prevent.
   d.dns_floor = cfg.state == FilterState::Connected && d.tun_named &&
-                cfg.block_offtunnel_dns && !d.resolvers.empty();
+                cfg.block_offtunnel_dns && (!d.resolvers.empty() || !d.resolvers6.empty());
   d.block_v6 = cfg.block_ipv6;
-  d.helper_dns = cfg.state == FilterState::Connecting && cfg.floor &&
+  const NftCgroupMode cgroupMode =
+      SelectNftCgroupMode(cfg.socket_mark_proven, cfg.cgroup_socket_match_supported,
+                          cfg.floor, !cfg.dns_helper_cgroups.empty());
+  d.helper_dns = cgroupMode == NftCgroupMode::CgroupAndMark &&
+                 cfg.state == FilterState::Connecting && cfg.floor &&
                  !cfg.dns_helper_cgroups.empty();
   return d;
 }
@@ -515,6 +530,56 @@ bool IsIpv4Address(const std::string& value) {
   return ::inet_pton(AF_INET, value.c_str(), &addr) == 1;
 }
 
+bool IsIpv6Address(const std::string& value) {
+  if (value.empty() || value.size() > 45) return false;
+  in6_addr addr{};
+  return ::inet_pton(AF_INET6, value.c_str(), &addr) == 1;
+}
+
+bool HostIpv6Available(std::string* detail) {
+  // A kernel booted with ipv6.disable=1 has no /proc/sys/net/ipv6 at all.
+  struct stat st {};
+  if (::stat("/proc/sys/net/ipv6", &st) != 0 || !S_ISDIR(st.st_mode)) {
+    if (detail != nullptr) *detail = "the kernel has IPv6 disabled (no /proc/sys/net/ipv6)";
+    return false;
+  }
+  // net.ipv6.conf.all.disable_ipv6=1 disables it on every interface, new ones
+  // included, and no per-interface setting can re-enable it. (`default` only
+  // seeds new interfaces, and Configure sets the tun's own knob explicitly.)
+  std::ifstream in("/proc/sys/net/ipv6/conf/all/disable_ipv6");
+  std::string value;
+  if (in && std::getline(in, value) && !value.empty() && value[0] == '1') {
+    if (detail != nullptr) *detail = "net.ipv6.conf.all.disable_ipv6 is 1";
+    return false;
+  }
+  if (detail != nullptr) detail->clear();
+  return true;
+}
+
+namespace {
+
+// net.ipv6.conf.<tun>.disable_ipv6 = 0, explicitly. A host whose `default`
+// sysctl disables v6 on new interfaces would otherwise refuse the address add
+// with a message that names nothing; `all` is what HostIpv6Available checks
+// and cannot be overridden here.
+bool EnableInterfaceIpv6(const std::string& name, std::string* error) {
+  const std::string path = "/proc/sys/net/ipv6/conf/" + name + "/disable_ipv6";
+  std::ofstream out(path);
+  if (!out) {
+    if (error != nullptr) *error = "could not open " + path;
+    return false;
+  }
+  out << "0\n";
+  out.flush();
+  if (!out) {
+    if (error != nullptr) *error = "could not write " + path;
+    return false;
+  }
+  return true;
+}
+
+}  // namespace
+
 // ---- the daemon's own cgroup ----------------------------------------------
 
 CgroupRef SelfCgroupV2() {
@@ -865,7 +930,11 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
   const FilterDerived d = DeriveFilter(cfg);
   const std::string mark = MarkHex(cfg.mark);
   const char* policy = cfg.floor ? "drop" : "accept";
-  const bool cg = CgroupQuotable(cfg.cgroup);
+  const NftCgroupMode cgroupMode =
+      SelectNftCgroupMode(cfg.socket_mark_proven, cfg.cgroup_socket_match_supported,
+                          cfg.floor, !cfg.dns_helper_cgroups.empty());
+  const bool cg = cgroupMode == NftCgroupMode::CgroupAndMark &&
+                  CgroupQuotable(cfg.cgroup);
 
   std::string s;
   const auto line = [&s](const std::string& text) {
@@ -1029,18 +1098,32 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
   }
 
   if (d.dns_floor) {
-    std::string set = "{ ";
-    for (size_t i = 0; i < d.resolvers.size(); ++i) {
-      if (i != 0) set += ", ";
-      set += d.resolvers[i];
-    }
-    set += " }";
+    const auto nftSet = [](const std::vector<std::string>& members) {
+      std::string set = "{ ";
+      for (size_t i = 0; i < members.size(); ++i) {
+        if (i != 0) set += ", ";
+        set += members[i];
+      }
+      return set + " }";
+    };
     // Pin :53 to the tunnel's own resolvers over the tun ONLY (Windows filter
     // 10), then close every other name channel. This MUST sit above the LAN
     // permit or that permit re-opens the router's resolver at 192.168.1.1:53 —
-    // the exact hole the separate Dns sublayer exists to close.
-    line("\t\toifname \"" + cfg.tun_name + "\" ip daddr " + set + " udp dport 53 counter accept");
-    line("\t\toifname \"" + cfg.tun_name + "\" ip daddr " + set + " tcp dport 53 counter accept");
+    // the exact hole the separate Dns sublayer exists to close. One pin per
+    // family that has a resolver: an empty set is a syntax error to nft, and
+    // a family with no resolver has nothing to permit.
+    if (!d.resolvers.empty()) {
+      const std::string set = nftSet(d.resolvers);
+      line("\t\toifname \"" + cfg.tun_name + "\" ip daddr " + set + " udp dport 53 counter accept");
+      line("\t\toifname \"" + cfg.tun_name + "\" ip daddr " + set + " tcp dport 53 counter accept");
+    }
+    if (!d.resolvers6.empty()) {
+      const std::string set6 = nftSet(d.resolvers6);
+      line("\t\toifname \"" + cfg.tun_name + "\" ip6 daddr " + set6 +
+           " udp dport 53 counter accept");
+      line("\t\toifname \"" + cfg.tun_name + "\" ip6 daddr " + set6 +
+           " tcp dport 53 counter accept");
+    }
     // reject for unicast 53/853 so a stray query fails in milliseconds; drop
     // for the multicast-destined channels, where no ICMP error is generated
     // anyway.
@@ -1065,10 +1148,14 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
   }
 
   if (d.block_v6) {
-    // Permitted because the machine hangs otherwise: NDP/DAD/RS on the link,
-    // link-scope multicast (including the whole solicited-node block DAD
-    // depends on), site-scope all-DHCP-servers, DHCPv6 and ULA. Everything
-    // else — all global unicast — is refused.
+    // OFF-TUNNEL v6 ONLY. Everything the v6 capture routes send into the tun
+    // was accepted by the `oifname` permit just above, and the daemon's own
+    // marked sockets (the v6-pinned provider transport included) by the mark
+    // permit at rank 1 — so what reaches these rules is v6 that would leave
+    // AROUND the tunnel. Permitted because the machine hangs otherwise:
+    // NDP/DAD/RS on the link, link-scope multicast (including the whole
+    // solicited-node block DAD depends on), site-scope all-DHCP-servers,
+    // DHCPv6 and ULA. Everything else — all global unicast — is refused.
     line("\t\tip6 daddr fe80::/10 counter accept");
     line("\t\tip6 daddr ff02::/16 counter accept");
     line("\t\tip6 daddr ff05::1:3 counter accept");
@@ -1618,6 +1705,8 @@ std::vector<std::string> NetFilter::RecoveryCommands() {
       RecoveryCommand(),
       "sudo ip -4 rule delete table " + table,
       "sudo ip -4 route flush table " + table,
+      "sudo ip -6 rule delete table " + table,
+      "sudo ip -6 route flush table " + table,
       std::string("sudo rm -f ") + kArmedMarkerPath,
   };
 }
@@ -1699,6 +1788,29 @@ bool NetFilter::CheckRuleset(const std::string& script, std::string* error) {
   return true;
 }
 
+bool NetFilter::CheckCgroupSocketMatch(const CgroupRef& cgroup, std::string* error) {
+  if (!CgroupInstallable(cgroup)) {
+    if (error != nullptr) {
+      *error = cgroup.valid
+                   ? "the cgroup v2 path '" + cgroup.path + "' is not usable"
+                   : "this process has no usable cgroup v2 path";
+    }
+    return false;
+  }
+
+  // Keep the probe narrower than the production ruleset: if this fails while
+  // the path above exists, the only expression being evaluated is the
+  // socket-cgroup matcher. A regular (unhooked) chain avoids touching packet
+  // traversal even in check mode, and --check commits nothing.
+  std::string script;
+  script += "table inet urnetwork_cgroup_probe {\n";
+  script += "\tchain probe {\n";
+  script += "\t\t" + CgroupMatch(cgroup) + " counter\n";
+  script += "\t}\n";
+  script += "}\n";
+  return CheckRuleset(script, error);
+}
+
 bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
   // Copy: the reaper legitimately calls Apply(filter.appliedConfig(), …), and
   // this function rewrites the config it actually installs.
@@ -1714,11 +1826,31 @@ bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
     return false;
   };
 
+  const NftCgroupMode cgroupMode =
+      SelectNftCgroupMode(cfg.socket_mark_proven, cfg.cgroup_socket_match_supported,
+                          cfg.floor, !cfg.dns_helper_cgroups.empty());
+  if (cgroupMode == NftCgroupMode::Refuse) {
+    std::string why;
+    if (!cfg.socket_mark_proven) {
+      why = "this kernel does not support nftables socket cgroupv2 matching and the "
+            "cgroup-BPF socket marker was not proven";
+    } else if (cfg.floor) {
+      why = "this kernel does not support nftables socket cgroupv2 matching, so the "
+            "crash-safe kill-switch floor cannot exempt the daemon after its BPF program "
+            "dies";
+    } else {
+      why = "this kernel does not support nftables socket cgroupv2 matching, so the DNS "
+            "helper cgroup cannot be opened for a floored reconnect";
+    }
+    return refuse(kFilterCodeCgroupUnavailable, std::move(why));
+  }
+
   // A floor we cannot exempt ourselves from is a machine that is blocked AND
   // structurally unable to reconnect: with no cgroup match nothing sets the
   // mark, so neither permit fires for the daemon's own sockets. Refuse with
   // the cause named rather than install it.
-  if (cfg.floor && !CgroupInstallable(cfg.cgroup)) {
+  if (cfg.floor && cgroupMode == NftCgroupMode::CgroupAndMark &&
+      !CgroupInstallable(cfg.cgroup)) {
     return refuse(kFilterCodeCgroupUnavailable,
                   cfg.cgroup.valid
                       ? "the daemon's cgroup v2 path '" + cfg.cgroup.path +
@@ -1728,23 +1860,27 @@ bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
                                     "hierarchy, so the daemon's own sockets cannot be exempted "
                                     "from the block floor"));
   }
-  // Windows refuses first on an IPv6-only network rather than block the
-  // machine off the net; Linux had no such preflight. Arming the v6
-  // fail-closed floor there leaves no v4 path for the daemon either, and the
-  // only way out is the GUI toggle or `urnetworkd --revert`.
+  // An IPv6-only network is CARRIED, not refused. Builds before the v6 half
+  // of the tunnel existed refused to arm here (kFilterCodeIpv4DefaultRouteMissing):
+  // blocking off-tunnel v6 with no v6 tunnel cut such a machine off the net.
+  // Now the daemon's own sockets are exempted by cgroup/mark whatever their
+  // family, so the control plane keeps its v6 uplink, and user v6 rides the
+  // tunnel. Still worth one line in the journal: it is the network shape most
+  // likely to be blamed when something else is wrong.
   if (cfg.block_ipv6) {
     std::string detail;
     if (IsIpv6OnlyNetwork(&detail)) {
-      return refuse(kFilterCodeIpv4DefaultRouteMissing,
-                    "refusing to block IPv6: " + detail +
-                        ", so blocking it would cut this machine off the network entirely");
+      std::fprintf(stderr, "[filter] %s; user IPv6 rides the tunnel and the daemon's own "
+                           "sockets are exempted by family-agnostic mark/cgroup\n",
+                   detail.c_str());
     }
   }
   // A helper cgroup whose path is absent fails the ENTIRE transaction (nft
   // resolves it to a cgroup id at load time), which would take the kill switch
   // and the egress self-exclusion down with it. Drop the absent ones here so
   // appliedConfig() is what is really in force.
-  if (!cfg.dns_helper_cgroups.empty()) {
+  if (cgroupMode == NftCgroupMode::CgroupAndMark &&
+      !cfg.dns_helper_cgroups.empty()) {
     std::vector<CgroupRef> usable;
     for (const auto& helper : cfg.dns_helper_cgroups) {
       if (CgroupInstallable(helper)) {
@@ -1758,7 +1894,8 @@ bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
   }
   // The mark chain is worth installing even without a floor (it is the whole
   // egress self-exclusion), but only when the path resolves.
-  if (!CgroupInstallable(cfg.cgroup) && cfg.cgroup.valid) {
+  if (cgroupMode == NftCgroupMode::CgroupAndMark &&
+      !CgroupInstallable(cfg.cgroup) && cfg.cgroup.valid) {
     std::fprintf(stderr,
                  "[filter] the daemon cgroup path '%s' does not resolve; the mark chain will be "
                  "empty and the egress split will not hold\n",
@@ -1779,10 +1916,12 @@ bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
   SetArmedMarker(cfg.floor);
   std::fprintf(stderr,
                "[filter] %s (floor=%d ipv6_blocked=%d dns_pinned=%d helper_dns=%d lan=%d "
-               "cgroup=%s)\n",
+               "socket_mark=%d cgroup_match=%d cgroup=%s)\n",
                ToString(cfg.state), cfg.floor ? 1 : 0, RulesetBlocksIpv6(cfg) ? 1 : 0,
                RulesetPinsDns(cfg) ? 1 : 0, RulesetOpensHelperDns(cfg) ? 1 : 0,
-               cfg.allow_lan ? 1 : 0, cfg.cgroup.valid ? cfg.cgroup.path.c_str() : "(none)");
+               cfg.allow_lan ? 1 : 0, cfg.socket_mark_proven ? 1 : 0,
+               cgroupMode == NftCgroupMode::CgroupAndMark ? 1 : 0,
+               cfg.cgroup.valid ? cfg.cgroup.path.c_str() : "(none)");
   if (cfg.floor) {
     // Printed at the moment the floor goes in, so the recovery command is in
     // the journal BEFORE anyone needs it.
@@ -2029,6 +2168,12 @@ bool NetFilter::SweepStaleState(bool preserveArmed) {
   // every non-default route in main; an upgrade must not inherit it.
   DeleteRetiredSuppressRules(ip);
   RunCommand({ip, "-4", "route", "flush", "table", table});
+  // and the v6 half of the same policy
+  for (int removed6 = 0; removed6 < kMaxDuplicatePolicyRules; ++removed6) {
+    if (!RunCommand({ip, "-6", "rule", "delete", "table", table}).ok()) break;
+    std::fprintf(stderr, "[filter] startup sweep: removed a stale IPv6 policy rule\n");
+  }
+  RunCommand({ip, "-6", "route", "flush", "table", table});
   return armedFloorLeft;
 }
 
@@ -2043,38 +2188,38 @@ std::unique_ptr<Tunnel> Tunnel::Open(const TunnelConfig& cfg, TunnelError* err) 
     return std::unique_ptr<Tunnel>();
   };
 
-  // --- UPSTREAM'S IPv4-ONLY CONFIG FLOOR, first, before any device exists.
-  //     Same predicate, same placement and same [tun] diagnostic as upstream
-  //     (upstream app/src/Tunnel.cpp:32); the fork adds the ctl error code so
-  //     the refusal reaches the UI as something other than "could not open or
-  //     configure the tun device".
+  // --- THE DUAL-STACK CONFIG FLOOR, first, before any device exists. The
+  //     tunnel carries both families (connect/IPV6.md C2), so a configuration
+  //     that can only describe one is refused outright: a tun brought up with
+  //     the v4 half alone is a split tunnel that leaks every AAAA-reachable
+  //     destination while the UI says Connected. The ctl error code is what
+  //     lets the refusal reach the UI as something other than "could not open
+  //     or configure the tun device".
   //
-  //     IT IS NOT REDUNDANT WITH OUR RUNTIME IPv6 FLOORS, which is why it is
-  //     kept rather than folded into the field checks below:
-  //       * NetFilter's `meta nfproto ipv6 counter reject` and IsIpv6OnlyNetwork
-  //         are RUNTIME floors over packets and over the host's default routes.
-  //         They say nothing about the ADDRESSES the device handed us, and they
-  //         are armed AFTER the link is up. This runs before ::open.
-  //       * The per-field checks below are stricter than upstream on the
-  //         address (inet_pton rejects the leading-zero forms IsIpv4Literal
-  //         accepts) but were LOOSER in two places upstream catches:
-  //           - prefix 0 was accepted here, and a /0 on the tun installs a
-  //             connected route covering the whole IPv4 space;
-  //           - a non-IPv4 resolver was dropped silently AFTER the device was
-  //             created (see the filter loop below), so a device that offered
-  //             only IPv6 resolvers brought a tunnel up with no DNS at all.
-  //         Upstream refuses the configuration outright for both. That is the
-  //         fail-closed direction, so upstream wins here and the checks below
-  //         stay as the more specific message for the cases they do catch.
-  if (!IsIpv4OnlyTunnelConfig(cfg)) {
+  //     IT IS NOT REDUNDANT WITH THE RUNTIME FLOORS, which is why it is kept
+  //     rather than folded into the field checks below:
+  //       * NetFilter's off-tunnel v6 reject is a RUNTIME floor over packets.
+  //         It says nothing about the ADDRESSES the device handed us, and it
+  //         is armed AFTER the link is up. This runs before ::open.
+  //       * The per-field checks below are stricter on the addresses
+  //         (inet_pton rejects the leading-zero forms the literal checks
+  //         accept) but the predicate is what refuses a prefix of 0 (a /0 on
+  //         the tun installs a connected route covering the whole space) and a
+  //         resolver of the wrong family, for BOTH halves, before anything is
+  //         touched. The checks below stay as the more specific message for
+  //         the cases they do catch.
+  if (!IsDualStackTunnelConfig(cfg)) {
     std::fprintf(stderr,
-                 "[tun] refusing non-IPv4 tunnel configuration "
-                 "(addr=%s/%d, dns-count=%zu)\n",
-                 cfg.local_addr_v4.c_str(), cfg.prefix_v4, cfg.dns_servers_v4.size());
+                 "[tun] refusing a tunnel configuration that is not dual-stack "
+                 "(v4=%s/%d dns4-count=%zu, v6=%s/%d dns6-count=%zu)\n",
+                 cfg.local_addr_v4.c_str(), cfg.prefix_v4, cfg.dns_servers_v4.size(),
+                 cfg.local_addr_v6.c_str(), cfg.prefix_v6, cfg.dns_servers_v6.size());
     return fail("tun_config_invalid",
-                "refusing a non-IPv4 tunnel configuration: address '" + cfg.local_addr_v4 + "/" +
-                    std::to_string(cfg.prefix_v4) +
-                    "' and every tunnel resolver must be an IPv4 literal");
+                "refusing a tunnel configuration that is not dual-stack: the v4 address '" +
+                    cfg.local_addr_v4 + "/" + std::to_string(cfg.prefix_v4) +
+                    "' must be an IPv4 literal with every v4 resolver, and the v6 address '" +
+                    cfg.local_addr_v6 + "/" + std::to_string(cfg.prefix_v6) +
+                    "' must be a unique-local IPv6 literal with every v6 resolver");
   }
 
   // --- validate every value that came back from the device BEFORE it reaches
@@ -2088,11 +2233,19 @@ std::unique_ptr<Tunnel> Tunnel::Open(const TunnelConfig& cfg, TunnelError* err) 
     return fail("tun_config_invalid",
                 "the device reported an invalid tunnel address '" + cfg.local_addr_v4 + "'");
   }
-  // >= 1, not >= 0: agrees with IsIpv4OnlyTunnelConfig so the two guards can
+  // >= 1, not >= 0: agrees with IsDualStackTunnelConfig so the two guards can
   // never disagree about what a legal prefix is if their order ever changes.
   if (cfg.prefix_v4 < 1 || cfg.prefix_v4 > 32) {
     return fail("tun_config_invalid",
                 "invalid tunnel prefix length " + std::to_string(cfg.prefix_v4));
+  }
+  if (!IsIpv6Address(cfg.local_addr_v6)) {
+    return fail("tun_config_invalid",
+                "the device reported an invalid tunnel IPv6 address '" + cfg.local_addr_v6 + "'");
+  }
+  if (cfg.prefix_v6 < 1 || cfg.prefix_v6 > 128) {
+    return fail("tun_config_invalid",
+                "invalid tunnel IPv6 prefix length " + std::to_string(cfg.prefix_v6));
   }
   if (cfg.mtu < 576 || cfg.mtu > 65535) {
     return fail("tun_config_invalid", "invalid tunnel mtu " + std::to_string(cfg.mtu));
@@ -2169,6 +2322,16 @@ std::unique_ptr<Tunnel> Tunnel::Open(const TunnelConfig& cfg, TunnelError* err) 
       std::fprintf(stderr, "[tun] ignoring an invalid tunnel resolver '%s'\n", dns.c_str());
     }
   }
+  // v6 resolvers AFTER the v4 ones: every DNS tier hands the host this list
+  // in order, so the v4 resolver stays first for a stub that only reads one.
+  for (const auto& dns : cfg.dns_servers_v6) {
+    if (IsIpv6Address(dns)) {
+      t->dnsServers_.push_back(dns);
+    } else {
+      std::fprintf(stderr, "[tun] ignoring an invalid tunnel IPv6 resolver '%s'\n",
+                   dns.c_str());
+    }
+  }
   if (!t->Configure(cfg, err)) {
     return nullptr;  // dtor closes the fd + tears the rules down
   }
@@ -2178,32 +2341,61 @@ std::unique_ptr<Tunnel> Tunnel::Open(const TunnelConfig& cfg, TunnelError* err) 
     dnsList += dns;
   }
   std::fprintf(stderr,
-               "[tun] up %s addr=%s/%d mtu=%d dns=%s (routes=%d egress_protected=%d "
-               "dns_applied=%d)\n",
-               t->name_.c_str(), cfg.local_addr_v4.c_str(), cfg.prefix_v4, cfg.mtu, dnsList.c_str(),
-               t->report_.routes_installed ? 1 : 0, t->report_.egress_protected ? 1 : 0,
-               t->report_.dns_applied ? 1 : 0);
+               "[tun] up %s addr=%s/%d addr6=%s/%d mtu=%d dns=%s (routes=%d ipv6=%d "
+               "egress_protected=%d dns_applied=%d)\n",
+               t->name_.c_str(), cfg.local_addr_v4.c_str(), cfg.prefix_v4,
+               cfg.local_addr_v6.c_str(), cfg.prefix_v6, cfg.mtu, dnsList.c_str(),
+               t->report_.routes_installed ? 1 : 0, t->report_.ipv6_captured ? 1 : 0,
+               t->report_.egress_protected ? 1 : 0, t->report_.dns_applied ? 1 : 0);
   return t;
 }
 
 bool Tunnel::Configure(const TunnelConfig& cfg, TunnelError* err) {
   const std::string ip = FindTool("ip");
   const std::string addr = cfg.local_addr_v4 + "/" + std::to_string(cfg.prefix_v4);
-  // Leg A of the witness compares the source address the kernel picks for our
-  // own socket against this, so it has to survive Configure().
+  const std::string addr6 = cfg.local_addr_v6 + "/" + std::to_string(cfg.prefix_v6);
+  // Leg 1 of the witness compares the source address the kernel picks for our
+  // own socket against these, so they have to survive Configure().
   localAddr_ = cfg.local_addr_v4;
+  localAddr6_ = cfg.local_addr_v6;
+
+  // THE v6 HALF IS INSTALLED EXACTLY WHEN THE HOST CAN CARRY IT. A kernel with
+  // IPv6 disabled outright cannot leak v6 either, so skipping the half there
+  // is honest; on every other host a failing v6 step fails the bring-up below
+  // like a failing v4 step, because a tunnel with only one half installed is
+  // a split tunnel. Decided ONCE here so the address, the policy rule, the
+  // routes and the witness all agree on which halves exist.
+  {
+    std::string why;
+    ipv6Captured_ = HostIpv6Available(&why);
+    report_.ipv6_captured = false;
+    if (!ipv6Captured_) {
+      report_.ipv6_detail = "the v6 half of the tunnel is not installed: " + why +
+                            ". IPv6 can neither be carried nor leak on this host; the "
+                            "firewall's off-tunnel v6 block stays in force regardless";
+      std::fprintf(stderr, "[tun] %s\n", report_.ipv6_detail.c_str());
+    }
+  }
+
   // Order matters (wg-quick order: mtu/addr first, up second): NetworkManager
   // only protects an externally-created tun WHILE THE LINK IS DOWN
   // (APPIMAGE.md §10c), so do every link-down configuration before `up`. The
   // authoritative guard is the installed [keyfile] unmanaged-devices marking
   // + udev rule; this ordering just avoids ever showing NM a bare up link.
-  const std::vector<std::vector<std::string>> steps = {
+  std::vector<std::vector<std::string>> steps = {
       {ip, "link", "set", "dev", name_, "mtu", std::to_string(cfg.mtu)},
       // `replace`, not `add`: a stale address from an unclean previous run
       // answers EEXIST and would abort the whole bring-up.
       {ip, "-4", "address", "replace", addr, "dev", name_},
-      {ip, "link", "set", "dev", name_, "up"},
   };
+  if (ipv6Captured_) {
+    // `nodad`: a tun has no link to run duplicate address detection on, and a
+    // tentative address is skipped by source selection — the witness's v6
+    // control leg would then bind nothing and fail a working tunnel.
+    steps.push_back({ip, "-6", "address", "replace", addr6, "dev", name_, "nodad"});
+  }
+  steps.push_back({ip, "link", "set", "dev", name_, "up"});
+
   // FROM UPSTREAM (556dca7), but BEST-EFFORT rather than one of the fatal
   // `steps` above, which is the whole reason it is not in that vector: the
   // loop below aborts the entire bring-up on any non-zero exit, and
@@ -2212,20 +2404,28 @@ bool Tunnel::Configure(const TunnelConfig& cfg, TunnelError* err) {
   // on exactly the older kernels least able to spare one.
   //
   // What it buys: set while the link is still DOWN (the `up` step is last), it
-  // stops the kernel synthesizing an IPv6 link-local address on urnet0 at all,
-  // so there is no tunnel-local v6 source address for anything to bind or
-  // advertise. This is defence in depth UNDER the nftables v6 block
-  // (FilterConfig::block_ipv6, §6.3), never a replacement for it — the filter
-  // is still what refuses v6 egress; this removes the address that block
-  // exists to contain. Host IPv6 is untouched: no route and no blackhole is
-  // installed, so the physical interface keeps its normal policy.
+  // stops the kernel synthesizing an IPv6 LINK-LOCAL address on urnet0. A
+  // point-to-point tun has no neighbours to discover, so the address would
+  // carry nothing; what it WOULD do is widen the tun's v6 source set beyond
+  // the one ULA the witness measures against. The tunnel's own v6 address is
+  // the explicit ULA step above, never an autoconfigured one.
   if (const CommandResult agm =
           RunCommand({ip, "link", "set", "dev", name_, "addrgenmode", "none"});
       !agm.ok()) {
     std::fprintf(stderr,
-                 "[tun] addrgenmode none unavailable (%s); the nftables IPv6 block remains "
-                 "the enforcing layer\n",
+                 "[tun] addrgenmode none unavailable (%s); the tun may also carry a "
+                 "link-local v6 address\n",
                  agm.Describe().c_str());
+  }
+  if (ipv6Captured_) {
+    // Best-effort like addrgenmode: the address add below is what tells the
+    // truth, and it is fatal.
+    std::string sysctlError;
+    if (!EnableInterfaceIpv6(name_, &sysctlError)) {
+      std::fprintf(stderr, "[tun] could not enable IPv6 on %s (%s); the address add will say "
+                           "whether it matters\n",
+                   name_.c_str(), sysctlError.c_str());
+    }
   }
   for (const auto& step : steps) {
     const CommandResult r = RunCommand(step);
@@ -2242,6 +2442,7 @@ bool Tunnel::Configure(const TunnelConfig& cfg, TunnelError* err) {
   if (!InstallPolicyRules(err)) return false;
   if (!InstallRoutes(err)) return false;
   report_.routes_installed = true;
+  report_.ipv6_captured = ipv6Captured_;
 
   // The self-check is the whole point of the dedicated table: prove, before
   // anybody calls this tunnel up, that (a) ordinary traffic now leaves through
@@ -2295,8 +2496,8 @@ bool Tunnel::Configure(const TunnelConfig& cfg, TunnelError* err) {
   //
   // THE CASE FOR REFUSING (taken):
   //   1. It is the rule this codebase already applies to the same class of
-  //      defect. IPv6 has no tunnel, so IPv6 is BLOCKED rather than leaked, in
-  //      every state, NOT gated on the kill switch — docs/linux_agent_help.md
+  //      defect. Off-tunnel IPv6 is BLOCKED rather than leaked, in every
+  //      state, NOT gated on the kill switch — docs/linux_agent_help.md
   //      §6.3 is explicit that leak prevention is not a preference. Names are a
   //      leak in exactly the way v6 is: the UI says Connected while an observer
   //      on the ISP's resolver sees every site the user visits, in order, with
@@ -2405,6 +2606,27 @@ bool Tunnel::InstallPolicyRules(TunnelError* err) {
     }
     return false;
   }
+  if (ipv6Captured_) {
+    // The v6 half of the ONE rule. `ip -6 rule` is a separate policy database
+    // from `ip -4 rule`, so the fwmark steer has to be installed once per
+    // family or v6 would never consult the capture table at all — and the v6
+    // capture routes would sit in table 51821 reachable by nothing.
+    for (int i = 0; i < kMaxDuplicatePolicyRules; ++i) {
+      if (!RunCommand({ip, "-6", "rule", "delete", "table", table}).ok()) break;
+    }
+    const std::vector<std::string> rule6 = {ip,    "-6",  "rule", "add", "not",
+                                            "fwmark", MarkHex(kEgressMark), "table", table,
+                                            "pref", std::to_string(kFwmarkRulePriority)};
+    const CommandResult r6 = RunCommand(rule6);
+    if (!r6.ok()) {
+      report_.route_detail = JoinArgv(rule6) + ": " + r6.Describe();
+      if (err != nullptr) {
+        err->code = "route_install_failed";
+        err->message = "could not install the tunnel IPv6 policy rule: " + r6.Describe();
+      }
+      return false;
+    }
+  }
   return true;
 }
 
@@ -2437,6 +2659,19 @@ void Tunnel::RemovePolicyRules() {
   // The kernel drops routes with their link, in every table; flushing is the
   // belt for the case where the link outlives us by a moment.
   RunCommand({ip, "-4", "route", "flush", "table", table});
+  // The v6 half, unconditionally: cheap, and a rule left by a previous run on
+  // a host that has since disabled v6 is exactly the copy nothing else sweeps.
+  int removed6 = 0;
+  for (; removed6 < kMaxDuplicatePolicyRules; ++removed6) {
+    if (!RunCommand({ip, "-6", "rule", "delete", "table", table}).ok()) break;
+  }
+  if (removed6 == kMaxDuplicatePolicyRules) {
+    std::fprintf(stderr,
+                 "[tun] WARNING: more than %d IPv6 policy rules still point at table %s; remove "
+                 "the rest with: sudo ip -6 rule delete table %s\n",
+                 kMaxDuplicatePolicyRules, table.c_str(), table.c_str());
+  }
+  RunCommand({ip, "-6", "route", "flush", "table", table});
 }
 
 bool Tunnel::InstallRoutes(TunnelError* err) {
@@ -2444,21 +2679,33 @@ bool Tunnel::InstallRoutes(TunnelError* err) {
   const std::string table = std::to_string(kTunnelRouteTable);
   std::string firstFailure;
   int failures = 0;
-  for (const auto& prefix : CaptureV4Prefixes()) {
-    // `replace`, not `add`: another VPN or a stale route answering EEXIST used
-    // to abort the entire bring-up with an opaque message.
-    const std::vector<std::string> step = {ip,   "-4",     "route", "replace", prefix,
-                                           "dev", name_,   "table", table};
-    const CommandResult r = RunCommand(step);
-    if (!r.ok()) {
-      ++failures;
-      if (firstFailure.empty()) firstFailure = "route " + prefix + " failed: " + r.Describe();
-      std::fprintf(stderr, "[tun] %s\n", firstFailure.c_str());
+  size_t attempted = 0;
+  // One loop body for both families, so the v6 half can never drift into a
+  // "best effort" that the v4 half is not: a partial capture set of EITHER
+  // family is a silent split tunnel.
+  const auto install = [&](const char* family, const std::vector<std::string>& prefixes) {
+    for (const auto& prefix : prefixes) {
+      ++attempted;
+      // `replace`, not `add`: another VPN or a stale route answering EEXIST
+      // used to abort the entire bring-up with an opaque message.
+      const std::vector<std::string> step = {ip,    family, "route", "replace", prefix,
+                                             "dev", name_,  "table", table};
+      const CommandResult r = RunCommand(step);
+      if (!r.ok()) {
+        ++failures;
+        if (firstFailure.empty()) firstFailure = "route " + prefix + " failed: " + r.Describe();
+        std::fprintf(stderr, "[tun] route %s failed: %s\n", prefix.c_str(),
+                     r.Describe().c_str());
+      }
     }
-  }
+  };
+  install("-4", CaptureV4Prefixes());
+  // The v6 capture set (TunnelPolicy.hpp, the same table the firewall's v6
+  // permits are built from), only when the v6 half exists on this host.
+  if (ipv6Captured_) install("-6", CaptureV6Prefixes());
   if (failures > 0) {
     report_.route_detail = firstFailure + " (" + std::to_string(failures) + " of " +
-                           std::to_string(CaptureV4Prefixes().size()) + " capture prefixes)";
+                           std::to_string(attempted) + " capture prefixes)";
     if (err != nullptr) {
       err->code = "route_install_failed";
       err->message = report_.route_detail;
@@ -2551,6 +2798,7 @@ struct SocketBinding {
   std::string source;   // getsockname() after connect()
   uint32_t mark = 0;    // SO_MARK as the socket was born with it
   bool mark_known = false;
+  int connect_errno = 0;  // why connect() failed, when it did (0 otherwise)
 };
 
 // clearMark=false: exactly the socket the SDK's dialer gets — created by this
@@ -2559,12 +2807,14 @@ struct SocketBinding {
 // clearMark=true:  the same socket with the exemption taken away. THE CONTROL.
 //                  Its binding is what the capture policy does to ordinary
 //                  traffic, measured rather than assumed.
-bool BindWitnessSocket(bool clearMark, SocketBinding* out, std::string* error) {
+// `family` is AF_INET or AF_INET6: the same measurement, once per half of
+// the tunnel, against that half's own probe address.
+bool BindWitnessSocket(int family, bool clearMark, SocketBinding* out, std::string* error) {
   const auto fail = [error](std::string message) {
     if (error != nullptr) *error = std::move(message);
     return false;
   };
-  const int sock = ::socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP);
+  const int sock = ::socket(family, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP);
   if (sock < 0) return fail(std::string("socket(): ") + std::strerror(errno));
   struct SockGuard {
     int fd;
@@ -2592,6 +2842,30 @@ bool BindWitnessSocket(bool clearMark, SocketBinding* out, std::string* error) {
     return fail("the control socket kept a mark after it was cleared, so it is not a control");
   }
 
+  if (family == AF_INET6) {
+    sockaddr_in6 dst{};
+    dst.sin6_family = AF_INET6;
+    dst.sin6_port = htons(static_cast<uint16_t>(kEgressProbePort));
+    if (::inet_pton(AF_INET6, kEgressProbeAddressV6, &dst.sin6_addr) != 1) {
+      return fail("the v6 witness address is unparseable");
+    }
+    if (::connect(sock, reinterpret_cast<sockaddr*>(&dst), sizeof(dst)) != 0) {
+      out->connect_errno = errno;
+      return fail(std::string("connect(): ") + std::strerror(out->connect_errno));
+    }
+    sockaddr_in6 local{};
+    socklen_t locallen = sizeof(local);
+    if (::getsockname(sock, reinterpret_cast<sockaddr*>(&local), &locallen) != 0) {
+      return fail(std::string("getsockname(): ") + std::strerror(errno));
+    }
+    char srcbuf[INET6_ADDRSTRLEN] = {0};
+    if (::inet_ntop(AF_INET6, &local.sin6_addr, srcbuf, sizeof(srcbuf)) == nullptr) {
+      return fail(std::string("inet_ntop(): ") + std::strerror(errno));
+    }
+    out->source = srcbuf;
+    return true;
+  }
+
   sockaddr_in dst{};
   dst.sin_family = AF_INET;
   dst.sin_port = htons(static_cast<uint16_t>(kEgressProbePort));
@@ -2599,7 +2873,8 @@ bool BindWitnessSocket(bool clearMark, SocketBinding* out, std::string* error) {
     return fail("the witness address is unparseable");
   }
   if (::connect(sock, reinterpret_cast<sockaddr*>(&dst), sizeof(dst)) != 0) {
-    return fail(std::string("connect(): ") + std::strerror(errno));
+    out->connect_errno = errno;
+    return fail(std::string("connect(): ") + std::strerror(out->connect_errno));
   }
 
   sockaddr_in local{};
@@ -2683,7 +2958,7 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
   // among the measurements rather than a separate bring-up-only function.
   SocketBinding control;
   std::string bindError;
-  if (!BindWitnessSocket(/*clearMark=*/true, &control, &bindError)) {
+  if (!BindWitnessSocket(AF_INET, /*clearMark=*/true, &control, &bindError)) {
     return fail(kCodeRouteInstallFailed,
                 "the control socket could not be established or routed, so it is not possible "
                 "to say whether this tunnel captures anything at all: " +
@@ -2704,7 +2979,7 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
   // mark. Legs 1 and 2 must come out OPPOSITE. Two greens that agree are a
   // broken instrument, not a passing tunnel.
   SocketBinding daemon;
-  if (!BindWitnessSocket(/*clearMark=*/false, &daemon, &bindError)) {
+  if (!BindWitnessSocket(AF_INET, /*clearMark=*/false, &daemon, &bindError)) {
     return fail(kCodeEgressUnprotected,
                 "a socket created exactly as the SDK's are could not be established or routed, "
                 "so this daemon's own egress path cannot be characterised at all: " +
@@ -2740,6 +3015,74 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
                   "that, so the next connection the SDK dials cannot be assumed to escape too",
                   kEgressMark, daemon.mark, daemon.mark_known ? "" : ", unreadable");
     return fail(kCodeEgressUnprotected, buf);
+  }
+
+  // ---- LEGS 1v6 / 2v6: THE SAME TWO MEASUREMENTS FOR THE v6 HALF ----------
+  // Only when the v6 half is installed; a host with IPv6 disabled has nothing
+  // to measure and nothing that can leak. The control leg is identical to v4:
+  // an unmarked socket must bind the tun's own ULA. The treatment leg has ONE
+  // extra legal outcome: a host whose IPv6 is enabled but has NO v6 uplink (an
+  // IPv4-only ISP, the common case) has no route at all for a socket steered
+  // OUT of the capture table, so connect() answers ENETUNREACH — the kernel
+  // saying "not through the tun, and nowhere else either", which is exactly
+  // the escape this leg exists to prove. Any other failure is a fault.
+  std::string v6Detail = "v6 half not installed";
+  if (ipv6Captured_) {
+    if (localAddr6_.empty()) {
+      return fail(kCodeEgressUnprotected,
+                  "the tunnel's own IPv6 address was never recorded, so the v6 legs of the "
+                  "witness cannot be interpreted");
+    }
+    SocketBinding control6;
+    if (!BindWitnessSocket(AF_INET6, /*clearMark=*/true, &control6, &bindError)) {
+      return fail(kCodeRouteInstallFailed,
+                  "the v6 control socket could not be established or routed, so it is not "
+                  "possible to say whether this tunnel captures IPv6 at all: " +
+                      bindError);
+    }
+    if (control6.source != localAddr6_) {
+      return fail(kCodeRouteInstallFailed,
+                  "the IPv6 capture policy is NOT in force: an unmarked v6 socket this daemon "
+                  "just opened was bound to " +
+                      control6.source + ", not to the tunnel's own address " + localAddr6_ +
+                      ", so IPv6 traffic is leaving around this tunnel");
+    }
+    SocketBinding daemon6;
+    if (!BindWitnessSocket(AF_INET6, /*clearMark=*/false, &daemon6, &bindError)) {
+      if (daemon6.connect_errno == ENETUNREACH || daemon6.connect_errno == EHOSTUNREACH ||
+          daemon6.connect_errno == EADDRNOTAVAIL) {
+        v6Detail = "v6: control socket bound " + control6.source +
+                   " = the tunnel; the daemon socket has no IPv6 route off the tunnel (" +
+                   std::strerror(daemon6.connect_errno) + "), so it cannot enter it";
+      } else {
+        return fail(kCodeEgressUnprotected,
+                    "a v6 socket created exactly as the SDK's are could not be established "
+                    "or routed, so this daemon's own IPv6 egress path cannot be "
+                    "characterised: " +
+                        bindError);
+      }
+    } else {
+      if (daemon6.source == localAddr6_) {
+        return fail(kCodeEgressUnprotected,
+                    "a v6 socket this daemon just opened was bound to the tunnel's own "
+                    "address (" +
+                        daemon6.source +
+                        "), so it resolved the capture table before anything could steer it "
+                        "away. The mark is not reaching this process's IPv6 sockets at "
+                        "creation time");
+      }
+      if (!daemon6.mark_known || daemon6.mark != kEgressMark) {
+        char buf[320];
+        std::snprintf(buf, sizeof(buf),
+                      "a v6 socket this daemon just opened escaped the capture table WITHOUT "
+                      "carrying mark 0x%08x (it reads 0x%08x%s). Nothing this daemon "
+                      "installed explains that",
+                      kEgressMark, daemon6.mark, daemon6.mark_known ? "" : ", unreadable");
+        return fail(kCodeEgressUnprotected, buf);
+      }
+      v6Detail = "v6: control socket bound " + control6.source +
+                 " = the tunnel, daemon socket bound " + daemon6.source + " with the mark";
+    }
   }
 
   // ---- LEG 3: HAS ANY REAL DAEMON PACKET ENTERED OUR OWN TUN? --------------
@@ -2785,13 +3128,13 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
   report_.egress_mechanism =
       "socket mark set at creation (cgroup-bpf sock_create), proven differentially against an "
       "unmarked control socket";
-  char detail[400];
+  char detail[640];
   std::snprintf(detail, sizeof(detail),
                 "control socket (mark 0) bound %s = the tunnel, so capture is in force; daemon "
-                "socket bound %s with mark 0x%08x, so it is steered around it; 0 marked daemon "
-                "packets have entered %s and %llu have left via a physical interface",
-                control.source.c_str(), daemon.source.c_str(), daemon.mark, name_.c_str(),
-                static_cast<unsigned long long>(counters.phy));
+                "socket bound %s with mark 0x%08x, so it is steered around it; %s; 0 marked "
+                "daemon packets have entered %s and %llu have left via a physical interface",
+                control.source.c_str(), daemon.source.c_str(), daemon.mark, v6Detail.c_str(),
+                name_.c_str(), static_cast<unsigned long long>(counters.phy));
   report_.egress_detail = detail;
   report_.egress_protected = true;
   std::fprintf(stderr, "%s passed: %s\n", tag.c_str(), detail);
@@ -3543,12 +3886,11 @@ bool Tunnel::VerifyDnsStillApplied(std::string* detail) const {
 //
 // Nothing in the body below changed; what changed is WHO CAN CALL IT AND WHEN.
 // The measured defect: `resolvectl revert urnet0` failed with "Failed to
-// resolve interface urnet0: No such device" on every single teardown in the
-// journal, because TunnelHost hands tunnel_->fd() to urnet::newIoLoop and then
-// closes that io loop BEFORE it destroys this object — Go owns the descriptor,
-// a non-persistent tun dies with its last descriptor, and the link was already
-// gone by the time ~Tunnel got to speak. The revert was ALREADY the first thing
-// ~Tunnel did, so no reordering inside this file could have fixed it.
+// resolve interface urnet0: No such device" on every single teardown. The Go
+// IoLoop could close its tun descriptor before this object was destroyed, so
+// the link was already gone by the time ~Tunnel got to speak. The loop now
+// receives an independent duplicate, but the explicit early call remains the
+// guarantee that DNS restoration precedes both descriptor owners' teardown.
 //
 // It is idempotent, which is what lets TunnelHost::StopInternalLocked call it
 // early on the ordinary path while ~Tunnel keeps calling it for the paths that

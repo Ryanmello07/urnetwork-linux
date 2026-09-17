@@ -35,17 +35,28 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <glibmm/main.h>
 
+#include "PricePresentation.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
+
+// A batch of newly observed referrals for the local network. `isFirst` marks
+// the crowning: the count went from zero to earned, which gets the full-screen
+// celebration; later batches get the gold snackbar.
+struct ReferralCelebration {
+  int64_t joined = 0;
+  bool isFirst = false;
+};
 
 class SubscriptionBalanceStore {
  public:
   // Fired on the GTK main loop after any state change.
   using ChangedHandler = std::function<void()>;
+  using ReferralCelebrationHandler = std::function<void(const ReferralCelebration&)>;
 
   explicit SubscriptionBalanceStore(SdkHost& host);
   ~SubscriptionBalanceStore();
@@ -88,11 +99,36 @@ class SubscriptionBalanceStore {
   int64_t AvailableByteCount() const { return availableByteCount_; }
   int64_t StartBalanceByteCount() const { return startBalanceByteCount_; }
   int64_t TotalReferrals() const { return totalReferrals_; }
+  // the referral program's numbers, from the server (defaults until fetched)
+  int64_t MaxReferrals() const { return maxReferrals_; }
+  int64_t BonusGibPerDay() const { return bonusGibPerDay_; }
+  int64_t ReferredBonusGibPerDay() const { return referredBonusGibPerDay_; }
   const std::string& ReferralCode() const { return referralCode_; }
 
+  // The plan response's price tier (standard/regional, from the storefront
+  // country the server resolved), the network's welcome offer and the
+  // experiment assignments (mmm/onboarding/PLAN.md). Defaults until fetched.
+  const PriceTierView& Tier() const { return tier_; }
+  const OfferView& Offer() const { return offer_; }
+  bool OfferActive() const { return offer_.active; }
+  // the variant for an experiment surface ("" when unassigned)
+  std::string ExperimentVariant(const std::string& surface) const;
+  std::string ExperimentId(const std::string& surface) const;
+  // A freshly issued offer (POST /onboarding/offer/issue) lands here so every
+  // plan surface prints it before the next poll.
+  void SetOffer(const urnet::OnboardingOffer& offer);
+
   void SetChangedHandler(ChangedHandler h) { onChanged_ = std::move(h); }
+  // Fired on the GTK main loop when the referral poll observes new referrals
+  // over the persisted per-network baseline (the first observation only
+  // records the baseline, so pre-existing referrals never celebrate).
+  void SetReferralCelebrationHandler(ReferralCelebrationHandler h) {
+    onReferralCelebration_ = std::move(h);
+  }
 
  private:
+  void MaybeCelebrateReferrals(int64_t count);
+  void EnsureReferralPolling();
   void FetchSubscriptionBalance();
   void FetchReferralCode();
   void UpdateIsPro(bool isPro);  // mac updateIsPro: flips the polling mode
@@ -106,6 +142,10 @@ class SubscriptionBalanceStore {
 
   SdkHost& host_;
   ChangedHandler onChanged_;
+  ReferralCelebrationHandler onReferralCelebration_;
+  // referral celebrations poll on their own timer: unlike the balance poll it
+  // never stops for Pro (referrals keep landing either way)
+  sigc::connection referralTimer_;
 
   // Invalidates in-flight fetch callbacks across Stop()/Start() (logout must
   // not let a stale result repopulate the next session's state).
@@ -128,7 +168,14 @@ class SubscriptionBalanceStore {
 
   bool isLoadingReferral_ = false;
   int64_t totalReferrals_ = 0;
+  int64_t maxReferrals_ = 20;
+  int64_t bonusGibPerDay_ = 3;
+  int64_t referredBonusGibPerDay_ = 3;
   std::string referralCode_;
+
+  PriceTierView tier_;
+  OfferView offer_;
+  std::vector<urnet::ExperimentAssignment> experiments_;
 
   // polling (mac: backgroundPollingTimer / pollingTimer / pollingDeadline).
   // The confirmation deadline only elapses while the poll timer runs:

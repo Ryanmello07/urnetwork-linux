@@ -214,6 +214,17 @@ Gtk::Widget* MakePaneTableHeader(const std::vector<int>& weights,
                                  const std::vector<Glib::ustring>& titles,
                                  size_t textColumns = 1);
 
+// Turns one leading text cell of a table row into a two-line stack: `top`, which
+// takes the cell's place in `row.cells` so callers keep addressing the row's text
+// by index, over `bottom` (a tag or badge, hidden while empty). Rows built with
+// it need a height that fits two lines (52 rather than 36).
+struct PaneTableStack {
+  Gtk::Box* root = nullptr;
+  Gtk::Label* top = nullptr;
+  Gtk::Label* bottom = nullptr;
+};
+PaneTableStack MakePaneTableStack(PaneTableRow& row, size_t index);
+
 // The search field row at the top of a list pane (40px, squared off).
 struct PaneSearchRow {
   Gtk::Widget* root = nullptr;
@@ -237,7 +248,7 @@ class Snackbar {
  public:
   static constexpr int kDefaultDurationMs = 4000;
   static constexpr int kPersistent = 0;
-  enum class Severity { Info, Success, Warning, Error };
+  enum class Severity { Info, Success, Warning, Error, Gold };
 
   Snackbar();
   Gtk::Widget& root();  // overlay this at the window bottom-center
@@ -252,5 +263,22 @@ class Snackbar {
   Gtk::Label message_;
   sigc::connection timer_;
 };
+
+// ---- DESIGNSTYLE "Placeholders, not pop-in" -----------------------------------
+//
+// A skeleton stands in for content that arrives after first paint, in the
+// content's OWN box, so a section never opens shorter than it settles and a
+// drawer can be pulled fully open on first show. The bar IS the label it
+// becomes: `sizer` is the text the real value will show (or a representative
+// width), rendered transparent under the faint rounded fill, so the two share
+// one set of metrics. Shimmers only while animations are on (motion::ShouldAnimate).
+Gtk::Label* MakeSkeletonLabel(const Glib::ustring& sizer, const char* textCssClass);
+// The dot form of the same bar (a chip's status dot), `size` square.
+Gtk::Widget* MakeSkeletonDot(int size);
+// Toggle the skeleton on an existing widget (the value column of a row that
+// keeps its key): on = faint bar over transparent text, off = as styled.
+void SetSkeleton(Gtk::Widget& widget, bool on);
+// The accessible BUSY state (aria-busy) on the container that is loading.
+void SetBusy(Gtk::Widget& widget, bool busy);
 
 }  // namespace urnw::kit

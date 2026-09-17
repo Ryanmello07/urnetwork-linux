@@ -37,6 +37,7 @@ class CreateNetworkPage : public Gtk::Box {
   enum class Mode {
     Password,      // full sign-up: email + network name + password
     Wallet,        // wallet sign-in with no network yet: name + terms only
+    Sso,           // Google/Apple (the provider's web flow) with no network yet: name + terms only
     UpgradeGuest,  // guest -> full account (email + name + password)
   };
 
@@ -86,6 +87,10 @@ class CreateNetworkPage : public Gtk::Box {
   Gtk::PasswordEntry* password_ = nullptr;
   Gtk::Label* passwordCaption_ = nullptr;
   Gtk::Switch* termsSwitch_ = nullptr;
+  // "Periodic product updates": the marketing opt-out at collection, on by
+  // default (mmm/onboarding/PLAN.md). Off -> the create carries
+  // product_updates=false and signup.optout_changed fires.
+  Gtk::Switch* productUpdates_ = nullptr;
   Gtk::Button* referralToggle_ = nullptr;
   Gtk::Revealer* referralRevealer_ = nullptr;
   Gtk::Entry* referralEntry_ = nullptr;

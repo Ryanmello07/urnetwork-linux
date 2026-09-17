@@ -43,7 +43,9 @@
 #include "Tunnel.hpp"
 #include "daemon/ControlServer.hpp"
 #include "daemon/DaemonLog.hpp"
+#include "daemon/HostMemory.hpp"
 #include "daemon/TunnelHost.hpp"
+#include "TunnelPolicy.hpp"
 
 // The release version, threaded in via the -Dapp_version meson option (the
 // pipeline passes $VERSION). This is what the hello reply's daemon_version
@@ -55,9 +57,15 @@
 
 namespace {
 
-// Same bound the app used in-process: the data plane's memory target scales
-// from it (SetMemoryLimit -> connect defaults).
-constexpr int64_t kMemoryLimit = 64ll * 1024 * 1024;
+// The daemon's process budget: the message pools and the go soft limit
+// (setMemoryLimit -> connect defaults), and nothing else. The per-device memory
+// target TunnelHost creates its DeviceLocal with is a separate surface, chosen
+// from the SAME cached host measurement so the two are always one tier -- see
+// TunnelPolicy.hpp for the backing and collector constraints, asserted there
+// for both tiers.
+int64_t ProcessMemoryBudgetByteCount() {
+  return urnw::MemoryTierForHost(urnw::HostMemoryByteCountCached()).process_budget_byte_count;
+}
 
 // State (device identity + SDK storage) and log locations. systemd's
 // StateDirectory=/LogsDirectory= set the env vars; the fallbacks match the
@@ -750,7 +758,8 @@ int ReportPreflight() {
   static const Tool kTools[] = {
       {"ip", true, "iproute2: the tun address, the capture routes and the policy rules"},
       {"nft", true, "nftables: egress self-exclusion (without it the daemon's own sockets "
-                    "fall into its own tunnel), the IPv6 and DNS leak floor, the kill switch"},
+                    "fall into its own tunnel), the off-tunnel IPv6 and DNS leak floor, the "
+                    "kill switch"},
       {"resolvectl", false,
        "systemd-resolved: the FIRST of three ways DNS is pointed at the tunnel "
        "(resolvconf and a direct /etc/resolv.conf takeover follow it)"},
@@ -1028,7 +1037,14 @@ int main(int argc, char** argv) {
   urnw::DaemonLog::Instance().SetSdkLogDir(logDir);
   urnw::DaemonLog::Instance().StartSdkLogPolling();
   urnw::DaemonLogf("[daemon] urnetworkd %s starting (log dir %s)\n", UR_APP_VERSION, logDir.c_str());
-  urnet::setMemoryLimit(kMemoryLimit);
+  const int64_t hostMemoryByteCount = urnw::HostMemoryByteCountCached();
+  const urnw::MemoryTier memoryTier = urnw::MemoryTierForHost(hostMemoryByteCount);
+  urnw::DaemonLogf(
+      "[daemon] memory: host %lld MiB -> device target %lld MiB in a %lld MiB process budget\n",
+      static_cast<long long>(hostMemoryByteCount / (1024 * 1024)),
+      static_cast<long long>(memoryTier.device_target_byte_count / (1024 * 1024)),
+      static_cast<long long>(memoryTier.process_budget_byte_count / (1024 * 1024)));
+  urnet::setMemoryLimit(ProcessMemoryBudgetByteCount());
 
   // Clear a location override left behind by a previous run BEFORE serving any
   // client: nothing else on the system ever reverts /etc/geolocation, so an

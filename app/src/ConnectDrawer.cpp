@@ -337,6 +337,18 @@ void ConnectDrawer::BuildClientStatsCard() {
   transportBar_ = Gtk::make_managed<TransportBar>();
   transportBar_->on_activate = [this] { transportSheet_->Open(); };
   card->append(*transportBar_);
+  // the ip-version histogram, directly under the transport bar: the added
+  // providers as the canvas's dots under Both / v4 / v6. Decorative -- a tap
+  // on it is a tap on the card (the contract details), like the charts.
+  ipFamilyHistogram_ = Gtk::make_managed<IpFamilyHistogram>();
+  card->append(*ipFamilyHistogram_);
+  // the extender panel, directly under the histogram (EXTENDER.md K4): the
+  // active extenders as hollow rings in their own colors, the N-of-M count and
+  // the gossip network's status dot. Decorative like the histogram -- K4 is
+  // explicit that tapping does nothing and there is no details panel -- so a
+  // tap on it is a tap on the card.
+  extenderPanel_ = Gtk::make_managed<ExtenderPanel>();
+  card->append(*extenderPanel_);
   blockChart_ = Gtk::make_managed<TransferChart>(T_("blocked", "Blocked"),
                                                  TransferChart::Route::Block, kUrCoral,
                                                  kUrMutedCoral);
@@ -479,7 +491,7 @@ void ConnectDrawer::BuildPlanCard() {
     if (on_create_account) on_create_account();
   });
   planRow->append(*createAccountBtn_);
-  getProBtn_ = Gtk::make_managed<Gtk::Button>(T_("become_supporter", "Get UR Pro"));
+  getProBtn_ = Gtk::make_managed<Gtk::Button>(T_("get_pro", "Get Pro"));
   getProBtn_->add_css_class("suggested-action");
   getProBtn_->set_valign(Gtk::Align::CENTER);
   getProBtn_->signal_clicked().connect([this] { OpenUpgrade(); });
@@ -488,6 +500,9 @@ void ConnectDrawer::BuildPlanCard() {
 
   usageBar_ = Gtk::make_managed<UsageBar>();
   usageBar_->set_margin_top(8);
+  usageBar_->on_referrals = [this] {
+    if (on_open_referrals) on_open_referrals();
+  };
   card->append(*usageBar_);
 
   auto* redeemBtn =
@@ -543,6 +558,15 @@ void ConnectDrawer::OnHostEvent(DrawerEvent event) {
       // no provider stats surface in the drawer (the provider bar would live
       // under a provider Local chart); nothing to refresh here
       break;
+    case DrawerEvent::ExtenderStatus:
+      // the SDK coalesces this to one callback per second; the panel drops a
+      // push that changes nothing, so this costs a read and a compare
+      RefreshExtenderPanel();
+      break;
+    case DrawerEvent::ExtenderProvideStatus:
+      // this device's own extender role has no surface in the drawer; the
+      // connect page's provide group and the earnings page carry it
+      break;
     case DrawerEvent::Blocker:
       RefreshBlocker();
       break;
@@ -580,6 +604,10 @@ void ConnectDrawer::OnHostEvent(DrawerEvent event) {
       // home screen's provider-count label, not off the drawer, and the location
       // override has to keep tracking the window even with the drawer unbuilt.
       break;
+    case DrawerEvent::ProviderSelection:
+      // The chooser owns its selection row and MainWindow owns the connected
+      // provider summary. The drawer has no selected-provider state to refresh.
+      break;
   }
 }
 
@@ -602,6 +630,7 @@ void ConnectDrawer::RefreshAll() {
     });
   }
   RefreshPlanCard();
+  RefreshExtenderPanel();
   if (pqiPanel_) pqiPanel_->Refresh();
   if (contractsSheet_->is_visible()) contractsSheet_->Refresh();
   if (splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
@@ -751,6 +780,17 @@ void ConnectDrawer::PullThroughput() {
 
 void ConnectDrawer::RefreshTransportBar() {
   if (transportBar_) transportBar_->SetDistribution(host_.ClientTransportDistribution());
+}
+
+void ConnectDrawer::RefreshExtenderPanel() {
+  // nullopt with no device: the panel hides itself rather than reporting zero
+  // extenders, which is a different statement
+  if (extenderPanel_) extenderPanel_->SetStatus(host_.GetExtenderStatus());
+}
+
+void ConnectDrawer::SetProviderGrid(const std::vector<urnet::ProviderGridPoint>& points,
+                                    int64_t gridWidth, int64_t gridHeight) {
+  if (ipFamilyHistogram_) ipFamilyHistogram_->SetGrid(points, gridWidth, gridHeight);
 }
 
 void ConnectDrawer::RefreshSplitRuleCount() {

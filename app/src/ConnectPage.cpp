@@ -9,6 +9,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 
+#include "ExtenderProvideRowPaint.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
@@ -311,6 +312,7 @@ ConnectPage::ConnectPage(SdkHost& host)
   // session must still SETTLE on its empty/unavailable readings rather than
   // sit blank (docs/parity/connect-page.md §8).
   RefreshAllPanes();
+  BeginPlaceholders();
   ApplyBreakpoint(widthDip_);
 
   // "Presenting" is the WINDOW being up; "visible" is this destination being
@@ -367,6 +369,19 @@ void ConnectPage::BuildPaneA() {
   statusDot_->set_valign(Gtk::Align::START);
   statusDot_->set_margin_top(7);
   kit::MarkDecorative(*statusDot_);
+  // the easter egg: five taps on the dot while connected, each within two
+  // seconds of the previous, play the Pro celebration; silent otherwise
+  auto dotTap = Gtk::GestureClick::create();
+  dotTap->signal_released().connect([this](int, double, double) {
+    if (renderedState_ != health::State::Connected) {
+      connectedIconTaps_.Reset();
+      return;
+    }
+    if (connectedIconTaps_.Tap(g_get_monotonic_time() / 1000) && on_connected_icon_tap) {
+      on_connected_icon_tap();
+    }
+  });
+  statusDot_->add_controller(dotTap);
   statusRow->append(*statusDot_);
   auto* statusColumn = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
   statusColumn->set_hexpand(true);
@@ -543,6 +558,63 @@ void ConnectPage::BuildPaneA() {
   discoverableText_->set_wrap(true);
   CapNatural(discoverableText_, 32);
   moreOptionsHost_->append(*discoverableText_);
+
+  // The provider extender row (EXTENDER.md N7), after the provide control's
+  // own footer line so the segmented control keeps it. Hand built like the
+  // provide row above, since the kit's two-line rows have no leading slot: the
+  // dot, the title over the one-line state, and the switch. Hidden, never
+  // disabled, until a device reports the role supported.
+  extenderRow_ = kit::MakePaneRow(44);
+  {
+    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    line->set_hexpand(true);
+    extenderDot_ = Gtk::make_managed<Gtk::Label>();
+    extenderDot_->set_valign(Gtk::Align::CENTER);
+    kit::MarkDecorative(*extenderDot_);
+    line->append(*extenderDot_);
+    auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 1);
+    text->set_hexpand(true);
+    text->set_valign(Gtk::Align::CENTER);
+    auto* title = Gtk::make_managed<Gtk::Label>(T_("extender", "Extender"));
+    title->add_css_class("ur-row-title");
+    title->set_xalign(0);
+    text->append(*title);
+    extenderState_ = Gtk::make_managed<Gtk::Label>();
+    extenderState_->add_css_class("ur-row-note");
+    extenderState_->set_xalign(0);
+    extenderState_->set_single_line_mode(true);
+    extenderState_->set_ellipsize(Pango::EllipsizeMode::END);
+    // the 330 rail holds only if a long listen failure does not ask for more;
+    // the tooltip carries the whole text
+    CapNatural(extenderState_, 30);
+    text->append(*extenderState_);
+    line->append(*text);
+    extenderToggle_ = Gtk::make_managed<Gtk::Switch>();
+    extenderToggle_->set_valign(Gtk::Align::CENTER);
+    kit::SetAccessibleLabel(*extenderToggle_, T_("extender", "Extender"));
+    extenderToggle_->property_active().signal_changed().connect([this] {
+      // echo guard: a feed-driven write must not travel back to the SDK
+      if (updatingControls_) return;
+      OnExtenderToggled();
+    });
+    line->append(*extenderToggle_);
+    if (auto* inner = RowInner(extenderRow_)) inner->append(*line);
+  }
+  extenderRow_->set_visible(false);
+  moreOptionsHost_->append(*extenderRow_);
+  extenderDescription_ = Gtk::make_managed<Gtk::Label>(
+      T_("extender_setting_description",
+         "While you are providing, this device also relays for people whose access to the "
+         "network is blocked, on TCP and UDP 443 and UDP 4053."));
+  extenderDescription_->add_css_class("ur-caption");
+  extenderDescription_->set_xalign(0);
+  extenderDescription_->set_margin_start(12);
+  extenderDescription_->set_margin_end(12);
+  extenderDescription_->set_margin_bottom(8);
+  extenderDescription_->set_wrap(true);
+  CapNatural(extenderDescription_, 32);
+  extenderDescription_->set_visible(false);
+  moreOptionsHost_->append(*extenderDescription_);
 
   // connect options: the four toggle rows, each writing through SdkHost with
   // an echo guard (the load writes the same control)
@@ -877,9 +949,21 @@ void ConnectPage::BuildDataUsageGroup() {
   providerCountText_->set_hexpand(true);
   providerCountText_->set_ellipsize(Pango::EllipsizeMode::END);
   CapNatural(providerCountText_, 30);
-  providerCountLine_->set_child(*providerCountText_);
+  // text + a chevron (iOS parity): the row opens the provider details
+  auto* providerCountRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 4);
+  providerCountRow->append(*providerCountText_);
+  auto* providerCountChevron = Gtk::make_managed<Gtk::Image>();
+  providerCountChevron->set_from_icon_name("pan-end-symbolic");
+  providerCountChevron->set_pixel_size(14);
+  providerCountChevron->add_css_class("ur-key");
+  providerCountChevron->set_valign(Gtk::Align::CENTER);
+  kit::MarkDecorative(*providerCountChevron);
+  providerCountRow->append(*providerCountChevron);
+  providerCountLine_->set_child(*providerCountRow);
   providerCountLine_->signal_clicked().connect([this] {
-    if (!ConnectedNow()) return;  // the globe has nothing to plot without a session
+    // the globe has nothing to plot without a session; while connecting the
+    // sheet lists the providers known so far
+    if (!ConnectedNow() && !ConnectingNow()) return;
     if (on_open_provider_locations) on_open_provider_locations();
   });
   liveStatsGroup_->append(*providerCountLine_);
@@ -1030,6 +1114,37 @@ void ConnectPage::BuildDnsGroup() {
 // the daemon can be gone, StopTunnel can throw — and a UI that waits forever for
 // a completion that will never arrive is a worse lie than the one being fixed.
 constexpr gint64 kDisconnectIntentUs = 8 * G_TIME_SPAN_SECOND;
+
+// How long a loading skeleton may stand before the section settles on its
+// empty reading (DESIGNSTYLE: a placeholder must resolve). The device is up
+// well inside this after a sign-in; past it, the honest reading is the one
+// the accessors give — unavailable rows, an empty transport track.
+constexpr gint64 kPlaceholderCeilingUs = 6 * G_TIME_SPAN_SECOND;
+
+// ---- DESIGNSTYLE "Placeholders, not pop-in" -----------------------------------
+
+// Arm the skeletons for whatever has not been read yet: at build, and on every
+// Resync (login / re-show) — a null distribution on a signed-in page means the
+// device is still coming up, and the reading is worth waiting for.
+void ConnectPage::BeginPlaceholders() {
+  placeholdersSinceUs_ = g_get_monotonic_time();
+  if (!dnsSettings_) {
+    dnsSettled_ = false;
+    ApplyDnsCard();
+  }
+  if (transportBar_ && !host_.ClientTransportDistribution()) transportBar_->BeginLoading();
+}
+
+// The ceiling: whatever is still a skeleton becomes its empty reading, in
+// the same box. Idempotent — a section that settled on real data is untouched.
+void ConnectPage::SettlePlaceholders() {
+  placeholdersSinceUs_ = 0;
+  if (!dnsSettled_) {
+    dnsSettled_ = true;
+    ApplyDnsCard();
+  }
+  if (transportBar_ && transportBar_->IsLoading()) transportBar_->SettleEmpty();
+}
 
 bool ConnectPage::DisconnectIntentLive() {
   if (disconnectRequestedAtUs_ == 0) return false;
@@ -1244,15 +1359,18 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
 // a third question again.
 void ConnectPage::ApplyLiveStatsGroup() {
   if (!liveStatsGroup_ || !providerCountText_) return;
-  const bool show = ConnectedNow();
+  const bool connected = ConnectedNow();
+  const bool connecting = ConnectingNow();
+  const bool show = connected || connecting;
   liveStatsGroup_->set_visible(show);
   kit::SetTextOrCollapse(
       *providerCountText_,
-      show ? Glib::ustring(Format(TN_("connected_provider_count", "Connected to {} provider",
-                                      "Connected to {} providers",
-                                      static_cast<unsigned long>(stats_.providerCount)),
-                                  stats_.providerCount))
-           : Glib::ustring());
+      connected ? Glib::ustring(Format(TN_("connected_provider_count", "Connected to {} provider",
+                                           "Connected to {} providers",
+                                           static_cast<unsigned long>(stats_.providerCount)),
+                                       stats_.providerCount))
+      : connecting ? Glib::ustring(T_("connecting_status_indicator", "Connecting to providers"))
+                   : Glib::ustring());
   if (providerCountLine_) {
     kit::SetAccessibleLabel(*providerCountLine_, providerCountText_->get_text());
     // A row that cannot act must not claim it can: with the callback
@@ -1521,15 +1639,43 @@ void ConnectPage::ApplySplitRuleCount() {
 
 void ConnectPage::ApplyDnsCard() {
   const bool present = dnsSettings_.has_value();
-  if (dnsRowsPanel_) dnsRowsPanel_->set_visible(present);
-  if (dnsUnavailableRow_) dnsUnavailableRow_->set_visible(!present);
+  if (present) dnsSettled_ = true;
+  // DESIGNSTYLE "Placeholders, not pop-in": before the first reading the four
+  // rows are up with their labels (the labels are static) and a skeleton
+  // where the On/Off value goes, so the group opens at its settled 4x34 and
+  // the values are replaced in place. Only a reading that comes back empty
+  // swaps to the unavailable row — the error state, in the same group.
+  const bool loading = !present && !dnsSettled_;
+  if (dnsRowsPanel_) {
+    dnsRowsPanel_->set_visible(present || loading);
+    kit::SetBusy(*dnsRowsPanel_, loading);
+  }
+  if (dnsUnavailableRow_) dnsUnavailableRow_->set_visible(!present && !loading);
   // the editor has nothing to draft from without settings (DnsSheet::Open
   // returns false and does not present) — say so on the control
   if (dnsEditButton_) dnsEditButton_->set_sensitive(present);
   ApplyDnsRecommendationPill();  // collapses with the rows
+  if (loading) {
+    const Glib::ustring loadingText = T_("loading", "Loading...");
+    auto placeholder = [&loadingText](DnsStatusRow& row, const Glib::ustring& label) {
+      if (!row.dot || !row.state) return;
+      row.dot->remove_css_class("ur-dot-on");
+      row.dot->add_css_class("ur-dot-off");
+      row.state->remove_css_class("ur-value-on");
+      row.state->set_text(T_("off", "Off"));  // the sizer: the wider of the two values
+      kit::SetSkeleton(*row.state, true);
+      kit::SetAccessibleLabel(*row.state, label + ", " + loadingText);
+    };
+    placeholder(dnsDohRow_, T_("dns_over_https", "DNS over HTTPS"));
+    placeholder(dnsUnencryptedRow_, T_("unencrypted_dns", "Unencrypted DNS"));
+    placeholder(dnsLocalRow_, T_("local_dns", "Local DNS"));
+    placeholder(dnsFallbackRow_, T_("local_dns_fallback", "Local DNS fallback"));
+    return;
+  }
   if (!present) return;
   auto apply = [](DnsStatusRow& row, const Glib::ustring& label, bool on) {
     if (!row.dot || !row.state) return;
+    kit::SetSkeleton(*row.state, false);
     row.dot->remove_css_class(on ? "ur-dot-off" : "ur-dot-on");
     row.dot->add_css_class(on ? "ur-dot-on" : "ur-dot-off");
     if (on) {
@@ -1893,6 +2039,50 @@ void ConnectPage::ApplyKillSwitchUi() {
                               Glib::Markup::escape_text(copy.line) + "</span>");
 }
 
+// ---- the provider extender row (EXTENDER.md N7) -------------------------------
+
+// Re-reads the status, and beside a status that shows, the setting the switch
+// takes its position from. No status (no device) and an unsupported role both
+// hide the row, and a row that will not show reads nothing else.
+void ConnectPage::ApplyExtenderProvideState() {
+  DrawExtenderRow(extender::ProvideRowOf(host_.GetExtenderProvideStatus(),
+                                         [this] { return host_.GetProvideExtender(); }));
+}
+
+void ConnectPage::DrawExtenderRow(const extender::ProvideRow& row) {
+  if (!extenderRow_ || !extenderDescription_) return;
+  // a push that changes nothing is dropped
+  if (extenderRowApplied_ && row == extenderRowDrawn_) return;
+  extenderRowApplied_ = true;
+  extenderRowDrawn_ = row;
+  extenderRow_->set_visible(row.visible);
+  extenderDescription_->set_visible(row.visible);
+  if (!row.visible) return;
+  const std::string text = PaintExtenderProvideRow(*extenderDot_, *extenderState_, row);
+  // the switch shows the setting, written under the echo guard
+  if (extenderToggle_->get_active() != row.on) {
+    updatingControls_ = true;
+    extenderToggle_->set_active(row.on);
+    updatingControls_ = false;
+  }
+  // the switch is named Extender and carries the state as its description (N7)
+  Glib::Value<Glib::ustring> description;
+  description.init(Glib::Value<Glib::ustring>::value_type());
+  description.set(text);
+  extenderToggle_->update_property(Gtk::Accessible::Property::DESCRIPTION, description);
+}
+
+// The switch writes the setting at once and repaints the row with the guess
+// before the listener answers; the next status replaces the guess (N7).
+void ConnectPage::OnExtenderToggled() {
+  if (!extenderToggle_) return;
+  // never while hidden: a device that cannot take the write shows no row (N1)
+  if (!extenderRowDrawn_.visible) return;
+  const bool on = extenderToggle_->get_active();
+  host_.SetProvideExtender(on);
+  DrawExtenderRow(extender::ProvideRowGuess(on, stats_.provideEnabled));
+}
+
 // ---- connect options: the performance profile (§2.8) ---------------------------
 // ConnectDrawer::RefreshControls/ApplyControls, reused verbatim: the Linux
 // SdkHost has exposed GetPerformanceProfile/SetPerformanceProfile since the
@@ -2184,6 +2374,9 @@ void ConnectPage::RefreshFeeds(bool force) {
   ApplyKillSwitchUi();
   if (force) {
     PullThroughput();
+    // the extender row's listener fires nothing on registration, so a device
+    // arriving, a re-show and the build all re-read the status
+    ApplyExtenderProvideState();
     ApplyInspectorVisibility();
     ApplyInspector();
     // Ask urnetworkd what floor is REALLY installed. There is no push for
@@ -2216,6 +2409,7 @@ void ConnectPage::Resync() {
   ++(*epoch_);  // anything in flight against the old reading is stale
   SyncProvideControlMode();
   RefreshAllPanes();
+  BeginPlaceholders();
   // Seed the exit tables on entry rather than waiting up to a full 5 s tick:
   // Resync is login / tab entry / window re-show, i.e. exactly the moments the
   // pane comes back on screen. The tables are deliberately NOT cleared here —
@@ -2238,6 +2432,16 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       exits_.reset();
       destinationExits_.reset();
       RefreshAllPanes();
+      // the device's arrival (or departure) IS the dns reading: what the
+      // accessor returns now is the answer, so the skeleton rows settle on it.
+      // The transport bar settles on its first real distribution, pulled here
+      // rather than on the next throughput tick so the footer does not trail
+      // the rows by half a second.
+      if (!dnsSettled_) {
+        dnsSettled_ = true;
+        ApplyDnsCard();
+      }
+      if (transportBar_) transportBar_->SetDistribution(host_.ClientTransportDistribution());
       if (advanced_) RefreshExitRouting();
       break;
     case DrawerEvent::Throughput:
@@ -2272,6 +2476,7 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
       break;
     case DrawerEvent::DnsSettings:
+      dnsSettled_ = true;
       dnsSettings_ = host_.GetDnsResolverSettings();
       ApplyDnsCard();
       break;
@@ -2335,6 +2540,13 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::ProviderSelection:
       // MainWindow owns the globe sheet and the location-override tracking, so
       // they must survive with this page unbuilt
+      break;
+    case DrawerEvent::ExtenderStatus:
+      // the extender panel is the drawer's, and the hero canvas's rings ride
+      // the provider grid rather than the status
+      break;
+    case DrawerEvent::ExtenderProvideStatus:
+      ApplyExtenderProvideState();
       break;
   }
 }
@@ -2540,6 +2752,11 @@ void ConnectPage::Tick() {
   // "Disconnecting…" and a dead button on screen indefinitely. Re-rendered only
   // while an intent is actually outstanding, so an idle page costs nothing.
   if (disconnectRequestedAtUs_ != 0) ApplyConnectStatus();
+  // the loading skeletons' ceiling is clock-driven for the same reason
+  if (placeholdersSinceUs_ != 0 &&
+      g_get_monotonic_time() - placeholdersSinceUs_ > kPlaceholderCeilingUs) {
+    SettlePlaceholders();
+  }
   // the charts ride the throughput feed; at 2fps the 60s window still reads
   // live and the read stays off the per-frame path
   if (tickCount_ % 5 == 0) PullThroughput();

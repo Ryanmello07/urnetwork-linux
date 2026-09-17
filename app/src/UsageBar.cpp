@@ -5,6 +5,7 @@
 
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "PaneKit.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -67,10 +68,14 @@ UsageBar::UsageBar() : Gtk::Box(Gtk::Orientation::VERTICAL, 8) {
   dailyRow->append(*dailyBalanceValue_);
   append(*dailyRow);
 
-  append(*Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL));
+  referralSeparator_ = Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL);
+  append(*referralSeparator_);
 
-  // referrals: every referral adds 30 GiB/month to the daily balance
+  // referrals: every referral adds 3 GiB/day to the daily balance. The row is
+  // a flat button that opens the one Referrals page (on_referrals), so the
+  // drawer never grows a referral design of its own.
   auto* referralRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  referralRow_ = referralRow;
   referralCount_ = Gtk::make_managed<Gtk::Label>();
   referralCount_->add_css_class("dim-label");
   referralCount_->set_xalign(0);
@@ -79,7 +84,15 @@ UsageBar::UsageBar() : Gtk::Box(Gtk::Orientation::VERTICAL, 8) {
   referralBonus_ = Gtk::make_managed<Gtk::Label>();
   referralBonus_->add_css_class("dim-label");
   referralRow->append(*referralBonus_);
-  append(*referralRow);
+  referralButton_ = Gtk::make_managed<Gtk::Button>();
+  referralButton_->add_css_class("ur-usage-referral-row");
+  referralButton_->set_has_frame(false);
+  referralButton_->set_hexpand(true);
+  referralButton_->set_child(*referralRow);
+  referralButton_->signal_clicked().connect([this] {
+    if (on_referrals) on_referrals();
+  });
+  append(*referralButton_);
 
   SetData(0, 0, 0, 0, 0);
 }
@@ -94,8 +107,37 @@ void UsageBar::SetData(int64_t usedByteCount, int64_t pendingByteCount,
 
   dailyBalanceValue_->set_text(FormatByteCountCompact(dailyBalanceByteCount));
   referralCount_->set_text(
-      Format(T_("total_referral_count", "Total referrals: {}"), totalReferrals));
-  referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Month"), totalReferrals * 30));
+      Format(TN_("total_referral_count", "Total referrals: {}", "Total referrals: {}",
+                 totalReferrals),
+             totalReferrals));
+  // 3 GiB per referral per DAY (server pro.yml referral; this said GiB/Month * 30)
+  totalReferrals_ = totalReferrals;
+  const int64_t paid = (0 < maxReferrals_ && maxReferrals_ < totalReferrals) ? maxReferrals_ : totalReferrals;
+  referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), std::max<int64_t>(0, paid) * bonusGibPerDay_));
+  UpdateReferralAccessibleName();
+}
+
+// The button's accessible name is the row's two texts; the labels inside are
+// plain text and would otherwise read as an unnamed button.
+void UsageBar::UpdateReferralAccessibleName() {
+  if (!referralButton_ || !referralCount_ || !referralBonus_) return;
+  kit::SetAccessibleLabel(*referralButton_,
+                          referralCount_->get_text() + ", " + referralBonus_->get_text());
+}
+
+void UsageBar::SetShowReferrals(bool show) {
+  if (referralSeparator_) referralSeparator_->set_visible(show);
+  if (referralButton_) referralButton_->set_visible(show);
+}
+
+void UsageBar::SetReferralTerms(int64_t maxReferrals, int64_t bonusGibPerDay) {
+  maxReferrals_ = maxReferrals;
+  bonusGibPerDay_ = bonusGibPerDay;
+  const int64_t paid = (0 < maxReferrals_ && maxReferrals_ < totalReferrals_) ? maxReferrals_ : totalReferrals_;
+  if (referralBonus_) {
+    referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), std::max<int64_t>(0, paid) * bonusGibPerDay_));
+  }
+  UpdateReferralAccessibleName();
 }
 
 void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {

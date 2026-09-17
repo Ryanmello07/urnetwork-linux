@@ -73,6 +73,7 @@ sdk_root = meson.project_source_root() / 'third_party' / 'urnetwork-sdk' / sdk_a
 # explicitly where the compiler supports it (MSVC on Windows has no such warning).
 sdk_inc  = include_directories('third_party' / 'urnetwork-sdk' / sdk_arch, is_system : true)
 cpp = meson.get_compiler('cpp')
+exhaustive_switch_args = cpp.get_supported_arguments('-Werror=switch')
 # Existence check at configure time (a missing vendored SDK must fail here,
 # not with a link error later).
 sdk_found = cpp.find_library('URnetworkSdk', dirs : sdk_root)
@@ -121,6 +122,34 @@ if webkit.found() and build_gui
   webkit_args = ['-DUR_HAVE_WEBKIT']
 endif
 
+# QR DECODING for the extender import screen (connect/EXTENDER.md K8: "Windows
+# and linux: the code renders through a vendored single-file encoder, import
+# reads an image file through zxing-cpp plus pasted text, no camera").
+#
+# GUI-ONLY, and required exactly when the GUI is: with -Dgui=enabled (the
+# AppImage and Flatpak builds) a missing zxing-cpp is a hard configure error,
+# so the import screen can never ship silently half-working. A GTK-less or
+# `auto` build without it still compiles -- the "choose image file" button is
+# then absent and the pasted-text path, which needs no library at all, carries
+# the whole feature.
+#
+# >= 2.1 for ReaderOptions (2.0 called it DecodeHints). Ubuntu 24.04 and
+# Fedora 40 ship 2.2.1; the Flatpak builds it from source. The pkg-config
+# module is `zxing`, which is what zxing-cpp installs.
+# ENCODING is NOT this dependency: it is the vendored MIT single-file
+# app/third_party/qrcodegen (see its README for why it is vendored).
+zxing = dependency('zxing', version : '>= 2.1', required : get_option('gui'))
+zxing_args = []
+if zxing.found() and build_gui
+  gui_deps += zxing
+  zxing_args = ['-DUR_HAVE_ZXING']
+endif
+
+# The vendored QR encoder's header (app/third_party/qrcodegen). is_system for
+# the same reason the SDK header is: it is upstream code kept verbatim, and a
+# local warning policy must never become a reason to patch it.
+qrcodegen_inc = include_directories('third_party' / 'qrcodegen', is_system : true)
+
 # Optional WalletConnect Cloud project id -> src/Config.hpp (kWalletConnectProjectId).
 # Empty is valid and is the default: the wallet-connect bridge then drives injected
 # (browser extension) wallets only. Keeps the id out of the source tree, the way
@@ -162,6 +191,9 @@ executable('urnetwork-gui',
     'src/MainWindow.cpp',
     'src/UrTheme.cpp',
     'src/PaneKit.cpp',
+    'src/ReferralRoyalty.cpp',
+    'src/ReferralPanel.cpp',
+    'src/ReferralsPage.cpp',
     'src/HomeShell.cpp',
     'src/UrMotion.cpp',
     'src/LoginCarousel.cpp',
@@ -181,6 +213,8 @@ executable('urnetwork-gui',
     'src/ServiceInstall.cpp',
     'src/DeveloperPage.cpp',
     'src/EarningsPage.cpp',
+    'src/SolanaWalletSheet.cpp',
+    'src/EmojiTagSheet.cpp',
     'src/AccountPage.cpp',
     'src/LogTailClient.cpp',
     'src/Tray.cpp',
@@ -190,6 +224,13 @@ executable('urnetwork-gui',
     'src/TransportPresentation.cpp',
     'src/TransportBar.cpp',
     'src/TransportSheet.cpp',
+    'src/IpFamilyHistogram.cpp',
+    'src/ExtenderPanel.cpp',
+    'src/ExtenderSection.cpp',
+    'src/ExtenderShareSheet.cpp',
+    'src/ExtenderImportSheet.cpp',
+    # the vendored MIT QR encoder behind the extender share code
+    'third_party/qrcodegen/qrcodegen.cpp',
     'src/ConnectDrawer.cpp',
     'src/PostQuantumIdentity.cpp',
     'src/ContractsSheet.cpp',
@@ -197,9 +238,14 @@ executable('urnetwork-gui',
     'src/SplitRulesSheet.cpp',
     'src/DnsSheet.cpp',
     'src/SubscriptionBalance.cpp',
+    'src/ClientEvents.cpp',
+    'src/OfferCard.cpp',
     'src/UsageBar.cpp',
     'src/RedeemCodeSheet.cpp',
     'src/UpgradeSheet.cpp',
+    'src/Onboarding.cpp',
+    'src/PlanPicker.cpp',
+    'src/ProCelebration.cpp',
     'src/AuthViews.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
@@ -210,9 +256,10 @@ executable('urnetwork-gui',
     'src/LocationOverride.cpp',
     'src/LocationOverrideGuide.cpp',
   ],
-  include_directories : [sdk_inc],
+  include_directories : [sdk_inc, qrcodegen_inc],
   dependencies : gui_deps,
-  cpp_args : wc_args + i18n_args + webkit_args + sdk_warn_args + pkgdata_args + version_args,
+  cpp_args : wc_args + i18n_args + webkit_args + zxing_args + sdk_warn_args + pkgdata_args +
+             version_args + exhaustive_switch_args,
   install : true,
   # AppDir layout: usr/bin/urnetwork-gui next to usr/lib/libURnetworkSdk.so
   install_rpath : '$ORIGIN/../lib')
@@ -245,6 +292,7 @@ executable('urnetworkd',
     'src/daemon/ControlServer.cpp',
     'src/daemon/TunnelHost.cpp',
     'src/daemon/DaemonLog.cpp',
+    'src/daemon/HostMemory.cpp',
     'src/Tunnel.cpp',
     'src/ControlClient.cpp',
     'src/LocationOverride.cpp',
@@ -252,7 +300,7 @@ executable('urnetworkd',
   ],
   include_directories : [include_directories('src'), sdk_inc],
   dependencies : [gio, json, threads, sdk_lib],
-  cpp_args : sdk_warn_args + version_args,
+  cpp_args : sdk_warn_args + version_args + exhaustive_switch_args,
   link_args : daemon_link_args,
   install : true,
   install_dir : 'lib' / 'urnetwork',
@@ -322,27 +370,28 @@ install_data('packaging/com.bringyour.network.desktop',
 
 # AppStream metadata — required by Flathub, read by GNOME Software / Discover.
 # The component id matches the .desktop basename.
-# The release stamp is DERIVED, not hardcoded. Our release version is
-# <YYYY>.<M>.<D>-<run>[-beta]. Nothing used to write it, so the file sat at
-# 2026.8.19 while the pipeline shipped 2026.8.20 -- and this element is exactly
-# what GNOME Software, KDE Discover and the Flathub page display.
 #
-# The FULL version goes in, suffix and all: appstreamcli 1.0.2 (the ubuntu-24.04
-# validator CI runs) accepts "2026.8.20-1023929350-beta" with exit 0, so there is
-# no reason to truncate. Truncating would advertise a version that matches no
-# artifact -- every other consumer of $VERSION (UR_APP_VERSION in both binaries,
-# every package filename, the release-asset gates) uses the whole string -- and
-# would collapse every build of the same UTC day, and beta and stable alike, onto
-# one indistinguishable release element.
+# THE RELEASE STAMP IS DERIVED, NOT HARDCODED. The release version is
+# <YYYY>.<M>.<D>-<run>[-<suffix>]. Nothing used to write it into this file, so
+# it sat at whatever was typed last while the pipeline shipped something else —
+# and this element is exactly what GNOME Software, KDE Discover and the Flathub
+# page display.
 #
-# Only the DATE is derived from the leading <YYYY>.<M>.<D>.
+# The FULL version goes in, suffix and all: appstreamcli 1.0.2 (the version on
+# the ubuntu-24.04 image CI validates on) accepts a version like
+# "2026.8.16-1020679030-beta" with exit 0, so there is no reason to truncate.
+# Truncating would advertise a version that matches no artifact — every other
+# consumer of $VERSION (UR_APP_VERSION in both binaries, every package
+# filename, the release-asset gates) uses the whole string — and would collapse
+# every build of the same UTC day onto one indistinguishable release element.
+#
+# Only the DATE is derived, from the leading <YYYY>.<M>.<D>.
 #
 # NB: the .deb, .rpm and tarball do NOT ship this file. packaging/lib/common.sh's
 # assemble_daemon_root() copies an explicit whitelist (desktop entry, polkit
 # policy, icons) that does not include usr/share/metainfo, and make-appimage.sh
 # does not package it either. The Flatpak is the only artifact that installs it,
-# which is precisely why -Dapp_version must reach the Flatpak build --
-# packaging/make-flatpak.sh stamps it into the manifest for exactly that reason.
+# which is why -Dapp_version has to reach the Flatpak build.
 _appver = get_option('app_version')
 _av = _appver.split('-')[0]
 _vp = _av.split('.')
@@ -353,7 +402,7 @@ if _vp.length() == 3 and _vp[0].to_int() > 2000
 else
   # -Dapp_version was not passed (the 0.0.0 dev sentinel). LOUD on purpose: a
   # document saying version="0.0.0" is perfectly valid AppStream, so neither the
-  # meson test below nor CI's validate step can catch it -- the build log is the
+  # meson test below nor CI's validate step can catch it — the build log is the
   # only place it can surface. A release build must never take this branch.
   warning('app_version was not set, so the AppStream release stamp will say "' +
           _appver + '". Pass -Dapp_version=<release version> for anything you ' +
@@ -372,8 +421,8 @@ metainfo_xml = configure_file(
 install_data(metainfo_xml,
              install_dir : get_option('datadir') / 'metainfo')
 
-# Nothing validated this file before, which is how the stale version survived.
-# appstreamcli is the validator Flathub gates submissions on, so a bad edit
+# Nothing validated this file before, which is how a stale version survived in
+# it. appstreamcli is the validator Flathub gates submissions on, so a bad edit
 # fails here instead of in review. Optional: not every build host ships it.
 appstreamcli = find_program('appstreamcli', required : false)
 if appstreamcli.found()
@@ -381,17 +430,18 @@ if appstreamcli.found()
        args : ['validate', '--no-net', '--pedantic', metainfo_xml])
 endif
 
-# hicolor icons (Icon=urnetwork in the desktop file)
-# Sourced from the 1024x1024 master in the apple repo's AppIcon.appiconset, so
-# every size is a downscale of one artwork rather than separately-drawn assets
-# that drift. Flathub renders the store page at up to 512 and HiDPI desktops
-# ask for 128/256, so shipping only 48 and 256 left both looking soft.
-# 512 is the ceiling ON PURPOSE: flatpak refuses to export an icon larger
-# than 512x512 ("Image too large (1024x1024). Max. size 512x512") and fails
-# the whole build at export time. The 1024 master lives at
-# packaging/icons/com.bringyour.network-master-1024.png for regenerating
-# these, and is deliberately not installed. Flathub renders the store page
-# at up to 512, so nothing downstream wants a larger one.
+# hicolor icons (Icon=com.bringyour.network in the desktop file)
+# Every size is a downscale of ONE 1024x1024 master, so they cannot drift the
+# way separately-drawn assets do. Shipping only 48 and 256 meant the shell had
+# to upscale for the 64px app grid and the 128/256 HiDPI lookups, which is the
+# softness that showed up on a HiDPI desktop.
+#
+# 512 IS THE CEILING ON PURPOSE. flatpak refuses to export an icon larger than
+# 512x512 -- "Image too large (1024x1024). Max. size 512x512" -- and fails the
+# whole build at export time. The master is kept at
+# packaging/icons/com.bringyour.network-master-1024.png for regenerating these
+# and is deliberately not installed; nothing downstream asks for more than 512
+# (Flathub renders the store page at up to 512).
 foreach size : ['48', '64', '128', '256', '512']
   install_data('packaging/icons/hicolor/' + size + 'x' + size + '/apps/com.bringyour.network.png',
                install_dir : get_option('datadir') / 'icons' / 'hicolor' /
@@ -431,6 +481,8 @@ install_data('assets/world-110m.json',
 # and every AppImage would silently render the badge as a bare sentence.
 install_data('assets/ReferralFrog.png',
              install_dir : get_option('datadir') / 'urnetwork')
+install_data('assets/UrPerson1.png', 'assets/UrPerson2.png', 'assets/UrPerson3.png',
+             install_dir : get_option('datadir') / 'urnetwork')
 
 # The four licensed brand faces (SEPARATELY LICENSED commercial fonts — ABC
 # Dinamo + Pangram Pangram, NOT MPL; ship deliberately, per the owner's
@@ -452,12 +504,18 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # ---- unit tests -------------------------------------------------------------
 # The pure-logic modules (orthographic projection math, the TopoJSON decoder,
 # the provider row/label helpers, the location-override state machine, the
-# transport bar's boundary-tween geometry and the
-# daemon control protocol: framing, version negotiation in both directions,
-# SDK-build agreement, peer-credential authorization) carry no GTK, libadwaita
-# or SDK dependency on purpose, so this binary builds and runs anywhere a
-# C++17 compiler does -- including a developer machine that cannot build the
-# app itself.  meson test -C build
+# transport bar's boundary-tween geometry, the ip-version histogram's
+# grouping, the extender ring geometry, the extender panel's reading of
+# ExtenderStatus, the provider extender row's reading of ExtenderProvideStatus
+# and the statistics sections' visibility, the compact count and count-rate
+# labels, the extender share/import decisions, the Solana payout wallet's card
+# and connect-sheet rules, the wallet bridge's return routing, the dual-stack
+# tunnel policy and v6 capture set, and the daemon control protocol: framing,
+# version
+# negotiation in both directions, SDK-build agreement, peer-credential
+# authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
+# binary builds and runs anywhere a C++17 compiler does -- including a
+# developer machine that cannot build the app itself.  meson test -C build
 urnetwork_tests = executable('urnetwork-tests',
   sources : [
     'tests/main.cpp',
@@ -468,11 +526,27 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ControlProtocolTest.cpp',
     'tests/RpcSessionStoreTest.cpp',
     'tests/TunnelPolicyTest.cpp',
+    'tests/IoLoopFdTest.cpp',
     'tests/NetworkServerUtilsTest.cpp',
+    'tests/NetworkQualityTest.cpp',
     'tests/HealthTest.cpp',
+    'tests/TapSequenceGateTest.cpp',
     'tests/TransportBarGeometryTest.cpp',
-    'tests/UpdateReleaseTest.cpp',
+    'tests/IpFamilyHistogramTest.cpp',
+    'tests/ExtenderRingGeometryTest.cpp',
+    'tests/ExtenderStatusPresentationTest.cpp',
+    'tests/ExtenderProvidePresentationTest.cpp',
+    'tests/CountFormatTest.cpp',
+    'tests/ExtenderSharePresentationTest.cpp',
     'tests/TransportStatusPresentationTest.cpp',
+    'tests/DaemonUnreachableCopyTest.cpp',
+    'tests/SsoBridgeTest.cpp',
+    'tests/PricePresentationTest.cpp',
+    'tests/OnboardingRoutingTest.cpp',
+    'tests/LeaderboardIndicatorTest.cpp',
+    'tests/SolanaWalletPresentationTest.cpp',
+    'tests/WalletBridgeRouteTest.cpp',
+    'tests/UpdateReleaseTest.cpp',
     # The install-offer matrix. ServiceInstall.cpp is pure logic over
     # os-release text and a list of asset names -- no GTK, no SDK -- so it
     # belongs in this target, and the Arch package's immutable carve-out
@@ -489,13 +563,18 @@ urnetwork_tests = executable('urnetwork-tests',
   include_directories : include_directories('src', 'tests'),
   dependencies : [json],
   cpp_args : ['-DUR_ASSETS_DIR="' + meson.project_source_root() / 'assets' + '"',
-              # TunnelPolicyTest reads Tunnel.cpp to prove the IPv4-only guard
+              # TunnelPolicyTest reads Tunnel.cpp to prove the dual-stack guard
               # still has a caller. A predicate with no call site is this
               # project's most-repeated defect, and it is invisible to a test
               # that only exercises the predicate.
-              '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'],
+              '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
+             exhaustive_switch_args,
   install : false)
 test('unit', urnetwork_tests, protocol : 'exitcode')
+
+test('appimage-gsettings-schema-closure',
+     find_program('../packaging/gsettings.test.sh'),
+     protocol : 'exitcode')
 
 # ABI floor gate (APPIMAGE.md R9/§10c): the daemon and the vendored SDK must
 # reference no glibc symbol newer than the floor the packaging declares. The

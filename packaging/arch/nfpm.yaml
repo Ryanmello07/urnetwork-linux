@@ -346,11 +346,13 @@ archlinux:
 # iproute2, shadow, systemd in core; nftables, fuse2 in extra), so it resolves
 # on any of them.
 #
-# IT IS NOT FOR SteamOS, even though app/src/ServiceInstall.cpp maps steamos to
-# Family::Arch. SteamOS has a read-only /usr and `pacman -U` there needs
-# `steamos-readonly disable` and is reverted by the next system update, so the
-# in-app offer deliberately keeps immutable Arch hosts on the install tarball,
-# which handles a read-only /usr by installing under /usr/local.
+# IT IS NOT FOR SteamOS, which is Arch-family but immutable. SteamOS has a
+# read-only /usr; `pacman -U` there needs `steamos-readonly disable` and is
+# reverted by the next system update. Immutable Arch hosts take the install
+# tarball instead, which handles a read-only /usr by installing under
+# /usr/local. packaging/distro-smoke.sh says so on a SteamOS host.
+# app/src/ServiceInstall.cpp applies the same carve-out to the in-app offer:
+# it maps steamos to Family::Arch and still offers immutable hosts the tarball.
 #
 # NO conflicts:/provides:/replaces: are declared. There is no urnetwork package
 # in the Arch repositories or the AUR today, so there is nothing to conflict

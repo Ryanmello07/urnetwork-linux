@@ -29,9 +29,11 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ClientEvents.hpp"
 #include "ControlClient.hpp"
 #include "Health.hpp"
 #include "RpcSession.hpp"
+#include "WalletBridgeRoute.hpp"
 #include "WalletConnect.hpp"
 
 namespace urnw {
@@ -44,6 +46,15 @@ struct AuthResult {
   // kept the signed wallet_auth (see CreateNetworkWithPendingWallet) and the
   // UI routes into the create-network page instead of dead-ending.
   bool wallet_needs_network = false;
+  // Google/Apple (the provider's web flow) authenticated but the identity has
+  // no network yet: the host kept the identity token (see
+  // CreateNetworkWithPendingSso) and the UI routes into the create-network
+  // page the same way.
+  bool sso_needs_network = false;
+  // The account exists under other sign-in methods (comma-joined), so this
+  // attempt cannot sign it in; the UI names them (login_error_auth_allowed).
+  std::string authAllowed = {};
+  bool sso = false;  // the outcome of an sso attempt (its generic error copy)
 };
 
 // Outcome of the authLogin account discovery (macOS LoginInitialViewModel
@@ -89,6 +100,10 @@ enum class DrawerEvent {
   ProviderIdentities,  // post-quantum identity set changed (PQI panel + list)
   ProviderLocations,   // connected provider set/locations changed (locations sheet)
   ProviderSelection,   // the globe's selected provider changed (locations sheet)
+  ExtenderStatus,      // extender directory / gossip status changed (drawer panel)
+  // this device's own extender role changed state or setting (the connect
+  // page's extender row, the earnings page's read-only row and statistics)
+  ExtenderProvideStatus,
 };
 
 // Outcome of StartTunnel. Everything except Started is a degraded state the
@@ -378,7 +393,10 @@ class SdkHost {
     std::string error;
     std::string seedphrase;  // the caller zeroes its copy after display
   };
-  void CreateInstantAccount(std::function<void(InstantAccount)> done);
+  // Instant accounts can be referred too: a validated referral code rides
+  // along on the create (empty = none).
+  void CreateInstantAccount(const std::string& referralCode,
+                            std::function<void(InstantAccount)> done);
   void ConfirmInstantAccount(std::function<void(AuthResult)> done);
   void DiscardInstantAccount();
 
@@ -422,6 +440,54 @@ class SdkHost {
   // blockchain urnet::TAO. Same deep-link routing as Solana (HandleDeepLink).
   void SignInWithBittensor(std::function<void(AuthResult)> done);
 
+  // Sign in with Google or Apple through the provider's own web flow
+  // (SsoBridge.hpp): the host mints a state + nonce for the attempt, the api's
+  // callback returns the provider's identity token on
+  // urnetwork://oauth/<provider>, and only a return echoing that state with a
+  // token minted for that nonce reaches
+  // authLogin{auth_jwt_type, auth_jwt}. A new identity (no network) reports
+  // sso_needs_network and the create page finishes with
+  // CreateNetworkWithPendingSso.
+  void SignInWithSso(const std::string& provider, std::function<void(AuthResult)> done);
+
+  // The same bridge as a plain SIGNER (no sign-in): fetch a wallet challenge for
+  // `walletAddress` (empty = whichever wallet the bridge picks), open the bridge
+  // with purpose "connect", and hand back the ss58 address, the sr25519
+  // signature and the exact message that was signed. The Earnings page uses it
+  // to attach a Bittensor coldkey to the UR protocol (POST /sn/wallet verifies
+  // the signature server-side). Same deep-link routing as sign-in.
+  struct WalletSignature {
+    bool ok = false;
+    std::string address;
+    std::string signature;
+    std::string message;
+    std::string error;
+  };
+  void SignBittensorConnect(const std::string& walletAddress,
+                            std::function<void(WalletSignature)> done);
+
+  // The same bridge as a plain CONNECT for a Solana wallet (Phantom / Solflare):
+  // no challenge and no signature. The bridge connects the wallet and the
+  // urnetwork://<provider>-connect return hands back its base58 public key,
+  // which `done` receives as-is (the server validates it on POST /account/wallet,
+  // which takes no signature -- android's MWA connect and apple's
+  // connectPhantomWallet did the same). The Earnings page links it as the USDC
+  // payout wallet. The bridge is this request's from the moment it starts: a
+  // connect still waiting and a Bittensor signature request still waiting
+  // (SignBittensorConnect) are answered "superseded by a wallet connect
+  // request", and a challenge still being fetched for an older flow will not
+  // open the bridge over it (walletFlows_). Any later wallet flow answers this
+  // one "superseded by ..." in turn. `done` runs where the answer arrives: on the
+  // GTK main loop for a deep link, on the caller's own thread when the browser
+  // cannot be opened; callers marshal with PostToMain either way.
+  struct SolanaConnectResult {
+    bool ok = false;
+    std::string address;  // base58 public key
+    std::string error;
+  };
+  void ConnectSolanaWallet(WalletConnect::Provider provider,
+                           std::function<void(SolanaConnectResult)> done);
+
   // Route a urnetwork:// deep link (wallet callback, later OAuth) into the host.
   void HandleDeepLink(const std::string& url);
 
@@ -437,6 +503,12 @@ class SdkHost {
                                       const std::string& referralCode,
                                       std::function<void(AuthResult)> done);
   bool HasPendingWalletAuth();
+  // Create a network bound to the identity token captured by an sso sign-in
+  // that had no network yet (name + terms, no password).
+  void CreateNetworkWithPendingSso(const std::string& networkName,
+                                   const std::string& referralCode,
+                                   std::function<void(AuthResult)> done);
+  bool HasPendingSsoAuth();
   // Guest -> full account (Api::upgradeGuest). On success the guest device is
   // torn down and the network client re-registered under the upgraded jwt;
   // the UI restarts the tunnel.
@@ -619,6 +691,25 @@ class SdkHost {
   // Throughput tick as the points; nullopt with the tunnel down.
   std::optional<urnet::TransportDistribution> ClientTransportDistribution();
   std::optional<urnet::TransportDistribution> ProviderTransportDistribution();
+  // The provider and the extender series of the same controller, read on the
+  // same Throughput tick as ThroughputPoints (EXTENDER.md O3, O5): the provider
+  // points carry the provider's Local and Block routes, the extender points
+  // the traffic this device's extender role relayed, in the Remote route only.
+  // nullopt with no session.
+  std::optional<urnet::ThroughputPointList> ProviderThroughputPoints();
+  std::optional<urnet::ThroughputPointList> ExtenderThroughputPoints();
+  // The device reports provider packet stats: the half of the provider
+  // statistics gate (O8) the provide control mode does not decide. false with
+  // no session. The extender role's running state is not read here: it is the
+  // Enabled of the pushed GetExtenderProvideStatus.
+  bool HasProviderStats();
+  // The same fact asked of the DEVICE, one device rpc, for the forced re-reads
+  // right after a contract view controller opens (a device arriving, the
+  // window coming back): a new controller's provider stats stay nil until its
+  // first sample, while the device answers at once. Provider presence is fixed
+  // per device, so the two agree once the controller has sampled. false with
+  // no device.
+  bool DeviceHasProviderStats();
   std::optional<urnet::BlockActionList> BlockActions();
   std::optional<urnet::BlockStats> BlockStatsSnapshot();
   std::optional<urnet::BlockActionOverrideList> BlockActionOverrides();
@@ -692,6 +783,70 @@ class SdkHost {
   void SetSelectedProviderClientId(const std::string& clientId);
   void StepProviderSelection(int steps);
 
+  // ---- extenders (EXTENDER.md K4 to K8) -------------------------------------
+  // The extender directory + gossip status, read off the DEVICE (K5: it lives
+  // on DeviceLocal and reaches DeviceRemote over the rpc with the last value
+  // cached, exactly as the provider family transport status), so the drawer
+  // panel reads the DAEMON's directory rather than this process's. nullopt
+  // with no device -- which the panel renders as "hidden", never as zero.
+  // Changes arrive as DrawerEvent::ExtenderStatus, coalesced by the SDK to one
+  // callback per second.
+  std::optional<urnet::ExtenderStatus> GetExtenderStatus();
+
+  // The status of this device's OWN extender role (EXTENDER.md N2, N3), read
+  // off the DEVICE like GetExtenderStatus, because the role runs in the
+  // daemon's DeviceLocal. DeviceRemote reads it through the rpc with the last
+  // value cached, and answers the unsupported status against a device process
+  // that lacks the method. nullopt with no device, which the extender rows
+  // render as hidden. Changes arrive as DrawerEvent::ExtenderProvideStatus: the
+  // SDK coalesces them to one callback per epoch (a second) after any change of
+  // the setting, the provide state or the role, and fires none on
+  // registration, so the pages re-read the status on DeviceLifecycle.
+  std::optional<urnet::ExtenderProvideStatus> GetExtenderProvideStatus();
+  // The provider extender setting of the daemon's space, through the device:
+  // the queued or last-known value while the daemon is out of contact, so the
+  // toggle never snaps back during a daemon restart (N2). With no device, the
+  // setting's default, on (N4) -- nothing draws it then, the row is hidden.
+  bool GetProvideExtender();
+  // Writes the setting through the device, which persists and applies it at
+  // once; queued and replayed at the next sync while the daemon is unreachable
+  // (N2, N4). The GUI's own LocalState is not the daemon's space and is never
+  // written. With no device the write is dropped: the row is hidden then, and
+  // the setter is never called while the row is hidden (N1).
+  void SetProvideExtender(bool on);
+
+  // The SDK's shared ExtenderViewController (K7: "encoding, decoding and
+  // applying live in the sdk, one implementation for every app"). Opened with
+  // the rest of the presentation, so every call below returns nullopt with the
+  // window hidden or the tunnel down and the account section renders its
+  // no-device state rather than an empty form.
+  //
+  // Settings are the SPACE's, applied through the controller, which restarts
+  // the space's network client and node in place. On this platform that space
+  // belongs to urnetworkd, which is the correct one: the tunnel's dials are
+  // what the settings steer.
+  std::optional<urnet::ExtenderSettings> GetExtenderSettings();
+  std::optional<urnet::ExtenderSettings> SetExtenderSettings(const std::string& dnsName,
+                                                             const std::string& gossipUrl,
+                                                             const std::vector<std::string>& hosts);
+  std::optional<urnet::ExtenderShareResult> BuildExtenderShare(bool includeSettings);
+  std::optional<urnet::ExtenderShareDecodeResult> DecodeExtenderShare(const std::string& text);
+  std::optional<urnet::ExtenderImportResult> ImportExtenderShare(const std::string& text,
+                                                                 bool useSettings);
+
+  // The LEGACY private extender (F1: NetExtender stays), an advanced override
+  // on the network space values written through updateNetworkSpaceValues --
+  // the same path ApplyNetworkServer uses. Empty ip AND secret clears it.
+  //
+  // KNOWN LIMIT (the daemon split): this writes the GUI's OWN space, which is
+  // the one its api/auth calls dial. urnetworkd builds its space from its own
+  // storage (daemon/TunnelHost.cpp), so the tunnel's provider dials do not see
+  // a private extender set here until the daemon is taught the same value.
+  // Every other extender setting goes through the view controller above and
+  // therefore does reach the daemon.
+  std::optional<urnet::NetExtender> GetPrivateExtender();
+  bool SetPrivateExtender(const std::string& ip, const std::string& secret);
+
   // ---- reliability / exits (Home's Advanced inspector + the Developer page) --
   // The locked, BLOCKING read. Every field behind it is a synchronous device
   // rpc over the loopback mTLS channel to urnetworkd — three for ExitsOnly,
@@ -727,6 +882,19 @@ class SdkHost {
 
   // Exposed so the (full-parity) UI/view models can drive the SDK directly.
   urnet::Api& api() { return *api_; }
+  // The app-wide client event queue (ClientEvents.hpp): every product event
+  // the onboarding optimization loop reads goes through this one facade.
+  // Valid after Initialize().
+  ClientEventQueue& events() { return *events_; }
+  // The sign-up pages' "Periodic product updates" switch, read at submit:
+  // the next network create carries product_updates=false when it is off
+  // (absent = opted in), and signup.optout_changed records the opt-out.
+  void SetProductUpdatesOptOut(bool optOut);
+  // urnetwork://onboarding/<step> deep links (the campaign emails' buttons):
+  // routed to the window, which owns the destinations. Fired on the GTK loop.
+  void SetOnboardingLinkHandler(std::function<void(const std::string& url)> handler) {
+    onOnboardingLink_ = std::move(handler);
+  }
   // "There is a session I can drive", NOT "I am holding a handle".
   //
   // A urnet::DeviceRemote handle belongs to this process and nothing
@@ -791,6 +959,17 @@ class SdkHost {
   // auth (Logout clears auth too; the guest upgrade only swaps the device).
   void TeardownDeviceLocked();
   void SetupWalletCallbacks();
+  // Answers a ConnectSolanaWallet that is still waiting with `reason` (another
+  // wallet flow is taking the bridge). Takes mutex_: never call it holding it.
+  void CancelPendingSolanaConnect(const std::string& reason);
+  // Whether `flow` is still the newest wallet flow (walletFlows_); logs the drop
+  // when it is not. Takes mutex_.
+  bool WalletFlowIsCurrent(uint64_t flow);
+  void RequestWalletChallenge(
+      const std::string& blockchain, const std::string& walletAddress,
+      std::function<void(std::optional<std::string> message, std::string error)> done);
+  void FailWalletOperation(const std::string& error);
+  void FinishCreateNetworkWithWallet(const std::string& signature);
   // blockchain: "solana" (ed25519, base64 signature) | urnet::TAO (sr25519, hex)
   void AuthLoginWithWallet(const std::string& address, const std::string& signature,
                            const std::string& message, const std::string& blockchain);
@@ -867,6 +1046,17 @@ class SdkHost {
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::Api> api_;
+  std::unique_ptr<ClientEventQueue> events_;
+  std::function<void(const std::string& url)> onOnboardingLink_;
+  bool productUpdatesOptOut_ = false;  // the next create's product_updates
+  // the sign-up pages' opt-out onto a create's args (absent = opted in)
+  void ApplySignupPreferences(urnet::NetworkCreateArgs& args) const;
+  // POST /network/auth-client with the device's time zone (IANA) and locale
+  // (BCP 47) on the args: the campaign engine schedules its emails in the
+  // user's local time. Sent as extra json fields until the C ABI's
+  // AuthNetworkClientArgs carries them.
+  void AuthNetworkClientWithLocale(const urnet::AuthNetworkClientArgs& args,
+                                   urnet::AuthNetworkClientCallback callback);
   std::optional<urnet::AsyncLocalState> asyncLocalState_;
   std::optional<urnet::LocalState> localState_;
   // The remote face of the daemon's DeviceLocal. Exists only while a tunnel
@@ -888,6 +1078,8 @@ class SdkHost {
   std::optional<urnet::PostQuantumIdentityViewController> pqiVc_;
   // the provider globe's selection + scroll wheel, shared across every app
   std::optional<urnet::ProviderLocationsViewController> providerLocationsVc_;
+  // extender settings, share and import (the SDK owns the payload format)
+  std::optional<urnet::ExtenderViewController> extenderVc_;
   // control channel to urnetworkd (tunnel lifecycle + location override)
   ControlClient control_;
   std::string lastTunnelError_;
@@ -964,9 +1156,35 @@ class SdkHost {
   // consumed on wallet deep-link and SDK callback threads (on_error /
   // AuthLoginWithWallet) — always taken under the lock, invoked outside it.
   std::function<void(AuthResult)> walletAuthDone_;
-  // The signed wallet_auth of a wallet sign-in with no network, carried into
-  // CreateNetworkWithPendingWallet (android/apple route the same way).
+  // Identity from a wallet sign-in with no network. Its first signature was
+  // consumed by AuthLogin; CreateNetworkWithPendingWallet always fetches and
+  // signs a new address-bound challenge before submitting it.
   std::optional<urnet::WalletAuthArgs> pendingWalletAuth_;
+  std::string pendingWalletNetworkName_;
+  std::string pendingWalletReferralCode_;
+  std::function<void(AuthResult)> walletCreateDone_;
+  std::function<void(WalletSignature)> walletSignDone_;  // SignBittensorConnect
+  // ConnectSolanaWallet (guarded by mutex_, like walletSignDone_): consumed by the
+  // connect return (on_public_key) or a bridge error (on_error), or answered
+  // "superseded by ..." by the next wallet flow.
+  std::function<void(SolanaConnectResult)> walletConnectDone_;
+  // Guarded by mutex_: every wallet flow start takes the next number, and a step
+  // that runs later (a challenge arriving after its fetch) opens the bridge only
+  // while its flow is still the newest (WalletBridgeRoute.hpp FlowCounter).
+  bridge::FlowCounter walletFlows_;
+  // The sso attempt in flight (guarded by mutex_): the provider it was opened
+  // for and the state + nonce minted for it; cleared by the first return that
+  // echoes the state. walletAuthDone_ carries its completion, so the shared
+  // error path (FailWalletOperation / on_error) covers it too.
+  std::string ssoProvider_;
+  std::string ssoState_;
+  std::string ssoNonce_;
+  // Identity from an sso sign-in with no network: the token and its type,
+  // consumed by CreateNetworkWithPendingSso.
+  bool pendingSsoAuth_ = false;
+  std::string pendingSsoType_;
+  std::string pendingSsoJwt_;
+  void AuthLoginWithSso(const std::string& provider, const std::string& jwt);
   // The instant account's jwt, held between CreateInstantAccount and the
   // seedphrase sheet's confirm (guarded by mutex_; a secret — never log it).
   std::optional<std::string> pendingInstantJwt_;

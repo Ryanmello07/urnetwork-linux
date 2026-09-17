@@ -286,7 +286,7 @@ inline constexpr const char* kCodeRpcListenFailed = "rpc_listen_failed";
 // "127.0.0.1:notaport" into 0 and then silently report 12025 while the
 // listener was elsewhere, a mismatch the GUI had no way to detect:
 //   * literal "127.0.0.1" only — NOT "localhost" (resolver-dependent) and NOT
-//     "::1" (a v6 listener sits outside the IPv6 fail-closed story);
+//     "::1" (the device rpc is a v4 loopback contract on every platform);
 //   * digits only, so a second ':', whitespace or a leading '+' all fail;
 //   * 1024 <= port <= 65535. Port 0 is refused: the SDK would bind an
 //     ephemeral port the GUI could never dial, and the echoed rpc_port would
@@ -953,7 +953,14 @@ struct StatusReply {
   std::string dns_detail;    // always set: which tier holds DNS, or why none could
   KillSwitchState kill_switch = KillSwitchState::Off;
   std::string kill_switch_detail;  // why it is Failed ("" otherwise)
-  bool ipv6_blocked = false;       // v6 has no tunnel: blocked rather than leaked
+  // OFF-TUNNEL IPv6 is blocked (leak prevention, never gated on the kill
+  // switch): v6 leaves this machine through the tunnel or not at all.
+  bool ipv6_blocked = false;
+  // The v6 half of the tunnel is in force: the tun carries a v6 address and
+  // the v6 capture routes. false with tunnel_state=up means the host has IPv6
+  // disabled (kernel ipv6.disable / net.ipv6.conf.all.disable_ipv6), where v6
+  // can neither be carried nor leak. Absent from an older daemon = false.
+  bool ipv6_captured = false;
   std::string tunnel_interface;    // "urnet0" while up
   // Why the last session ended: "user" (an explicit stop_tunnel), "io_loop"
   // (the SDK loop finished under us), "start_failed", "daemon_shutdown", or ""
@@ -1001,6 +1008,7 @@ inline void to_json(nlohmann::json& j, const StatusReply& v) {
   j["kill_switch"] = ToString(v.kill_switch);
   j["kill_switch_detail"] = v.kill_switch_detail;
   j["ipv6_blocked"] = v.ipv6_blocked;
+  j["ipv6_captured"] = v.ipv6_captured;
   j["tunnel_interface"] = v.tunnel_interface;
   j["stop_reason"] = v.stop_reason;
   j["up_since_millis"] = v.up_since_millis;
@@ -1027,6 +1035,7 @@ inline void from_json(const nlohmann::json& j, StatusReply& v) {
   v.kill_switch = KillSwitchStateFromString(killSwitch);
   detail::Get(j, "kill_switch_detail", v.kill_switch_detail);
   detail::Get(j, "ipv6_blocked", v.ipv6_blocked);
+  detail::Get(j, "ipv6_captured", v.ipv6_captured);  // absent = false = understates
   detail::Get(j, "tunnel_interface", v.tunnel_interface);
   detail::Get(j, "stop_reason", v.stop_reason);
   detail::Get(j, "up_since_millis", v.up_since_millis);

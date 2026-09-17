@@ -218,6 +218,25 @@ void TransportBar::BuildUi() {
   unused_->set_visible(false);
   append(*unused_);
 
+  // DESIGNSTYLE "Placeholders, not pop-in": the legend line as a skeleton of
+  // itself, shown between BeginLoading and the first distribution. Built from
+  // the chip's own parts — the dot at kDotSize, the caption face as a
+  // transparent sizer — so its height IS a legend line's; three chips is the
+  // shape a settled line has. Hidden until the page asks for it.
+  placeholder_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+  for (const char* sizer : {"WebRTC 100%", "QUIC 0%", "TLS 0%"}) {
+    auto* item = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 5);
+    item->append(*kit::MakeSkeletonDot(kDotSize));
+    auto* bar = kit::MakeSkeletonLabel(sizer, "ur-caption-11");
+    bar->set_valign(Gtk::Align::END);  // as the chip's labels sit
+    item->append(*bar);
+    placeholder_->append(*item);
+  }
+  kit::SetAccessibleLabel(*placeholder_, T_("loading", "Loading..."));
+  kit::SetBusy(*placeholder_, true);
+  placeholder_->set_visible(false);
+  append(*placeholder_);
+
   // whole-component tap opens the editor. The bar sits inside a tappable
   // card (the client statistics card opens the contract details), so the
   // press CLAIMS the sequence: gestures on the ancestors are denied it and
@@ -241,8 +260,21 @@ void TransportBar::SetSurfaceColor(const Rgba& color) {
   bar_.queue_draw();
 }
 
+void TransportBar::BeginLoading() {
+  loading_ = true;
+  if (placeholder_) placeholder_->set_visible(true);
+}
+
+void TransportBar::SettleEmpty() {
+  loading_ = false;
+  if (placeholder_) placeholder_->set_visible(false);
+}
+
 void TransportBar::SetDistribution(
     const std::optional<urnet::TransportDistribution>& distribution) {
+  // a real reading, even an empty one, is what the skeleton was waiting for:
+  // the legend / footer it becomes are rebuilt below, in the same box
+  if (distribution && loading_) SettleEmpty();
   // the distribution is inactive while the window is idle; only a real change
   // retargets the tween or touches the rows
   if (SameDistribution(distribution, distribution_)) return;

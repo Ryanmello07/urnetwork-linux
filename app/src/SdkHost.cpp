@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "SdkHost.hpp"
 
+#include <urnetwork_sdk.h>
+
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -27,7 +29,9 @@
 // the one translation unit that links libsecret, and urnetworkd (which builds
 // in a container that has no libsecret at all) never sees this header.
 #include "SecretServiceRpcSessionStore.hpp"
+#include "SsoBridge.hpp"
 #include "Ui.hpp"  // PostToMain — the only UI dependency here, and only to marshal
+#include "WalletBridgeRoute.hpp"
 
 // The release version, threaded in via the -Dapp_version meson option (the
 // pipeline passes $VERSION); the fallback matches the option's default.
@@ -45,9 +49,6 @@ constexpr const char* kAppVersion = UR_APP_VERSION;
 // The GUI's memory bound. The data plane's budget now lives in urnetworkd
 // (TunnelHost); this only scales the GUI-side SDK (api + DeviceRemote).
 constexpr int64_t kMemoryLimit = 64ll * 1024 * 1024;
-// The challenge every wallet signs for wallet sign-in — the same static string on
-// every client (apple/NEXTSTEPS2.md §4); no client sends a nonce.
-constexpr const char* kWalletSignInMessage = "Welcome to URnetwork";
 // AuthLogin{wallet_auth} blockchain ids. The server matches case-insensitively:
 // "solana" -> ed25519, urnet::TAO ("TAO") -> sr25519 (bittensor).
 constexpr const char* kSolanaBlockchain = "solana";
@@ -325,6 +326,10 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     api_ = networkSpace_->getApi();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
+    // the SDK's client event queue over this network space: it persists,
+    // batches and sends the product events (ClientEvents.hpp)
+    events_ = std::make_unique<ClientEventQueue>(networkSpace_->handle(), UR_APP_VERSION,
+                                                 ClientEventLocale());
     // RESTORE THE API'S AUTHORIZATION FROM THE PERSISTED SESSION.
     //
     // api_->setByJwt is called in exactly one other place — RegisterNetworkClient,
@@ -454,6 +459,7 @@ void SdkHost::LoginWithCode(const std::string& authCode, std::function<void(Auth
 
 void SdkHost::LoginAsGuest(std::function<void(AuthResult)> done) {
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.terms = true;
   args.guest_mode = true;
   api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
@@ -515,11 +521,14 @@ void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
   });
 }
 
-void SdkHost::CreateInstantAccount(std::function<void(InstantAccount)> done) {
+void SdkHost::CreateInstantAccount(const std::string& referralCode,
+                                   std::function<void(InstantAccount)> done) {
   // NO user_auth, password, auth_jwt or wallet_auth: that combination is what
   // makes the server mint a seedphrase-secured network and return the phrase.
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.terms = true;  // the form's button is gated on the terms consent
+  if (!referralCode.empty()) args.referral_code = referralCode;
   api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
     InstantAccount out;
@@ -746,6 +755,7 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
                             const std::string& password, const std::string& referralCode,
                             std::function<void(AuthResult)> done) {
   urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
   args.user_auth = userAuth;
   args.password = password;
@@ -762,25 +772,56 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
 void SdkHost::CreateNetworkWithPendingWallet(const std::string& networkName,
                                              const std::string& referralCode,
                                              std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded by wallet network creation");
   std::optional<urnet::WalletAuthArgs> walletAuth;
+  uint64_t flow = 0;
   {
     std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();  // this flow signs through the bridge too
     walletAuth = pendingWalletAuth_;
   }
   if (!walletAuth) {
     done({false, false, "no wallet sign-in pending"});
     return;
   }
-  urnet::NetworkCreateArgs args;
-  args.user_name = std::string();
-  args.network_name = networkName;
-  args.terms = true;
-  args.verify_use_numeric = true;
-  if (!referralCode.empty()) args.referral_code = referralCode;
-  args.wallet_auth = walletAuth;  // the signed challenge from the wallet sign-in
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
-                                         std::optional<std::string> err) {
-    HandleNetworkCreateResult(std::move(result), std::move(err), done);
+
+  RequestWalletChallenge(walletAuth->blockchain.value_or(std::string()),
+                         walletAuth->wallet_address.value_or(std::string()),
+                         [this, flow, networkName, referralCode, done = std::move(done)](
+                             std::optional<std::string> message, std::string error) mutable {
+    if (!message) {
+      done({false, false, error.empty() ? "could not fetch wallet challenge" : error});
+      return;
+    }
+
+    PostToMain([this, flow, networkName, referralCode, message = *message,
+                done = std::move(done)]() mutable {
+      WalletConnect::Provider provider;
+      {
+        std::scoped_lock lock(mutex_);
+        if (!walletFlows_.IsCurrent(flow)) {
+          // another wallet flow took the bridge while the challenge was fetched
+          done({false, false, "superseded by another wallet flow"});
+          return;
+        }
+        if (!pendingWalletAuth_) {
+          done({false, false, "no wallet sign-in pending"});
+          return;
+        }
+        pendingWalletAuth_->wallet_message = message;
+        pendingWalletAuth_->wallet_signature = std::string();
+        pendingWalletNetworkName_ = networkName;
+        pendingWalletReferralCode_ = referralCode;
+        walletCreateDone_ = std::move(done);
+        provider = wallet_.provider();
+      }
+
+      if (provider == WalletConnect::Provider::Bittensor) {
+        wallet_.SignInWithBittensor(message);
+      } else {
+        wallet_.SignMessage(message);
+      }
+    });
   });
 }
 
@@ -905,51 +946,575 @@ void SdkHost::RefreshJwt() {
 // ---- Sign in with a wallet (Solana / Bittensor via ur.io/wallet-connect) ----
 
 void SdkHost::SetupWalletCallbacks() {
-  // Solana is a two-hop flow: connect first, then ask the wallet to sign the
+  // Every return goes to the flow waiting for it (WalletBridgeRoute.hpp), and
+  // one nobody waits for is dropped. The bridge page keeps "Return to
+  // URnetwork" on screen after its automatic redirect and the key pair lives
+  // until the next Connect, so a second delivery of a connect return decrypts
+  // again: it must never become a wallet sign-in in a signed-in app. A wallet
+  // sign-in is waiting exactly when walletAuthDone_ is set.
+  //
+  // Solana signs in in two hops: connect first, then ask the wallet to sign the
   // challenge. (Bittensor never fires this — it signs in a single hop.)
-  wallet_.on_public_key = [this](std::string, WalletConnect::Provider) {
-    wallet_.SignMessage(kWalletSignInMessage);
+  wallet_.on_public_key = [this](std::string publicKey, WalletConnect::Provider provider) {
+    std::function<void(SolanaConnectResult)> connectDone;
+    bridge::PublicKeyRoute route = bridge::PublicKeyRoute::Drop;
+    uint64_t flow = 0;
+    {
+      std::scoped_lock lock(mutex_);
+      flow = walletFlows_.Latest();
+      route = bridge::RoutePublicKey(provider == WalletConnect::Provider::Bittensor,
+                                     static_cast<bool>(walletConnectDone_),
+                                     static_cast<bool>(walletAuthDone_));
+      if (route == bridge::PublicKeyRoute::AnswerConnect) {
+        connectDone = std::move(walletConnectDone_);
+        walletConnectDone_ = nullptr;
+      }
+    }
+    switch (route) {
+      case bridge::PublicKeyRoute::Drop:
+        std::fprintf(stderr,
+                     "[wallet] a connect return arrived with no flow in flight, ignoring it\n");
+        return;
+      case bridge::PublicKeyRoute::AnswerConnect: {
+        // a plain connect (ConnectSolanaWallet) wants the key itself: no
+        // challenge, no signature
+        SolanaConnectResult out;
+        out.ok = true;
+        out.address = std::move(publicKey);
+        connectDone(std::move(out));
+        return;
+      }
+      case bridge::PublicKeyRoute::SignIn:
+        break;
+    }
+    RequestWalletChallenge(kSolanaBlockchain, publicKey,
+                           [this, flow](std::optional<std::string> message, std::string error) {
+      if (!message) {
+        // a newer wallet flow owns the slots now: it is not failed for this one
+        if (!WalletFlowIsCurrent(flow)) return;
+        FailWalletOperation(error.empty() ? "could not fetch wallet challenge" : error);
+        return;
+      }
+      PostToMain([this, flow, message = *message] {
+        if (!WalletFlowIsCurrent(flow)) return;  // a newer flow owns the bridge now
+        wallet_.SignMessage(message);
+      });
+    });
   };
   // Either way the wallet address is on the WalletConnect by now: solana set it
   // on the connect callback, bittensor returns it alongside the signature.
   wallet_.on_signature = [this](std::string signature) {
+    // A plain signing request (SignBittensorConnect) never authenticates: the
+    // signature goes back to the caller with the address and the message. A
+    // signature nobody waits for (a superseded or abandoned tab) is dropped: it
+    // must not reach AuthLoginWithWallet, which would move the session.
+    std::function<void(WalletSignature)> signDone;
+    bridge::SignatureRoute route = bridge::SignatureRoute::Drop;
+    {
+      std::scoped_lock lock(mutex_);
+      route = bridge::RouteSignature(static_cast<bool>(walletSignDone_),
+                                     static_cast<bool>(walletCreateDone_),
+                                     static_cast<bool>(walletAuthDone_));
+      if (route == bridge::SignatureRoute::AnswerRequest) {
+        signDone = std::move(walletSignDone_);
+        walletSignDone_ = nullptr;
+      }
+    }
+    switch (route) {
+      case bridge::SignatureRoute::Drop:
+        std::fprintf(stderr,
+                     "[wallet] a wallet signature arrived with no flow in flight, ignoring it\n");
+        return;
+      case bridge::SignatureRoute::AnswerRequest: {
+        WalletSignature out;
+        out.ok = true;
+        out.address = wallet_.publicKey();
+        out.signature = std::move(signature);
+        out.message = wallet_.message();
+        signDone(std::move(out));
+        return;
+      }
+      case bridge::SignatureRoute::FinishCreate:
+        FinishCreateNetworkWithWallet(signature);
+        return;
+      case bridge::SignatureRoute::SignIn:
+        break;
+    }
     const bool bittensor = wallet_.provider() == WalletConnect::Provider::Bittensor;
-    AuthLoginWithWallet(wallet_.publicKey(), signature, kWalletSignInMessage,
+    AuthLoginWithWallet(wallet_.publicKey(), signature, wallet_.message(),
                         bittensor ? urnet::TAO : kSolanaBlockchain);
+  };
+  // The sign-in return (the api's oauth callback): only the attempt in flight is accepted (echoed
+  // state, token minted for the nonce), then the identity token signs in.
+  wallet_.on_sso = [this](std::string provider, std::string jwt, std::string state,
+                          std::string error) {
+    sso::Return r;
+    r.provider = provider;
+    r.authJwt = jwt;
+    r.state = state;
+    r.error = error;
+    sso::Verdict verdict;
+    std::string expectedProvider;
+    {
+      std::scoped_lock lock(mutex_);
+      verdict = sso::CheckReturn(r, ssoProvider_, ssoState_, ssoNonce_);
+      expectedProvider = ssoProvider_;
+      // a return that echoes the state ends the attempt either way; a stray
+      // one (no attempt, another state) leaves a live attempt untouched
+      if (r.state == ssoState_ && !ssoState_.empty()) {
+        ssoProvider_.clear();
+        ssoState_.clear();
+        ssoNonce_.clear();
+      }
+    }
+    if (!verdict.ok) {
+      std::fprintf(stderr, "[sso] rejected return for %s: %s\n", provider.c_str(),
+                   verdict.error.c_str());
+      // a stray return must not fail the attempt in flight
+      if (verdict.error == "unexpected sign-in return" && !expectedProvider.empty() &&
+          r.state != state) {
+        return;
+      }
+      FailWalletOperation(verdict.error);
+      return;
+    }
+    AuthLoginWithSso(provider, jwt);
   };
   wallet_.on_error = [this](std::string err) {
     // walletAuthDone_ is set on the UI thread and consumed on wallet/SDK
     // callback threads: take it under the lock, invoke it outside
+    std::function<void(SolanaConnectResult)> connectDone;
+    std::function<void(WalletSignature)> signDone;
     std::function<void(AuthResult)> done;
     {
       std::scoped_lock lock(mutex_);
-      done = std::move(walletAuthDone_);
-      walletAuthDone_ = nullptr;
+      // a plain connect is answered first, and alone: every other wallet flow
+      // cancels a waiting connect when it starts, so a connect still waiting
+      // is the flow that opened the bridge last
+      connectDone = std::move(walletConnectDone_);
+      walletConnectDone_ = nullptr;
+      if (!connectDone) {
+        signDone = std::move(walletSignDone_);
+        walletSignDone_ = nullptr;
+        if (walletCreateDone_) {
+          done = std::move(walletCreateDone_);
+          pendingWalletNetworkName_.clear();
+          pendingWalletReferralCode_.clear();
+        } else {
+          done = std::move(walletAuthDone_);
+        }
+        walletAuthDone_ = nullptr;
+        walletCreateDone_ = nullptr;
+      }
+    }
+    if (connectDone) {
+      SolanaConnectResult out;
+      out.error = err;
+      connectDone(std::move(out));
+      return;
+    }
+    if (signDone) {
+      WalletSignature out;
+      out.error = err;
+      signDone(std::move(out));
+      return;
     }
     if (done) done({false, false, err});
   };
 }
 
-void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
-                               std::function<void(AuthResult)> done) {
+void SdkHost::CancelPendingSolanaConnect(const std::string& reason) {
+  std::function<void(SolanaConnectResult)> connectDone;
   {
     std::scoped_lock lock(mutex_);
+    connectDone = std::move(walletConnectDone_);
+    walletConnectDone_ = nullptr;
+  }
+  if (!connectDone) return;
+  SolanaConnectResult out;
+  out.error = reason;
+  connectDone(std::move(out));
+}
+
+bool SdkHost::WalletFlowIsCurrent(uint64_t flow) {
+  {
+    std::scoped_lock lock(mutex_);
+    if (walletFlows_.IsCurrent(flow)) return true;
+  }
+  std::fprintf(stderr, "[wallet] a challenge arrived for a superseded wallet flow; the bridge "
+                       "stays with the newer one\n");
+  return false;
+}
+
+void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
+                                  std::function<void(SolanaConnectResult)> done) {
+  if (provider == WalletConnect::Provider::Bittensor) {
+    // Bittensor has no connect hop on the bridge (it signs in one)
+    SolanaConnectResult out;
+    out.error = "not a solana wallet provider";
+    if (done) done(std::move(out));
+    return;
+  }
+  CancelPendingSolanaConnect("superseded by a wallet connect request");
+  // The bridge is this request's now. A Bittensor connect still waiting for its
+  // signature is answered (the page settles it quietly), and its challenge, if
+  // it is still being fetched, will not open the bridge over this one: the flow
+  // number moves on.
+  std::function<void(WalletSignature)> signDone;
+  {
+    std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
+    signDone = std::move(walletSignDone_);
+    walletSignDone_ = nullptr;
+  }
+  if (signDone) {
+    WalletSignature out;
+    out.error = "superseded by a wallet connect request";
+    signDone(std::move(out));
+  }
+  {
+    std::scoped_lock lock(mutex_);
+    walletConnectDone_ = std::move(done);
+  }
+  // opens the browser; the key comes back on the urnetwork://<provider>-connect
+  // callback (on_public_key) and a failure on on_error -- a browser that cannot
+  // be opened is answered before this returns
+  wallet_.Connect(provider);
+}
+
+void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
+                               std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded by a wallet sign-in");
+  {
+    std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
+    pendingWalletAuth_.reset();
     walletAuthDone_ = std::move(done);
   }
   wallet_.Connect(provider);  // opens the browser; the rest continues on the deep-link callback
 }
 
 void SdkHost::SignInWithBittensor(std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded by a wallet sign-in");
+  uint64_t flow = 0;
   {
     std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();
+    pendingWalletAuth_.reset();
     walletAuthDone_ = std::move(done);
   }
-  // one hop: the bridge connects the substrate wallet and signs; the rest
-  // continues on the urnetwork://bittensor-sign-message callback
-  wallet_.SignInWithBittensor(kWalletSignInMessage);
+  RequestWalletChallenge(urnet::TAO, std::string(),
+                         [this, flow](std::optional<std::string> message, std::string error) {
+    if (!message) {
+      // a newer wallet flow owns the slots now: it is not failed for this one
+      if (!WalletFlowIsCurrent(flow)) return;
+      FailWalletOperation(error.empty() ? "could not fetch wallet challenge" : error);
+      return;
+    }
+    // one hop: the bridge connects the substrate wallet and signs; the rest
+    // continues on the urnetwork://bittensor-sign-message callback
+    PostToMain([this, flow, message = *message] {
+      if (!WalletFlowIsCurrent(flow)) return;  // a newer flow owns the bridge now
+      wallet_.SignInWithBittensor(message);
+    });
+  });
+}
+
+void SdkHost::SignInWithSso(const std::string& provider, std::function<void(AuthResult)> done) {
+  CancelPendingSolanaConnect("superseded by a wallet sign-in");
+  // a fresh state + nonce per attempt, never reused: the return is accepted
+  // exactly once and only for this attempt
+  std::string state;
+  std::string nonce;
+  if (char* s = g_uuid_string_random()) { state = s; g_free(s); }
+  if (char* n = g_uuid_string_random()) { nonce = n; g_free(n); }
+  // Google and Apple run their own web flow: the state carries the platform
+  // claim the api's callback reads to redirect back to this app
+  // (urnetwork://oauth/<provider>). No other provider signs in this way.
+  const bool apple = provider == sso::kProviderApple;
+  const bool google = provider == sso::kProviderGoogle;
+  if (!apple && !google) {
+    AuthResult r;
+    r.error = "unknown sign-in provider";
+    if (done) done(r);
+    return;
+  }
+  state = sso::OAuthState(state);
+  std::string apiUrl;
+  {
+    std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
+    pendingWalletAuth_.reset();
+    pendingSsoAuth_ = false;
+    pendingSsoType_.clear();
+    pendingSsoJwt_.clear();
+    ssoProvider_ = provider;
+    ssoState_ = state;
+    ssoNonce_ = nonce;
+    walletAuthDone_ = std::move(done);
+    if (networkSpace_) apiUrl = networkSpace_->getApiUrl();
+  }
+  // opens the browser; the rest continues on the deep-link callback
+  if (apple) {
+    wallet_.SignInWithApple(apiUrl, state, nonce);
+  } else if (google) {
+    wallet_.SignInWithGoogle(apiUrl, state, nonce);
+  }
+}
+
+void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& jwt) {
+  urnet::AuthLoginArgs args;
+  args.auth_jwt_type = provider;
+  args.auth_jwt = jwt;
+  api_->authLogin(args, [this, provider, jwt](std::optional<urnet::AuthLoginResult> result,
+                                              std::optional<std::string> err) {
+    std::function<void(AuthResult)> done;
+    {
+      std::scoped_lock lock(mutex_);
+      done = std::move(walletAuthDone_);
+      walletAuthDone_ = nullptr;
+    }
+    auto fail = [&done](const std::string& message) {
+      AuthResult r;
+      r.error = message;
+      r.sso = true;
+      if (done) done(r);
+    };
+    if (err) { fail(*err); return; }
+    if (!result) { fail("no result"); return; }
+    if (result->error && !result->error->message.empty()) { fail(result->error->message); return; }
+    if (result->network && !result->network->by_jwt.empty()) {
+      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      return;
+    }
+    if (result->auth_allowed && !result->auth_allowed->empty()) {
+      // the account exists under other sign-in methods
+      AuthResult r;
+      r.sso = true;
+      for (const auto& method : *result->auth_allowed) {
+        if (!r.authAllowed.empty()) r.authAllowed += ", ";
+        r.authAllowed += method;
+      }
+      if (done) done(r);
+      return;
+    }
+    // Authenticated identity with no network yet: keep the token and route
+    // into the create-network page (the web's ssoCreateNetworkView).
+    {
+      std::scoped_lock lock(mutex_);
+      pendingSsoAuth_ = true;
+      pendingSsoType_ = provider;
+      pendingSsoJwt_ = jwt;
+    }
+    if (done) {
+      AuthResult r;
+      r.sso = true;
+      r.sso_needs_network = true;
+      done(r);
+    }
+  });
+}
+
+void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
+                                          const std::string& referralCode,
+                                          std::function<void(AuthResult)> done) {
+  std::string type;
+  std::string jwt;
+  {
+    std::scoped_lock lock(mutex_);
+    if (!pendingSsoAuth_) {
+      done({false, false, "no sign-in pending"});
+      return;
+    }
+    type = pendingSsoType_;
+    jwt = pendingSsoJwt_;
+  }
+  urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
+  args.user_name = std::string();  // mac parity: always empty
+  args.auth_jwt_type = type;
+  args.auth_jwt = jwt;
+  args.network_name = networkName;
+  args.terms = true;  // the page's continue button is gated on the terms switch
+  if (!referralCode.empty()) args.referral_code = referralCode;
+  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+                                         std::optional<std::string> err) {
+    HandleNetworkCreateResult(std::move(result), std::move(err), [this, done](AuthResult r) {
+      if (r.ok) {
+        std::scoped_lock lock(mutex_);
+        pendingSsoAuth_ = false;
+        pendingSsoType_.clear();
+        pendingSsoJwt_.clear();
+      }
+      done(r);
+    });
+  });
+}
+
+bool SdkHost::HasPendingSsoAuth() {
+  std::scoped_lock lock(mutex_);
+  return pendingSsoAuth_;
+}
+
+void SdkHost::RequestWalletChallenge(
+    const std::string& blockchain, const std::string& walletAddress,
+    std::function<void(std::optional<std::string> message, std::string error)> done) {
+  urnet::AuthWalletChallengeArgs args;
+  args.blockchain = blockchain;
+  if (!walletAddress.empty()) args.wallet_address = walletAddress;
+  api_->authWalletChallenge(args, [done = std::move(done)](
+                                      std::optional<urnet::AuthWalletChallengeResult> result,
+                                      std::optional<std::string> err) mutable {
+    if (err) {
+      done(std::nullopt, *err);
+      return;
+    }
+    if (!result) {
+      done(std::nullopt, "wallet challenge returned no result");
+      return;
+    }
+    if (result->error && !result->error->message.empty()) {
+      done(std::nullopt, result->error->message);
+      return;
+    }
+    if (!result->message_template || result->message_template->empty()) {
+      done(std::nullopt, "wallet challenge returned no message");
+      return;
+    }
+    done(*result->message_template, std::string());
+  });
+}
+
+void SdkHost::FailWalletOperation(const std::string& error) {
+  std::function<void(WalletSignature)> signDone;
+  std::function<void(AuthResult)> done;
+  {
+    std::scoped_lock lock(mutex_);
+    signDone = std::move(walletSignDone_);
+    walletSignDone_ = nullptr;
+    if (walletCreateDone_) {
+      done = std::move(walletCreateDone_);
+      pendingWalletNetworkName_.clear();
+      pendingWalletReferralCode_.clear();
+    } else {
+      done = std::move(walletAuthDone_);
+    }
+    walletAuthDone_ = nullptr;
+    walletCreateDone_ = nullptr;
+  }
+  if (signDone) {
+    WalletSignature out;
+    out.error = error;
+    signDone(std::move(out));
+    return;
+  }
+  if (done) done({false, false, error});
+}
+
+void SdkHost::SignBittensorConnect(const std::string& walletAddress,
+                                   std::function<void(WalletSignature)> done) {
+  CancelPendingSolanaConnect("superseded by a wallet signature request");
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();
+    walletSignDone_ = std::move(done);
+  }
+  if (!api_) {
+    FailWalletOperation("no api");
+    return;
+  }
+  // the challenge is bound to the typed address when there is one, so a wallet
+  // that signs for a different account is caught by the page (address mismatch)
+  RequestWalletChallenge(urnet::TAO, walletAddress,
+                         [this, flow](std::optional<std::string> message, std::string error) {
+    if (!message) {
+      // superseded while the challenge was fetched (the Solana sheet): its slot
+      // was answered already, and a newer request's must not get this error
+      if (!WalletFlowIsCurrent(flow)) return;
+      FailWalletOperation(error.empty() ? "could not fetch wallet challenge" : error);
+      return;
+    }
+    // one hop, purpose "connect": the bridge signs and calls back on
+    // urnetwork://bittensor-sign-message with the address + signature
+    PostToMain([this, flow, message = *message] {
+      // A Solana connect that started while this challenge was fetched owns the
+      // bridge now: opening a Bittensor tab would also reset its keypair, so its
+      // Phantom or Solflare return could no longer be read.
+      if (!WalletFlowIsCurrent(flow)) return;
+      wallet_.SignInWithBittensor(message, "connect");
+    });
+  });
+}
+
+void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
+  std::function<void(AuthResult)> done;
+  std::optional<urnet::WalletAuthArgs> walletAuth;
+  std::string networkName;
+  std::string referralCode;
+  {
+    std::scoped_lock lock(mutex_);
+    done = std::move(walletCreateDone_);
+    walletCreateDone_ = nullptr;
+    if (!done || !pendingWalletAuth_) return;
+    if (wallet_.publicKey() != pendingWalletAuth_->wallet_address.value_or(std::string())) {
+      pendingWalletNetworkName_.clear();
+      pendingWalletReferralCode_.clear();
+      walletAuth.reset();
+    } else {
+      pendingWalletAuth_->wallet_signature = signature;
+      walletAuth = pendingWalletAuth_;
+      networkName = std::move(pendingWalletNetworkName_);
+      referralCode = std::move(pendingWalletReferralCode_);
+      pendingWalletNetworkName_.clear();
+      pendingWalletReferralCode_.clear();
+    }
+  }
+  if (!walletAuth) {
+    done({false, false, "wallet account changed; use the same account to create the network"});
+    return;
+  }
+
+  urnet::NetworkCreateArgs args;
+  ApplySignupPreferences(args);
+  args.user_name = std::string();
+  args.network_name = networkName;
+  args.terms = true;
+  args.verify_use_numeric = true;
+  if (!referralCode.empty()) args.referral_code = referralCode;
+  args.wallet_auth = walletAuth;
+  api_->networkCreate(args, [this, done = std::move(done)](
+                                std::optional<urnet::NetworkCreateResult> result,
+                                std::optional<std::string> err) mutable {
+    HandleNetworkCreateResult(std::move(result), std::move(err), std::move(done));
+  });
+}
+
+void SdkHost::SetProductUpdatesOptOut(bool optOut) {
+  productUpdatesOptOut_ = optOut;
+  if (optOut && events_) events_->SignupOptoutChanged(false);
+}
+
+void SdkHost::ApplySignupPreferences(urnet::NetworkCreateArgs& args) const {
+  if (productUpdatesOptOut_) args.product_updates = false;
+}
+
+void SdkHost::AuthNetworkClientWithLocale(const urnet::AuthNetworkClientArgs& args,
+                                          urnet::AuthNetworkClientCallback callback) {
+  nlohmann::json json = args;
+  json["time_zone"] = LocalTimeZoneId();
+  json["locale"] = ClientEventLocale();
+  const std::string body = json.dump();
+  auto* fn = new urnet::AuthNetworkClientCallback(std::move(callback));
+  urnet_api_auth_network_client(api_->handle(), body.c_str(),
+                                &urnet::detail::oneshot_auth_network_client, fn);
 }
 
 void SdkHost::HandleDeepLink(const std::string& url) {
+  if (url.rfind("urnetwork://onboarding/", 0) == 0) {
+    if (onOnboardingLink_) onOnboardingLink_(url);
+    return;
+  }
   wallet_.HandleDeepLink(url);  // returns false for non-wallet links (future: OAuth)
 }
 
@@ -1025,8 +1590,8 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void
     urnet::AuthNetworkClientArgs args;
     args.description = UrDeviceDescription();
     args.device_spec = UrDeviceSpec();
-    api_->authNetworkClient(args, [this, done](std::optional<urnet::AuthNetworkClientResult> result,
-                                               std::optional<std::string> err) {
+    AuthNetworkClientWithLocale(args, [this, done](std::optional<urnet::AuthNetworkClientResult> result,
+                                                   std::optional<std::string> err) {
       if (err) { done({false, false, *err}); return; }
       if (!result) { done({false, false, "no result"}); return; }
       if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
@@ -1943,6 +2508,32 @@ void SdkHost::SubscribeDrawer() {
   // so the sheet dedupes by value before touching widgets.
   presentationSubs_.push_back(device_->addConnectedProviderLocationChangeListener(
       [this] { EmitDrawerEvent(DrawerEvent::ProviderLocations); }));
+
+  // extenders (EXTENDER.md K4/K5): the directory + gossip status, read off the
+  // DEVICE so the drawer panel shows the DAEMON's directory -- the one whose
+  // dials the rings describe -- rather than this process's. The SDK coalesces
+  // to one callback per second, so no throttle is needed here; the panel
+  // dedupes by value anyway.
+  presentationSubs_.push_back(device_->addExtenderStatusChangeListener(
+      [this](std::optional<urnet::ExtenderStatus>) {
+        EmitDrawerEvent(DrawerEvent::ExtenderStatus);
+      }));
+  // ...and this device's OWN extender role (N2, N7): the connect page's
+  // extender row, and the earnings page's read-only row and the running state
+  // behind its extender statistics (O4). The SDK coalesces it to one callback
+  // per epoch (a second) after any change of the setting, the provide state or
+  // the role, and fires none on registration, so the pages re-read the status
+  // on DeviceLifecycle.
+  presentationSubs_.push_back(device_->addExtenderProvideStatusChangeListener(
+      [this](std::optional<urnet::ExtenderProvideStatus>) {
+        EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
+      }));
+  // ...and the shared view controller behind the account section's settings,
+  // share and import. It is opened with the rest of the presentation and
+  // closed with it, so every accessor is nullopt with the window hidden or the
+  // tunnel down and the section renders its no-device state.
+  extenderVc_ = device_->openExtenderViewController();
+  extenderVc_->start();
 }
 
 void SdkHost::ClosePresentationLocked() {
@@ -1956,8 +2547,17 @@ void SdkHost::ClosePresentationLocked() {
     peerVc_.reset();
     pqiVc_.reset();
     providerLocationsVc_.reset();
+    extenderVc_.reset();
     return;
   }
+  // The extender controller closes ITSELF (the SDK exposes no
+  // device.closeExtenderViewController, unlike the older controllers), so stop
+  // it first and then hand the handle back.
+  if (extenderVc_) {
+    extenderVc_->stop();
+    extenderVc_->close();
+  }
+  extenderVc_.reset();
   if (providerLocationsVc_) {
     device_->closeProviderLocationsViewController(*providerLocationsVc_);
   }
@@ -2273,6 +2873,34 @@ std::optional<urnet::TransportDistribution> SdkHost::ProviderTransportDistributi
   return contractVc_->getProviderTransportDistribution();
 }
 
+std::optional<urnet::ThroughputPointList> SdkHost::ProviderThroughputPoints() {
+  std::scoped_lock lock(mutex_);
+  if (!contractVc_) return std::nullopt;
+  return contractVc_->getProviderThroughputPoints();
+}
+
+std::optional<urnet::ThroughputPointList> SdkHost::ExtenderThroughputPoints() {
+  std::scoped_lock lock(mutex_);
+  if (!contractVc_) return std::nullopt;
+  return contractVc_->getExtenderThroughputPoints();
+}
+
+bool SdkHost::HasProviderStats() {
+  std::scoped_lock lock(mutex_);
+  return contractVc_ && contractVc_->getProviderPacketStats().has_value();
+}
+
+bool SdkHost::DeviceHasProviderStats() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return false;
+  try {
+    return device_->getProviderPacketStats().has_value();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getProviderPacketStats failed: %s\n", e.what());
+    return false;
+  }
+}
+
 std::optional<urnet::TransportSettings> SdkHost::GetTransportSettings() {
   std::scoped_lock lock(mutex_);
   if (device_) {
@@ -2511,6 +3139,184 @@ void SdkHost::StepProviderSelection(int steps) {
   std::scoped_lock lock(mutex_);
   if (!providerLocationsVc_ || steps == 0) return;
   providerLocationsVc_->stepSelection(steps);
+}
+
+// ---- extenders (EXTENDER.md K4 to K8) ---------------------------------------
+
+std::optional<urnet::ExtenderStatus> SdkHost::GetExtenderStatus() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return std::nullopt;  // no session: the panel hides, never zeroes
+  try {
+    return device_->getExtenderStatus();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getExtenderStatus failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return std::nullopt;  // no session: the extender rows hide
+  try {
+    return device_->getExtenderProvideStatus();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getExtenderProvideStatus failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+bool SdkHost::GetProvideExtender() {
+  std::scoped_lock lock(mutex_);
+  // the setting's default with no device (N4); the row is hidden then
+  if (!device_) return true;
+  return device_->getProvideExtender();
+}
+
+void SdkHost::SetProvideExtender(bool on) {
+  std::scoped_lock lock(mutex_);
+  if (!device_) {
+    g_warning("extender: dropping a provide extender write with no device");
+    return;
+  }
+  device_->setProvideExtender(on);
+}
+
+std::optional<urnet::ExtenderSettings> SdkHost::GetExtenderSettings() {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->getSettings();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender getSettings failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderSettings> SdkHost::SetExtenderSettings(
+    const std::string& dnsName, const std::string& gossipUrl,
+    const std::vector<std::string>& hosts) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    // An EMPTY host list is a real edit (the user cleared every manual
+    // bootstrap address), so it is sent as an empty list rather than as "no
+    // opinion" -- passing nullopt would leave the previous list in place and
+    // the form would silently refuse to clear.
+    return extenderVc_->setSettings(dnsName, gossipUrl, urnet::StringList(hosts));
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender setSettings failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderShareResult> SdkHost::BuildExtenderShare(bool includeSettings) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->buildShare(includeSettings);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender buildShare failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderShareDecodeResult> SdkHost::DecodeExtenderShare(
+    const std::string& text) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->decodeShare(text);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender decodeShare failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::ExtenderImportResult> SdkHost::ImportExtenderShare(const std::string& text,
+                                                                       bool useSettings) {
+  std::scoped_lock lock(mutex_);
+  if (!extenderVc_) return std::nullopt;
+  try {
+    return extenderVc_->importShare(text, useSettings);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] extender importShare failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::NetExtender> SdkHost::GetPrivateExtender() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getNetExtender();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getNetExtender failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secret) {
+  std::scoped_lock lock(mutex_);
+  if (!spaceManager_ || !networkSpace_) return false;
+  try {
+    urnet::NetworkSpaceKey key;
+    key.host_name = networkSpace_->getHostName();
+    key.env_name = networkSpace_->getEnvName();
+
+    // updateNetworkSpaceValues takes the WHOLE value set, not a patch, so every
+    // field is read back off the live space before the one being edited is
+    // changed. Writing only net_extender would silently reset the api/platform
+    // url overrides a custom network server left here (ApplyNetworkServer) and
+    // the extender settings the view controller wrote.
+    urnet::NetworkSpaceValues values;
+    values.bundled = networkSpace_->getBundled();
+    values.net_expose_server_ips = networkSpace_->getNetExposeServerIps();
+    values.net_expose_server_host_names = networkSpace_->getNetExposeServerHostNames();
+    values.link_host_name = networkSpace_->getLinkHostName();
+    values.migration_host_name = networkSpace_->getMigrationHostName();
+    values.wallet = networkSpace_->getWallet();
+    values.sso_google = networkSpace_->getSsoGoogle();
+    values.api_url = networkSpace_->getConfiguredApiUrl();
+    values.platform_url = networkSpace_->getConfiguredPlatformUrl();
+    if (const std::string envSecret = networkSpace_->getEnvSecret(); !envSecret.empty()) {
+      values.env_secret = envSecret;
+    }
+    if (const std::string store = networkSpace_->getStore(); !store.empty()) {
+      values.store = store;
+    }
+    if (const std::string dnsName = networkSpace_->getExtenderDnsName(); !dnsName.empty()) {
+      values.extender_dns_name = dnsName;
+    }
+    if (const std::string gossipUrl = networkSpace_->getGossipUrl(); !gossipUrl.empty()) {
+      values.gossip_url = gossipUrl;
+    }
+    values.extender_hosts = networkSpace_->getExtenderHosts();
+    values.extender_root_public_keys = networkSpace_->getExtenderRootPublicKeys();
+
+    // both fields empty = "no private extender": the advanced override is off
+    // and discovery resumes
+    if (!ip.empty() || !secret.empty()) {
+      urnet::NetExtender netExtender;
+      netExtender.ip = ip;
+      netExtender.secret = secret;
+      values.net_extender = netExtender;
+    }
+
+    networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
+    spaceManager_->setActiveNetworkSpace(*networkSpace_);
+    // ...and re-derive what hangs off the space, exactly as ApplyNetworkServer
+    // does: the handle is new, and a freshly derived Api carries no token.
+    api_ = networkSpace_->getApi();
+    asyncLocalState_ = networkSpace_->getAsyncLocalState();
+    localState_ = asyncLocalState_->getLocalState();
+    if (const std::string byJwt = localState_->getByJwt(); !byJwt.empty()) {
+      api_->setByJwt(byJwt);
+    }
+    return true;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] set private extender failed: %s\n", e.what());
+    return false;
+  }
 }
 
 // ---- reliability / exits ---------------------------------------------------
@@ -2865,6 +3671,7 @@ void SdkHost::Logout() {
   ForgetRpcSession();
   pendingWalletAuth_.reset();
   if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+  if (events_) events_->NewSession();  // the next sign-in is a new session
   if (onAuth_) onAuth_(false);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);  // drawer falls back to empty states
 }

@@ -1,19 +1,30 @@
 // SPDX-License-Identifier: MPL-2.0
+#include "ProvideModeGlyph.hpp"
 #include "MainWindow.hpp"
+
+#include "SsoBridge.hpp"
 
 #include <adwaita.h>
 #include <glib.h>
 
 #include <cstdio>
 
+#include <glibmm/datetime.h>
+
 #include "AppPrefs.hpp"
+#include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
+#include "DaemonUnreachableCopy.hpp"
 #include "Formatters.hpp"
 #include "UrTheme.hpp"
 #include "I18n.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
+
+namespace {
+constexpr const char* kOnboardingPendingKey = "onboarding_pending";
+}  // namespace
 namespace {
 
 // a user auth is an email or a phone number (light shape check gating the
@@ -119,12 +130,59 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   BuildInstantStep();
   BuildHome();
   BuildAuthPages();
+  // URNW_ONBOARDING_PREVIEW=1 opens the onboarding flow over whatever is
+  // showing, for design review without an account (no data behind it)
+  if (const char* preview = g_getenv("URNW_ONBOARDING_PREVIEW"); preview && *preview) {
+    const std::string tag(preview);
+    const int step = std::max(1, atoi(preview));
+    Glib::signal_timeout().connect_once([this, tag, step] {
+      if (!onboarding_) {
+        onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
+      }
+      // URNW_ONBOARDING_PREVIEW_OFFER=1 seeds a sample welcome offer (no
+      // session behind the preview, so nothing is issued): the offer card on
+      // the plan page and the offer page print the sample's numbers
+      if (const char* sample = g_getenv("URNW_ONBOARDING_PREVIEW_OFFER"); sample && *sample) {
+        urnet::OnboardingOffer offer;
+        offer.state = "active";
+        offer.percent_off = 25;
+        offer.months_free = 3;
+        offer.first_year_usd = 30;
+        offer.regular_year_usd = 40;
+        offer.tier = "standard";
+        offer.currency = "USD";
+        offer.expires_at =
+            Glib::DateTime::create_now_utc().add_days(5).format_iso8601();
+        balance_.SetOffer(offer);
+      }
+      // "offer" reviews the urnetwork://onboarding/offer destination: the
+      // offer page on its own
+      if (tag == "offer") {
+        onboarding_->OpenOffer();
+      } else {
+        onboarding_->OpenAt(step);
+      }
+    }, 800);
+  }
   // AdwToastOverlay across the page stack: hosts the drawer PQI panel's
   // copied-to-clipboard toasts (the detail sheets carry their own overlays;
   // see Ui.hpp ShowToast).
   GtkWidget* toastOverlay = adw_toast_overlay_new();
   adw_toast_overlay_set_child(ADW_TOAST_OVERLAY(toastOverlay), GTK_WIDGET(stack_.gobj()));
-  gtk_window_set_child(GTK_WINDOW(gobj()), toastOverlay);
+  // The Pro celebration wraps everything: the page stack (with its toasts)
+  // sits in the mosaic container, and the confetti overlay floats above it.
+  // Both are inert until a flight starts (ProCelebration.hpp).
+  proPixelateBin_ = Gtk::make_managed<PixelateBin>(proFlightClock_);
+  proPixelateBin_->SetChild(*Glib::wrap(toastOverlay));
+  auto* windowOverlay = Gtk::make_managed<Gtk::Overlay>();
+  windowOverlay->set_child(*proPixelateBin_);
+  proCelebration_ = Gtk::make_managed<ProCelebrationOverlay>(proFlightClock_);
+  proCelebration_->on_frame = [this] {
+    if (proPixelateBin_) proPixelateBin_->queue_draw();
+  };
+  windowOverlay->add_overlay(*proCelebration_);
+  windowOverlay->set_measure_overlay(*proCelebration_, false);
+  set_child(*windowOverlay);
 
   // Track window visibility (tray app: closing hides to tray). Skip window-widget
   // updates while hidden and resync when shown, so a hidden window doesn't churn
@@ -139,6 +197,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     balance_.SetWindowVisible(windowVisible_);
     UpdateCarouselRunning();
     if (connectPage_) connectPage_->SetPresentationActive(windowVisible_);
+    if (earningsPage_) earningsPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
     if (windowVisible_) {
       status_.set_text(lastStatus_);
@@ -189,6 +248,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       snapshot.timedOut = balance_.PurchaseConfirmationTimedOut();
       accountPage_->ApplyBalance(snapshot);
     }
+    // The Refer and earn page paints its card from the same store.
+    if (referralsPage_) referralsPage_->OnBalanceChanged();
     // The free -> Pro upgrade side effect (mac MainView reacts to
     // didDetectUpgradeToPro): reset provide mode to never at the upgrade,
     // exactly once — the user can opt back in afterward and that sticks.
@@ -196,6 +257,33 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       provideResetOnUpgrade_ = true;
       host_.ResetProvideToNever();
       SyncProvideControlMode();  // reflect it in the home controls
+    }
+    // The Pro celebration, once per purchase: the store confirms the free ->
+    // Pro flip after checkout (the upgrade sheet's success state reads the
+    // same snapshot), and the flight plays over whatever is on screen.
+    if (balance_.DidDetectUpgradeToPro() && !proCelebrated_) {
+      proCelebrated_ = true;
+      LaunchProCelebration();
+    }
+  });
+
+  // Referral celebrations (the king-frog gold moments): the first referral
+  // gets the full-screen crowning sheet; later batches get the gold snackbar.
+  // The store only polls while the window is visible, so the celebration
+  // always has a window to land in.
+  balance_.SetReferralCelebrationHandler([this](const ReferralCelebration& celebration) {
+    if (celebration.isFirst) {
+      ShowReferralCelebrationSheet(*this, celebration.joined, balance_.ReferralCode());
+      return;
+    }
+    if (shell_) {
+      shell_->snackbar().Show(
+          Format(TN_("referral_toast_joined",
+                     "A friend joined with your code! +{1} GiB/day, for life.",
+                     "{0} friends joined with your code! +{1} GiB/day each, for life.",
+                     celebration.joined),
+                 celebration.joined, kReferralGiBPerDay),
+          kit::Snackbar::Severity::Gold);
     }
   });
 
@@ -210,6 +298,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   });
   host_.SetJwtRefreshedHandler([this] {
     PostToMain([this] { balance_.OnJwtRefreshed(); });
+  });
+  host_.SetOnboardingLinkHandler([this](const std::string& url) {
+    PostToMain([this, url] { HandleOnboardingLink(url); });
   });
   // THE CONNECTION FEED, AND IT IS NOT GATED ON VISIBILITY. That asymmetry —
   // this push ungated beside a stats push gated on windowVisible_ — is how two
@@ -237,6 +328,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       // stats, overrides, contracts, DNS settings, blocker, routeLocal and
       // location changes would never reach the page at all.
       if (windowVisible_ && connectPage_) connectPage_->OnHostEvent(event);
+      // ...and so do the earnings page's provider and extender statistics and
+      // its read-only extender row (EXTENDER.md N7, O5), under the same gate
+      if (windowVisible_ && earningsPage_) earningsPage_->OnHostEvent(event);
       if (event == DrawerEvent::Peers || event == DrawerEvent::DeviceLifecycle) {
         RefreshPeersStatus();
       }
@@ -293,6 +387,18 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     ApplyAuthState(false);
   }
 
+  // Verification hook for the Google / Apple sign-in round trip (with URNETWORK_SSO_SIMULATE,
+  // WalletConnect.cpp): URNETWORK_SSO_AUTOSTART=<google|apple> presses that
+  // pill shortly after the window shows, so the whole return path — minted
+  // state + nonce, the simulated return, the login call, the error line the
+  // server's rejection of an unsigned token paints — runs without a click and
+  // lands in a URNETWORK_SHOOT frame. Debug only; inert without SIMULATE.
+  if (const char* provider = g_getenv("URNETWORK_SSO_AUTOSTART");
+      provider && g_getenv("URNETWORK_SSO_SIMULATE")) {
+    const std::string p(provider);
+    Glib::signal_timeout().connect_once([this, p] { OnSso(p); }, 1200);
+  }
+
   // The preview harness (windows --preview-ui): URNETWORK_PREVIEW_UI=<tag>
   // renders the signed-in shell with NO session — API loads are skipped (no
   // jwt, no balance poll) and every panel settles on its real empty state.
@@ -312,16 +418,22 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     // rather than sit on a spinner forever with no session behind it.
     if (earningsPage_) earningsPage_->SetPreviewMode(true);
     if (accountPage_) accountPage_->SetPreviewMode(true);
+    if (referralsPage_) referralsPage_->SetPreviewMode(true);
     // DEFERRED to idle, and guarded: a destination's Load() runs API/SDK
     // reads, and in preview there is no session — an exception escaping the
     // WINDOW CONSTRUCTOR would take the process down before anything renders
     // (measured). Navigating after the window exists is also what the real
     // app does; nothing may load from inside the constructor.
-    Glib::signal_idle().connect_once([this, tag] {
+    // A short TIMEOUT rather than an idle: the connect canvas keeps the frame
+    // clock busy, and a default-priority idle can starve behind redraws for
+    // the whole life of the process (observed on macOS: the shoot fired with
+    // the Connect page still up and this navigation never logged).
+    Glib::signal_timeout().connect_once([this, tag] {
       g_message("preview: navigating to '%s'", tag.c_str());
       try {
         if (shell_ && !tag.empty() && tag != "1") shell_->Navigate(tag);
         if (tag == "account" && accountPage_) accountPage_->ShowPreviewState();
+        if (tag == "referrals" && referralsPage_) referralsPage_->ShowPreviewState();
         if (tag == "wallet" && earningsPage_) shell_->Navigate("earnings");
         if ((tag == "earnings" || tag == "wallet") && earningsPage_) {
           // ORDER MATTERS: the empty settle is what a no-session preview looks
@@ -330,6 +442,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
           earningsPage_->ShowPreviewState();
           if (g_getenv("URNETWORK_PREVIEW_SAMPLE")) earningsPage_->ApplyPreviewSample();
           if (tag == "wallet") earningsPage_->ShowPreviewSnackbar();
+          // the claim dialog over the sample's attached-wallet layer
+          if (g_getenv("URNETWORK_PREVIEW_CLAIM")) earningsPage_->ShowPreviewClaimDialog();
         }
       } catch (const std::exception& e) {
         g_warning("preview: navigate to '%s' failed: %s", tag.c_str(), e.what());
@@ -337,7 +451,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
         g_warning("preview: navigate to '%s' failed: non-std exception", tag.c_str());
       }
       g_message("preview: navigate done");
-    });
+    }, 100);
   }
 }
 
@@ -383,47 +497,16 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
       // sends them nowhere. Every arm here is a transport failure — the daemon
       // was never reached — which is what separates them from the
       // authorization refusals under Failed.
-      switch (host_.Control().LastUnreachableReason()) {
-        case DaemonUnreachableReason::StaleSandboxMount:
-          notice = T_("daemon_stale_sandbox_mount",
-                      "The URnetwork system service restarted while this app was open. "
-                      "Close the app and open it again to reconnect to it.");
-          break;
-        case DaemonUnreachableReason::PermissionDenied:
-          // EACCES at connect(2) NARROWED to one cause. A polkit-gated daemon
-          // makes the socket world-connectable and refuses per action with a
-          // reason on a live connection, so it can never produce this; only a
-          // group-gated daemon can (an old build, or a machine with no polkit
-          // where it re-tightens the socket to 0660 root:urnetwork). That is
-          // the one and only case where telling the user to join a group and
-          // sign out again is still true.
-          //
-          // NOTE: the key id changed (daemon_permission_denied ->
-          // daemon_legacy_group_auth) because that id was in use at TWO sites
-          // with two DIFFERENT English strings — here and KillSwitchCopy.hpp:82
-          // — and appears zero times in app/po/en.po, so both rendered fallback
-          // English and contradicted each other. KillSwitchCopy.hpp is outside
-          // this change; it must adopt this key and this exact string.
-          notice = T_("daemon_legacy_group_auth",
-                      "The URnetwork system service on this device is an older version "
-                      "that still requires group membership. Update the service, or add "
-                      "your user to the 'urnetwork' group and sign out and back in.");
-          break;
-        case DaemonUnreachableReason::Other: {
+      {
+        const auto reason = host_.Control().LastUnreachableReason();
+        const auto copy = CopyForDaemonUnreachableReason(reason);
+        notice = T_(copy.key, copy.english);
+        if (reason == DaemonUnreachableReason::Other) {
           // LastTunnelError() is EnsureSession's own out-param, which already
           // carries strerror for this case.
           const std::string detail = host_.LastTunnelError();
-          notice = Glib::ustring(T_("daemon_unreachable_detail",
-                                    "Could not reach the URnetwork system service"));
-          if (!detail.empty()) notice += ": " + detail;
-          break;
+          if (!detail.empty()) notice += " (" + detail + ")";
         }
-        case DaemonUnreachableReason::SocketMissing:
-        case DaemonUnreachableReason::None:
-          notice = T_("daemon_unreachable",
-                      "The URnetwork system service is not running. Install or start it, "
-                      "then try again.");
-          break;
       }
       break;
     case TunnelStartResult::DaemonTooOld:
@@ -562,6 +645,47 @@ Gtk::Button* MakeUrIconButton(BrandIcon::Kind kind, const Glib::ustring& label) 
   return button;
 }
 
+// A login tile (LOGIN_STACK_SPEC): a SECONDARY pill in square form, the
+// brand mark over a small caption. Rows of four are laid out by MakeTileRows.
+Gtk::Button* MakeUrTileButton(BrandIcon::Kind kind, const Glib::ustring& caption) {
+  auto* button = Gtk::make_managed<Gtk::Button>();
+  button->add_css_class("ur-btn");
+  button->add_css_class("ur-btn-secondary");
+  button->add_css_class("ur-tile");
+  button->set_hexpand(true);
+  auto* content = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 6);
+  content->set_halign(Gtk::Align::CENTER);
+  content->set_valign(Gtk::Align::CENTER);
+  content->append(*Gtk::make_managed<BrandIcon>(kind, 22));
+  auto* text = Gtk::make_managed<Gtk::Label>(caption);
+  text->add_css_class("ur-tile-caption");
+  content->append(*text);
+  button->set_child(*content);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(button->gobj()),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL, caption.c_str(), -1);
+  return button;
+}
+
+// Four tiles per row, each row's tiles stretched to fill it (a homogeneous
+// row: a last row of two is two half-width tiles), the rows as wide as the
+// full-width pills above.
+Gtk::Box* MakeTileRows(const std::vector<Gtk::Button*>& tiles) {
+  auto* rows = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
+  Gtk::Box* row = nullptr;
+  int inRow = 0;
+  for (Gtk::Button* tile : tiles) {
+    if (!row || inRow == 4) {
+      row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+      row->set_homogeneous(true);
+      rows->append(*row);
+      inRow = 0;
+    }
+    row->append(*tile);
+    ++inRow;
+  }
+  return rows;
+}
+
 // Wrap a widget in a MotionBin (a reveal ring / translated element).
 urnw::motion::MotionBin* WrapInBin(Gtk::Widget& child) {
   auto* bin = Gtk::make_managed<urnw::motion::MotionBin>();
@@ -571,12 +695,16 @@ urnw::motion::MotionBin* WrapInBin(Gtk::Widget& child) {
 
 }  // namespace
 
-// The initial step (windows LoginPanel / android LoginInitial.kt, in its
-// order): carousel hero, field, Get started, "or", the wallet + auth-code
-// pills, then the seedphrase pair. There is deliberately NO heading (the
-// carousel supplies the headline) and NO guest button (superseded by
-// seedphrase accounts). Wide (>=1000dip) the carousel moves to an art pane
-// beside a fixed 544dip form column; narrow it rides atop the single column.
+// The initial step, in the login stack's order (LOGIN_STACK_SPEC, shared by
+// every app): carousel hero, then up to three full-width pills — Google,
+// Apple, Create Instant Account — then the remaining ways in as square icon
+// tiles four per row (secret key, auth code, Bittensor, Solana), then "or",
+// the email/phone field and Get started. Google and Apple sign in through the
+// provider's own web flow in the browser (Linux has no native provider flow). There is
+// deliberately NO heading (the carousel supplies the headline) and NO guest
+// button (superseded by seedphrase accounts). Wide (>=1000dip) the carousel
+// moves to an art pane beside a fixed 544dip form column; narrow it rides
+// atop the single column.
 void MainWindow::BuildLogin() {
   loginPanel_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
   loginPanel_->set_margin(16);
@@ -590,7 +718,62 @@ void MainWindow::BuildLogin() {
   heroBin_->set_size_request(-1, 200);  // the narrow slot's cap
   loginPanel_->append(*heroBin_);
 
-  // URTextInput: a label above the underlined field
+  // ---- the three full-width pills ----------------------------------------
+  auto* pillGroup = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+  auto* google = MakeUrIconButton(BrandIcon::Kind::Google,
+                                  T_("sign_in_with_google", "Sign in with Google"));
+  google->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnGoogle));
+  pillGroup->append(*google);
+  auto* apple = MakeUrIconButton(BrandIcon::Kind::Apple,
+                                 T_("sign_in_with_apple", "Sign in with Apple"));
+  apple->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnApple));
+  pillGroup->append(*apple);
+  auto* instant =
+      MakeUrButton(T_("create_instant_account", "Create Instant Account"), false);
+  instant->signal_clicked().connect([this] {
+    loginError_.set_text("");
+    creatingInstant_ = false;
+    if (instantTerms_) {
+      instantTerms_->set_active(false);
+      instantTerms_->set_sensitive(true);
+    }
+    if (instantError_) instantError_->set_text("");
+    if (instantCreate_) instantCreate_->set_sensitive(false);
+    stack_.set_visible_child("instant");
+  });
+  pillGroup->append(*instant);
+  walletBin_ = WrapInBin(*pillGroup);
+  loginPanel_->append(*walletBin_);
+
+  // ---- the tiles: the less common ways in ----------------------------------
+  auto* secretKey =
+      MakeUrTileButton(BrandIcon::Kind::Key, T_("login_tile_secret_key", "Seed"));
+  secretKey->signal_clicked().connect([this] {
+    loginError_.set_text("");
+    if (seedphraseView_) seedphraseView_->get_buffer()->set_text("");
+    if (seedphraseError_) seedphraseError_->set_text("");
+    OnSeedphraseChanged();
+    stack_.set_visible_child("seedphrase");
+    if (seedphraseView_) seedphraseView_->grab_focus();
+  });
+  auto* authCode = MakeUrTileButton(BrandIcon::Kind::AuthCode, T_("auth_code", "Auth code"));
+  authCode->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnUseCode));
+  auto* bittensor = MakeUrTileButton(BrandIcon::Kind::Bittensor, T_("bittensor", "Bittensor"));
+  bittensor->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnBittensor));
+  // ONE Solana tile, as android has: the bridge needs a provider up front,
+  // so this presents a Phantom/Solflare chooser
+  auto* solana = MakeUrTileButton(BrandIcon::Kind::Solana, T_("solana", "Solana"));
+  solana->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnSolanaChooser));
+  auto* tiles = MakeTileRows({secretKey, authCode, bittensor, solana});
+  secondaryBin_ = WrapInBin(*tiles);
+  loginPanel_->append(*secondaryBin_);
+
+  auto* orDivider = Gtk::make_managed<Gtk::Label>(T_("or", "or"));
+  orDivider->add_css_class("dim-label");
+  orBin_ = WrapInBin(*orDivider);
+  loginPanel_->append(*orBin_);
+
+  // ---- email / phone (URTextInput: a label above the underlined field) -----
   auto* emailGroup = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   auto* emailLabel = Gtk::make_managed<Gtk::Label>(T_("user_auth_label", "Email or phone"));
   emailLabel->add_css_class("ur-input-label");
@@ -618,65 +801,6 @@ void MainWindow::BuildLogin() {
   getStartedBtn_->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnGetStarted));
   getStartedBin_ = WrapInBin(*getStartedBtn_);
   loginPanel_->append(*getStartedBin_);
-
-  auto* orDivider = Gtk::make_managed<Gtk::Label>(T_("or", "or"));
-  orDivider->add_css_class("dim-label");
-  orBin_ = WrapInBin(*orDivider);
-  loginPanel_->append(*orBin_);
-
-  // the wallet + auth-code pills (one ripple ring). Google SSO is absent by
-  // the windows rule: the network space reports sso_google=false and no OAuth
-  // client id is compiled in — a visible, always-failing button reads worse
-  // than an absent one.
-  auto* walletGroup = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
-  auto* bittensor = MakeUrIconButton(BrandIcon::Kind::Bittensor,
-                                     T_("bittensor_sign_in", "Sign in with Bittensor"));
-  bittensor->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnBittensor));
-  walletGroup->append(*bittensor);
-  // ONE Solana button, as android has: the bridge needs a provider up front,
-  // so this presents a Phantom/Solflare chooser
-  auto* solana = MakeUrIconButton(BrandIcon::Kind::Solana,
-                                  T_("solana_sign_in", "Sign in with Solana"));
-  solana->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnSolanaChooser));
-  walletGroup->append(*solana);
-  auto* authCode = MakeUrIconButton(BrandIcon::Kind::AuthCode,
-                                    T_("auth_code_login_button_text", "Log in with Auth Code"));
-  authCode->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::OnUseCode));
-  walletGroup->append(*authCode);
-  walletBin_ = WrapInBin(*walletGroup);
-  loginPanel_->append(*walletBin_);
-
-  // the seedphrase pair is its OWN group, set off by a larger gap and held
-  // tighter to each other; neither carries an icon (iOS parity)
-  auto* secondaryRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
-  secondaryRow->set_margin_top(16);
-  auto* seedphrase =
-      MakeUrButton(T_("sign_in_with_seedphrase", "Sign in with Seedphrase"), false);
-  seedphrase->signal_clicked().connect([this] {
-    loginError_.set_text("");
-    if (seedphraseView_) seedphraseView_->get_buffer()->set_text("");
-    if (seedphraseError_) seedphraseError_->set_text("");
-    OnSeedphraseChanged();
-    stack_.set_visible_child("seedphrase");
-    if (seedphraseView_) seedphraseView_->grab_focus();
-  });
-  secondaryRow->append(*seedphrase);
-  auto* instant =
-      MakeUrButton(T_("create_instant_account", "Create Instant Account"), false);
-  instant->signal_clicked().connect([this] {
-    loginError_.set_text("");
-    creatingInstant_ = false;
-    if (instantTerms_) {
-      instantTerms_->set_active(false);
-      instantTerms_->set_sensitive(true);
-    }
-    if (instantError_) instantError_->set_text("");
-    if (instantCreate_) instantCreate_->set_sensitive(false);
-    stack_.set_visible_child("instant");
-  });
-  secondaryRow->append(*instant);
-  secondaryBin_ = WrapInBin(*secondaryRow);
-  loginPanel_->append(*secondaryBin_);
 
   // URInlineErrorText: a line of coral body text, not an info bar
   loginError_.add_css_class("ur-error-text");
@@ -709,7 +833,7 @@ void MainWindow::BuildLogin() {
   });
   loginPanel_->append(*networkServerLink);
 
-  loginAffordances_ = {getStartedBtn_, bittensor, solana, authCode, seedphrase, instant};
+  loginAffordances_ = {getStartedBtn_, google, apple, instant, secretKey, authCode, bittensor, solana};
 
   // ---- wide | narrow assembly (the app-wide 1000dip breakpoint) ------------
   auto* clamp = Gtk::make_managed<Gtk::Box>();  // host for the adw clamp below
@@ -886,11 +1010,11 @@ void MainWindow::RunSignedOutReveal() {
   // the brand beat: the wordmark joins mid-hero-settle — the signed-out table's
   // AppTitleBar row (+8 -> rises up, delay 120)
   if (brandBin_) RiseIn(*brandBin_, Rise::Up, kDist8, kBrandBeatMs);
-  RiseIn(*emailGroupBin_, Rise::Down, kDist8, 240);
-  RiseIn(*getStartedBin_, Rise::Down, kDist8, 280);
-  RiseIn(*orBin_, Rise::Down, kDist8, 280);
-  RiseIn(*walletBin_, Rise::Down, kDist12, 320);
-  RiseIn(*secondaryBin_, Rise::Down, kDist12, 360);
+  RiseIn(*walletBin_, Rise::Down, kDist12, 240);
+  RiseIn(*secondaryBin_, Rise::Down, kDist12, 280);
+  RiseIn(*orBin_, Rise::Down, kDist8, 300);
+  RiseIn(*emailGroupBin_, Rise::Down, kDist8, 320);
+  RiseIn(*getStartedBin_, Rise::Down, kDist8, 360);
 }
 
 // CancelToFinal: every pose the reveal ever writes is either animated back to
@@ -1178,6 +1302,77 @@ void MainWindow::BuildInstantStep() {
   termsRow->append(*termsText);
   scaffold.card->append(*termsRow);
 
+  // the marketing opt-out, on by default (every page that creates a network)
+  auto* updatesRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  instantProductUpdates_ = Gtk::make_managed<Gtk::Switch>();
+  instantProductUpdates_->set_valign(Gtk::Align::CENTER);
+  instantProductUpdates_->set_active(true);
+  updatesRow->append(*instantProductUpdates_);
+  auto* updatesText = Gtk::make_managed<Gtk::Label>(
+      T_("periodic_product_updates", "Periodic product updates"));
+  updatesText->add_css_class("dim-label");
+  updatesText->add_css_class("caption");
+  updatesText->set_wrap(true);
+  updatesText->set_xalign(0);
+  updatesText->set_hexpand(true);
+  updatesRow->append(*updatesText);
+  scaffold.card->append(*updatesRow);
+
+  // optional referral code (android/apple instant-account parity): the server
+  // links the referral on the guest/seedphrase create path too
+  instantReferralToggle_ =
+      Gtk::make_managed<Gtk::Button>(T_("add_referral_code", "Add referral code"));
+  instantReferralToggle_->add_css_class("flat");
+  instantReferralToggle_->set_halign(Gtk::Align::START);
+  instantReferralToggle_->signal_clicked().connect([this] {
+    instantReferralRevealer_->set_reveal_child(!instantReferralRevealer_->get_reveal_child());
+  });
+  scaffold.card->append(*instantReferralToggle_);
+
+  instantReferralRevealer_ = Gtk::make_managed<Gtk::Revealer>();
+  auto* instantReferralBox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
+  auto* instantReferralRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  instantReferralEntry_ = Gtk::make_managed<Gtk::Entry>();
+  instantReferralEntry_->set_placeholder_text(
+      T_("enter_a_bonus_referral_code", "Enter a bonus referral code"));
+  instantReferralEntry_->set_hexpand(true);
+  instantReferralEntry_->signal_changed().connect([this] {
+    // retyping invalidates the previous validation
+    instantReferralValid_ = false;
+    instantReferralSupporting_->set_text("");
+    instantReferralApplied_->set_visible(false);
+    instantReferralApply_->set_sensitive(
+        !TrimWhitespace(instantReferralEntry_->get_text()).empty());
+  });
+  instantReferralRow->append(*instantReferralEntry_);
+  instantReferralApply_ = Gtk::make_managed<Gtk::Button>(T_("apply_bonus", "Apply bonus"));
+  instantReferralApply_->set_sensitive(false);
+  instantReferralApply_->signal_clicked().connect(
+      sigc::mem_fun(*this, &MainWindow::OnInstantValidateReferral));
+  instantReferralRow->append(*instantReferralApply_);
+  instantReferralBox->append(*instantReferralRow);
+  instantReferralSupporting_ = Gtk::make_managed<Gtk::Label>();
+  instantReferralSupporting_->add_css_class("ur-error-text");
+  instantReferralSupporting_->set_xalign(0);
+  instantReferralSupporting_->set_wrap(true);
+  instantReferralBox->append(*instantReferralSupporting_);
+  instantReferralRevealer_->set_child(*instantReferralBox);
+  scaffold.card->append(*instantReferralRevealer_);
+
+  // referral accepted: the gold king-frog line
+  instantReferralApplied_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
+  {
+    auto* appliedLabel = Gtk::make_managed<Gtk::Label>();
+    appliedLabel->set_markup("<span foreground='" + HexForMarkup(kReferralGoldLight) + "'>" +
+                             Glib::Markup::escape_text(
+                                 T_("referral_bonus_applied_2", "Referral Bonus applied")) +
+                             "</span>");
+    appliedLabel->add_css_class("caption");
+    instantReferralApplied_->append(*appliedLabel);
+  }
+  instantReferralApplied_->set_visible(false);
+  scaffold.card->append(*instantReferralApplied_);
+
   instantCreate_ = Gtk::make_managed<Gtk::Button>(T_("create_account_2", "Create Account"));
   instantCreate_->add_css_class("suggested-action");
   instantCreate_->set_sensitive(false);
@@ -1193,6 +1388,40 @@ void MainWindow::BuildInstantStep() {
   stack_.add(*scaffold.page, "instant");
 }
 
+void MainWindow::OnInstantValidateReferral() {
+  if (validatingInstantReferral_) return;
+  const std::string code = TrimWhitespace(instantReferralEntry_->get_text());
+  if (code.empty()) return;
+  validatingInstantReferral_ = true;
+  instantReferralApply_->set_sensitive(false);
+  instantReferralSupporting_->set_text("");
+
+  host_.ValidateReferralCode(code, [this](bool ok, bool valid, bool capped) {
+    PostToMain([this, ok, valid, capped] {
+      validatingInstantReferral_ = false;
+      instantReferralApply_->set_sensitive(
+          !TrimWhitespace(instantReferralEntry_->get_text()).empty());
+      instantReferralValid_ = ok && valid && !capped;
+      if (instantReferralValid_) {
+        // the royal welcome: the gold king-frog moment for the referred
+        instantReferralRevealer_->set_reveal_child(false);
+        instantReferralApplied_->set_visible(true);
+        instantReferralToggle_->set_label(T_("edit_referral_code", "Edit referral code"));
+        ShowRoyalWelcomeSheet(*this);
+      } else if (ok && capped) {
+        instantReferralSupporting_->set_text(
+            T_("referral_code_capped", "This code has been used up"));
+      } else if (ok) {
+        instantReferralSupporting_->set_text(
+            T_("invalid_referral_code", "This code is not valid"));
+      } else {
+        instantReferralSupporting_->set_text(
+            T_("something_went_wrong", "Something went wrong."));
+      }
+    });
+  });
+}
+
 void MainWindow::OnInstantSubmit() {
   if (creatingInstant_ || !instantTerms_ || !instantTerms_->get_active()) return;
   creatingInstant_ = true;
@@ -1200,7 +1429,12 @@ void MainWindow::OnInstantSubmit() {
   instantTerms_->set_sensitive(false);
   instantError_->set_text("");
 
-  host_.CreateInstantAccount([this](SdkHost::InstantAccount account) {
+  const std::string referralCode =
+      instantReferralValid_ ? TrimWhitespace(instantReferralEntry_->get_text())
+                            : std::string();
+  // the marketing opt-out rides on the create call (absent = opted in)
+  host_.SetProductUpdatesOptOut(instantProductUpdates_ && !instantProductUpdates_->get_active());
+  host_.CreateInstantAccount(referralCode, [this](SdkHost::InstantAccount account) {
     PostToMain([this, account = std::move(account)]() mutable {
       creatingInstant_ = false;
       instantTerms_->set_sensitive(true);
@@ -1225,6 +1459,7 @@ void MainWindow::OnInstantSubmit() {
                                           : r.error.c_str());
               return;
             }
+            prefs::Set(kOnboardingPendingKey, true);  // an instant account is a new network
             StartTunnelUi();  // auth handler flips the view
           });
         });
@@ -1357,6 +1592,11 @@ void MainWindow::BuildHome() {
     // guest -> full account: the create page in upgrade-guest mode
     NavigateCreate(CreateNetworkPage::Mode::UpgradeGuest, "", /*fromHome=*/true);
   };
+  // "Total referrals" in the drawer's usage bar opens the same Referrals page
+  // Account's row opens (one referral screen everywhere)
+  drawer_->on_open_referrals = [this] {
+    if (shell_) shell_->Navigate("referrals");
+  };
   box->append(*drawer_);
 
   box->append(*Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL));
@@ -1404,6 +1644,8 @@ void MainWindow::BuildHome() {
   // because the GeoClue location override must keep following the window
   // while the sheet is closed.
   connectPage_->on_open_provider_locations = [this] { OpenProviderLocations(); };
+  // the easter egg: five taps on the connected dot play the Pro celebration
+  connectPage_->on_connected_icon_tap = [this] { LaunchProCelebration(); };
   shell_->SetPage("connect", *connectPage_);
   shell_->SetPage("connect-legacy", *scroller);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
@@ -1421,18 +1663,13 @@ void MainWindow::BuildHome() {
                                              : kit::Snackbar::Severity::Success);
     }
   };
-  // A guest has no account to attach a plan to: the upgrade door sends them
-  // through create-account first (the windows guest-upgrade path), everyone
-  // else straight into the plan sheet the drawer owns.
-  earningsPage_->on_open_upgrade = [this] {
-    if (balance_.IsGuest()) {
-      NavigateCreate(CreateNetworkPage::Mode::UpgradeGuest, "", /*fromHome=*/true);
-    } else if (drawer_) {
-      drawer_->OpenUpgrade();
-    }
-  };
   earningsPage_->sheet_open = [this] { return sheetOpen_; };
   earningsPage_->on_sheet_open_changed = [this](bool open) { sheetOpen_ = open; };
+  // the provide mode is changed on the connect page (its provide row); the
+  // earnings row is a shortcut there
+  earningsPage_->on_open_provide_settings = [this] {
+    if (shell_) shell_->Navigate("connect");
+  };
   shell_->SetPage("earnings", *earningsPage_);
   accountPage_ = Gtk::make_managed<AccountPage>(host_);
   accountPage_->on_snackbar = [this](const Glib::ustring& message, bool error) {
@@ -1449,6 +1686,8 @@ void MainWindow::BuildHome() {
       drawer_->OpenUpgrade();
     }
   };
+  // a Pro network's plan label replays the Pro celebration
+  accountPage_->on_plan_label_tap = [this] { LaunchProCelebration(); };
   // The redeem sheet needs the balance store (it starts confirmation polling),
   // which the page deliberately does not hold — so the window opens it.
   accountPage_->on_open_redeem = [this] {
@@ -1458,6 +1697,24 @@ void MainWindow::BuildHome() {
   accountPage_->sheet_open = [this] { return sheetOpen_; };
   accountPage_->on_sheet_open_changed = [this](bool open) { sheetOpen_ = open; };
   shell_->SetPage("account", *accountPage_);
+  // The "Refer and earn" page: a destination without a rail item, reached from
+  // Account's Referrals row and left through its own "‹ Account".
+  referralsPage_ = Gtk::make_managed<ReferralsPage>(host_, balance_);
+  referralsPage_->on_snackbar = [this](const Glib::ustring& message, bool error) {
+    if (shell_) {
+      shell_->snackbar().Show(message, error ? kit::Snackbar::Severity::Error
+                                             : kit::Snackbar::Severity::Success);
+    }
+  };
+  referralsPage_->sheet_open = [this] { return sheetOpen_; };
+  referralsPage_->on_sheet_open_changed = [this](bool open) { sheetOpen_ = open; };
+  referralsPage_->on_back = [this] {
+    if (shell_) shell_->Navigate("account");
+  };
+  accountPage_->on_open_referrals = [this] {
+    if (shell_) shell_->Navigate("referrals");
+  };
+  shell_->SetPage("referrals", *referralsPage_);
   supportPage_ = Gtk::make_managed<SupportPage>(host_);
   supportPage_->on_snackbar = [this](const Glib::ustring& message, bool error) {
     if (shell_) {
@@ -1494,6 +1751,10 @@ void MainWindow::BuildHome() {
     if (tag == "account" && accountPage_) {
       accountPage_->Load();
       balance_.FetchNow();  // the plan pane is painted from the store's snapshot
+    }
+    if (tag == "referrals" && referralsPage_) {
+      referralsPage_->Load();
+      balance_.FetchNow();  // the card is painted from the store's referral figures
     }
     // Settings owns the account-subject sheets too, so it loads for both tags.
     if ((tag == "settings" || tag == "account") && settingsPage_) settingsPage_->Load();
@@ -1542,6 +1803,8 @@ void MainWindow::BuildAuthPages() {
 
   createPage_ = Gtk::make_managed<CreateNetworkPage>(host_);
   createPage_->on_success = [this] {
+    // a network was just created: the onboarding flow follows the sign-in
+    prefs::Set(kOnboardingPendingKey, true);
     StartTunnelUi();  // auth handler flips the view
   };
   createPage_->on_verify = [this](std::string userAuth) { NavigateVerify(userAuth); };
@@ -1552,6 +1815,7 @@ void MainWindow::BuildAuthPages() {
 
   verifyPage_ = Gtk::make_managed<VerifyPage>(host_);
   verifyPage_->on_success = [this] {
+    prefs::Set(kOnboardingPendingKey, true);  // a verified sign-up is a new network
     StartTunnelUi();  // auth handler flips the view
   };
   verifyPage_->on_back = [this] { stack_.set_visible_child("login"); };
@@ -1744,6 +2008,19 @@ void MainWindow::OnSolana(WalletConnect::Provider provider) {
   host_.SignInWithSolana(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
+void MainWindow::OnGoogle() { OnSso(sso::kProviderGoogle); }
+
+void MainWindow::OnApple() { OnSso(sso::kProviderApple); }
+
+// Google / Apple: the browser carries the provider's own sign-in; the api's
+// callback returns the identity token on urnetwork://oauth/<provider> and it
+// lands in OnWalletAuth like the wallet flows.
+void MainWindow::OnSso(const std::string& provider) {
+  loginError_.set_text("");
+  SetLoginBusy(true);
+  host_.SignInWithSso(provider, [this](AuthResult r) { OnWalletAuth(r); });
+}
+
 void MainWindow::OnBittensor() {
   SetLoginNotice(T_("opening_bittensor_wallet_in_browser",
                     "Opening your Bittensor wallet in the browser…"));
@@ -1760,10 +2037,22 @@ void MainWindow::OnWalletAuth(const AuthResult& result) {
       // wallet_auth; finish sign-up on the create page (name + terms)
       loginError_.set_text("");
       NavigateCreate(CreateNetworkPage::Mode::Wallet, "", /*fromHome=*/false);
+    } else if (result.sso_needs_network) {
+      // an sso identity with no network: the host kept the identity token
+      loginError_.set_text("");
+      NavigateCreate(CreateNetworkPage::Mode::Sso, "", /*fromHome=*/false);
+    } else if (!result.ok && !result.authAllowed.empty()) {
+      // the account exists under other sign-in methods
+      SetLoginError(Format(T_("login_error_auth_allowed", "Please login with one of: {}."),
+                           result.authAllowed));
     } else if (!result.ok) {
-      SetLoginError(result.error.empty()
-                        ? T_("wallet_sign_in_failed", "Wallet sign-in failed")
-                        : result.error.c_str());
+      if (!result.error.empty()) {
+        SetLoginError(result.error.c_str());
+      } else if (result.sso) {
+        SetLoginError(T_("there_was_an_error_logging_in", "There was an error logging in"));
+      } else {
+        SetLoginError(T_("wallet_sign_in_failed", "Wallet sign-in failed"));
+      }
     } else {
       loginError_.set_text("");
       StartTunnelUi();  // auth handler flips the view
@@ -1803,6 +2092,89 @@ void MainWindow::SyncProvideControlMode() {
   syncingProvideMode_ = false;
 }
 
+// The post-sign-up onboarding: shown once, only after a network was created
+// on this machine (never for an existing account signing in).
+void MainWindow::NoteConnected() {
+  // connect.first: once per network. The network id keys the memory, so a
+  // second account on the same machine gets its own first connect.
+  auto byJwt = host_.ParseByJwt();
+  const std::string networkId = byJwt && byJwt->NetworkId ? *byJwt->NetworkId : byJwt ? byJwt->NetworkName : "";
+  if (networkId.empty()) return;
+  const std::string key = "connect_first_" + networkId;
+  if (prefs::Get<bool>(key.c_str(), false)) return;
+  prefs::Set(key.c_str(), true);
+  host_.events().ConnectFirst();
+}
+
+void MainWindow::HandleOnboardingLink(const std::string& url) {
+  if (!host_.IsLoggedIn() || !shell_) return;
+  present();
+  std::map<std::string, std::string> query;
+  if (const size_t q = url.find('?'); q != std::string::npos) {
+    size_t i = q + 1;
+    while (i < url.size()) {
+      const size_t amp = url.find('&', i);
+      const std::string pair = url.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
+      if (const size_t eq = pair.find('='); eq != std::string::npos) {
+        char* dec = g_uri_unescape_string(pair.substr(eq + 1).c_str(), nullptr);
+        query[pair.substr(0, eq)] = dec ? std::string(dec) : pair.substr(eq + 1);
+        if (dec) g_free(dec);
+      }
+      if (amp == std::string::npos) break;
+      i = amp + 1;
+    }
+  }
+  switch (ParseOnboardingLink(url)) {
+    case OnboardingLink::Connect:
+      shell_->Navigate("connect");
+      break;
+    case OnboardingLink::Widgets:
+      // no widgets on the desktop: the Account page is the closest destination
+      shell_->Navigate("account");
+      break;
+    case OnboardingLink::Offer:
+      if (balance_.OfferActive()) {
+        if (!onboarding_) {
+          onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
+          onboarding_->on_finished = [] { prefs::Set(kOnboardingPendingKey, false); };
+        }
+        onboarding_->OpenOffer();
+      } else if (drawer_) {
+        drawer_->OpenUpgrade();
+      }
+      break;
+    case OnboardingLink::Feedback: {
+      shell_->Navigate("support");
+      int rating = 0;
+      if (auto r = query.find("r"); r != query.end()) rating = std::atoi(r->second.c_str());
+      const std::string why = query.count("why") ? query["why"] : "";
+      std::string token = query.count("token") ? query["token"] : "";
+      if (token.empty() && query.count("t")) token = query["t"];
+      if (supportPage_) supportPage_->PrefillFromCampaign(token, rating, why);
+      break;
+    }
+    case OnboardingLink::None:
+      break;
+  }
+}
+
+void MainWindow::OpenOnboardingIfPending() {
+  if (!prefs::Get<bool>(kOnboardingPendingKey, false)) return;
+  Glib::signal_timeout().connect_once([this] {
+    if (!prefs::Get<bool>(kOnboardingPendingKey, false)) return;
+    // A repeated logged-in transition (the session reconnecting, a second auth
+    // event) must not restart a flow that is already on screen: Open() resets
+    // it to page 1. The persisted pending pref is the only gate; it is cleared
+    // when the flow hides for any reason (Get connected, Skip, Escape, close).
+    if (onboarding_ && onboarding_->get_visible()) return;
+    if (!onboarding_) {
+      onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
+      onboarding_->on_finished = [] { prefs::Set(kOnboardingPendingKey, false); };
+    }
+    onboarding_->Open();
+  }, 600);
+}
+
 void MainWindow::ApplyAuthState(bool loggedIn) {
   stack_.set_visible_child(loggedIn ? "home" : "login");
   // a fresh session (either way) re-arms the once-only Pro-upgrade provide
@@ -1822,6 +2194,7 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // so panes B/C would otherwise wait for the next DeviceLifecycle event.
     if (connectPage_) connectPage_->Resync();
     if (shell_ && shell_->on_navigate) shell_->on_navigate(shell_->CurrentTag());
+    OpenOnboardingIfPending();
   } else {
     // A signed-out window has no session at all: the DEFAULT reading, not a
     // bool poked into a copy of the last one.
@@ -1832,6 +2205,7 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // Account carries account-SUBJECT state (name, login methods, referral
     // code, the departed plan): a sign-out must wipe it, not merely reload it.
     if (accountPage_) accountPage_->ResetForSignOut();
+    if (referralsPage_) referralsPage_->ResetForSignOut();
     // sign-out lands back on the initial step with a clean login flow
     loginUserAuth_.clear();
     password_.set_text("");
@@ -1932,6 +2306,7 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // longer say "Connect" over a press that disconnects.
   connected_ = view.action == health::Action::Disconnect;
   connectBtn_.set_label(connected_ ? T_("disconnect", "Disconnect") : T_("connect", "Connect"));
+  if (view.state == health::State::Connected) NoteConnected();
   // The strip's raw status field carries the controller's OWN token now
   // (CONNECTING/CONNECTED/CONNECT_FAILED), not the two-word destination
   // vocabulary the old push could produce.
@@ -1994,8 +2369,13 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
     return buf;
   };
   // the drawer surfaces the insufficient-balance banner (upgrade flow CTA)
-  if (drawer_) drawer_->SetInsufficientBalance(stats.insufficientBalance);
+  // and the ip-version histogram (the same grid push the hero canvas rides)
+  if (drawer_) {
+    drawer_->SetInsufficientBalance(stats.insufficientBalance);
+    drawer_->SetProviderGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
+  }
   if (connectPage_) connectPage_->ApplyStats(stats);
+  if (earningsPage_) earningsPage_->ApplyProvideState(stats);  // the provide row + gate
   // the status strip: provider + traffic (+ the Advanced raw field)
   if (shell_) {
     shell_->SetStatusProvider(T_("best_available_provider", "Best available provider"));
@@ -2045,22 +2425,9 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
   // provide indicator (apple parity). The effective provide mode is a bit
   // set (0 none, 1 network, 2 friends-and-family, 3 public) — per-case only.
   // "●" = solid dot (Network tier), "◉" = dot with outer ring (Public tier).
-  const char* provideGlyph = "●";
-  Rgba provideColor = kUrCoral;
-  switch (stats.provideMode) {
-    case 3:  // public
-      provideGlyph = "◉";
-      provideColor = stats.providePaused ? kUrAmber : kUrGreen;
-      break;
-    case 1:  // network (also Auto while idle)
-    case 2:  // friends-and-family
-      provideColor = kUrGreen;
-      break;
-    default:
-      break;
-  }
-  provideModeDot_.set_markup("<span foreground='" + HexForMarkup(provideColor) + "'>" +
-                             provideGlyph + "</span>");
+  const auto provideVisual = ProvideModeGlyphFor(stats.provideMode, stats.providePaused);
+  provideModeDot_.set_markup("<span foreground='" + HexForMarkup(provideVisual.color) + "'>" +
+                             provideVisual.glyph + "</span>");
 
   // discoverability line (apple/android parity): a paused device stays
   // discoverable — pause stops public provide only
@@ -2068,6 +2435,13 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
       stats.provideEnabled && stats.provideHasNetworkKey
           ? T_("device_discoverable", "This device is discoverable")
           : T_("device_not_discoverable", "Enable provide mode to make this device discoverable"));
+}
+
+// ---- the Pro celebration ----------------------------------------------------
+// One flight at a time; the overlay itself declines to start while a flight
+// is in the air or when animations are off, so the callers stay simple.
+void MainWindow::LaunchProCelebration() {
+  if (proCelebration_) proCelebration_->Launch();
 }
 
 }  // namespace urnw

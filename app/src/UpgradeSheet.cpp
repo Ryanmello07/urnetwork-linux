@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "UpgradeSheet.hpp"
 
+#include "PlanPicker.hpp"
+
+#include <cstdio>
+
 #include <gio/gio.h>
 
 #ifdef UR_HAVE_WEBKIT
@@ -10,11 +14,17 @@
 #include <webkit/webkit.h>
 #endif
 
+#include <nlohmann/json.hpp>
+
+#include "ClientEvents.hpp"
 #include "I18n.hpp"
+#include "PricePresentation.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
 namespace {
+
+constexpr const char* kStoreStripe = "stripe";
 
 // Canonical Stripe checkout items (server/controller/subscription_stripe_
 // controller.go StripeItemPro*).
@@ -34,6 +44,22 @@ constexpr const char* kUiModeEmbedded = "embedded";
 // the sheet's own close (X) is the only way out.
 constexpr const char* kCheckoutPage = "https://ur.io/checkout";
 constexpr const char* kCheckoutRedirect = "urnetwork://checkout";
+// The ur.io embedded pay page (mmm/ur.io /app/pay-sheet): mounts Stripe's
+// Payment Element for the payment sheet's client secret, confirms the intent,
+// and hands control back by navigating to the return url (success) or posting
+// {type: "ur-pay", status} to the host — the desktop forwards that message
+// through a script message handler, so both signals land in the sheet.
+constexpr const char* kPaySheetPage = "https://ur.io/app/pay-sheet";
+constexpr const char* kPayReturn = "urnetwork://pay/done";
+constexpr const char* kPayMessageHandler = "urpay";
+constexpr const char* kPayMessageBridge =
+    "window.addEventListener('message', function (e) {"
+    "  var d = e && e.data;"
+    "  if (typeof d === 'string') { try { d = JSON.parse(d); } catch (err) { return; } }"
+    "  if (!d || d.type !== 'ur-pay') return;"
+    "  var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.urpay;"
+    "  if (h) h.postMessage(JSON.stringify(d));"
+    "});";
 
 std::string Escape(const std::string& s) {
   char* e = g_uri_escape_string(s.c_str(), nullptr, FALSE);
@@ -85,26 +111,6 @@ UpgradeSheet::UpgradeSheet(Gtk::Window& parent, SdkHost& host, SubscriptionBalan
   BuildUi();
 }
 
-Gtk::ToggleButton* UpgradeSheet::MakeOptionCard(const std::string& title,
-                                                const std::string& subtitle) {
-  auto* card = Gtk::make_managed<Gtk::ToggleButton>();
-  card->add_css_class("ur-option");
-  auto* column = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
-  auto* titleLabel = Gtk::make_managed<Gtk::Label>(title);
-  titleLabel->add_css_class("title-3");
-  titleLabel->set_xalign(0);
-  column->append(*titleLabel);
-  if (!subtitle.empty()) {
-    auto* subtitleLabel = Gtk::make_managed<Gtk::Label>(subtitle);
-    subtitleLabel->add_css_class("dim-label");
-    subtitleLabel->add_css_class("caption");
-    subtitleLabel->set_xalign(0);
-    column->append(*subtitleLabel);
-  }
-  card->set_child(*column);
-  return card;
-}
-
 void UpgradeSheet::BuildUi() {
   auto* root = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   root->set_margin(24);
@@ -113,53 +119,32 @@ void UpgradeSheet::BuildUi() {
   // ---- product options (mac UpgradeSubscriptionSheet) ------------------------
   optionsBox_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
 
-  auto* becomeA = Gtk::make_managed<Gtk::Label>(T_("become_a", "Become a"));
-  becomeA->add_css_class("title-3");
-  becomeA->set_xalign(0);
-  optionsBox_->append(*becomeA);
-  auto* supporter =
-      Gtk::make_managed<Gtk::Label>(T_("urnetwork_supporter", "URnetwork Supporter"));
-  supporter->add_css_class("title-1");
-  supporter->set_xalign(0);
-  optionsBox_->append(*supporter);
+  // "Get Pro", the same heading onboarding, Android and Apple give this sheet
+  auto* proTitle = Gtk::make_managed<Gtk::Label>(T_("get_pro", "Get Pro"));
+  proTitle->add_css_class("title-1");
+  proTitle->set_xalign(0);
+  optionsBox_->append(*proTitle);
 
-  auto* supportUs = Gtk::make_managed<Gtk::Label>(
-      T_("support_us",
-         "Support us in building a new kind of network that gives instead of takes."));
-  supportUs->add_css_class("dim-label");
-  supportUs->set_wrap(true);
-  supportUs->set_xalign(0);
-  supportUs->set_margin_top(16);
-  optionsBox_->append(*supportUs);
-  auto* unlock = Gtk::make_managed<Gtk::Label>(
-      T_("unlock_speed",
-         "You’ll unlock even faster speeds, and first dibs on new features like robust "
-         "anti-censorship measures and data control."));
-  unlock->add_css_class("dim-label");
-  unlock->set_wrap(true);
-  unlock->set_xalign(0);
-  unlock->set_margin_top(8);
-  optionsBox_->append(*unlock);
+  // No explainer under the title: the sheet is the title and the two plan
+  // options (android UpgradeScreenHeader).
 
-  // yearly (preselected, "Most Popular" — mac parity), then monthly. Prices are
-  // shown by Stripe's checkout, so the cards carry the cadence + trial.
-  yearlyCard_ = MakeOptionCard(T_("yearly", "Yearly"),
-                               T_("includes_2_week_free_trial", "Includes 2 week free trial"));
-  auto* yearlyOverlay = Gtk::make_managed<Gtk::Overlay>();
-  yearlyOverlay->set_child(*yearlyCard_);
-  auto* popularChip = MakeChip(T_("most_popular", "Most Popular"), "green", true);
-  popularChip->set_halign(Gtk::Align::END);
-  popularChip->set_valign(Gtk::Align::START);
-  popularChip->set_margin_end(12);
-  yearlyOverlay->add_overlay(*popularChip);
-  yearlyOverlay->set_margin_top(20);
-  optionsBox_->append(*yearlyOverlay);
+  // the plan picker the onboarding welcome page shows: yearly in the gold
+  // dress with the trial, selected by default, monthly plain below it. One
+  // component, so Get Pro and onboarding cannot drift.
+  plans_ = Gtk::make_managed<PlanPicker>();
+  plans_->set_margin_top(36);  // room for the halo and the Best value pill
+  plans_->on_select = [this](bool yearly) {
+    if (joinLabel_) joinLabel_->set_text(PlanPicker::CtaLabel(yearly));
+  };
+  optionsBox_->append(*plans_);
 
-  monthlyCard_ = MakeOptionCard(T_("monthly", "Monthly"), "");
-  monthlyCard_->set_group(*yearlyCard_);
-  monthlyCard_->set_margin_top(12);
-  optionsBox_->append(*monthlyCard_);
-  yearlyCard_->set_active(true);
+  // the network's welcome offer while it is active (read-only: the picker's
+  // yearly card already prints the first-year price; this is the deadline
+  // and the terms). Issued elsewhere — the sheet never issues one.
+  offerLine_ = Gtk::make_managed<OfferCard>(/*compact=*/true);
+  offerLine_->set_margin_top(16);
+  offerLine_->set_visible(false);
+  optionsBox_->append(*offerLine_);
 
   joinBtn_ = Gtk::make_managed<Gtk::Button>();
   auto* joinContent = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
@@ -167,8 +152,9 @@ void UpgradeSheet::BuildUi() {
   joinSpinner_ = Gtk::make_managed<Gtk::Spinner>();
   joinSpinner_->set_visible(false);
   joinContent->append(*joinSpinner_);
-  joinContent->append(
-      *Gtk::make_managed<Gtk::Label>(T_("join_the_movement", "Join the movement")));
+  // only the yearly plan carries the trial: the button says what the click does
+  joinLabel_ = Gtk::make_managed<Gtk::Label>(PlanPicker::CtaLabel(plans_->Yearly()));
+  joinContent->append(*joinLabel_);
   joinBtn_->set_child(*joinContent);
   joinBtn_->add_css_class("suggested-action");
   joinBtn_->add_css_class("pill");
@@ -216,7 +202,13 @@ void UpgradeSheet::BuildUi() {
   checkoutClose->add_css_class("circular");
   checkoutClose->set_tooltip_text(T_("close", "Close"));
   // back to the products; the abandoned embedded session just expires
-  checkoutClose->signal_clicked().connect([this] { SetState(State::Options); });
+  checkoutClose->signal_clicked().connect([this] {
+    if (state_ == State::Checkout && !purchaseEmitted_) {
+      EmitPurchase("cancelled");
+      purchaseEmitted_ = true;
+    }
+    SetState(State::Options);
+  });
   checkoutHeader->append(*checkoutClose);
   checkoutBox_->append(*checkoutHeader);
   webViewSlot_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
@@ -227,7 +219,13 @@ void UpgradeSheet::BuildUi() {
   // hidden mid-checkout (Escape / window close): drop the webview so a stale
   // payment page never lingers behind a hidden window
   signal_hide().connect([this] {
-    if (state_ == State::Checkout) SetState(State::Options);
+    if (state_ == State::Checkout) {
+      if (!purchaseEmitted_) {
+        EmitPurchase("cancelled");
+        purchaseEmitted_ = true;
+      }
+      SetState(State::Options);
+    }
   });
 #endif
 
@@ -320,6 +318,10 @@ void UpgradeSheet::SetState(State state) {
   if (state != State::Checkout) TeardownWebView();
   checkoutBox_->set_visible(state == State::Checkout);
 #endif
+  if (state == State::Success && state_ != State::Success && !purchaseEmitted_) {
+    purchaseEmitted_ = true;
+    EmitPurchase("completed");
+  }
   state_ = state;
   optionsBox_->set_visible(state == State::Options || state == State::Launching);
   waitingBox_->set_visible(state == State::Waiting);
@@ -334,37 +336,116 @@ void UpgradeSheet::SetState(State state) {
     joinSpinner_->stop();
   }
   joinBtn_->set_sensitive(!launching);
-  yearlyCard_->set_sensitive(!launching);
-  monthlyCard_->set_sensitive(!launching);
+  plans_->set_sensitive(!launching);
+}
+
+void UpgradeSheet::ApplyPrices() {
+  const PriceTierView& tier = balance_.Tier();
+  const OfferView& offer = balance_.Offer();
+  if (plans_) plans_->SetPrices(tier, offer);
+  if (offerLine_) {
+    offerLine_->set_visible(offer.active);
+    if (offer.active) offerLine_->Update(offer, tier, kFreeTrialDays);
+  }
+}
+
+void UpgradeSheet::EmitPurchase(const char* outcome, const std::string& errorClass) {
+  const bool yearly = plans_->Yearly();
+  const PriceTierView& tier = balance_.Tier();
+  const OfferView& offer = balance_.Offer();
+  const double price = yearly ? (offer.active ? offer.firstYear : tier.yearly) : tier.monthly;
+  const std::string out(outcome);
+  ClientEventQueue& events = host_.events();
+  if (out == "started") {
+    events.PurchaseStarted(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+                           tier.currency);
+  } else if (out == "completed") {
+    events.PurchaseCompleted(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+                             tier.currency);
+  } else if (out == "cancelled") {
+    events.PurchaseCancelled(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+                             tier.currency);
+  } else {
+    events.PurchaseFailed(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+                          tier.currency, errorClass);
+  }
 }
 
 void UpgradeSheet::Open() {
   ++*epoch_;
   errorLabel_->set_visible(false);
-  yearlyCard_->set_active(true);
+  ApplyPrices();
+  plans_->Select(true);
+  joinLabel_->set_text(PlanPicker::CtaLabel(true));
   // resuming a still-running confirmation poll re-opens onto the waiting state
   SetState(balance_.IsPolling() ? State::Waiting : State::Options);
   present();
+}
+
+void UpgradeSheet::OpenCheckout(bool yearly) {
+  ApplyPrices();
+  if (plans_) plans_->Select(yearly);
+  if (joinLabel_) joinLabel_->set_text(PlanPicker::CtaLabel(yearly));
+  present();
+  StartCheckout();
 }
 
 void UpgradeSheet::StartCheckout() {
   if (state_ == State::Launching) return;
   SetState(State::Launching);
   errorLabel_->set_visible(false);
+  purchaseEmitted_ = false;
+  EmitPurchase("started");
 #ifdef UR_HAVE_WEBKIT
-  // Embedded first — but only once a webview actually exists (webkit can be
-  // present at build time and still unusable at runtime).
+  // The inline payment sheet first, then embedded checkout — but only once a
+  // webview actually exists (webkit can be present at build time and still
+  // unusable at runtime).
   if (EnsureWebView()) {
-    RequestSession(/*embedded=*/true);
+    RequestPaymentSheet();
     return;
   }
 #endif
   RequestSession(/*embedded=*/false);
 }
 
+void UpgradeSheet::RequestPaymentSheet() {
+#ifdef UR_HAVE_WEBKIT
+  urnet::StripePaymentSheetArgs args;
+  args.plan = PlanName(plans_->Yearly());
+  auto epoch = epoch_;
+  const uint64_t issued = *epoch;
+  host_.api().stripePaymentSheet(
+      args, [this, epoch, issued](std::optional<urnet::StripePaymentSheetResult> result,
+                                  std::optional<std::string> err) {
+        PostToMain([this, epoch, issued, result = std::move(result), err = std::move(err)] {
+          if (*epoch != issued) return;  // sheet was reset since
+          if (state_ != State::Launching) return;
+          // the intent to confirm: the SetupIntent for the yearly plan (the
+          // trial defers the charge), the PaymentIntent for monthly
+          std::string clientSecret;
+          if (!err && result && !result->error) {
+            if (result->setup_intent_client_secret && !result->setup_intent_client_secret->empty()) {
+              clientSecret = *result->setup_intent_client_secret;
+            } else if (result->payment_intent_client_secret &&
+                       !result->payment_intent_client_secret->empty()) {
+              clientSecret = *result->payment_intent_client_secret;
+            }
+          }
+          if (clientSecret.empty() || !result->publishable_key || result->publishable_key->empty()) {
+            // nothing rendered yet: the embedded checkout session saves the purchase
+            if (err) std::fprintf(stderr, "[upgrade] payment sheet failed: %s\n", err->c_str());
+            RequestSession(/*embedded=*/true);
+            return;
+          }
+          OpenPaySheet(clientSecret, *result->publishable_key);
+        });
+      });
+#endif
+}
+
 void UpgradeSheet::RequestSession(bool embedded) {
   urnet::StripeCreateCheckoutSessionArgs args;
-  args.item_id = monthlyCard_->get_active() ? kItemProMonthly : kItemProYearly;
+  args.item_id = plans_->Yearly() ? kItemProYearly : kItemProMonthly;
   args.ui_mode = embedded ? kUiModeEmbedded : kUiModeHosted;
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
@@ -376,6 +457,10 @@ void UpgradeSheet::RequestSession(bool embedded) {
                     err = std::move(err)] {
           if (*epoch != issued) return;  // sheet was reset since
           auto fail = [this](const std::string& message) {
+            if (!purchaseEmitted_) {
+              EmitPurchase("failed", "transport");
+              purchaseEmitted_ = true;
+            }
             SetState(State::Options);
             errorLabel_->set_text(
                 message.empty()
@@ -432,6 +517,26 @@ bool UpgradeSheet::EnsureWebView() {
   GtkWidget* view = webkit_web_view_new();
   if (!view) return false;  // webkit unusable at runtime -> hosted checkout
   webView_ = view;
+  // the pay page's posted {type:"ur-pay"} message: a page-side bridge forwards
+  // it to a script message handler, so the sheet hears it even when the page
+  // does not navigate to the return url
+  if (WebKitUserContentManager* ucm = webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(view))) {
+    g_signal_connect(ucm, "script-message-received::urpay",
+                     G_CALLBACK(+[](WebKitUserContentManager*, JSCValue* value, gpointer data) {
+                       if (!value || !jsc_value_is_string(value)) return;
+                       char* text = jsc_value_to_string(value);
+                       const std::string json = text ? text : "";
+                       if (text) g_free(text);
+                       static_cast<UpgradeSheet*>(data)->HandlePayMessage(json);
+                     }),
+                     this);
+    webkit_user_content_manager_register_script_message_handler(ucm, kPayMessageHandler, nullptr);
+    WebKitUserScript* bridge = webkit_user_script_new(
+        kPayMessageBridge, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
+    webkit_user_content_manager_add_script(ucm, bridge);
+    webkit_user_script_unref(bridge);
+  }
   // brand background while the page loads (avoids a white flash; the checkout
   // page itself is dark, matching the sheet)
   GdkRGBA bg;
@@ -519,6 +624,44 @@ bool UpgradeSheet::EnsureWebView() {
   return true;
 }
 
+void UpgradeSheet::OpenPaySheet(const std::string& clientSecret, const std::string& publishableKey) {
+  if (!EnsureWebView()) {  // torn down since the request went out
+    RequestSession(/*embedded=*/true);
+    return;
+  }
+  pageLoaded_ = false;
+  webFallbackTried_ = false;
+  paySheetActive_ = true;
+  const std::string url = std::string(kPaySheetPage) + "?cs=" + Escape(clientSecret) +
+                          "&pk=" + Escape(publishableKey) +
+                          "&plan=" + Escape(PlanName(plans_->Yearly())) +
+                          "&return=" + Escape(kPayReturn);
+  SetState(State::Checkout);
+  webkit_web_view_load_uri(WEBKIT_WEB_VIEW(webView_), url.c_str());
+}
+
+void UpgradeSheet::HandlePayMessage(const std::string& json) {
+  // deferred: this arrives from the web view's own signal emission
+  PostToMain([this, json] {
+    if (state_ != State::Checkout || !paySheetActive_) return;
+    nlohmann::json message = nlohmann::json::parse(json, nullptr, false);
+    if (!message.is_object()) return;
+    const std::string status = message.value("status", std::string());
+    if (status == "succeeded" || status == "complete" || status == "processing" || status == "ok") {
+      HandleCheckoutCallback(std::string(kPayReturn));
+      return;
+    }
+    if (status == "cancelled" || status == "canceled") {
+      EmitPurchase("cancelled");
+      purchaseEmitted_ = true;
+      SetState(State::Options);
+      return;
+    }
+    const std::string detail = message.value("message", std::string());
+    HandleCheckoutCallback("urnetwork://pay/error?errorMessage=" + Escape(detail));
+  });
+}
+
 void UpgradeSheet::OpenEmbedded(const std::string& clientSecret) {
   if (!EnsureWebView()) {  // torn down since the request went out
     RequestSession(/*embedded=*/false);
@@ -526,6 +669,7 @@ void UpgradeSheet::OpenEmbedded(const std::string& clientSecret) {
   }
   pageLoaded_ = false;
   webFallbackTried_ = false;
+  paySheetActive_ = false;
   const std::string url = std::string(kCheckoutPage) +
                           "?client_secret=" + Escape(clientSecret) +
                           "&redirect_link=" + Escape(kCheckoutRedirect);
@@ -538,7 +682,8 @@ void UpgradeSheet::HandleCheckoutCallback(const std::string& uri) {
   PostToMain([this, uri] {
     const auto params = ParseQuery(uri);
     const auto status = params.find("status");
-    if (status != params.end() && status->second == "complete") {
+    const bool payDone = uri.rfind(kPayReturn, 0) == 0;
+    if (payDone || (status != params.end() && status->second == "complete")) {
       // paid in the webview — the server only believes the Stripe webhook, so
       // bridge the gap with the confirmation poll exactly like hosted
       waitingLabel_->set_text(T_("processing_payment", "Processing payment"));
@@ -548,6 +693,8 @@ void UpgradeSheet::HandleCheckoutCallback(const std::string& uri) {
     }
     if (state_ != State::Checkout) return;  // stale error after close
     const auto message = params.find("errorMessage");
+    EmitPurchase("failed", paySheetActive_ ? "payment_sheet" : "checkout");
+    purchaseEmitted_ = true;
     SetState(State::Options);
     errorLabel_->set_text(message != params.end() && !message->second.empty()
                               ? message->second
@@ -563,10 +710,13 @@ void UpgradeSheet::OnCheckoutLoadFailed() {
   // flow can still save the purchase. Once per checkout attempt.
   if (pageLoaded_ || webFallbackTried_ || state_ != State::Checkout) return;
   webFallbackTried_ = true;
-  PostToMain([this] {
+  const bool fromPaySheet = paySheetActive_;
+  PostToMain([this, fromPaySheet] {
     if (state_ != State::Checkout) return;  // closed in the meantime
     SetState(State::Launching);             // tears the webview down
-    RequestSession(/*embedded=*/false);
+    // the pay page failing falls back to the embedded checkout page; that
+    // failing falls back to the browser
+    RequestSession(/*embedded=*/fromPaySheet);
   });
 }
 

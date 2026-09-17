@@ -10,6 +10,11 @@
 #   src/main.cpp        only the gettext bootstrap and stderr diagnostics
 src/AuthViews.cpp
 src/ConnectDrawer.cpp
+src/IpFamilyHistogram.cpp
+src/ExtenderPanel.cpp
+src/ExtenderSection.cpp
+src/ExtenderShareSheet.cpp
+src/ExtenderImportSheet.cpp
 src/ConnectPage.cpp
 src/ContractsSheet.cpp
 src/DnsSheet.cpp
@@ -34,5 +39,7 @@ src/TransportSheet.cpp
 src/Tray.cpp
 src/UpgradeSheet.cpp
 src/UsageBar.cpp
-app/src/EarningsPage.cpp
-app/src/AccountPage.cpp
+src/EarningsPage.cpp
+src/SolanaWalletSheet.cpp
+src/AccountPage.cpp
+src/ReferralRoyalty.cpp

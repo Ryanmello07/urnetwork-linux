@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "ConnectorShape.hpp"
+#include "Ui.hpp"
 #include "UrMotion.hpp"
 
 namespace urnw {
@@ -40,6 +42,10 @@ constexpr Rgb kGround{0x10 / 255.0, 0x10 / 255.0, 0x10 / 255.0};
 constexpr Rgb kElectric{0x00 / 255.0, 0x39 / 255.0, 0xDE / 255.0};
 constexpr Rgb kFaint{0x5A / 255.0, 0x5A / 255.0, 0x5A / 255.0};
 constexpr Rgb kOffWhite{0xF8 / 255.0, 0xF8 / 255.0, 0xF8 / 255.0};
+// An extender ring whose color the SDK did not fill in (an older SDK, a point
+// built before the colors landed) still draws -- in this neutral. Dropping the
+// ring would hide a live extender, which is the one thing the ring exists for.
+constexpr Rgba kExtenderRingFallback{0xF8 / 255.0, 0xF8 / 255.0, 0xF8 / 255.0, 1.0};
 
 // Lift(ground, amt): per-channel add — #1C1C1C resting, #242424 hovered
 Rgb Lift(Rgb c, int amt) {
@@ -263,10 +269,14 @@ void ConnectCanvas::ApplyGrid() {
       dot.state = dot.previous = parseState(p->State);
       dot.colorProgress = 1.0;
       dot.sizeProgress = animate ? 0.0 : 1.0;  // grow-in, or born settled
-      dots_.emplace(key, dot);
+      dot.extenderColors = extender::PairColors(p->ExtenderIps, p->ExtenderColorHexes);
+      dots_.emplace(key, std::move(dot));
     } else {
       it->second.x = p->X;
       it->second.y = p->Y;
+      // The extender set turns over on transport migration (K1: briefly two),
+      // so it is re-read on every push rather than only at birth.
+      it->second.extenderColors = extender::PairColors(p->ExtenderIps, p->ExtenderColorHexes);
       const PointState next = parseState(p->State);
       if (next != it->second.state) {
         // unanimated, the blend has no frames to run through: land on the new
@@ -542,45 +552,13 @@ bool ConnectCanvas::AnimStep(gint64 nowUs) {
 
 // ---- drawing ----------------------------------------------------------------
 
-// the ur-globe silhouette in its 32x32 box (identical to the login carousel)
+// The ur-globe silhouette in its 32x32 box: ONE definition, in
+// ConnectorShape.hpp, shared with the login carousel's mask and the extender
+// share code's centre glyph. This stays as the canvas's own entry point
+// because the focus ring and the clip both call it.
 void ConnectCanvas::AddGlobePath(const Cairo::RefPtr<Cairo::Context>& cr, double originX,
                                  double originY, double side) const {
-  const double u = side / 32.0;
-  auto P = [&](double x, double y) { return std::pair(originX + x * u, originY + y * u); };
-  auto M = [&](double x, double y) { auto [px, py] = P(x, y); cr->move_to(px, py); };
-  auto C = [&](double x1, double y1, double x2, double y2, double x, double y) {
-    auto [ax, ay] = P(x1, y1);
-    auto [bx, by] = P(x2, y2);
-    auto [cx2, cy2] = P(x, y);
-    cr->curve_to(ax, ay, bx, by, cx2, cy2);
-  };
-  auto L = [&](double x, double y) { auto [px, py] = P(x, y); cr->line_to(px, py); };
-  M(30, 8);
-  C(28.8955, 8, 28, 7.10453, 28, 6);
-  C(28, 4.89547, 27.1045, 4, 26, 4);
-  C(24.8955, 4, 24, 3.10453, 24, 2);
-  C(24, 0.895469, 23.1045, 0, 22, 0);
-  L(10, 0);
-  C(8.89547, 0, 8, 0.895469, 8, 2);
-  C(8, 3.10453, 7.10453, 4, 6, 4);
-  C(4.89547, 4, 4, 4.89547, 4, 6);
-  C(4, 7.10453, 3.10453, 8, 2, 8);
-  C(0.895469, 8, 0, 8.89547, 0, 10);
-  L(0, 22);
-  C(0, 23.1045, 0.895469, 24, 2, 24);
-  C(3.10453, 24, 4, 24.8955, 4, 26);
-  C(4, 27.1045, 4.89547, 28, 6, 28);
-  C(7.10453, 28, 8, 28.8955, 8, 30);
-  C(8, 31.1045, 8.89547, 32, 10, 32);
-  L(22, 32);
-  C(23.1045, 32, 24, 31.1045, 24, 30);
-  C(24, 28.8955, 24.8955, 28, 26, 28);
-  C(27.1045, 28, 28, 27.1045, 28, 26);
-  C(28, 24.8955, 28.8955, 24, 30, 24);
-  C(31.1045, 24, 32, 23.1045, 32, 22);
-  L(32, 10);
-  C(32, 8.89547, 31.1045, 8, 30, 8);
-  cr->close_path();
+  AddConnectorPath(cr, originX, originY, side);
 }
 
 void ConnectCanvas::snapshot_vfunc(const Glib::RefPtr<Gtk::Snapshot>& snapshot) {
@@ -665,11 +643,34 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
         if (a <= 0.001 && dot.colorProgress >= 1.0) continue;
         const double scale = EaseInOutCubic(dot.sizeProgress);
         if (scale <= 0.001) continue;
+        // EXTENDER.md K2: one ring per extender ip in its own color, the
+        // outermost pinned to the cell edge, the FILL shrinking to make room.
+        // Radii come out of the pure geometry at full size and are multiplied
+        // by the dot's own grow-in scale here, so rings arrive and leave with
+        // the dot instead of popping in around it.
+        const extender::Rings rings = extender::RingsFor(cell, dot.extenderColors);
+        const double dotCx = ox + dot.x * cell + cell / 2.0;
+        const double dotCy = oy + dot.y * cell + cell / 2.0;
         cr->set_source_rgba(from.r + (to.r - from.r) * t, from.g + (to.g - from.g) * t,
                             from.b + (to.b - from.b) * t, a);
-        cr->arc(ox + dot.x * cell + cell / 2.0, oy + dot.y * cell + cell / 2.0,
-                (cell / 2.0) * scale, 0, 2 * G_PI);
+        cr->arc(dotCx, dotCy, rings.dotRadius * scale, 0, 2 * G_PI);
         cr->fill();
+        for (const auto& ring : rings.rings) {
+          const Rgba color = ParseHexColor(ring.colorHex, kExtenderRingFallback);
+          // the ring fades with the dot (a Removed dot takes its rings with it)
+          cr->set_source_rgba(color.r, color.g, color.b, color.a * a);
+          cr->set_line_width(ring.lineWidth * scale);
+          if (ring.dashed) {
+            cr->set_dash(std::vector<double>{extender::kCollapsedDashOn * scale,
+                                             extender::kCollapsedDashOff * scale},
+                         0.0);
+          } else {
+            cr->unset_dash();
+          }
+          cr->arc(dotCx, dotCy, ring.radius * scale, 0, 2 * G_PI);
+          cr->stroke();
+        }
+        cr->unset_dash();
       }
     }
     cr->pop_group_to_source();

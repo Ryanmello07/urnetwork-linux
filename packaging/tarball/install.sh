@@ -554,16 +554,14 @@ if command -v rpm >/dev/null 2>&1 && rpm -q "${PKG_NAME}" >/dev/null 2>&1; then
 fi
 # pacman (Arch, CachyOS, Manjaro, EndeavourOS). THIS IS NOW A LIVE CONFLICT,
 # not the hypothetical it was written as: packaging/make-arch.sh ships a real
-# urnetwork-daemon .pkg.tar.zst on every release, owning exactly the paths
-# below. Two owners of the same paths is the same silent-corruption failure
-# dpkg is refused for above -- pacman would not know these files changed, and
-# the next `pacman -Syu` or `pacman -R` would half-replace or half-remove the
-# install.
+# urnetwork-daemon .pkg.tar.zst, owning exactly the paths below. Two owners of
+# the same paths is the same silent-corruption failure dpkg is refused for
+# above -- pacman would not know these files changed, and the next
+# `pacman -Syu` or `pacman -R` would half-replace or half-remove the install.
 #
 # SteamOS is the one Arch-family host where the tarball is the RIGHT answer and
-# this guard should stay quiet: its /usr is read-only, so our package is never
-# installed there (app/src/ServiceInstall.cpp keeps immutable Arch hosts on the
-# tarball for exactly that reason) and pacman owns none of these paths.
+# this guard should stay quiet: its /usr is read-only, so the pacman package is
+# never installed there and pacman owns none of these paths.
 #
 # Queried by PATH, not by name. Our own package is urnetwork-daemon, but an AUR
 # package could equally be urnetwork, urnetwork-bin or urnetwork-git, and a

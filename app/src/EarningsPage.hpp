@@ -1,37 +1,52 @@
-// The Earnings destination — wallets, the payouts/leaderboard ledger and the
-// network-points column merged into ONE destination (port of the windows
-// WalletPage + WalletSheets, spec docs/parity/earnings.md). The old separate
-// Leaderboard destination is gone; its tables live behind a tab in the ledger.
+// The Earnings destination — points first.
+//
+// Points are URnetwork's own system and are always the headline: the points
+// earned with their breakdown, and a per-epoch history. The UR protocol is an
+// OPT-IN layer on top: once a Bittensor coldkey is attached (signed through the
+// ur.io wallet bridge, purpose "connect", verified by POST /sn/wallet) the same
+// history rows gain an SN25α column, an Unclaimed tile appears and a claim
+// dialog lets the user settle the alpha. Claiming is DIRECT between the SDK on
+// this device and the settlement vault contract: the SDK builds, signs (with
+// its own gas key) and sends the transaction; no URnetwork API is in the path.
+// Nothing is retroactive — alpha accrues from the first epoch after the wallet
+// is attached; earlier epochs earned points only.
+//
+// USDC payouts continue until the migration to Bittensor completes, so the
+// Solana payout wallet stays reachable from here: a three-dot overflow beside
+// the Bittensor actions opens "Connect Solana wallet" (SolanaWalletSheet: the
+// wallet bridge, connect only, or an address entered by hand), a card under the
+// Bittensor block shows the payout wallet with the USDC waiting for it and
+// removes it, and with no payout wallet one "N USDC waiting" line sits above
+// the Bittensor actions. Its three reads (account wallets, payout wallet,
+// account payments) are secondary: they settle the card together, never touch
+// the Bittensor block, and a plain reload keeps the card while they are out.
+// There is no payout history on this surface (support@ur.io holds the old
+// ledger).
 //
 // Three panes, folded by the window's ApplyBreakpoint:
-//   >= 1500  wallets(360) | ledger(*) | points(380)
-//   >=  900  wallets(360) | ledger(*)
-//   <   900  ledger(*) only — the LEDGER survives to the smallest width: a
-//            payouts table is what the user opens this destination to read.
+//   >= 1500  earnings(360) | history(*) | network(380)
+//   >=  900  earnings(360) | history(*)
+//   <   900  history(*) only — the HISTORY survives to the smallest width.
 //
-// Pane A is the payout wallets: three header stats (pending payout, unpaid
-// data, referrals), the payout-threshold note, the Stripe upgrade action, one
-// 44px row per wallet, and the connect-a-wallet form whose address box is
-// validated per chain (SOL > MATIC > TAO precedence) behind a 300ms debounce.
-// A TAO address CAN be connected and can NEVER be a payout wallet — the
-// affordance is replaced by the reason wherever it would appear.
+// Pane A (earnings): the points headline with its Providing / Referral /
+// Reliability breakdown (and the Seeker multiplier, points-only), the protocol
+// note with the ur.xyz link, the Unclaimed SN25α tile
+// (wallet only), the Bittensor wallet block (connect through the bridge, or
+// enter an address manually — validated locally and then against
+// /sn/wallet/validate before anything is sent — and still sign it), the Solana
+// payout wallet card (only with a payout wallet), and the Top 200 head-spot
+// tile / bound status.
 //
-// Pane B is the ledger: a two-item tab switch over the payouts table and the
-// leaderboard table, exactly one visible. The leaderboard is fetched the FIRST
-// time its tab is looked at (one-shot), never on destination selection.
+// Pane B (history): a two-item tab switch over the per-epoch history and the
+// leaderboard. The leaderboard is fetched the FIRST time its tab is looked at.
 //
-// Pane C is the network-earnings column: own ranking, the public-leaderboard
-// switch (echo-guarded — the handler cannot tell a user flip from the
-// programmatic render of the server's answer), the account-points breakdown,
-// the seeker multiplier block and the reliability window.
+// Pane C (network): own ranking, the public-leaderboard switch (echo-guarded),
+// the reliability window, and under it the extender statistics and the
+// provider statistics with the provide mode row and the read-only extender row
+// (EXTENDER.md N7, O5, O8).
 //
 // Every panel settles on exactly one of Loading / Ready-empty / Failed, and
-// the three renders are distinguishable: the header stats show a FAINT dash
-// when unloaded or failed (a dash must read "no answer yet", never "the
-// answer is nothing"), each list carries its own status line, and one panel's
-// failure never blanks another — LoadWallet fires EIGHT independent requests.
-//
-// Every server write AND every server question is gated by CanCallApi(); the
+// every server write AND every server question is gated by CanCallApi(); the
 // one affordance allowed to decline silently is address validation while
 // typing (the user did not ask for anything).
 //
@@ -49,79 +64,184 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ExtenderProvidePresentation.hpp"
+#include "LeaderboardIndicator.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
+#include "SolanaWalletPresentation.hpp"
+#include "TransferChart.hpp"
+#include "TransportBar.hpp"
+#include "TransportSheet.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
+
+// ---- the earnings model -----------------------------------------------------
+// Plain mirrors of the SDK earnings surface (EARNINGS_SDK_SPEC.md), so the
+// page renders the same rows whether they come from the SDK bindings or from
+// the preview sample.
+
+struct SnWalletInfo {
+  std::string coldkeySs58;
+  std::string clientId;  // the provider client the wallet is attached to ("" = network)
+  int64_t setAtMillis = 0;
+};
+
+struct AccountEpochRow {
+  int64_t epoch = 0;
+  int64_t startMillis = 0;
+  int64_t endMillis = 0;
+  double points = 0;
+  int64_t shareBps = 0;
+};
+
+struct SnClaimRow {
+  int64_t epoch = 0;
+  int64_t shareBps = 0;
+  int64_t amountRao = 0;   // 1 α = 1e9 rao
+  std::string status;      // open | claimable | claimed | expired | not-finalized
+  int64_t claimOpenBlock = 0;
+  int64_t expiryBlock = 0;
+  std::string txHash;
+  std::string message;  // why the epoch is not claimable, when the status alone does not say
+};
+
+struct SnGasInfo {
+  std::string address;     // 0x… (pays gas only; the secret never leaves the SDK)
+  std::string mirrorSs58;  // fund it by sending TAO here
+  bool balanceKnown = false;
+  double tao = 0;
+};
+
+struct SnHeadInfo {
+  bool eligible = false;
+  double score = 0;
+  double floor = 0;
+  int64_t rankEstimate = 0;
+  int64_t cutoff = 200;
+  bool bound = false;
+  std::string hotkey;
+  int64_t uid = 0;
+  int64_t rank = 0;
+  int64_t epoch = 0;
+  std::string source;
+};
+
+struct SnWalletCheck {
+  bool validSyntax = false;
+  bool existsOnChain = true;
+  bool banned = false;
+  std::string message;
+};
+
+class ClaimAlphaSheet;
+class EmojiTagSheet;
 
 class EarningsPage : public Gtk::Box {
  public:
   explicit EarningsPage(SdkHost& host);
   ~EarningsPage() override;
 
-  // nav-select + auth-change: the eight independent wallet-pane fetches.
-  // Bumps the stale-async epoch first, so every completion armed for the
-  // previous session is dropped before it touches a widget.
+  // nav-select + auth-change: the independent earnings-pane fetches. Bumps the
+  // stale-async epoch first, so every completion armed for the previous
+  // session is dropped before it touches a widget.
   void Load();
+
+  // The provide-mode row (the connect page's indicator + label with the
+  // current mode) and the providing gate: with providing off the reliability
+  // chart hides and the group says so, the same gate and message as the stats
+  // widget. Fed from the same live stats the connect page paints.
+  // The provider statistics share the gate (EXTENDER.md O8).
+  void ApplyProvideState(const LiveStats& stats);
+  // the provide mode is changed on the connect page; the row opens it there
+  // (and so does the read-only extender row, whose switch lives there too)
+  std::function<void()> on_open_provide_settings;
+
+  // The drawer's change feed (SdkHost::DrawerEvent), relayed by MainWindow
+  // under the same visibility gate as the connect page's: the throughput tick
+  // feeds the provider and extender charts and the provider transport bar, and
+  // the extender status repaints the read-only extender row and the running
+  // state behind the extender statistics (EXTENDER.md N7, O5, O8).
+  void OnHostEvent(DrawerEvent event);
+  // The window presenting or hiding to the tray (MainWindow's
+  // reconcilePresentation), by ConnectPage::SetPresentationActive's rule that a
+  // sheet may not outlive the surface that feeds it: hiding closes the provider
+  // transport sheet, and showing re-reads the statistics and the extender row,
+  // since every drawer event was dropped while hidden.
+  void SetPresentationActive(bool active);
+
+  // The points board's row and stat tile (public: a free helper in the .cpp builds rows).
+  struct PointsRowUi {
+    int64_t position = 0;  // the row's 1-based place in the whole ranking (no ties)
+    std::string networkId;
+    std::string displayName;  // empty when anonymous: the row shows "Anonymous"
+    std::string emojiTag;     // shows either way
+    bool anonymous = false;
+    std::string totalPointsText;
+    std::string blocksText;
+    std::string streakText;
+    std::string longestStreakText;
+    std::string rankPointsText;
+    std::string rankBlocksText;
+    std::string rankStreakText;
+    bool operator==(const PointsRowUi& o) const {
+      return position == o.position && networkId == o.networkId && displayName == o.displayName &&
+             emojiTag == o.emojiTag && anonymous == o.anonymous &&
+             totalPointsText == o.totalPointsText && blocksText == o.blocksText &&
+             streakText == o.streakText && longestStreakText == o.longestStreakText &&
+             rankPointsText == o.rankPointsText && rankBlocksText == o.rankBlocksText &&
+             rankStreakText == o.rankStreakText;
+    }
+    bool operator!=(const PointsRowUi& o) const { return !(*this == o); }
+  };
+  struct PointsStatTile {
+    Gtk::Label* value = nullptr;
+    Gtk::Label* rank = nullptr;
+  };
 
   // The spec's pane-fold table (window width in dip).
   void ApplyBreakpoint(int widthDip);
 
-  // The window's balance relay: the Upgrade action is visible iff
-  // !isPro && !guest — hidden for Pro AND for guests (an account comes first).
+  // The window's balance relay (kept for the window's wiring; the page has no
+  // upgrade affordance any more — the Account destination owns plans).
   void SetBalanceState(bool isPro, bool guest);
 
   // ---- preview harness (--preview-ui) ---------------------------------------
-  // Preview mode makes CanCallApi() false everywhere (a preview build once
-  // reached production authenticated) and swaps the loads for
-  // ShowPreviewState(), which settles EVERY panel on its real empty state —
-  // a permanent "Loading..." is indistinguishable from a hang.
+  // Preview mode makes CanCallApi() false everywhere and swaps the loads for
+  // ShowPreviewState(), which settles EVERY panel on its real empty state.
   void SetPreviewMode(bool on);
   void ShowPreviewState();
-  // --preview-ui=wallet: raise the wallet snackbar at Error severity, which is
-  // the persistent treatment (demonstrates the severity gate).
+  // --preview-ui=wallet: raise the earnings snackbar at Error severity.
   void ShowPreviewSnackbar();
-  // URNETWORK_PREVIEW_SAMPLE=1 (a SECOND gate): obviously-synthetic rows
-  // pushed through the SAME Apply* functions. Sample rows are INTERACTIVE,
-  // which is exactly why CanCallApi() gates the actions and not the loads.
+  // URNETWORK_PREVIEW_SAMPLE=1 (a SECOND gate): obviously-synthetic rows pushed
+  // through the SAME Apply* functions. URNETWORK_PREVIEW_WALLET=1 adds the
+  // attached-wallet layer (claims, gas key, alpha column);
+  // URNETWORK_PREVIEW_TOP200=bound renders the bound head-spot status;
+  // URNETWORK_PREVIEW_MANUAL=1 opens the manual entry on a "new wallet" verdict;
+  // URNETWORK_PREVIEW_GAS=low puts the claim dialog in its needs-gas state;
+  // URNETWORK_PREVIEW_SOLANA=1 adds a Solana payout wallet with 3.87 USDC
+  // waiting (the card); URNETWORK_PREVIEW_USDC_WAITING=1 the same figure with no
+  // payout wallet (the waiting line above the Bittensor actions).
   void ApplyPreviewSample();
+  // URNETWORK_PREVIEW_CLAIM=1: open the claim dialog over the sample.
+  void ShowPreviewClaimDialog();
 
   // ---- window-level routing --------------------------------------------------
-  // OnOpenUpgrade: guests go to the create-account (guest upgrade) flow,
-  // everyone else to the existing UpgradeSheet. The window owns both, so the
-  // page emits and the window routes.
-  std::function<void()> on_open_upgrade;
-  // The window's one-ContentDialog-at-a-time gate: every sheet open path asks
-  // first and bails, and reports both edges. Unbound = the page's own flag is
-  // the only gate.
+  // The window's one-ContentDialog-at-a-time gate.
   std::function<bool()> sheet_open;
   std::function<void(bool open)> on_sheet_open_changed;
-  // Fallback snackbar surface. The spec puts one InfoBar in pane A and one in
-  // pane C so a message lands beside content the user is looking at; below
-  // 1500dip pane C is folded away and below 900dip pane A is too, so a message
-  // with no visible bar is handed to the shell instead of being dropped
-  // (spec FLAG: "consider routing to whichever bar is actually visible").
+  // Fallback snackbar surface for the folds where both pane bars are hidden.
   std::function<void(const Glib::ustring& message, bool error)> on_snackbar;
 
  private:
-  // Per-panel fetch state. Loading / Ready / Failed must render distinguishably
-  // — a list that renders the same three ways is the bug this enum exists for.
-  //
-  // NoSession is the FOURTH state and it is LEADERBOARD-ONLY (ApplyLeaderboard
-  // is the only applier that handles it; nothing else is ever passed it). It
-  // exists because "we never asked" was being rendered as Ready+empty, i.e. as
-  // the authoritative answer "there are no networks on the leaderboard" — the
-  // exact bug in this file's history: LoadWallet's no-session settle stamped
-  // that string into a pane nobody had asked about, and the one-shot fetch flag
-  // then made it permanent for the life of the process.
+  // Per-panel fetch state. NoSession is LEADERBOARD-ONLY ("we never asked" is
+  // not the answer "the board is empty").
   enum class Fetch { Loading, Ready, Failed, NoSession };
 
   // One non-repeating watchdog + a generation. BeginFlow bumps the generation
   // and arms the timer; on timeout the handler bumps AGAIN (making the give-up
-  // final: a late success must not undo what the user was already told) and
-  // runs the timeout action. SettleFlow returns false — caller must do NOTHING
-  // — when its generation was superseded or already timed out.
+  // final) and runs the timeout action. SettleFlow returns false — the caller
+  // must do NOTHING — when its generation was superseded or already timed out.
   struct Flow {
     uint32_t generation = 0;
     sigc::connection timer;
@@ -130,47 +250,149 @@ class EarningsPage : public Gtk::Box {
   bool SettleFlow(Flow& flow, uint32_t generation, const char* what);
 
   // ---- construction ----------------------------------------------------------
-  void BuildWalletsPane();
+  void BuildEarningsPane();
   void BuildLedgerPane();
-  void BuildPointsPane();
+  void BuildNetworkPane();
+
+  // ---- the points board (android/POINTSLEADERBOARD.md) ----------------------
+  // The leaderboard is two boards behind one switch: Data (the last-4-payments
+  // board) and Points (the all-time points board). The Points board is the
+  // SDK's PointsLeaderboardViewController rendered as it is: rows, ranks, sort
+  // and pages all come from the controller; nothing here sorts, ranks or
+  // pages. The controller is opened the first time the Points board shows and
+  // closed with the page.
+  void BuildPointsBoard();         // pane B: the switch, the sort chips, the rows
+  void BuildPointsNetworkBlock();  // pane C: this network's block
+  void OnBoardTabChanged();
+  // Opens the controller on the current device (or shows why it cannot);
+  // safe to call on every look: a controller on a device that is still the
+  // device is kept.
+  void EnsurePointsBoard();
+  void ClosePointsBoard(bool deviceAlive);
+  // Mirrors the controller into the page: rows (value-compared, so a no-op
+  // event does not re-render the table), sort, loading, end, error, `me`.
+  void ReadPointsBoard();
+  void RebuildPointsRows(size_t fromIndex = 0);
+  std::string OwnPointsName();
+  void RenderPointsHeader();
+  void RenderPointsFooter();
+  void OnPointsSortChanged(const std::string& sort);
+  void OnPointsScrolled();
+  // ---- the position indicator and the tab reset (mmm/DESIGNSTYLE.md "Long
+  // ranked lists"; the math in LeaderboardIndicator.hpp)
+  void BuildPointsIndicator();  // the overlay over pane B: track, thumb, the drag label
+  void DrawPointsIndicator(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height);
+  // the thumb for the current window and scroll position; the track's
+  // extent inside the indicator comes back through the out-params
+  urnw::leaderboard::Thumb PointsThumb(double& trackTop, double& trackHeight) const;
+  void RefreshPointsPosition();  // the first row in view, from the scroller
+  void UpdatePointsIndicator();  // visibility, the slider value, a redraw
+  void OnPointsDragBegin(double x, double y, const Glib::RefPtr<Gtk::GestureDrag>& drag);
+  void OnPointsDragUpdate(double dy);
+  void OnPointsDragEnd(double dy);
+  bool OnPointsIndicatorKey(guint keyval);
+  void SeekPoints(int64_t rank);  // a rank in the window scrolls there; any other asks the controller
+  void ShowPointsDragLabel(int64_t rank);
+  void HidePointsDragLabel(bool fade);
+  void ScrollPointsToFirstRow();
+  void AnchorPointsScroll(double prependedHeight);
+  double PointsRowsTop() const;  // where the first row starts in the scrolled content
+  void PrependPointsRows(size_t count);
+  Gtk::Widget* MakePointsRow(const PointsRowUi& row, const std::string& ownId);
+  void ResetBoardList(bool pointsBoard);  // a board tab activated (the active one included)
+  void ApplyPointsBoardSample();          // preview rows for the indicator (URNETWORK_PREVIEW_SAMPLE)
+  void OnPointsRetry();
+  void OnPointsPublicToggled();
+  void SetPointsToggle(bool on);
+  void ApplyPointsPublicResult(uint32_t generation, bool ok, bool requested,
+                               const std::string& serverError);
+  void OnEditEmoji();
+  void SaveEmojiTag(std::string tag, std::function<void(std::string)> done);
+  void SettlePointsBoardPreview();
 
   // ---- loads -----------------------------------------------------------------
-  void LoadWallet();
+  void LoadEarnings();
+  void LoadWalletLayer();  // claims + gas key: only with an attached wallet
   void LoadLeaderboard();
 
   // ---- appliers (one writer per surface) -------------------------------------
-  void ApplyWallets(std::optional<urnet::AccountWalletsList> wallets, Fetch state);
-  void ApplyPayoutWalletId(const std::string& walletId);
-  void ApplyTransferStats(bool ok, int64_t unpaidBytes);
-  void ApplyWalletBalance(bool ok, int64_t balanceNanoCents);
-  void ApplyReferrals(bool ok, int64_t totalReferrals);
   void ApplyPoints(std::optional<urnet::AccountPointsList> points, Fetch state);
+  void ApplyEpochs(std::optional<std::vector<AccountEpochRow>> epochs, Fetch state);
+  void ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state);
+  void ApplyClaims(std::optional<std::vector<SnClaimRow>> claims, int64_t totalClaimableRao,
+                   Fetch state, const Glib::ustring& failure = {});
+  void ApplyGas(std::optional<SnGasInfo> gas);
+  void ApplyHead(std::optional<SnHeadInfo> head, Fetch state);
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
-  void ApplyPayments(std::optional<urnet::AccountPaymentsList> payments, Fetch state);
   void ApplyRanking(std::optional<urnet::NetworkRanking> ranking, bool ok);
   void ApplyLeaderboard(std::optional<urnet::LeaderboardEarnersList> earners, Fetch state);
 
   // ---- rebuilders ------------------------------------------------------------
-  void RebuildWalletCards();
-  void RebuildPayouts();
-  void RebuildLeaderboard();
   void RebuildPointsCard();
+  void RebuildUnclaimedTile();
+  void RebuildWalletBlock();
+  void RebuildTop200();
+  void RebuildHistory();
+  void RebuildLeaderboard();
   void RebuildReliabilityCard();
-  void ApplySeekerState();
+
+  // ---- the extender and provider statistics (pane C; EXTENDER.md O5, O8) ----
+  // One pull per throughput tick, the shape of ConnectPage::PullThroughput: the
+  // two point lists, the window, the provider distribution and the provider
+  // stats flag. `forced` marks a re-read right after SdkHost opened a new
+  // contract view controller, which asks the device for the provider stats
+  // flag rather than the controller, which has not sampled yet.
+  void PullProviderThroughput(bool forced);
+  // Re-reads the extender status: the read-only row (N7) and the running state
+  // of the role, re-applying the sections when it flips.
+  void ApplyExtenderProvideState();
+  void DrawExtenderRow(const extender::ProvideRow& row);
+  // The O8 rule over its three inputs, applied to the two groups' rows.
+  void ApplyStatsSections();
+  void OpenProviderTransportSheet();
   void ApplyLedgerMeta();
   void OnLedgerTabChanged();
 
-  // ---- connect a wallet ------------------------------------------------------
+  // ---- attach a Bittensor wallet ---------------------------------------------
+  void OnConnectWithBridge();
+  void OnToggleManualEntry();
+  void OnChangeWallet();
   void OnWalletAddressChanged();
   void ValidateWalletAddress();
-  void ApplyWalletValidation(const std::string& chain, uint64_t generation, bool valid);
-  void OnConnectWallet();
-  void ApplyWalletConnectResult(uint32_t generation, bool ok, const std::string& serverError);
+  void ApplyWalletCheck(uint64_t generation, const std::string& address,
+                        std::optional<SnWalletCheck> check, const std::string& err);
+  void OnConnectManual();
+  // The bridge as a signer: `expectedAddress` is the typed address (the bridge
+  // must sign with that wallet) or empty (whichever wallet the bridge picks).
+  void StartWalletSignature(const std::string& expectedAddress);
+  void OnWalletSigned(uint32_t generation, const SdkHost::WalletSignature& signature,
+                      const std::string& expectedAddress);
+  void SetSnWallet(const std::string& address, const std::string& signature,
+                   const std::string& message);
+  void ApplyWalletConnectResult(uint32_t generation, bool ok, const std::string& serverError,
+                                const std::string& address);
+  void FinishConnecting();
 
-  // ---- the seeker browser-bridge flow ---------------------------------------
-  void OnVerifySeeker();
-  void StartSeekerVerification(WalletConnect::Provider provider);
-  void ApplySeekerResult(uint32_t generation, bool ok, const std::string& serverError);
+  // ---- the Solana payout wallet (USDC until the Bittensor migration) ---------
+  // The three-dot overflow (icon-only, named "Wallet options") over `menu`.
+  Gtk::MenuButton* BuildWalletOverflow(const Glib::RefPtr<const Gio::MenuModel>& menu);
+  // A plain reload keeps the card while the reads are out; `reset` (after a
+  // write) hides it until they land.
+  void LoadLegacyWallets(bool reset = false);
+  void ApplyLegacyWallets();  // commits a round once all three reads answered
+  void RebuildSolanaCard();
+  void OnConnectSolanaWallet();  // the overflow's item: the connect sheet
+  // The sheet linked `walletId`: make it the payout wallet unless a fresh read
+  // shows it already is (one 20 s flow over the read and the switch).
+  void OnSolanaConnected(const std::string& walletId);
+  void SwitchPayoutWallet(const std::string& walletId, uint32_t generation);
+  void OnRemoveSolanaWallet();  // the card's item: the confirmation
+  void RemoveSolanaWallet(const std::string& walletId);
+
+  // ---- claim -----------------------------------------------------------------
+  void OnClaim();
+  void OpenClaimSheet(bool allowActions);
+  void StartClaim(std::vector<int64_t> epochs);
 
   // ---- the public-leaderboard switch ----------------------------------------
   void SetRankingToggle(bool on);  // the echo-guarded programmatic write
@@ -178,119 +400,253 @@ class EarningsPage : public Gtk::Box {
   void ApplyRankingPublicResult(uint32_t generation, bool ok, bool requested,
                                 const std::string& serverError);
 
-  // ---- sheets ----------------------------------------------------------------
-  void ShowWalletDetail(const urnet::AccountWallet& wallet);
-  void ShowPayoutDetail(const urnet::AccountPayment& payment);
+  // ---- sheets + links --------------------------------------------------------
   void PresentSheet(const std::shared_ptr<Gtk::Window>& sheet);
   void CloseSheet();
+  void OpenLink(const std::string& url);
 
   // ---- gating + messaging ----------------------------------------------------
-  // !previewUi && apiReady() && IsLoggedIn(): guards every server write AND
-  // every server question, not only the loads.
   bool CanCallApi();
   void RefuseNoSession();
   void Notify(const Glib::ustring& message, kit::Snackbar::Severity severity);
-  // The stat placeholder rule: unloaded or failed renders a FAINT dash — a
-  // dash must read "no answer yet", never "the answer is nothing". The key is
-  // passed so the value re-announces as "Label, value" on every write.
   void SetStatValue(Gtk::Label* value, const Glib::ustring& key,
                     const Glib::ustring& text, bool loaded);
-  // Settle every panel on its real empty state (no session / preview): a
-  // permanent "Loading..." is indistinguishable from a hang.
   void SettleAllEmpty();
-  // Lifetime COMPLETED usdc paid into a wallet (iOS totalPaymentsByWalletId).
-  double TotalPaidToWallet(const std::string& walletId) const;
+  // The provider client this device runs (the daemon's DeviceLocal); "" when no
+  // device is bound, which attaches the wallet at the network level.
+  std::string ProviderClientId();
 
   SdkHost& host_;
   std::shared_ptr<uint64_t> epoch_ = std::make_shared<uint64_t>(0);  // stale-async guard
-  // Liveness token for marshaled work that must run even across a Load()
-  // (the sheet-dismiss cleanup): the epoch answers "is this answer stale",
-  // this answers "does the page still exist".
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 
   // ---- pane shell ------------------------------------------------------------
-  kit::Pane paneA_;  // WALLETS (360)
-  kit::Pane paneB_;  // LEDGER (*)
-  kit::Pane paneC_;  // POINTS (380)
+  kit::Pane paneA_;  // EARNINGS (360)
+  kit::Pane paneB_;  // HISTORY (*)
+  kit::Pane paneC_;  // NETWORK (380)
   Gtk::Widget* ruleB_ = nullptr;
   Gtk::Widget* ruleC_ = nullptr;
-  int lanes_ = -1;  // last applied fold (3 / 2 / 1); -1 = never applied
+  int lanes_ = -1;
 
   // pane A widgets
-  Gtk::Label* pendingValue_ = nullptr;
-  Gtk::Label* unpaidValue_ = nullptr;
-  Gtk::Label* referralsValue_ = nullptr;
-  Gtk::Button* upgradeButton_ = nullptr;
-  Gtk::Label* walletsStatus_ = nullptr;
-  Gtk::Box* walletCardsPanel_ = nullptr;
-  Gtk::Widget* walletsEmptyPanel_ = nullptr;
+  Gtk::Label* pointsStatus_ = nullptr;
+  Gtk::Box* pointsCard_ = nullptr;
+  Gtk::Box* pointsPanel_ = nullptr;
+  Gtk::Box* unclaimedCard_ = nullptr;
+  Gtk::Label* unclaimedValue_ = nullptr;
+  Gtk::Label* unclaimedStatus_ = nullptr;
+  Gtk::Button* claimButton_ = nullptr;
+  Gtk::Label* walletStatus_ = nullptr;
+  Gtk::Box* walletConnectedPanel_ = nullptr;
+  Gtk::Label* walletAddressLabel_ = nullptr;
+  Gtk::Button* changeWalletButton_ = nullptr;
+  Gtk::Box* walletConnectPanel_ = nullptr;
+  Gtk::Label* walletConnectNote_ = nullptr;
+  // provide mode row + gate
+  Gtk::Label provideModeDot_;
+  Gtk::Label* provideModeValue_ = nullptr;
+  Gtk::Button* provideModeRow_ = nullptr;
+  bool providingEnabled_ = true;
+  std::optional<urnet::ReliabilityWindow> lastReliability_;
+  Fetch lastReliabilityState_ = Fetch::Loading;
+  Gtk::Button* connectBridgeButton_ = nullptr;
+  Gtk::Button* manualToggleButton_ = nullptr;
+  Gtk::Box* manualPanel_ = nullptr;
   Gtk::Entry* walletAddressBox_ = nullptr;
-  Gtk::Label* walletChainText_ = nullptr;
-  Gtk::Button* connectWalletButton_ = nullptr;
+  Gtk::Label* walletSupportingText_ = nullptr;
+  Gtk::Button* connectManualButton_ = nullptr;
+  Gtk::Label* connectingStatus_ = nullptr;
+  // the Solana payout wallet: the overflow in both Bittensor states, the one
+  // waiting line (a label in each Bittensor panel) and the card
+  Gtk::MenuButton* walletMoreDisconnected_ = nullptr;
+  Gtk::MenuButton* walletMoreConnected_ = nullptr;
+  Gtk::Label* usdcWaitingLine_ = nullptr;           // in the connect panel
+  Gtk::Label* usdcWaitingLineConnected_ = nullptr;  // in the connected panel
+  Gtk::Box* solanaCard_ = nullptr;
+  Gtk::Label* solanaTitle_ = nullptr;
+  Gtk::Label* solanaAddressLabel_ = nullptr;
+  Gtk::Label* solanaDefaultTag_ = nullptr;
+  Gtk::Label* solanaPendingLabel_ = nullptr;
+  Gtk::MenuButton* solanaMore_ = nullptr;
+  // the two overflow menus over the page's "earnings" action group, built once
+  Glib::RefPtr<Gio::SimpleActionGroup> walletActions_;
+  Glib::RefPtr<Gio::SimpleAction> connectSolanaAction_;
+  Glib::RefPtr<Gio::SimpleAction> removeSolanaAction_;
+  Glib::RefPtr<Gio::Menu> connectSolanaMenu_;
+  Glib::RefPtr<Gio::Menu> solanaCardMenu_;
+  Gtk::Box* top200Card_ = nullptr;
+  Gtk::Box* top200Panel_ = nullptr;
   kit::Snackbar walletInfo_;
 
   // pane B widgets
-  Gtk::ToggleButton* payoutsTab_ = nullptr;
+  Gtk::ToggleButton* historyTab_ = nullptr;
   Gtk::ToggleButton* leaderboardTab_ = nullptr;
-  Gtk::Box* payoutsHost_ = nullptr;
-  Gtk::Box* payoutsPanel_ = nullptr;
-  Gtk::Label* payoutsStatus_ = nullptr;
+  Gtk::Box* historyHost_ = nullptr;
+  Gtk::Box* historyPanel_ = nullptr;
+  Gtk::Label* historyStatus_ = nullptr;
   Gtk::Box* leaderboardHost_ = nullptr;
   Gtk::Box* leaderboardRows_ = nullptr;
   Gtk::Label* leaderboardStatus_ = nullptr;
+  // the points board (pane B)
+  Gtk::ToggleButton* dataBoardTab_ = nullptr;
+  Gtk::ToggleButton* pointsBoardTab_ = nullptr;
+  Gtk::Box* leaderboardDataHost_ = nullptr;  // the data board's rows + status
+  Gtk::Box* pointsHost_ = nullptr;
+  Gtk::ToggleButton* pointsSortTabs_[3] = {nullptr, nullptr, nullptr};  // points, blocks, streak
+  Gtk::Box* pointsRows_ = nullptr;
+  Gtk::Box* pointsFooter_ = nullptr;
+  Gtk::Spinner* pointsFooterSpinner_ = nullptr;
+  Gtk::Label* pointsFooterLabel_ = nullptr;
+  Gtk::Button* pointsRetryButton_ = nullptr;
+  Gtk::Label* pointsBoardStatus_ = nullptr;
+  sigc::connection pointsScrollConn_;
 
   // pane C widgets
   Gtk::Label* netProvidedValue_ = nullptr;
   Gtk::Label* rankValue_ = nullptr;
   Gtk::Switch* publicToggle_ = nullptr;
   kit::Snackbar leaderboardInfo_;
-  Gtk::Label* accountPointsStatus_ = nullptr;
-  Gtk::Box* accountPointsCard_ = nullptr;   // the row (collapsed until Ready)
-  Gtk::Box* accountPointsPanel_ = nullptr;  // its content column
-  Gtk::Label* seekerStatus_ = nullptr;
-  Gtk::Button* verifySeekerButton_ = nullptr;
+  // the data board's own-ranking block, hidden while the Points board shows
+  std::vector<Gtk::Widget*> dataRankingWidgets_;
+  // the points board's block (pane C)
+  Gtk::Box* pointsGroup_ = nullptr;
+  Gtk::Label* pointsGroupMeta_ = nullptr;
+  Gtk::Label* pointsEmojiLabel_ = nullptr;
+  Gtk::Label* pointsNameLabel_ = nullptr;
+  Gtk::Label* pointsRankedLabel_ = nullptr;
+  Gtk::Button* editEmojiButton_ = nullptr;
+  PointsStatTile pointsTiles_[3];
+  Gtk::Label* pointsLongestLabel_ = nullptr;
+  Gtk::Switch* pointsPublicToggle_ = nullptr;
+  Gtk::Widget* pointsPrivateHintRow_ = nullptr;
   Gtk::Label* reliabilityStatus_ = nullptr;
   Gtk::Box* reliabilityCard_ = nullptr;
   Gtk::Box* reliabilityPanel_ = nullptr;
+  // the extender statistics group (O4, O8): its header and chart row show only
+  // with the provider statistics and a running role
+  kit::PaneGroupHeader extenderStatsHeader_;
+  Gtk::Box* extenderChartRow_ = nullptr;
+  TransferChart* extenderChart_ = nullptr;
+  // the provider statistics group (O5, O8): the header's meta says
+  // providing_disabled while the chart rows are collapsed; the provide mode
+  // row and the read-only extender row stay
+  kit::PaneGroupHeader providerStatsHeader_;
+  Gtk::Button* extenderRow_ = nullptr;
+  Gtk::Label* extenderDot_ = nullptr;
+  Gtk::Label* extenderState_ = nullptr;
+  Gtk::Box* localChartRow_ = nullptr;
+  TransferChart* localChart_ = nullptr;
+  Gtk::Box* providerTransportRow_ = nullptr;
+  TransportBar* providerTransportBar_ = nullptr;
+  Gtk::Box* blockedChartRow_ = nullptr;
+  TransferChart* blockedChart_ = nullptr;
+  std::unique_ptr<TransportSheet> providerTransportSheet_;
+  // the reading the extender row last drew, so a push that changes nothing is
+  // dropped
+  extender::ProvideRow extenderRowDrawn_;
+  bool extenderRowApplied_ = false;
+  // the rule's inputs beside providingEnabled_, and the sections last applied
+  bool extenderRunning_ = false;
+  bool hasProviderStats_ = false;
+  bool providerDistributionKnown_ = false;
+  extender::StatsSections statsSections_;
+  bool statsSectionsApplied_ = false;
 
   // ---- state -----------------------------------------------------------------
-  urnet::AccountWalletsList wallets_;
-  Fetch walletsState_ = Fetch::Loading;
-  std::string payoutWalletId_;
-  urnet::AccountPaymentsList payments_;
-  Fetch paymentsState_ = Fetch::Loading;
   urnet::AccountPointsList points_;
   Fetch pointsState_ = Fetch::Loading;
+  std::vector<AccountEpochRow> epochs_;
+  Fetch epochsState_ = Fetch::Loading;
+  std::optional<SnWalletInfo> wallet_;
+  Fetch walletState_ = Fetch::Loading;
+  std::vector<SnClaimRow> claims_;
+  int64_t totalClaimableRao_ = 0;
+  Fetch claimsState_ = Fetch::Loading;
+  Glib::ustring claimsFailure_;
+  std::optional<SnGasInfo> gas_;
+  std::optional<SnHeadInfo> head_;
+  Fetch headState_ = Fetch::Loading;
   std::optional<urnet::ReliabilityWindow> reliability_;
   Fetch reliabilityState_ = Fetch::Loading;
   urnet::LeaderboardEarnersList leaderboard_;
   Fetch leaderboardState_ = Fetch::Loading;
   int leaderboardCount_ = 0;
-  std::string ownNetworkId_;  // the JWT's network id: the own-row highlight
+  std::string ownNetworkId_;
   bool rankingPublic_ = false;
-  bool seekerHolder_ = false;  // any wallet with has_seeker_token
+  // the points board's mirror of its controller
+  std::optional<urnet::PointsLeaderboardViewController> pointsVc_;
+  std::optional<urnet::Sub> pointsSub_;
+  uint64_t pointsVcDevice_ = 0;  // the device handle the controller was opened on
+  bool pointsBoardShowing_ = false;
+  std::vector<PointsRowUi> pointsRowsUi_;
+  std::string pointsSort_ = urnet::PointsLeaderboardSortPoints;
+  std::string pointsRenderedSort_;
+  std::string pointsRenderedOwnId_;  // the own id the rows were drawn with
+  size_t pointsRenderedCount_ = 0;   // rows drawn; the next page appends after them
+  bool pointsLoading_ = false;
+  bool pointsEnd_ = false;
+  bool pointsHasLoaded_ = false;  // the first page landed (rows, an empty end, or an error)
+  std::string pointsError_;
+  int64_t pointsTotalRanked_ = 0;
+  int64_t pointsFirstPosition_ = 1;  // the loaded window's first position
+  bool pointsHasMoreBefore_ = false;  // rows exist above the window (after a seek)
+  int64_t pointsFirstVisible_ = 1;    // the first row in view's position
+  // the draggable position indicator: a slider over ranks 1..N floating at
+  // the pane's right edge, with the rank and tier beside the thumb while dragging
+  Gtk::Overlay* paneBOverlay_ = nullptr;
+  Gtk::DrawingArea* pointsIndicator_ = nullptr;
+  Gtk::Box* pointsIndicatorLabel_ = nullptr;
+  Gtk::Label* pointsIndicatorRank_ = nullptr;
+  Gtk::Label* pointsIndicatorTier_ = nullptr;
+  bool pointsDragging_ = false;
+  double pointsDragStartTop_ = 0;  // the thumb's top when the drag began
+  double pointsDragTop_ = 0;       // the thumb's top while dragging
+  int64_t pointsDragRank_ = 0;
+  uint64_t pointsLabelGen_ = 0;     // cancels a fade the next show overtakes
+  bool pointsSeekPending_ = false;  // a seek's window is on its way: scroll to its first row when it lands
+  sigc::connection pointsAnchorConn_;
+  std::optional<PointsRowUi> pointsMe_;
+  bool pointsPublic_ = false;  // this network's opt-in, from `me`, updated locally on toggle
+  std::string emojiTag_;       // this network's tag, from `me`, updated locally on save
+  bool settingPointsPublic_ = false;
+  bool applyingPointsToggle_ = false;  // ECHO GUARD on the opt-in switch
+  bool savingEmojiTag_ = false;
+  // after a local toggle or save, `me` from an older in-flight page could
+  // briefly disagree with what the user just did; the local values win until
+  // a response newer than the edit lands
+  uint64_t ownFlagsClock_ = 0;
+  uint64_t ownFlagsEditedAt_ = 0;
+  uint64_t ownFlagsAppliedAt_ = 0;
+  // the Solana payout wallet: the reads the card is drawn from, and the round
+  // of reads in flight (SolanaWalletPresentation.hpp LegacyLoad)
+  solana::LegacyCommitted legacyCommitted_;
+  solana::LegacyLoad legacyLoad_;
 
   // in-flight gates
-  bool connectingWallet_ = false;
-  bool verifyingSeeker_ = false;
+  bool connecting_ = false;      // bridge / set-wallet in flight
+  bool changingWallet_ = false;  // "Change" opened the connect affordances
+  bool manualEntryOpen_ = false;
+  bool claiming_ = false;
   bool settingRankingPublic_ = false;
   bool applyingRankingToggle_ = false;  // ECHO GUARD on the public switch
-  // One-shot PER LOOK, not per process: set when a look at the Leaderboard tab
-  // issues the fetch, and re-armed by Load() and by every no-session settle, so
-  // a board fetched (or refused) under one session never outlives it.
   bool leaderboardRequested_ = false;
+  bool removingSolanaWallet_ = false;
+  bool switchingPayoutWallet_ = false;  // the fresh read and the switch after a link
 
-  // detected chains for the address in the box (SOL > MATIC > TAO precedence)
-  bool walletValidSol_ = false;
-  bool walletValidMatic_ = false;
-  bool walletValidTao_ = false;
-  std::string walletChain_;
-  uint64_t walletValidateGeneration_ = 0;  // bare counter: no timer, no watchdog
-  sigc::connection walletDebounce_;
+  // manual entry validation: the verdict for the address in the box
+  std::string checkedAddress_;
+  std::optional<SnWalletCheck> check_;
+  bool checkInFlight_ = false;
+  uint64_t checkGeneration_ = 0;  // bare counter: no timer, no watchdog
+  sigc::connection checkDebounce_;
 
-  Flow seekerFlow_;   // 180s: the user legitimately spends minutes in a browser
-  Flow connectFlow_;  // 20s
-  Flow rankingFlow_;  // 20s
+  Flow connectFlow_;   // 180s: the user legitimately spends minutes in a browser
+  Flow setWalletFlow_; // 20s: POST /sn/wallet
+  Flow pointsPublicFlow_;  // 20s: POST /network/points-ranking-visibility
+  Flow claimFlow_;     // 180s: chain round trips
+  Flow rankingFlow_;   // 20s
+  Flow legacyFlow_;    // 20s: the payout read and POST /account/payout-wallet after a link
+  Flow removeSolanaFlow_;  // 20s: POST /account/wallets/remove
 
   // preview + balance relay
   bool previewMode_ = false;
@@ -298,9 +654,8 @@ class EarningsPage : public Gtk::Box {
   bool isPro_ = false;
   bool isGuest_ = false;
 
-  // The page holds the open sheet for its whole life, so a late callback after
-  // dismissal finds nothing (the sheet captures itself weakly).
   std::shared_ptr<Gtk::Window> sheet_;
+  std::weak_ptr<ClaimAlphaSheet> claimSheet_;
 };
 
 }  // namespace urnw

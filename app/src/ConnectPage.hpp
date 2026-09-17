@@ -34,9 +34,11 @@
 #include "ConnectCanvas.hpp"
 #include "ContractsSheet.hpp"
 #include "DnsSheet.hpp"
+#include "ExtenderProvidePresentation.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
+#include "TapSequenceGate.hpp"
 #include "TransferChart.hpp"
 #include "TransportBar.hpp"
 #include "TransportSheet.hpp"
@@ -114,6 +116,11 @@ class ConnectPage : public Gtk::Box {
   // beside the other two (MainWindow.cpp: on_open_provider_locations ->
   // OpenProviderLocations).
   std::function<void()> on_open_provider_locations;
+  // The easter egg: five taps on the connected dot, each within two seconds
+  // of the previous, play the Pro celebration (the window owns the flight).
+  // Silent: no counter, no toast, no announcement; taps while not connected
+  // are ignored.
+  std::function<void()> on_connected_icon_tap;
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off
@@ -147,6 +154,13 @@ class ConnectPage : public Gtk::Box {
   void ApplyProvideControlMode();
   void ApplyBlockerUi();
   void ApplyKillSwitchUi();
+  // The provider extender row under the provide control (EXTENDER.md N7): one
+  // writer that re-reads the status and the setting beside it and draws the
+  // row, dropping a reading that changes nothing; the switch writes the
+  // setting through the device and repaints with the guess.
+  void ApplyExtenderProvideState();
+  void DrawExtenderRow(const extender::ProvideRow& row);
+  void OnExtenderToggled();
   // the selected-provider row (§2.3): stats.locationName with a selected peer
   // resolved to its device name; empty => "Best available provider"
   void ApplyLocationRow();
@@ -183,6 +197,14 @@ class ConnectPage : public Gtk::Box {
     return renderedState_ == health::State::Connected ||
            renderedState_ == health::State::Blocked ||
            renderedState_ == health::State::Disconnecting;
+  }
+  // A session is up but no provider is proven yet. The provider-count row
+  // reads "Connecting to providers" here and still opens the provider
+  // locations sheet, which lists whatever providers are known so far
+  // (android/apple parity: the status label is the tap target in both states).
+  bool ConnectingNow() const {
+    return renderedState_ == health::State::Connecting ||
+           renderedState_ == health::State::Evaluating;
   }
   void ApplyContractsList();
   void ApplySplitRuleCount();
@@ -262,6 +284,16 @@ class ConnectPage : public Gtk::Box {
   // set the first time a real DrawerEvent lands: the clock-driven poll then
   // drops to a slow safety net instead of carrying the page on its own.
   bool eventsWired_ = false;
+  // DESIGNSTYLE "Placeholders, not pop-in": the sections whose data arrives
+  // after first paint (the dns readings, the transport legend) hold a skeleton
+  // of their settled box until it lands. `dnsSettled_` is "a reading has been
+  // taken" — absent settings after that are the unavailable row, before it
+  // they are still loading. The clock closes both after kPlaceholderCeilingUs
+  // (a daemon that never answers settles on its empty states, not a shimmer).
+  bool dnsSettled_ = false;
+  gint64 placeholdersSinceUs_ = 0;
+  void BeginPlaceholders();
+  void SettlePlaceholders();
   int widthDip_ = 1120;
   int foldWidth_ = -1;  // the pane-grid width the current fold was taken on
   bool foldRecheckPending_ = false;
@@ -337,6 +369,7 @@ class ConnectPage : public Gtk::Box {
   GtkWidget* paneAClamp_ = nullptr;
   GtkWidget* heroClamp_ = nullptr;  // hero host MaxWidth 190 (Adv) / 320
   Gtk::Label* statusDot_ = nullptr;
+  TapSequenceGate connectedIconTaps_;  // the easter egg's five-tap count on the dot
   Gtk::Label* statusText_ = nullptr;
   Gtk::Label* protectionText_ = nullptr;
   Gtk::Label* trafficHeldText_ = nullptr;
@@ -356,6 +389,17 @@ class ConnectPage : public Gtk::Box {
   Gtk::ToggleButton* provideNever_ = nullptr;
   bool syncingProvide_ = false;
   Gtk::Label* discoverableText_ = nullptr;
+  // the provider extender row and its description, directly under the provide
+  // control's footer line (N7): hidden, never disabled, while the status is
+  // absent or the role unsupported
+  Gtk::Box* extenderRow_ = nullptr;
+  Gtk::Label* extenderDot_ = nullptr;
+  Gtk::Label* extenderState_ = nullptr;
+  Gtk::Switch* extenderToggle_ = nullptr;
+  Gtk::Label* extenderDescription_ = nullptr;
+  // the reading the row last drew, so a push that changes nothing is dropped
+  extender::ProvideRow extenderRowDrawn_;
+  bool extenderRowApplied_ = false;
   // connect options (§2.8): the 3-item connection-mode segmented control and
   // the three PerformanceProfile toggles, all echo-guarded
   Gtk::ToggleButton* modeAuto_ = nullptr;

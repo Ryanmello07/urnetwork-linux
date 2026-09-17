@@ -4,6 +4,7 @@
 #include <gtk/gtk.h>
 
 #include "Ui.hpp"
+#include "UrMotion.hpp"
 
 namespace urnw::kit {
 namespace {
@@ -43,6 +44,41 @@ void SetTextOrCollapse(Gtk::Label& line, const Glib::ustring& text) {
 void MarkDecorative(Gtk::Widget& widget) {
   gtk_accessible_update_state(GTK_ACCESSIBLE(widget.gobj()), GTK_ACCESSIBLE_STATE_HIDDEN,
                               TRUE, -1);
+}
+
+Gtk::Label* MakeSkeletonLabel(const Glib::ustring& sizer, const char* textCssClass) {
+  auto* label = Gtk::make_managed<Gtk::Label>(sizer);
+  if (textCssClass) label->add_css_class(textCssClass);
+  label->set_xalign(0);
+  label->set_valign(Gtk::Align::CENTER);
+  SetSkeleton(*label, true);
+  return label;
+}
+
+Gtk::Widget* MakeSkeletonDot(int size) {
+  auto* dot = Gtk::make_managed<Gtk::Box>();
+  dot->set_size_request(size, size);
+  dot->set_valign(Gtk::Align::CENTER);
+  dot->add_css_class("ur-skeleton-dot");
+  SetSkeleton(*dot, true);
+  return dot;
+}
+
+void SetSkeleton(Gtk::Widget& widget, bool on) {
+  if (on) {
+    widget.add_css_class("ur-skeleton");
+    // the shimmer is a separate class so a reduce-motion setting leaves a
+    // still bar rather than a stopped animation
+    if (motion::ShouldAnimate()) widget.add_css_class("ur-skeleton-shimmer");
+  } else {
+    widget.remove_css_class("ur-skeleton");
+    widget.remove_css_class("ur-skeleton-shimmer");
+  }
+}
+
+void SetBusy(Gtk::Widget& widget, bool busy) {
+  gtk_accessible_update_state(GTK_ACCESSIBLE(widget.gobj()), GTK_ACCESSIBLE_STATE_BUSY,
+                              busy ? TRUE : FALSE, -1);
 }
 
 void SetAccessibleLabel(Gtk::Widget& widget, const Glib::ustring& label) {
@@ -556,6 +592,31 @@ Gtk::Widget* MakePaneTableHeader(const std::vector<int>& weights,
   return row;
 }
 
+PaneTableStack MakePaneTableStack(PaneTableRow& row, size_t index) {
+  PaneTableStack out;
+  auto* host = dynamic_cast<Gtk::Box*>(row.root);
+  if (host == nullptr || index >= row.cells.size()) return out;
+  auto* inner = RowHostInner(host);
+  Gtk::Label* cell = row.cells[index];
+  int minWidth = -1;
+  int minHeight = -1;
+  cell->get_size_request(minWidth, minHeight);
+  out.root = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+  out.root->set_valign(Gtk::Align::CENTER);
+  out.root->set_hexpand(true);
+  // the same star weight the cell had, so the columns stay aligned
+  out.root->set_size_request(minWidth, -1);
+  out.top = MakeStyledLabel({}, "ur-row-title", 0.f);
+  out.bottom = MakeStyledLabel({}, "ur-row-title", 0.f);
+  out.bottom->set_visible(false);
+  out.root->append(*out.top);
+  out.root->append(*out.bottom);
+  inner->insert_child_after(*out.root, *cell);
+  inner->remove(*cell);
+  row.cells[index] = out.top;
+  return out;
+}
+
 PaneSearchRow MakePaneSearchRow(const Glib::ustring& placeholder) {
   PaneSearchRow out;
   auto* host = MakeRowHost(40);
@@ -627,14 +688,19 @@ void Snackbar::Show(const Glib::ustring& message, Severity severity,
   message_.set_text(message);
   bar_.remove_css_class("ur-snackbar-error");
   bar_.remove_css_class("ur-snackbar-success");
+  bar_.remove_css_class("ur-snackbar-gold");
   if (severity == Severity::Error || severity == Severity::Warning) {
     bar_.add_css_class("ur-snackbar-error");
   } else if (severity == Severity::Success) {
     bar_.add_css_class("ur-snackbar-success");
+  } else if (severity == Severity::Gold) {
+    // the referral gold toast (a friend joined with your code)
+    bar_.add_css_class("ur-snackbar-gold");
   }
   revealer_.set_reveal_child(true);
   // an error is usually the only diagnostic the user gets; it waits for them
-  const bool safeToMiss = (severity == Severity::Info || severity == Severity::Success);
+  const bool safeToMiss = (severity == Severity::Info || severity == Severity::Success ||
+                           severity == Severity::Gold);
   const int duration = durationMs.value_or(safeToMiss ? kDefaultDurationMs : kPersistent);
   if (duration <= kPersistent) return;
   timer_ = Glib::signal_timeout().connect(

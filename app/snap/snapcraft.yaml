@@ -84,9 +84,18 @@ parts:
       # verify on the first build that the snap still launches (ldd the staged
       # binary) and add libwebkitgtk-6.0-4 to stage-packages if it does not.
       - libwebkitgtk-6.0-dev
+      # zxing-cpp: the QR DECODER behind the extender import screen
+      # (connect/EXTENDER.md K8). meson requires it whenever the GUI is
+      # required, so a build without this package fails at configure time
+      # rather than shipping a half-working import screen. The QR ENCODER is
+      # vendored (app/third_party/qrcodegen) and needs no package.
+      - libzxing-cpp-dev
     stage-packages:
       - libgtkmm-4.0-0
       - libadwaita-1-0
+      # core24 is Ubuntu 24.04, where the t64 transition renamed the zxing-cpp
+      # runtime; on an older base this is libzxingcore1.
+      - libzxingcore1t64
     build-attributes:
       - enable-patchelf
     override-build: |

@@ -64,6 +64,15 @@ button.ur-btn-secondary:active { background-color: mix(#ffffff, #000000, 0.12); 
 button.ur-btn-secondary:disabled { background-color: #ffffff; color: #000000; opacity: 0.38; }
 button.ur-btn-secondary image { color: #000000; }
 
+/* ---- login tiles (LOGIN_STACK_SPEC) ----------------------------------------
+   The less common ways in, four per row with each row filled: a SECONDARY
+   pill in square form, the mark over a small caption. The caption overrides
+   the pill's NeueBit label face (button.ur-btn label above). */
+button.ur-btn.ur-tile { min-height: 64px; padding: 8px 4px; }
+button.ur-btn.ur-tile label.ur-tile-caption {
+  font-family: "PP Neue Montreal"; font-size: 11px; font-weight: 500;
+}
+
 /* ---- URTextInput (android URTextInput.kt / windows TextControl* keys) --
    Not a filled box: a transparent field over a 1px underline that is
    TextFaint at rest and BlueMedium while focused; text renders #D3D3D3. */
@@ -152,6 +161,8 @@ button.link:hover label { color: #8AA9FF; }
 .ur-value { font-family: "PP Neue Montreal"; font-size: 13px; color: #F8F8F8; }
 .ur-row-title { font-family: "PP Neue Montreal"; font-size: 13px; color: #F8F8F8; }
 .ur-row-note { font-family: "PP Neue Montreal"; font-size: 11px; color: #989898; }
+/* the "Learn more" link inside a note: the pink accent, no underline */
+.ur-learn-more link { color: #ED8FFF; text-decoration-line: none; }
 /* TONE ON TOP OF A ROW CLASS. This provider outranks the one Ui.cpp installs
    (APPLICATION + 1), so a bare `.dim-label` added beside `.ur-value` LOSES and
    the label renders full white — every muted meta/value the kit builds was
@@ -163,19 +174,51 @@ button.link:hover label { color: #8AA9FF; }
 .ur-row-title.ur-label-faint { color: #5A5A5A; }
 /* ...and a STATE beats a tone. A lime figure (money that arrived, the payout
    wallet's total) or a danger figure carries a third class, so it outranks
-   the muted default it is layered on. */
+   the muted default it is layered on. The same holds for a supporting line
+   built on the note or key face (kit::ApplySupportingText's verdicts under an
+   address field): .ur-row-note and .ur-key come later in this sheet than the
+   bare state classes, so without a two-class rule an invalid verdict rendered
+   in the note's grey. */
 .ur-value.ur-value-on, .ur-value.dim-label.ur-value-on,
-.ur-row-title.ur-value-on, .ur-row-title.dim-label.ur-value-on { color: #87FB67; }
+.ur-row-title.ur-value-on, .ur-row-title.dim-label.ur-value-on,
+.ur-row-note.ur-value-on, .ur-key.ur-value-on { color: #87FB67; }
 .ur-value.ur-danger-text, .ur-value.dim-label.ur-danger-text,
-.ur-row-title.ur-danger-text, .ur-row-title.dim-label.ur-danger-text { color: #F8523B; }
+.ur-row-title.ur-danger-text, .ur-row-title.dim-label.ur-danger-text,
+.ur-row-note.ur-danger-text, .ur-key.ur-danger-text { color: #F8523B; }
+/* ...and the error voice on a row's note line, the extender row's state in
+   its error state: .ur-row-note comes after .ur-error-text in this sheet and
+   wins the tie, so the pair takes the coral here and keeps the note's 11px. */
+.ur-row-note.ur-error-text { color: #FF6C58; }
 /* the signed-in user's own row in the earnings leaderboard: card fill against
    the pane, never an accent — the rank is the emphasis, not the row */
 .ur-earn-own-row { background-color: #1C1C1C; }
-/* the DEFAULT chip riding beside a payout wallet */
+/* the rank and tier beside the points board's position indicator while it is
+   dragged: card fill, hairline edge, right-aligned lines */
+.ur-earn-scrub {
+  background-color: #1C1C1C; border: 1px solid alpha(#ffffff, 0.12);
+  border-radius: 8px; padding: 6px 10px;
+}
+/* the status chip on a history row (unclaimed / claimed / expired) */
 .ur-earn-tag {
   background-color: alpha(#F8F8F8, .04); border-radius: 6px; padding: 2px 6px;
   font-family: "PP NeueBit"; font-size: 16px; font-weight: bold; color: #989898;
 }
+/* the two gold tiles on the earnings page (unclaimed SN25α, Top 200): the
+   referral gold (Ui.hpp kReferralGold) on a faint fill, never the Pro gold */
+.ur-earn-gold-tile {
+  background-color: alpha(#F5B93C, .10); border: 1px solid alpha(#F5B93C, .45);
+  border-radius: 10px; padding: 12px;
+}
+.ur-earn-gold-text { color: #FFD76A; }
+button.ur-earn-gold-button {
+  background-color: #F5B93C; color: #241A05; border-radius: 8px; font-weight: 600;
+  padding: 6px 14px; min-height: 32px;
+}
+button.ur-earn-gold-button:hover { background-color: #FFD76A; }
+button.ur-earn-gold-button:active { background-color: #E0A52E; }
+button.ur-earn-gold-button:disabled { opacity: 0.38; }
+/* the wallet address in the bit face */
+.ur-earn-address { font-family: "PP NeueBit"; font-size: 18px; font-weight: bold; color: #F8F8F8; }
 .ur-col-header {
   font-family: "PP Neue Montreal"; font-size: 11px;
   letter-spacing: 0.7px; color: #5A5A5A;
@@ -280,6 +323,33 @@ button.ur-nav-item image { color: inherit; }
 }
 .ur-snackbar-error { border-color: alpha(#FF6C58, .5); }
 .ur-snackbar-success { border-color: alpha(#87FB67, .4); }
+/* the referral gold toast (Ui.hpp kReferralGold) */
+.ur-snackbar-gold { border-color: alpha(#F5B93C, .6); }
+/* the usage bar's referral row: a flat button that opens the Referrals page,
+   drawn like the plain rows above it (no chrome, no padding) until hovered */
+button.ur-usage-referral-row {
+  background: none; background-image: none; border: none; box-shadow: none;
+  border-radius: 6px; padding: 0; min-height: 0;
+  transition: background-color 150ms ease;
+}
+button.ur-usage-referral-row:hover { background-color: #1C1C1C; }
+button.ur-usage-referral-row:active { background-color: #2A2A2A; }
+
+/* ---- DESIGNSTYLE "Placeholders, not pop-in": the shared skeleton --------
+   A faint rounded bar in the EXACT box of the content it stands in for. On a
+   label the text is the sizer: the value the row will show, rendered
+   transparent under the fill, so the bar has the label's own metrics and can
+   never be a different height from what replaces it. The shimmer is a slow
+   opacity breath on a second class that PaneKit::SetSkeleton adds only while
+   gtk-enable-animations is on (the reduce-motion setting). */
+.ur-skeleton { background-color: alpha(#ffffff, 0.08); border-radius: 4px; }
+.ur-skeleton, .ur-value.ur-skeleton, .ur-key.ur-skeleton, .ur-caption-11.ur-skeleton,
+.ur-value.dim-label.ur-skeleton { color: transparent; }
+.ur-skeleton-dot { border-radius: 999px; }
+@keyframes ur-skeleton-shimmer {
+  0% { opacity: 1; } 50% { opacity: 0.45; } 100% { opacity: 1; }
+}
+.ur-skeleton-shimmer { animation: ur-skeleton-shimmer 1.8s ease-in-out infinite; }
 )";
 
 void AddFontFile(const std::string& dir, const char* file) {

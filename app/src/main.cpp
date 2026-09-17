@@ -14,6 +14,7 @@
 
 #include <clocale>
 #include <memory>
+#include <cstdlib>
 #include <string>
 
 #include "I18n.hpp"
@@ -114,7 +115,7 @@ int main(int argc, char** argv) {
     // missing face fails silently to the fallback font (windows parity).
     urnw::LoadBrandFonts();
     urnw::EnsureBrandCss();
-    // the icon NAME "com.bringyour.network" must resolve for the window icon and the
+    // the icon NAME kAppIconName must resolve for the window icon and the
     // tray, wherever the app runs from
     urnw::RegisterBrandIcons();
 
@@ -162,15 +163,26 @@ int main(int argc, char** argv) {
     // retry each second until the window is laid out (a headless compositor
     // can map late); give up after ~20 tries
     auto tries = std::make_shared<int>(0);
+    // URNETWORK_SHOOT_AFTER=<seconds> holds the first attempt back, for a
+    // frame that must be taken after a page has settled (the loading
+    // skeletons' ceiling) rather than at the first laid-out tick
+    const char* shootAfter = g_getenv("URNETWORK_SHOOT_AFTER");
+    const int holdTries = shootAfter ? std::atoi(shootAfter) : 0;
     Glib::signal_timeout().connect(
-        [&app, &window, out, tries]() -> bool {
-          if (++*tries > 20) {
+        [&app, &window, out, tries, holdTries]() -> bool {
+          if (++*tries > 20 + holdTries) {
             g_message("shoot: gave up (window never laid out)");
             app->quit();
             return false;
           }
-          if (!window) return true;
-          Gtk::Widget* child = window->get_child();
+          if (!window || *tries <= holdTries) return true;
+          // an onboarding review (URNW_ONBOARDING_PREVIEW) shoots the sheet,
+          // once it is up and its opening page change has settled
+          const bool wantSheet = g_getenv("URNW_ONBOARDING_PREVIEW") != nullptr;
+          Gtk::Window* target = window->PreviewSheet();
+          if (wantSheet && (!target || !target->get_mapped() || *tries < 4)) return true;
+          if (!target) target = window.get();
+          Gtk::Widget* child = target->get_child();
           if (!child) return true;
           const int w = child->get_width();
           const int h = child->get_height();

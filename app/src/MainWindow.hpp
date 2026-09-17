@@ -26,9 +26,12 @@
 #include "LocationOverride.hpp"
 #include "LoginCarousel.hpp"
 #include "NetworkServerSheet.hpp"
+#include "Onboarding.hpp"
 #include "ProviderLocationsSheet.hpp"
+#include "ReferralsPage.hpp"
 #include "SdkHost.hpp"
 #include "SeedphraseSheet.hpp"
+#include "ProCelebration.hpp"
 #include "SubscriptionBalance.hpp"
 #include "UrMotion.hpp"
 
@@ -50,6 +53,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // the tray menu — which must therefore ask the page what the press means.
   void ToggleConnect();
   bool connected() const { return connected_; }
+  // The screenshot hook (main.cpp URNETWORK_SHOOT) renders this window when a
+  // URNW_ONBOARDING_PREVIEW review has it open, else null.
+  Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
   std::function<void(bool connected)> on_connected_change;
 
  private:
@@ -75,6 +81,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   void OnGetStarted();  // authLogin discovery -> password / create / inline error
   void OnSignIn();
   void OnUseCode();     // auth-code login: a modal sheet, not an inline field
+  void OnGoogle();         // Google through Google's web flow (SdkHost::SignInWithSso)
+  void OnApple();          // Apple through Apple's web flow (SdkHost::SignInWithSso)
+  void OnSso(const std::string& provider);
   void OnSolanaChooser();  // ONE Solana button -> a Phantom/Solflare chooser
   void OnSolana(WalletConnect::Provider provider);
   void OnBittensor();
@@ -82,6 +91,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   void OnSeedphraseChanged();
   void OnSeedphraseSubmit();
   void OnInstantSubmit();
+  void OnInstantValidateReferral();
   // android disables every sign-in affordance while any one is in flight
   void SetLoginBusy(bool busy);
   // narrow <-> wide login (the app-wide 1000dip breakpoint): the wide layout
@@ -137,6 +147,16 @@ class MainWindow : public Gtk::ApplicationWindow {
   SubscriptionBalanceStore balance_;
   Gtk::Stack stack_;
 
+  // The Pro celebration (ProCelebration.hpp): the overlay above the whole
+  // window, the mosaic container around the page stack, and the one clock
+  // both follow. Plays once at the free -> Pro upgrade, and on a tap of the
+  // Account plan label while Pro.
+  ProFlightClock proFlightClock_;
+  ProCelebrationOverlay* proCelebration_ = nullptr;
+  PixelateBin* proPixelateBin_ = nullptr;
+  bool proCelebrated_ = false;
+  void LaunchProCelebration();
+
   Gtk::Entry email_;
   Gtk::Button* getStartedBtn_ = nullptr;  // disabled while a discovery is in flight
   Gtk::PasswordEntry password_;           // lives on the password step
@@ -158,8 +178,8 @@ class MainWindow : public Gtk::ApplicationWindow {
   motion::MotionBin* emailGroupBin_ = nullptr;
   motion::MotionBin* getStartedBin_ = nullptr;
   motion::MotionBin* orBin_ = nullptr;
-  motion::MotionBin* walletBin_ = nullptr;
-  motion::MotionBin* secondaryBin_ = nullptr;
+  motion::MotionBin* walletBin_ = nullptr;     // the three full-width pills
+  motion::MotionBin* secondaryBin_ = nullptr;  // the icon tiles (four per row)
   std::vector<Gtk::Widget*> loginAffordances_;  // everything SetLoginBusy toggles
 
   // ---- seedphrase + instant steps (windows parity) -------------------------
@@ -169,9 +189,19 @@ class MainWindow : public Gtk::ApplicationWindow {
   Gtk::Label* seedphraseError_ = nullptr;
   bool seedphraseLoggingIn_ = false;
   Gtk::CheckButton* instantTerms_ = nullptr;
+  Gtk::Switch* instantProductUpdates_ = nullptr;  // "Periodic product updates", default on
   Gtk::Button* instantCreate_ = nullptr;
   Gtk::Label* instantError_ = nullptr;
   bool creatingInstant_ = false;
+  // optional referral code on the instant path (android/apple parity)
+  Gtk::Button* instantReferralToggle_ = nullptr;
+  Gtk::Revealer* instantReferralRevealer_ = nullptr;
+  Gtk::Entry* instantReferralEntry_ = nullptr;
+  Gtk::Button* instantReferralApply_ = nullptr;
+  Gtk::Label* instantReferralSupporting_ = nullptr;
+  Gtk::Box* instantReferralApplied_ = nullptr;
+  bool instantReferralValid_ = false;
+  bool validatingInstantReferral_ = false;
   std::unique_ptr<SeedphraseSheet> seedphraseSheet_;
   std::unique_ptr<NetworkServerSheet> networkServerSheet_;
   // The user auth the discovery routed to the password step (normalized echo);
@@ -215,9 +245,19 @@ class MainWindow : public Gtk::ApplicationWindow {
   SupportPage* supportPage_ = nullptr;
   EarningsPage* earningsPage_ = nullptr;
   AccountPage* accountPage_ = nullptr;
+  ReferralsPage* referralsPage_ = nullptr;  // reached from Account's Referrals row
   // Account's Redeem row opens the same sheet the drawer owns, but the
   // drawer exposes no opener, so the window keeps its own (lazily built).
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;
+  std::unique_ptr<OnboardingWindow> onboarding_;
+  void OpenOnboardingIfPending();
+  // urnetwork://onboarding/<connect|widgets|offer|feedback> (the campaign
+  // emails' buttons): Connect, Account (the closest page to Widgets), the
+  // offer page (the upgrade sheet when no offer is active), the feedback form
+  // pre-filled from the link's token.
+  void HandleOnboardingLink(const std::string& url);
+  // connect.first, once per network (remembered in the prefs)
+  void NoteConnected();
   // Last width (in dip) fanned out to the destinations. Pages fold their own
   // panes; nothing else in the app measures the window for them.
   int pageWidthDip_ = -1;

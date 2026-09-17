@@ -31,7 +31,7 @@
 //          real machine on 2026-08-15: 1.34 Gbps out, 0 in, 3.38 Tb sent over
 //          forty minutes before a human noticed.
 //
-//          THE MECHANISM HAS TWO LAYERS, AND THE ORDER IS NOT A PREFERENCE.
+//          THE MECHANISM NORMALLY HAS TWO LAYERS, AND THE ORDER IS NOT A PREFERENCE.
 //          A fwmark only excludes a socket if the socket carries it BEFORE
 //          connect(): the route lookup that picks the tun (and, with it, the
 //          tun's source address) happens in connect(), and `ip_route_me_harder`
@@ -51,7 +51,9 @@
 //               connect() already bound, so it is a BELT, not the mechanism: it
 //               still saves sockets that were created before the marker
 //               attached, and it is the only layer at all on a host without
-//               CONFIG_CGROUP_BPF.
+//               CONFIG_CGROUP_BPF. A kernel that instead lacks CONFIG_NFT_SOCKET
+//               may omit this belt only for a floorless session after layer 1
+//               has been proven; kill-switch and helper-DNS states refuse.
 //          Neither layer is trusted. Tunnel::VerifyEgressWitness connect()s two
 //          real sockets that differ only in the mark and compares the source
 //          addresses the kernel binds to them, then reads nftables counters
@@ -59,7 +61,8 @@
 //          hole in the floor, and the tunnel does not come up — or stay up —
 //          unless all four of its legs pass.
 //        * LEAK PREVENTION — off-tunnel :53/:853/mDNS/LLMNR/NetBIOS, the cloud
-//          metadata address, and all globally routable IPv6 — which per
+//          metadata address, and all OFF-TUNNEL globally routable IPv6 (v6
+//          leaves this machine through the tunnel or not at all) — which per
 //          docs/linux_agent_help.md §6.3 is NOT a preference: it applies
 //          regardless of the kill switch. The kill switch adds the
 //          block-everything floor on top, and the OFF variant of a ruleset is
@@ -84,8 +87,9 @@
 //      destroys the table silently, and NetFilter::Verify() on the reaper tick
 //      is the entire mitigation.
 //
-//   3. Tunnel — the tun fd, its address, the 31 capture prefixes (in a
-//      DEDICATED route table, not main, so the fwmark rule can steer the
+//   3. Tunnel — the tun fd, its two addresses (one per family, the tunnel is
+//      dual-stack: connect/IPV6.md C2), the 31 v4 and 8 v6 capture prefixes
+//      (in a DEDICATED route table, not main, so the fwmark rule can steer the
 //      daemon around them), the DNS takeover (THREE mechanisms, not one — see
 //      "DNS on a host that may not have systemd-resolved" below), and a
 //      deterministic self-check that BOTH halves took before the caller is
@@ -104,11 +108,11 @@
 #include <string>
 #include <vector>
 
-// The ONE definition of urnw::TunnelConfig, and the IPv4-only predicate
-// Tunnel::Open enforces against it. Upstream's Tunnel.hpp includes it here for
-// the same reason; this fork briefly carried a second, differently-named copy
-// of the struct in this header, which made IsIpv4OnlyTunnelConfig impossible to
-// call from Tunnel.cpp.
+// The ONE definition of urnw::TunnelConfig, and the dual-stack predicate
+// Tunnel::Open enforces against it (plus the v6 capture set, pure, so the
+// routes and the tests read the same table). This fork once carried a second,
+// differently-named copy of the struct in this header, which made the guard
+// impossible to call from Tunnel.cpp; do not re-declare the struct here.
 #include "TunnelPolicy.hpp"
 
 namespace urnw {
@@ -143,6 +147,15 @@ std::string FindTool(const char* tool);
 // inet_pton, in the daemon, on every address the device hands back. The GUI's
 // client-side validation (Formatters.cpp) is a courtesy, not a boundary.
 bool IsIpv4Address(const std::string& value);
+bool IsIpv6Address(const std::string& value);
+
+// Can this host carry the v6 half of the tunnel at all? False when the kernel
+// booted with ipv6.disable=1 (no /proc/sys/net/ipv6) or
+// net.ipv6.conf.all.disable_ipv6 is set, which no per-interface setting can
+// override. On such a host v6 can neither be carried nor leak, so the v6 half
+// is skipped and reported (TunnelReport::ipv6_captured) rather than refused.
+// *detail names the reason on false.
+bool HostIpv6Available(std::string* detail);
 
 // ---- the daemon's own cgroup ----------------------------------------------
 
@@ -479,7 +492,8 @@ inline constexpr int kConnectingWindowSeconds = 60;
 // Android (MainService's excludeRoute set), iOS (NEIPv4Settings.excludedRoutes)
 // and windows NetPolicy.h use, so LAN traffic reaches local devices directly.
 // 169.254/16 and 224.0.0.0/3 stay CAPTURED on purpose (own tun addr; metadata
-// service; LLMNR/mDNS live in the multicast range).
+// service; LLMNR/mDNS live in the multicast range). The v6 counterpart,
+// CaptureV6Prefixes, lives in TunnelPolicy.hpp (pure, unit-tested).
 const std::vector<std::string>& CaptureV4Prefixes();
 
 // ---- nftables: egress self-exclusion + the leak floor ----------------------
@@ -526,10 +540,14 @@ struct FilterConfig {
   // The resolvers ACTUALLY validated and applied on the tun (Tunnel::resolvers).
   // Connected pins :53 to these, over the tun only.
   std::vector<std::string> tunnel_resolvers;
-  // v6 has no tunnel (the SDK captures IPv4 only), so on a dual-stack network
-  // every AAAA-reachable destination would leave in the clear while the UI
-  // says Connected. In force for Connecting/Armed/Connected and NEVER gated on
-  // the kill switch — leak prevention is not a preference (§6.3).
+  // OFF-TUNNEL v6 is refused: the tun permit above the v6 rules accepts what
+  // the v6 capture routes send INTO the tunnel, and everything else that is
+  // globally routable is reject/dropped, so on a dual-stack network no
+  // AAAA-reachable destination can leave in the clear while the UI says
+  // Connected. In force for Connecting/Armed/Connected and NEVER gated on the
+  // kill switch — leak prevention is not a preference (§6.3). It stays on
+  // even when the v6 half of the tunnel is not installed (host IPv6 disabled):
+  // then it matches nothing and costs nothing.
   bool block_ipv6 = true;
   // :53/:853/5353/5355/137-139 off-tunnel. AND'd by the builder with
   // "we are Connected" AND "a tunnel resolver survived validation": installing
@@ -540,11 +558,21 @@ struct FilterConfig {
   // and firewall are built from ONE table or they silently disagree.
   bool allow_lan = true;
   uint32_t mark = kEgressMark;
-  // The daemon's own. Permits by CGROUP, not by mark: SO_MARK needs
+  // Set only after EgressSocketMarker::Attach has read SO_MARK back from a
+  // fresh socket. It is the evidence that permits a floorless mark-only
+  // ruleset when this kernel lacks nft's socket-cgroup expression.
+  bool socket_mark_proven = false;
+  // Result of a live `nft --check` probe against this exact cgroup path.
+  // False omits every `socket cgroupv2` expression; NetFilter::Apply consults
+  // SelectNftCgroupMode first and refuses unsafe omissions.
+  bool cgroup_socket_match_supported = true;
+  // The daemon's own. Normally permits by CGROUP, not by mark: SO_MARK needs
   // CAP_NET_ADMIN/CAP_NET_RAW, so a privileged third party could forge our
   // mark and inherit the exemption; cgroup membership cannot be forged. The
   // mark match stays as a ranked-below fallback for packets whose socket
-  // lookup misses in the output hook.
+  // lookup misses in the output hook. On a measured CONFIG_NFT_SOCKET absence,
+  // a proven marker may run floorless without this belt; the policy above
+  // refuses every state that depends on crash survival or another cgroup.
   CgroupRef cgroup;
   // Emitted ONLY when state == Connecting && floor, and only for cgroups that
   // exist (see DnsHelperCgroupsV2).
@@ -585,6 +613,10 @@ bool IsIpv6OnlyNetwork(std::string* detail);
 inline constexpr const char* kFilterCodeNftMissing = "nft_missing";
 inline constexpr const char* kFilterCodeNftRejected = "nft_rejected";
 inline constexpr const char* kFilterCodeCgroupUnavailable = "cgroup_unavailable";
+// RETIRED. Arming used to refuse on an IPv6-only network, because blocking v6
+// with no v6 tunnel cut such a machine off the net. The tunnel is dual-stack
+// now, so a v6-only network is carried like any other; nothing emits this
+// code any more, and it survives only so an older GUI's switch stays complete.
 inline constexpr const char* kFilterCodeIpv4DefaultRouteMissing = "ipv4_default_route_missing";
 
 class NetFilter {
@@ -617,6 +649,10 @@ class NetFilter {
   // preflight and in tests, so a malformed ruleset is named before it is ever
   // the thing standing between the user and their network.
   static bool CheckRuleset(const std::string& script, std::string* error);
+  // A narrow, non-committing probe for CONFIG_NFT_SOCKET and nft userspace
+  // support. The path must exist; false carries the exact `nft --check`
+  // diagnostic so a compatibility fallback is never inferred from a guess.
+  static bool CheckCgroupSocketMatch(const CgroupRef& cgroup, std::string* error);
 
   // Is the table still ours and intact? nftables gives no tamper callback, and
   // a root `nft flush ruleset` destroys our table with no notification —
@@ -897,8 +933,8 @@ bool RestoreDirectResolvConf(std::string* detail);
 // ---- the tun ---------------------------------------------------------------
 
 // TunnelConfig lives in TunnelPolicy.hpp (included above) together with
-// IsIpv4OnlyTunnelConfig, which Tunnel::Open refuses on. Keeping the struct and
-// the predicate that validates it in one header is what makes the guard
+// IsDualStackTunnelConfig, which Tunnel::Open refuses on. Keeping the struct
+// and the predicate that validates it in one header is what makes the guard
 // callable; do not re-declare the struct here.
 
 // What is ACTUALLY in force, as opposed to what was attempted. Every field
@@ -907,6 +943,12 @@ bool RestoreDirectResolvConf(std::string* detail);
 struct TunnelReport {
   std::string interface;
   bool routes_installed = false;
+  // The v6 half of the tunnel is in force: the tun carries its ULA address and
+  // the v6 capture routes and policy rule are installed. False only when
+  // HostIpv6Available said no, in which case ipv6_detail says why; a v6 step
+  // failing on a host that CAN carry v6 fails the bring-up like a v4 step.
+  bool ipv6_captured = false;
+  std::string ipv6_detail;
   // PROVEN BY MEASUREMENT (Tunnel::VerifyEgressWitness: two real sockets whose
   // committed source bindings must disagree, plus a counter over the daemon's
   // real traffic that must be zero), never by a routing hypothetical. The
@@ -956,6 +998,11 @@ class Tunnel {
   int fd() const { return fd_; }
   const std::string& name() const { return name_; }
   const TunnelReport& report() const { return report_; }
+  // The tun's own addresses, per family, as configured. localAddrV6 is set
+  // even when the v6 half was skipped (it is the address that WOULD have been
+  // used); report().ipv6_captured says whether it is on the interface.
+  const std::string& localAddrV4() const { return localAddr_; }
+  const std::string& localAddrV6() const { return localAddr6_; }
   // The resolvers that ACTUALLY survived inet_pton and were handed to
   // resolved — not what the device asked for. This is what
   // FilterConfig::tunnel_resolvers must be filled from, so the pinned-DNS
@@ -977,15 +1024,11 @@ class Tunnel {
 
   // THE DNS UNDO, CALLABLE BEFORE THE LINK DIES.
   //
-  // It used to exist only inside ~Tunnel, and by the time ~Tunnel ran the tun
-  // was ALREADY GONE: TunnelHost hands tunnel_->fd() to urnet::newIoLoop, the
-  // Go loop owns that descriptor, and TunnelHost::StopInternalLocked closes the
-  // loop BEFORE it destroys this object. A non-persistent tun disappears with
-  // its last descriptor, so `resolvectl revert urnet0` was asked of a device
-  // that no longer existed and answered "No such device" on EVERY teardown in
-  // the journal. The revert was already first inside ~Tunnel — the ordering
-  // that was wrong was one level up, so the fix is an entry point the owner of
-  // the io loop can call while the link is still there.
+  // It used to exist only inside ~Tunnel. The Go IoLoop was stopped before the
+  // object was destroyed and could close its tun descriptor first, so
+  // `resolvectl revert urnet0` saw no device. The loop now owns an independent
+  // duplicate, but this early call remains the explicit ordering guarantee:
+  // DNS is restored before either owner starts closing the link.
   //
   // IDEMPOTENT, and ~Tunnel still calls it: an early call is the ordinary path,
   // the destructor call is the safety net for the throw/crash paths that never
@@ -1085,7 +1128,13 @@ class Tunnel {
 
   int fd_ = -1;
   std::string name_;
-  std::string localAddr_;  // the tun's own address; leg A compares against it
+  std::string localAddr_;   // the tun's own v4 address; leg 1 compares against it
+  std::string localAddr6_;  // the tun's own v6 address; leg 1v6 compares against it
+  // The v6 half is installed (HostIpv6Available at Configure). Decided once
+  // per bring-up so the policy rule, the routes and the witness agree.
+  bool ipv6Captured_ = false;
+  // v4 resolvers first, then v6: what every DNS tier hands the host, and what
+  // FilterConfig::tunnel_resolvers is filled from.
   std::vector<std::string> dnsServers_;
   bool rulesInstalled_ = false;
   // "resolvectl was given a per-link override that must be reverted". Tiers 2

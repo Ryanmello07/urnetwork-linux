@@ -55,6 +55,9 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "ExtenderImportSheet.hpp"
+#include "ExtenderSection.hpp"
+#include "ExtenderShareSheet.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "Ui.hpp"
@@ -69,7 +72,6 @@ class AccountUsageBar;
 // the spec defines them completely and the tree has none of them yet.
 class AccountAddAuthSheet;
 class AccountAuthCodeSheet;
-class AccountReferralNetworkSheet;
 class AccountDeleteSheet;
 
 // §0.4 — the terminal states of EVERY async field on this destination and its
@@ -143,7 +145,8 @@ class AccountPage : public Gtk::Box {
   // DIFFERENT event from the auth change that drives Load(). The window calls
   // this on DrawerEvent::DeviceLifecycle so "Attaching device controls…" is a
   // state the row LEAVES rather than one it is stuck in until the user
-  // navigates away and back.
+  // navigates away and back. The Extenders section rides the same event for
+  // the same reason: its view controller lives only while a device does.
   void RefreshClientId();
 
   // The spec's pane-fold table (window width in dip): 1500 / 900.
@@ -171,9 +174,14 @@ class AccountPage : public Gtk::Box {
   // The plan pane's primary action. Guests go to the create-account (guest
   // upgrade) flow, everyone else to the UpgradeSheet the window/drawer owns.
   std::function<void()> on_open_upgrade;
+  // A Pro network's plan label ("Pro") replays the Pro celebration (android
+  // AccountRootSubscription onPlanLabelTap); free and guest labels are inert.
+  std::function<void()> on_plan_label_tap;
   // The Redeem row: the existing RedeemCodeSheet (linux-reuse §2.15), which
   // needs the balance store the window owns.
   std::function<void()> on_open_redeem;
+  // the Referrals row: the window navigates to the Refer and earn page
+  std::function<void()> on_open_referrals;
   // The window's one-modal-at-a-time gate (§0.8): every sheet path asks first
   // and reports both edges.
   std::function<bool()> sheet_open;
@@ -190,22 +198,20 @@ class AccountPage : public Gtk::Box {
   void BuildCodesPane();
   void BuildProfileGroup(Gtk::Box& host);
   void BuildSecurityGroup(Gtk::Box& host);
-  void BuildReferralGroup(Gtk::Box& host);
+  void BuildReferralsRow(Gtk::Box& host);
+  void BuildExtendersGroup(Gtk::Box& host);
   void BuildDangerGroup(Gtk::Box& host);
 
   // ---- loads -----------------------------------------------------------------
   void LoadAccount();          // getNetworkUser: name, auth line, login methods
-  void LoadReferralInfo();     // getNetworkReferralCode: bonus row + summary
-  void LoadReferralNetwork();  // getReferralNetwork: the referral-network row
+  void LoadReferralInfo();     // getNetworkReferralCode: the Referrals row + pane A
   void ApplyClientId();        // DEVICE read, no round trip
 
   // ---- appliers (one writer per surface) -------------------------------------
   void ApplyAccountState(AccountFieldState state);
   void ApplyNetworkName(const std::string& name);  // the acknowledged name
   void ApplyAuthLine();
-  void ApplyReferralCode(AccountFieldState state);
-  void ApplyReferralSummary(AccountFieldState state);
-  void ApplyReferralNetworkValue(AccountFieldState state, const std::string& name);
+  void ApplyReferralsRow(AccountFieldState state);
   void RenderAuthMethods();
   void RenderBalanceCodes();
   void SettleNoSession();  // every panel on its real no-session state
@@ -230,8 +236,9 @@ class AccountPage : public Gtk::Box {
   void WireSheet(Gtk::Window& sheet);  // report the close edge exactly once
   void ShowAddAuthSheet();
   void ShowAuthCodeSheet();
-  void ShowReferralNetworkSheet();
   void ShowDeleteAccountSheet();
+  void ShowExtenderShareSheet();
+  void ShowExtenderImportSheet();
 
   // ---- helpers ---------------------------------------------------------------
   // !previewUi && IsLoggedIn(): the gate on every server question AND every
@@ -296,11 +303,10 @@ class AccountPage : public Gtk::Box {
   Gtk::Button* clientIdCopy_ = nullptr;
 
   // ---- pane B: referrals -----------------------------------------------------
-  Gtk::Label* bonusCodeValue_ = nullptr;
-  Gtk::Button* bonusCodeCopy_ = nullptr;
-  kit::PaneTwoLineRowButton referralNetworkRow_;
-  Gtk::Label* referralSummary_ = nullptr;
-  Gtk::Widget* royaltyBadge_ = nullptr;
+  kit::PaneTwoLineRowButton referralsRow_;  // opens the Refer and earn page
+
+  // ---- pane B: extenders (EXTENDER.md K6) -------------------------------------
+  ExtenderSection* extenderSection_ = nullptr;
 
   // ---- pane C ----------------------------------------------------------------
   Gtk::Box* codesPanel_ = nullptr;
@@ -327,7 +333,6 @@ class AccountPage : public Gtk::Box {
   AccountFlow accountFlow_;
   AccountFlow codesFlow_;
   AccountFlow referralFlow_;
-  AccountFlow referralNetworkFlow_;
   AccountFlow nameFlow_;
   AccountFlow resetFlow_;
   AccountFlow portalFlow_;
@@ -345,8 +350,9 @@ class AccountPage : public Gtk::Box {
   bool sheetShowing_ = false;  // this page's half of the one-modal gate
   std::unique_ptr<AccountAddAuthSheet> addAuthSheet_;
   std::unique_ptr<AccountAuthCodeSheet> authCodeSheet_;
-  std::unique_ptr<AccountReferralNetworkSheet> referralSheet_;
   std::unique_ptr<AccountDeleteSheet> deleteSheet_;
+  std::unique_ptr<ExtenderShareSheet> extenderShareSheet_;
+  std::unique_ptr<ExtenderImportSheet> extenderImportSheet_;
   std::unique_ptr<Gtk::Window> confirmDialog_;  // the remove-login-method confirm
 };
 

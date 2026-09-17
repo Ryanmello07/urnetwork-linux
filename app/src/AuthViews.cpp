@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "AuthViews.hpp"
 
+#include "ReferralRoyalty.hpp"
+
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "Ui.hpp"
@@ -130,6 +132,22 @@ void CreateNetworkPage::BuildUi() {
   termsRow->append(*termsLabel);
   card->append(*termsRow);
 
+  // the marketing opt-out, on by default: one short row under the terms
+  auto* updatesRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+  productUpdates_ = Gtk::make_managed<Gtk::Switch>();
+  productUpdates_->set_valign(Gtk::Align::CENTER);
+  productUpdates_->set_active(true);
+  updatesRow->append(*productUpdates_);
+  auto* updatesLabel = Gtk::make_managed<Gtk::Label>(
+      T_("periodic_product_updates", "Periodic product updates"));
+  updatesLabel->add_css_class("dim-label");
+  updatesLabel->add_css_class("caption");
+  updatesLabel->set_wrap(true);
+  updatesLabel->set_xalign(0);
+  updatesLabel->set_hexpand(true);
+  updatesRow->append(*updatesLabel);
+  card->append(*updatesRow);
+
   // bonus referral code: a flat toggle revealing the entry + apply button
   referralToggle_ = Gtk::make_managed<Gtk::Button>(T_("add_referral_code", "Add referral code"));
   referralToggle_->add_css_class("flat");
@@ -169,14 +187,14 @@ void CreateNetworkPage::BuildUi() {
   referralRevealer_->set_child(*referralBox);
   card->append(*referralRevealer_);
 
+  // referral accepted: the gold king-frog line (referral royalty, matching
+  // the ur.io referral panel and the android/apple gold chips)
   referralAppliedRow_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
-  auto* appliedCheck = Gtk::make_managed<Gtk::Image>();
-  appliedCheck->set_from_icon_name("emblem-ok-symbolic");
-  appliedCheck->add_css_class("ur-value-on");
-  referralAppliedRow_->append(*appliedCheck);
-  auto* appliedLabel =
-      Gtk::make_managed<Gtk::Label>(T_("referral_bonus_applied_2", "Referral Bonus applied"));
-  appliedLabel->add_css_class("dim-label");
+  auto* appliedLabel = Gtk::make_managed<Gtk::Label>();
+  appliedLabel->set_markup("<span foreground='" + HexForMarkup(kReferralGoldLight) + "'>" +
+                           Glib::Markup::escape_text(
+                               T_("referral_bonus_applied_2", "Referral Bonus applied")) +
+                           "</span>");
   appliedLabel->add_css_class("caption");
   referralAppliedRow_->append(*appliedLabel);
   referralAppliedRow_->set_visible(false);
@@ -226,8 +244,9 @@ void CreateNetworkPage::Configure(Mode mode, const std::string& userAuth) {
                     nullptr);
   SetCreating(false);
 
-  // wallet sign-up authenticates with the signed challenge: no email/password
-  const bool wantsUserAuth = mode != Mode::Wallet;
+  // wallet and sso sign-ups authenticate with the signed challenge / the
+  // identity token: no email/password
+  const bool wantsUserAuth = mode != Mode::Wallet && mode != Mode::Sso;
   email_->set_visible(wantsUserAuth);
   emailCaption_->set_visible(wantsUserAuth);
   password_->set_visible(wantsUserAuth);
@@ -324,11 +343,20 @@ void CreateNetworkPage::OnValidateReferral() {
         referralRevealer_->set_reveal_child(false);
         referralAppliedRow_->set_visible(true);
         referralToggle_->set_label(T_("edit_referral_code", "Edit referral code"));
+        // the royal welcome: the gold king-frog moment for the referred
+        if (auto* root = dynamic_cast<Gtk::Window*>(get_root())) {
+          ShowRoyalWelcomeSheet(*root);
+        }
       } else if (referralCapped_) {
         referralSupporting_->set_text(
             T_("referral_code_capped", "This code has been used up"));
-      } else {
+      } else if (ok) {
         referralSupporting_->set_text(T_("invalid_referral_code", "This code is not valid"));
+      } else {
+        // the check itself failed (no response, or the api refused the call):
+        // say so instead of calling a code the server never judged
+        referralSupporting_->set_text(
+            T_("something_went_wrong", "Something went wrong."));
       }
     });
   });
@@ -338,7 +366,7 @@ void CreateNetworkPage::UpdateFormValid() {
   // mac validateForm: name available, terms agreed, and (for the password auth
   // type) a 12+ character password
   bool valid = nameState_ == NameState::Valid && termsSwitch_->get_active();
-  if (mode_ != Mode::Wallet) {
+  if (mode_ != Mode::Wallet && mode_ != Mode::Sso) {
     valid = valid && !TrimWhitespace(email_->get_text()).empty() &&
             std::string(password_->get_text()).size() >= kMinPasswordLength;
   }
@@ -373,6 +401,9 @@ void CreateNetworkPage::OnContinue() {
       (referralValid_ && !referralCapped_) ? TrimWhitespace(referralEntry_->get_text())
                                            : std::string();
 
+  // the marketing opt-out rides on the create call (absent = opted in)
+  host_.SetProductUpdatesOptOut(productUpdates_ && !productUpdates_->get_active());
+
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
   auto done = [this, epoch, issued, userAuth](AuthResult r) {
@@ -401,6 +432,9 @@ void CreateNetworkPage::OnContinue() {
       break;
     case Mode::Wallet:
       host_.CreateNetworkWithPendingWallet(networkName, referralCode, done);
+      break;
+    case Mode::Sso:
+      host_.CreateNetworkWithPendingSso(networkName, referralCode, done);
       break;
     case Mode::UpgradeGuest:
       // UpgradeGuestArgs has no referral_code field — the bonus only applies

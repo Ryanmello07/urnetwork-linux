@@ -2,6 +2,7 @@
 #include "WalletConnect.hpp"
 
 #include <gio/gio.h>
+#include <glibmm/main.h>
 
 #include <cstdio>
 #include <map>
@@ -10,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include "Config.hpp"
+#include "SsoBridge.hpp"
 
 namespace urnw {
 namespace {
@@ -150,7 +152,8 @@ void WalletConnect::SignMessage(const std::string& message) {
   OpenUrl(url);
 }
 
-void WalletConnect::SignInWithBittensor(const std::string& message) {
+void WalletConnect::SignInWithBittensor(const std::string& message,
+                                        const std::string& purpose) {
   // One hop: the bridge connects the substrate wallet AND signs in the same page
   // load, and sr25519 signatures are public — so there is no ephemeral keypair,
   // no session, and no shared secret on this path.
@@ -166,6 +169,7 @@ void WalletConnect::SignInWithBittensor(const std::string& message) {
   std::string url = std::string(kWebBridge) + "?provider=" + Host(Provider::Bittensor) +
                     "&method=signMessage&message=" + Esc(message) +
                     "&redirect_link=" + Esc(redirect);
+  if (!purpose.empty()) url += "&purpose=" + Esc(purpose);
   // The WalletConnect Cloud project id (Config.hpp) lets the bridge pair with a
   // wallet app over a QR code. Without one the bridge falls back to injected
   // wallets only (browser extension) — so an empty id is sent as no param at all.
@@ -174,9 +178,75 @@ void WalletConnect::SignInWithBittensor(const std::string& message) {
   OpenUrl(url);
 }
 
+void WalletConnect::SignInWithApple(const std::string& apiUrl, const std::string& state,
+                                    const std::string& nonce) {
+  // Debug hook: URNETWORK_SSO_SIMULATE=1 (or =<token>) skips the browser and
+  // posts the return the api's callback would send — an unsigned token
+  // carrying the nonce, which the server rejects — so the whole return path
+  // (state, nonce, the login call, the error surface) runs without an Apple
+  // account
+  if (const char* sim = g_getenv("URNETWORK_SSO_SIMULATE")) {
+    const std::string given(sim);
+    const std::string token = given.find('.') != std::string::npos
+                                  ? given
+                                  : sso::SimulatedIdentityToken(nonce, "simulated");
+    const std::string uri = std::string("urnetwork://") + sso::kAppleReturnHost +
+                            sso::kAppleReturnPath + "?state=" + Esc(state) +
+                            "&id_token=" + Esc(token);
+    Glib::signal_timeout().connect_once([this, uri] { HandleDeepLink(uri); }, 400);
+    return;
+  }
+  if (apiUrl.empty()) {
+    if (on_error) on_error("no api url for the Apple sign-in callback");
+    return;
+  }
+  OpenUrl(sso::AppleAuthorizeUrl(apiUrl, state, nonce));
+}
+
+void WalletConnect::SignInWithGoogle(const std::string& apiUrl, const std::string& state,
+                                     const std::string& nonce) {
+  // the same debug hook as Apple: URNETWORK_SSO_SIMULATE posts the return the
+  // api's callback would send, so the whole return path runs without a Google
+  // account (the unsigned token is rejected by the server)
+  if (const char* sim = g_getenv("URNETWORK_SSO_SIMULATE")) {
+    const std::string given(sim);
+    const std::string token = given.find('.') != std::string::npos
+                                  ? given
+                                  : sso::SimulatedIdentityToken(nonce, "simulated");
+    const std::string uri = std::string("urnetwork://") + sso::kOAuthReturnHost +
+                            sso::kGoogleReturnPath + "?state=" + Esc(state) +
+                            "&id_token=" + Esc(token);
+    Glib::signal_timeout().connect_once([this, uri] { HandleDeepLink(uri); }, 400);
+    return;
+  }
+  if (apiUrl.empty()) {
+    if (on_error) on_error("no api url for the Google sign-in callback");
+    return;
+  }
+  OpenUrl(sso::GoogleAuthorizeUrl(apiUrl, state, nonce));
+}
+
+void WalletConnect::HandleOAuthReturn(const std::string& url) {
+  // urnetwork://oauth/apple?state=…&id_token=…  (or &error=…), and the same
+  // shape on urnetwork://oauth/google: the path names the provider
+  const std::string provider = sso::OAuthReturnProvider(sso::UrlPath(url));
+  if (provider.empty()) {
+    if (on_error) on_error("unknown oauth callback");
+    return;
+  }
+  const auto q = url.find('?');
+  const sso::Return r =
+      sso::ParseOAuthReturn(provider, q == std::string::npos ? std::string() : url.substr(q + 1));
+  if (on_sso) on_sso(r.provider, r.authJwt, r.state, r.error);
+}
+
 bool WalletConnect::HandleDeepLink(const std::string& url) {
   std::string host, query;
   SplitUrl(url, host, query);
+  if (host == sso::kOAuthReturnHost) {
+    HandleOAuthReturn(url);
+    return true;
+  }
   auto provider = ProviderForHost(host);
   if (!provider) return false;  // not a wallet callback
   if (*provider == Provider::Bittensor) {

@@ -429,12 +429,23 @@ UR_TEST(controlStatusReplyRoundTrip) {
   status.rpc_port = ctl::kDeviceRpcPort;
   status.client_id = "client-1";
   status.error = "";
+  status.ipv6_blocked = true;
+  status.ipv6_captured = true;
   const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
       ctl::MakeReply(4, true, nlohmann::json(status))))->get<ctl::StatusReply>();
   UR_EXPECT_TRUE(back.tunnel_state == ctl::TunnelState::Up);
   UR_EXPECT_EQ(12025, back.rpc_port);
   UR_EXPECT_TRUE(back.client_id == "client-1");
   UR_EXPECT_TRUE(back.error.empty());
+  UR_EXPECT_TRUE(back.ipv6_blocked);
+  UR_EXPECT_TRUE(back.ipv6_captured);
+
+  // An older daemon sends no ipv6_captured: silence understates protection.
+  nlohmann::json older = nlohmann::json(status);
+  older.erase("ipv6_captured");
+  const auto fromOlder = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(5, true, older)))->get<ctl::StatusReply>();
+  UR_EXPECT_FALSE(fromOlder.ipv6_captured);
 }
 
 UR_TEST(controlSetProvideRoundTrip) {
