@@ -542,6 +542,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/SolanaWalletPresentationTest.cpp',
     'tests/WalletBridgeRouteTest.cpp',
     'tests/LicensesPresentationTest.cpp',
+    'tests/EarningsPageTeardownTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -555,6 +556,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # still has a caller. A predicate with no call site is this
               # project's most-repeated defect, and it is invisible to a test
               # that only exercises the predicate.
+              # EarningsPageTeardownTest reads EarningsPage.cpp the same way:
+              # its destructor must touch no widget (issue #13).
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
