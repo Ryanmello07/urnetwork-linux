@@ -1236,7 +1236,10 @@ EarningsPage::~EarningsPage() {
   claimFlow_.timer.disconnect();
   pointsPublicFlow_.timer.disconnect();
   pointsScrollConn_.disconnect();
-  ClosePointsBoard(/*deviceAlive=*/true);
+  // controller only: by now the window's teardown may have disposed the
+  // page's widgets, so nothing here may touch them (issue #13: rebuilding
+  // the rows on a disposed Gtk::Box segfaulted every quit)
+  ReleasePointsBoard(/*deviceAlive=*/true);
   rankingFlow_.timer.disconnect();
   legacyFlow_.timer.disconnect();
   removeSolanaFlow_.timer.disconnect();
@@ -4040,6 +4043,14 @@ void EarningsPage::EnsurePointsBoard() {
 }
 
 void EarningsPage::ClosePointsBoard(bool deviceAlive) {
+  ReleasePointsBoard(deviceAlive);
+  if (pointsRows_ != nullptr) RebuildPointsRows();
+  RenderPointsHeader();
+  RenderPointsFooter();
+  UpdatePointsIndicator();
+}
+
+void EarningsPage::ReleasePointsBoard(bool deviceAlive) {
   pointsSub_.reset();  // unsubscribes
   if (pointsVc_) {
     // the controller must be closed on the device that opened it; a device
@@ -4062,10 +4073,6 @@ void EarningsPage::ClosePointsBoard(bool deviceAlive) {
   pointsFirstVisible_ = 1;
   pointsSeekPending_ = false;
   pointsAnchorConn_.disconnect();
-  if (pointsRows_ != nullptr) RebuildPointsRows();
-  RenderPointsHeader();
-  RenderPointsFooter();
-  UpdatePointsIndicator();
 }
 
 void EarningsPage::ReadPointsBoard() {

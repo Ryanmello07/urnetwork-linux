@@ -269,6 +269,9 @@ class EarningsPage : public Gtk::Box {
   // device is kept.
   void EnsurePointsBoard();
   void ClosePointsBoard(bool deviceAlive);
+  // ClosePointsBoard without the redraw: closes the controller and resets the
+  // board's state, touching no widget (the destructor's half)
+  void ReleasePointsBoard(bool deviceAlive);
   // Mirrors the controller into the page: rows (value-compared, so a no-op
   // event does not re-render the table), sort, loading, end, error, `me`.
   void ReadPointsBoard();
