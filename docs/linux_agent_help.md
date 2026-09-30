@@ -2231,11 +2231,12 @@ but note nfpm's version/release split at the last hyphen, §9.3.)
 ### 11.2 SDK job (adapt `windows:.github/workflows/beta-build.yml` job 1, ubuntu-latest)
 
 1. Derive version (above); export as job outputs.
-2. Sibling checkout: `Ryanmello07/urnetwork-sdk@beta/algorithm-dpi` into `sdk/`,
-   `git clone --depth 1 --branch beta/algorithm-dpi
-   https://github.com/Ryanmello07/connect.git connect`, depth-1 `urnetwork/glog` +
-   `urnetwork/goidenticons` — all siblings, matching the `replace ../..` layout. (The Windows
-   workflow pins sdk/connect to `beta/algorithm-dpi` regardless of triggering branch; a copy
+2. Sibling checkout: the official `urnetwork/sdk` into `sdk/` and
+   `git clone --depth 1 https://github.com/urnetwork/connect.git connect`, depth-1
+   `urnetwork/glog` + `urnetwork/goidenticons` — all siblings, matching the `replace ../..`
+   layout. Check out official `urnetwork` repos only, never a personal fork. (The fork's
+   Windows workflow pinned its own sdk/connect forks to `beta/algorithm-dpi` regardless of
+   triggering branch; a copy
    of the workflow must also exist on the default branch or GitHub never shows the
    Run-workflow button. Triggers: push + PR on `beta/custom-server` AND `beta/algorithm-dpi`
    + `workflow_dispatch`.)
@@ -2284,9 +2285,11 @@ GitHub's per-asset `digest` field.
 
 ### 11.5 GUI auto-update (mirror `UpdateChecker` semantics)
 
-- Poll `https://api.github.com/repos/<kUpdateRepo>/releases?per_page=15` — for Windows
-  `kUpdateRepo = "Ryanmello07/urnetwork-windows"` (`Config.h:71` — "the whole upstream
-  handoff is this one line"; give Linux the same single-line config). Cadence: **30 s after
+- Poll `https://api.github.com/repos/<kUpdateRepo>/releases?per_page=15` — the fork's
+  Windows build had `kUpdateRepo = "Ryanmello07/urnetwork-windows"` (`Config.h:71` — "the
+  whole upstream handoff is this one line"). Give Linux the same single-line config, but
+  pointed at the official release repo, `urnetwork/build`: never a personal fork as an
+  update source. Cadence: **30 s after
   launch, then every 6 h**, plus manual triggers; GitHub requires a User-Agent.
 - Rank tags with `ParseReleaseCode`; offer the newest release whose code outranks the running
   code, but ONLY if it carries the own-arch asset with the exact name grammar AND that same
