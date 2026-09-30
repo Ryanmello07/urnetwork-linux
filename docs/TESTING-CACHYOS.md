@@ -367,8 +367,10 @@ Expected on Arch, and each one is an assumption worth confirming rather than bel
 Asset names are a **contract** — the build pipeline asserts them, and the in-app updater
 parses them. Do not rename the files.
 
-Repo: `Ryanmello07/urnetwork-linux`. Current beta at time of writing:
-`v2026.8.16-1020679030-beta`, i.e. `VERSION = 2026.8.16-1020679030-beta`.
+Releases are published on the official `urnetwork/build` repo
+(<https://github.com/urnetwork/build/releases>); the source is `urnetwork/linux`. Only
+download from those official `urnetwork` repos. Current release at time of writing:
+`v2026.9.26-1056759680`, i.e. `VERSION = 2026.9.26-1056759680`.
 
 | Asset | You need it for |
 |---|---|
@@ -377,19 +379,20 @@ Repo: `Ryanmello07/urnetwork-linux`. Current beta at time of writing:
 | `URnetwork-<VERSION>-amd64.AppImage` | The GUI, AppImage channel. |
 | `URnetwork-<VERSION>-amd64.AppImage.zsync` | Update control file. Attached for mirroring only — GitHub Releases answers zsync's multi-range requests with HTTP 501, so the in-app updater uses the self-hosted copy. You do not need it to test. |
 | `urnetwork-daemon_<VERSION>_amd64.deb` | **Ignore.** No use on Arch. |
-| `URnetwork-<VERSION>-amd64.flatpak` | The GUI, Flatpak channel — **if the release has it.** This asset is newly added by the pipeline and is attached *after* the release is created, so it may be missing from the build you download. §10 covers both cases. |
+| `URnetwork-<VERSION>-amd64.flatpak` | The GUI, Flatpak channel — **if the release has it.** The pipeline builds the Flatpak for its build machine's architecture only, so a release may carry just the `arm64` bundle and no `amd64` one. §10 covers both cases. |
 
 ```bash
 mkdir -p ~/urnetwork-test && cd ~/urnetwork-test
 
 # Set this once; every later step in this document reuses $V.
-V=2026.8.16-1020679030-beta
+V=2026.9.26-1056759680
 
-# With the GitHub CLI (easiest):
-gh release download "v$V" -R Ryanmello07/urnetwork-linux -p '*'
+# With the GitHub CLI (easiest). The release carries every platform's assets,
+# so only the amd64/x86_64 Linux ones are fetched:
+gh release download "v$V" -R urnetwork/build -p '*-amd64.*' -p '*-x86_64.*'
 
 # Or by hand:
-B=https://github.com/Ryanmello07/urnetwork-linux/releases/download/v$V
+B=https://github.com/urnetwork/build/releases/download/v$V
 curl -fLO "$B/urnetwork-daemon-$V-amd64.install.tar.gz"
 curl -fLO "$B/URnetwork-$V-amd64.AppImage"
 
@@ -461,7 +464,7 @@ $D --version
 Expected shape (**FROM SOURCE**):
 
 ```
-urnetworkd 2026.8.16-1020679030-beta (control protocol 1, sdk <sdk-version>)
+urnetworkd 2026.9.26-1056759680 (control protocol 1, sdk <sdk-version>)
 ```
 
 Write the `sdk <sdk-version>` string down — §7.6 needs it verbatim.
@@ -482,7 +485,7 @@ to stdout, so a bare `> file` redirect silently loses exactly the part you came 
 Expected shape (**FROM SOURCE**; paths and the cgroup line will differ on your box):
 
 ```
-urnetworkd 2026.8.16-1020679030-beta (control protocol 1, sdk <sdk-version>)
+urnetworkd 2026.9.26-1056759680 (control protocol 1, sdk <sdk-version>)
 control socket: /run/urnetwork/control.sock
 state dir:      /var/lib/urnetwork
 log dir:        /var/log/urnetwork
@@ -551,7 +554,7 @@ sudo $D --selftest-egress ; echo "exit=$?"
 Expected output on a **pass** (**FROM SOURCE**; the `[…]` values will be yours):
 
 ```
-urnetworkd 2026.8.16-1020679030-beta — egress socket-marker self-test
+urnetworkd 2026.9.26-1056759680 — egress socket-marker self-test
 kernel Linux 6.17.x-cachyos
 
 Question: on THIS kernel, does a cgroup-BPF program attached at
@@ -735,7 +738,7 @@ cat /etc/resolv.conf
 ### 7.1 Put the AppImage where the launcher expects it
 
 ```bash
-V=2026.8.16-1020679030-beta                  # if this shell does not already have it
+V=2026.9.26-1056759680                       # if this shell does not already have it
 mkdir -p ~/.local/lib/urnetwork
 install -m 0755 ~/urnetwork-test/URnetwork-$V-amd64.AppImage \
   ~/.local/lib/urnetwork/URnetwork.AppImage
@@ -1093,7 +1096,7 @@ follow your session (Wayland stays Wayland).
 **If the release has `URnetwork-<VERSION>-amd64.flatpak`:**
 
 ```bash
-V=2026.8.16-1020679030-beta                  # if this shell does not already have it
+V=2026.9.26-1056759680                       # if this shell does not already have it
 flatpak install --user ~/urnetwork-test/URnetwork-$V-amd64.flatpak
 ```
 
@@ -1103,7 +1106,7 @@ absent), build it from the checkout. This takes a while and pulls the GNOME 49 r
 ```bash
 sudo pacman -S --needed flatpak flatpak-builder
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-git clone https://github.com/Ryanmello07/urnetwork-linux.git
+git clone https://github.com/urnetwork/linux.git urnetwork-linux
 cd urnetwork-linux
 ./packaging/make-flatpak.sh --install
 ```
