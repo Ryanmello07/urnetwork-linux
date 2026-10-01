@@ -1936,10 +1936,12 @@ replacing it, keeping its version/SDK-match enforcement.
   sets GTK_THEME/GDK_BACKEND/GSK_RENDERER (Mesa answer: host-provide + `GSK_RENDERER=cairo`
   user fallback).
 - Normative artifact names (`linux:MIGRATION.md`): `urnetwork-daemon_<v>_<arch>.deb`,
-  `urnetwork-daemon-<v>-<arch>.install.tar.gz`, `URnetwork-<v>-<arch>.AppImage` (+ `.zsync`,
-  `.sha256`, optional `.asc`); arches amd64+arm64.
-- **zsync must be self-hosted** — GitHub Releases returns **HTTP 501 on zsync's multi-range
-  requests**; embedded URL `https://get.ur.network/URnetwork-latest-<arch>.AppImage.zsync`.
+  `urnetwork-daemon-<v>-<arch>.install.tar.gz`, `URnetwork-<v>-<arch>.AppImage` (+
+  `.sha256`, optional `.asc`); arches amd64+arm64. No `.zsync`: the AppImage embeds no
+  update information; the GUI updates through the in-app checker
+  (`app/src/UpdateChecker.cpp`, polling the stable urnetwork/linux releases).
+- **zsync was ruled out** — GitHub Releases returns **HTTP 501 on zsync's multi-range
+  requests**, and the self-hosted endpoint the old embedded URL named was never stood up.
   zsync deltas ≈ 34% reuse at best, ~0% for the Go .so; the updater writes a NEW file (breaks
   `Exec=`/autostart unless the launcher pattern is used); zsync has no version ordering (hash
   compare can downgrade). `appimagetool --sign` is not a trust story — detached `.asc` for

@@ -61,8 +61,11 @@ urnetwork-daemon_<version>_<arch>.deb              arch = amd64 | arm64
 urnetwork-daemon-<version>-<arch>.install.tar.gz
 urnetwork-daemon-<version>-<pacmanarch>.pkg.tar.zst   pacmanarch = x86_64 | aarch64
 URnetwork-<version>-<arch>.AppImage
-URnetwork-<version>-<arch>.AppImage.zsync
 ```
+
+No `.AppImage.zsync` sidecar: the AppImage embeds no update information (GitHub
+Releases cannot serve zsync's multi-range requests), and the GUI updates itself
+through the in-app checker (`app/src/UpdateChecker.cpp`, README "Updates").
 
 The pacman package is named with pacman's own arch spelling, for the same reason the
 `.rpm` is named with rpm's: a package whose filename disagrees with the arch in its own
@@ -174,8 +177,8 @@ negotiation at all** — `sdk/device_rpc.go`'s `DeviceRemoteSyncRequest` carries
 `InstanceId` (pairing, not versioning) and listener id lists. That was harmless on
 every other platform because both halves ship in one artifact, so the two SDK copies
 are byte-identical. **Linux is the first platform where they can drift**: the GUI
-AppImage bundles its own `libURnetworkSdk.so` and self-updates via zsync, while the
-daemon's copy updates via apt or `install.sh`.
+AppImage bundles its own `libURnetworkSdk.so` and self-updates through the in-app
+checker, while the daemon's copy updates via apt or `install.sh`.
 
 The RPC is gob-encoded Go structs, and gob fails *quietly* in the cases that matter —
 adding or removing a field is tolerated, but **a renamed field silently decodes as

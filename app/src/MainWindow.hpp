@@ -22,6 +22,7 @@
 #include "EarningsPage.hpp"
 #include "NetworkPage.hpp"
 #include "SettingsPage.hpp"
+#include "UpdateChecker.hpp"
 #include "SupportPage.hpp"
 #include "LocationOverride.hpp"
 #include "LoginCarousel.hpp"
@@ -246,6 +247,10 @@ class MainWindow : public Gtk::ApplicationWindow {
   EarningsPage* earningsPage_ = nullptr;
   AccountPage* accountPage_ = nullptr;
   ReferralsPage* referralsPage_ = nullptr;  // reached from Account's Referrals row
+  // The in-app updater (UpdateChecker.hpp): built after the pages, bound to
+  // Settings (the notice + the auto-check toggle) and Developer (the manual
+  // check), then started. Its worker is joined when the window goes.
+  std::unique_ptr<UpdateChecker> updates_;
   // Account's Redeem row opens the same sheet the drawer owns, but the
   // drawer exposes no opener, so the window keeps its own (lazily built).
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;

@@ -819,12 +819,19 @@ void DeveloperPage::BuildIntroCard() {
   // needs no session, device or service).
   checkUpdatesBtn_ = MakeActionButton(T_("dev_check_updates", "Check for updates"), false);
   checkUpdatesBtn_->signal_clicked().connect([this] {
-    // TODO(sdk-wiring): urnw::pages::Updates().CheckNow() / Updates().Current()
-    // — this tree carries no UpdateChecker at all, so there is nothing to run
-    // and nothing to replay into ApplyUpdateCheck. Report the real outcome (the
-    // check did not run) instead of a fabricated "no update"; the app log
-    // carries the reason.
-    g_warning("developer: update check unavailable (no UpdateChecker in this build)");
+    if (updates_) {
+      // The outcome arrives through ApplyUpdateCheck (the window replays
+      // every snapshot the checker publishes); the line says so meanwhile.
+      updates_->CheckNow();
+      SetLineOrCollapse(updateCheckText_,
+                        T_("dev_update_checking", "Checking for updates…"), 12,
+                        &kUrTextMuted);
+      return;
+    }
+    // No checker bound (a preview build): report the real outcome (the check
+    // did not run) instead of a fabricated "no update"; the app log carries
+    // the reason.
+    g_warning("developer: update check unavailable (no UpdateChecker bound)");
     SetLineOrCollapse(updateCheckText_,
                       T_("dev_update_check_failed",
                          "The update check failed — see the app log."),
@@ -855,6 +862,43 @@ void DeveloperPage::BuildIntroCard() {
   // page on windows (a SEPARATE observer slot from the shell's own handler).
   // The linux SdkHost exposes no mode-notice surface, so nothing is bound here
   // and no notice is synthesized.
+}
+
+void DeveloperPage::SetUpdateChecker(UpdateChecker* checker) { updates_ = checker; }
+
+// The update-check line, in the words of the last completed check. NeverRan
+// and InFlight leave the line as the click wrote it (collapsed, or
+// "Checking…"): a periodic check's in-flight state is nothing to announce.
+void DeveloperPage::ApplyUpdateCheck(const UpdateChecker::Snapshot& snap) {
+  if (!updateCheckText_) return;
+  Glib::ustring text;
+  switch (snap.lastCheck) {
+    case UpdateChecker::CheckOutcome::NeverRan:
+    case UpdateChecker::CheckOutcome::InFlight:
+      return;
+    case UpdateChecker::CheckOutcome::NoUpdate:
+      text = snap.newestVersion.empty()
+                 ? Glib::ustring(T_("dev_update_no_releases",
+                                    "No stable release has been published yet."))
+                 : Glib::ustring(Format(T_("dev_update_up_to_date",
+                                           "Up to date. Newest release: v{}"),
+                                        snap.newestVersion));
+      break;
+    case UpdateChecker::CheckOutcome::UpdateFound:
+      text = Format(T_("dev_update_found", "Update available: v{} — see Settings."),
+                    snap.version);
+      break;
+    case UpdateChecker::CheckOutcome::DevBuild:
+      text = Format(T_("dev_update_dev_build",
+                       "Development build: the newest release is v{}, and a development "
+                       "build is never updated automatically."),
+                    snap.newestVersion);
+      break;
+    case UpdateChecker::CheckOutcome::Failed:
+      text = T_("dev_update_check_failed", "The update check failed — see the app log.");
+      break;
+  }
+  SetLineOrCollapse(updateCheckText_, text, 12, &kUrTextMuted);
 }
 
 void DeveloperPage::BuildMeasurementsCard() {

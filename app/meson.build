@@ -31,6 +31,12 @@ adwaita = dependency('libadwaita-1', required : get_option('gui'))  # libadwaita
 # Secret Service backing for the GUI-owned RPC credentials (upstream's
 # RpcSessionStore/SecretServiceRpcSessionStore). GUI-only, like gtkmm.
 libsecret = dependency('libsecret-1', required : get_option('gui'))
+# The in-app updater's HTTP client (src/UpdateChecker.cpp): the release list
+# and the AppImage download, over GIO's TLS (glib-networking, which the
+# AppImage already bundles with the GLib family). GUI-only, like gtkmm --
+# the daemon never fetches anything. Ubuntu 24.04 ships it as
+# libsoup-3.0-dev; the GNOME 49 Flatpak runtime carries it.
+libsoup = dependency('libsoup-3.0', required : get_option('gui'))
 build_gui = gtkmm.found() and adwaita.found()
 
 gio     = dependency('gio-2.0')         # raw GDBus C API for the SNI tray (also brings glib/gobject)
@@ -116,7 +122,7 @@ pkgdata_args = ['-DUR_PKGDATADIR="' + pkgdatadir + '"']
 # Ubuntu 24.04 ships it as libwebkitgtk-6.0-dev.
 webkit = dependency('webkitgtk-6.0', required : false)
 webkit_args = []
-gui_deps = [gtkmm, adwaita, libsecret, gio, json, threads, sdk_lib]
+gui_deps = [gtkmm, adwaita, libsecret, libsoup, gio, json, threads, sdk_lib]
 if webkit.found() and build_gui
   gui_deps += webkit
   webkit_args = ['-DUR_HAVE_WEBKIT']
@@ -205,6 +211,7 @@ executable('urnetwork-gui',
     'src/SupportPage.cpp',
     'src/NetworkPage.cpp',
     'src/SettingsPage.cpp',
+    'src/UpdateChecker.cpp',
     'src/LicensesSheet.cpp',
     'src/DeveloperPage.cpp',
     'src/EarningsPage.cpp',
@@ -505,7 +512,10 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # and the statistics sections' visibility, the compact count and count-rate
 # labels, the extender share/import decisions, the Solana payout wallet's card
 # and connect-sheet rules, the wallet bridge's return routing, the dual-stack
-# tunnel policy and v6 capture set, and the daemon control protocol: framing,
+# tunnel policy and v6 capture set, the updater's release selection (the one
+# official repo, the tag grammar, the own-arch asset and its digest, the
+# install-kind probe, the launch throttle) and its wiring, and the daemon
+# control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
 # authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
@@ -543,6 +553,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/WalletBridgeRouteTest.cpp',
     'tests/LicensesPresentationTest.cpp',
     'tests/EarningsPageTeardownTest.cpp',
+    'tests/ReleaseSelectionTest.cpp',
+    'tests/UpdateWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
