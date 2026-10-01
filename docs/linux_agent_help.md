@@ -1885,8 +1885,12 @@ replacing it, keeping its version/SDK-match enforcement.
   Device identity persisted as `client_key_seed.bin` / `provide_cert.pem` / `provide_key.pem`
   **0600 under `/var/lib/urnetwork`** — the same file-per-part scheme as the Windows
   TunnelController. GUI storage `$XDG_DATA_HOME/urnetwork`, logs `$XDG_STATE_HOME/urnetwork`.
-- `linux:app/src/NetworkSpaceConfig.hpp` (shared GUI+daemon): `kUrHostName="ur.network"`,
-  `kUrEnvName="main"`, link host `ur.io`, migration host `bringyour.com`, wallet `circle`,
+- `linux:app/src/NetworkSpaceBootstrap.hpp` (SDK-free, unit-tested) +
+  `NetworkSpaceConfig.hpp` (shared GUI+daemon): `kUrHostName="bringyour.com"`,
+  `kUrLegacyHostName="ur.network"` (the cancelled *.ur.network migration; every launch moves
+  a space stored under it to `bringyour.com/main` via `migrateNetworkSpace` before any
+  Device/NetworkSpace, in both SdkHost::Initialize and the daemon's TunnelHost),
+  `kUrEnvName="main"`, link host `ur.io`, NO migration host, wallet `circle`,
   `sso_google=false`; device spec `"linux amd64"|"linux arm64"`; device description =
   hostname.
 - meson options: `sdk_arch` (amd64|arm64 → `third_party/urnetwork-sdk/<arch>/`),
@@ -2361,7 +2365,8 @@ any client is potentially a provider. **Free tier with a data cap**; "supporter"
 cap; **Pro** is a separate entitlement with reserved gold. **Multi-hop/multi-exit**: the
 connect window races and load-balances flows across many provider exits — it is NOT a
 single-tunnel-single-server VPN, and NOT WireGuard. Network spaces: main space host
-`ur.network` env `main`; beta test space `beta-test.net`; **JWTs are per-space** — reading
+`bringyour.com` env `main` (the `ur.network` key is retired; the planned *.ur.network move was
+cancelled); beta test space `beta-test.net`; **JWTs are per-space** — reading
 credentials for the wrong space silently yields logged-out state (cost a full night on
 Windows); the active space is persisted under app storage (`storage/.network_spaces`) — read
 it, never hardcode. Website ur.io; auth: email, SMS, Google, Apple (Google on desktop is

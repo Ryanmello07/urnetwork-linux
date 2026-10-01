@@ -4,7 +4,9 @@
 // build their NetworkSpace independently — the GUI for the api/auth surface,
 // the daemon for its DeviceLocal — and they MUST agree on these values or the
 // DeviceRemote would sync against a device registered in a different space.
-// Header-only; needs the SDK (both consumers link it) but no GTK/glib.
+// The host/env constants and the bootstrap logic live in the SDK-free
+// NetworkSpaceBootstrap.hpp (unit-tested); this header binds them to the SDK
+// types. Header-only; needs the SDK (both consumers link it) but no GTK/glib.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -15,10 +17,10 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "NetworkSpaceBootstrap.hpp"
+
 namespace urnw {
 
-inline constexpr const char* kUrHostName = "ur.network";
-inline constexpr const char* kUrEnvName = "main";
 // matches the -Dapp_version meson option's default; the release pipeline
 // passes the real version
 inline constexpr const char* kUrAppVersionFallback = "0.0.0";
@@ -44,22 +46,23 @@ inline std::string UrDeviceSpec() {
 #endif
 }
 
+// Moves a space stored under the retired ur.network/main key to the current
+// key (NetworkSpaceBootstrap.hpp). Every manager owner calls this right after
+// newNetworkSpaceManager, before it takes any NetworkSpace from the manager.
+inline bool MigrateLegacyUrNetworkSpace(urnet::NetworkSpaceManager& manager) {
+  return MigrateLegacyUrNetworkSpace<urnet::NetworkSpaceKey>(manager);
+}
+
 // Builds (or refreshes) the app's network space in the given manager's
-// storage. Idempotent: updateNetworkSpaceValues persists and returns the
-// space for the fixed host/env key.
+// storage, after the legacy move. Idempotent: updateNetworkSpaceValues
+// persists and returns the space for the fixed host/env key.
 inline urnet::NetworkSpace BuildUrNetworkSpace(urnet::NetworkSpaceManager& manager) {
-  urnet::NetworkSpaceKey key;
-  key.host_name = std::string(kUrHostName);
-  key.env_name = std::string(kUrEnvName);
-  urnet::NetworkSpaceValues values;
-  values.bundled = true;
-  values.net_expose_server_ips = true;
-  values.net_expose_server_host_names = true;
-  values.link_host_name = "ur.io";
-  values.migration_host_name = "bringyour.com";
-  values.wallet = "circle";
-  values.sso_google = false;
-  return manager.updateNetworkSpaceValues(key, values);
+  return BootstrapUrNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(manager);
+}
+
+// The value set ApplyNetworkServer writes for a host (NetworkSpaceBootstrap.hpp).
+inline urnet::NetworkSpaceValues UrNetworkSpaceValues(bool official, const std::string& hostName) {
+  return UrNetworkSpaceValues<urnet::NetworkSpaceValues>(official, hostName);
 }
 
 }  // namespace urnw

@@ -24,7 +24,7 @@ using urnw::extender::SplitHostLines;
 
 namespace {
 constexpr const char* kPayload = "ur-ext:1:AAECAwQ";
-constexpr const char* kHome = "ur.network";
+constexpr const char* kHome = "bringyour.com";
 constexpr const char* kForeign = "example.test";
 
 // decode_share answered, ok, this network's own host, no settings block

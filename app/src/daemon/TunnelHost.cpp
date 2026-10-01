@@ -547,6 +547,13 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // production, never a surprise server.
       if (!spaceManager_) {
         spaceManager_ = urnet::newNetworkSpaceManager(storageRoot_ + "/sdk");
+        // The daemon owns this storage, so the move of a space stored under
+        // the retired ur.network key is its own job, done ONCE where the
+        // manager is created and BEFORE the import below can materialize
+        // the current key (NetworkSpaceBootstrap.hpp: an existing
+        // destination makes the move a no-op, which would strand the
+        // device's local state under the old key).
+        MigrateLegacyUrNetworkSpace(*spaceManager_);
       }
       networkSpace_.reset();
       if (!config.network_space_json.empty()) {

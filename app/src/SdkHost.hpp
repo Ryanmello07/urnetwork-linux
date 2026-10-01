@@ -402,7 +402,7 @@ class SdkHost {
 
   // ---- network server (iOS NetworkServerSheet / windows parity) ------------
   // Which network API this client talks to — on this fork, the difference
-  // between the official ur.network and a self-hosted deployment.
+  // between the official bringyour.com and a self-hosted deployment.
   struct NetworkServer {
     std::string hostName;
     std::string apiUrl;      // live, derived or overridden

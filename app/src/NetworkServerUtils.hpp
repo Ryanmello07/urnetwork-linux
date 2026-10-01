@@ -2,7 +2,7 @@
 // anything reaches the SDK. Ported one-for-one from the Windows netserver
 // namespace (windows:app/src/App/AuthSheets.cpp), itself a port of iOS
 // NetworkServerUtils.swift / android NetworkServerSelector.kt, so all four
-// clients agree on what "ur.network", "https://api.example.com/" and
+// clients agree on what a bare domain, "https://api.example.com/" and
 // "[2001:db8::1]:8080" each mean. Header-only and pure (no GTK, no SDK) so
 // the unit test binary covers it on any machine.
 // SPDX-License-Identifier: MPL-2.0
