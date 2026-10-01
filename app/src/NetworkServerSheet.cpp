@@ -74,7 +74,7 @@ NetworkServerSheet::NetworkServerSheet(Gtk::Window& parent, SdkHost& sdk) : sdk_
 
   const std::string initialHost = netserver::NormalizeHost(current_.hostName);
   field(hostBox_, T_("network_api_domain_label", "Network domain"),
-        T_("network_api_domain_help", "Example: ur.network or your custom domain."),
+        T_("network_api_domain_help", "Example: bringyour.com or your custom domain."),
         initialHost.empty() ? DefaultHost() : initialHost);
   field(apiBox_, T_("network_api_api_url_label", "API URL (optional)"),
         T_("network_api_api_url_help", "Leave blank to derive from the network domain."),
@@ -145,10 +145,10 @@ NetworkServerSheet::NetworkServerSheet(Gtk::Window& parent, SdkHost& sdk) : sdk_
 void NetworkServerSheet::ApplyDerivedPlaceholders() {
   const std::string typed = netserver::NormalizeHost(std::string(hostBox_->get_text()));
   const std::string host = typed.empty() ? DefaultHost() : typed;
-  // "official" means the PRODUCTION host specifically — only production
-  // carries the migration domain; a custom deployment derives off its own name
-  const bool official = (host == std::string(kUrHostName));
-  const std::string migration = official ? std::string("bringyour.com") : std::string();
+  // No migration host for any host: the official space derives off
+  // bringyour.com itself (the *.ur.network move was cancelled,
+  // NetworkSpaceBootstrap.hpp) and a custom deployment off its own name.
+  const std::string migration;
   const std::string env(kUrEnvName);
 
   hostBox_->set_placeholder_text(DefaultHost());

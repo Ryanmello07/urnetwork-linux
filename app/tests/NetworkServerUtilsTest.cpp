@@ -42,8 +42,10 @@ UR_TEST(insecureSchemeIsAdvisoryOnlyForExplicitSchemes) {
 }
 
 UR_TEST(derivedServiceUrlsFollowMigrationAndEnvRules) {
-  // production carries the migration domain; main env has no prefix
+  // a migration domain, when a space carries one, replaces the host; main env has no prefix
   UR_EXPECT_TRUE_MSG(std::string("https://api.bringyour.com"), DerivedServiceUrl("ur.network", "bringyour.com", "main", "https", "api") == std::string("https://api.bringyour.com"));
+  // the official space carries none and derives off bringyour.com itself
+  UR_EXPECT_TRUE_MSG(std::string("https://api.bringyour.com"), DerivedServiceUrl("bringyour.com", "", "main", "https", "api") == std::string("https://api.bringyour.com"));
   // a custom deployment derives straight off its own name
   UR_EXPECT_TRUE_MSG(std::string("wss://connect.example.com"), DerivedServiceUrl("example.com", "", "main", "wss", "connect") == std::string("wss://connect.example.com"));
   // a non-main env prefixes the service host

@@ -322,6 +322,9 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     urnet::setLogDir(logDir);
     urnet::setMemoryLimit(kMemoryLimit);
     spaceManager_ = urnet::newNetworkSpaceManager(storageDir);
+    // moves a space stored under the retired ur.network key first, then
+    // builds the bundled space (NetworkSpaceBootstrap.hpp) -- nothing below
+    // may take a NetworkSpace from the manager before this
     networkSpace_ = BuildUrNetworkSpace(*spaceManager_);
     api_ = networkSpace_->getApi();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
@@ -671,14 +674,8 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       // parity). `bundled` is true only for the official host with no
       // overrides: a bundled space carries pinned endpoints a custom
       // deployment does not have.
-      urnet::NetworkSpaceValues values;
+      urnet::NetworkSpaceValues values = UrNetworkSpaceValues(official, hostName);
       values.bundled = official && !explicitUrls;
-      values.net_expose_server_ips = true;
-      values.net_expose_server_host_names = true;
-      values.link_host_name = official ? std::string("ur.io") : hostName;
-      values.migration_host_name = official ? std::string("bringyour.com") : std::string();
-      values.wallet = "circle";
-      values.sso_google = false;
       values.api_url = apiUrl;
       values.platform_url = connectUrl;
 
