@@ -2988,8 +2988,8 @@ msgstr "Scegli il dominio di rete usato dall'app. Lascia vuoti gli URL API e con
 
 #. Help text under the network domain field of the network API selector.
 msgctxt "network_api_domain_help"
-msgid "Example: ur.network or your custom domain."
-msgstr "Esempio: ur.network o il tuo dominio personalizzato."
+msgid "Example: bringyour.com or your custom domain."
+msgstr "Esempio: bringyour.com o il tuo dominio personalizzato."
 
 #. Label of the network domain field in the network API selector.
 msgctxt "network_api_domain_label"

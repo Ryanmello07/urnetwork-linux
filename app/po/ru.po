@@ -4412,8 +4412,8 @@ msgstr "Выберите домен сети, используемый прил�
 
 #. Help text under the network domain field of the network API selector.
 msgctxt "network_api_domain_help"
-msgid "Example: ur.network or your custom domain."
-msgstr "Пример: ur.network или ваш собственный домен."
+msgid "Example: bringyour.com or your custom domain."
+msgstr "Пример: bringyour.com или ваш собственный домен."
 
 #. Label of the network domain field in the network API selector.
 msgctxt "network_api_domain_label"

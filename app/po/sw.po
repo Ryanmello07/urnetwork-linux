@@ -2988,8 +2988,8 @@ msgstr "Chagua kikoa cha mtandao kinachotumiwa na programu. Acha URL za API na c
 
 #. Help text under the network domain field of the network API selector.
 msgctxt "network_api_domain_help"
-msgid "Example: ur.network or your custom domain."
-msgstr "Mfano: ur.network au kikoa chako maalum."
+msgid "Example: bringyour.com or your custom domain."
+msgstr "Mfano: bringyour.com au kikoa chako maalum."
 
 #. Label of the network domain field in the network API selector.
 msgctxt "network_api_domain_label"

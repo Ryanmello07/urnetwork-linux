@@ -2982,8 +2982,8 @@ msgstr "Chọn tên miền mạng mà ứng dụng sử dụng. Để trống UR
 
 #. Help text under the network domain field of the network API selector.
 msgctxt "network_api_domain_help"
-msgid "Example: ur.network or your custom domain."
-msgstr "Ví dụ: ur.network hoặc tên miền tùy chỉnh của bạn."
+msgid "Example: bringyour.com or your custom domain."
+msgstr "Ví dụ: bringyour.com hoặc tên miền tùy chỉnh của bạn."
 
 #. Label of the network domain field in the network API selector.
 msgctxt "network_api_domain_label"

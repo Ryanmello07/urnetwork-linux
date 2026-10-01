@@ -2994,8 +2994,8 @@ msgstr "Wybierz domenę sieci używaną przez aplikację. Pozostaw adresy URL AP
 
 #. Help text under the network domain field of the network API selector.
 msgctxt "network_api_domain_help"
-msgid "Example: ur.network or your custom domain."
-msgstr "Przykład: ur.network lub twoja własna domena."
+msgid "Example: bringyour.com or your custom domain."
+msgstr "Przykład: bringyour.com lub twoja własna domena."
 
 #. Label of the network domain field in the network API selector.
 msgctxt "network_api_domain_label"
