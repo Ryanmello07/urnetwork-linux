@@ -149,12 +149,46 @@ Per release (names are normative, see `MIGRATION.md`):
 | `urnetwork-daemon-<v>.<x86_64\|aarch64>.rpm` | daemon: Fedora, RHEL, openSUSE |
 | `urnetwork-daemon-<v>-<x86_64\|aarch64>.pkg.tar.zst` | daemon: Arch, CachyOS, EndeavourOS, Manjaro |
 | `urnetwork-daemon-<v>-<amd64\|arm64>.install.tar.gz` | daemon: any systemd distro without one of the above (e.g. immutable or read-only `/usr` hosts) |
-| `URnetwork-<v>-<amd64\|arm64>.AppImage` (+ `.zsync`) | GUI, every distro |
+| `URnetwork-<v>-<amd64\|arm64>.AppImage` | GUI, every distro |
 | `URnetwork-<v>-<arch>.flatpak` | GUI, Flatpak. Built for the build host's architecture only (currently arm64) |
 
-You need a daemon package and one GUI. Publishing to an apt/dnf repository and
-self-hosting the AppImage zsync update channel are still manual follow-ups;
-today everything ships from the GitHub release.
+You need a daemon package and one GUI. Publishing to an apt/dnf repository is
+still a manual follow-up; today everything ships from the GitHub release.
+
+## Updates
+
+The GUI checks for updates itself (`app/src/UpdateChecker.cpp`): thirty seconds
+after launch, at most once every six hours, and from the Developer page's
+"Check for updates" button. Settings > General > "Check for updates
+automatically" turns the timed checks off. The check reads the official
+[urnetwork/linux releases](https://github.com/urnetwork/linux/releases) (the
+nightly `urnetwork/build` releases are never consulted), skips drafts and
+prereleases, and compares the release tag `v<version>` with the running
+version by its release code.
+
+What the app does with a newer release depends on how it was installed:
+
+- **AppImage** — Settings shows "Update available" with an **Install** button.
+  Install downloads the own-architecture `URnetwork-<v>-<arch>.AppImage` to a
+  temporary file beside the running one, verifies its SHA-256 against the
+  digest GitHub publishes for that release asset, makes it executable and
+  renames it over the running file (the previous file is kept as
+  `<name>.AppImage.bak` until the next launch). **Relaunch** then starts the
+  new file. Nothing that fails the digest check is ever installed or kept. If
+  the AppImage's folder is not writable (for example a root-owned
+  `/usr/lib/urnetwork/URnetwork.AppImage`), the verified file is saved to the
+  Downloads folder instead and Settings shows where.
+- **deb / rpm / Arch / install tarball / Flatpak** — Settings shows "Update
+  available" with the release page and the file to download for this install
+  plus its package-manager command (`apt`, `dnf`, `pacman`, `flatpak`, or the
+  tarball's `install.sh`). The app never elevates and never runs a package
+  manager.
+
+The daemon package and the GUI update independently; a GUI newer than the
+daemon shows the "service out of date" state until the daemon package is
+updated. The AppImage carries no embedded zsync update information: GitHub
+Releases cannot serve the multi-range requests zsync needs, so there is no
+`.zsync` sidecar and `appimageupdatetool` does not apply.
 
 ## Supported distros
 

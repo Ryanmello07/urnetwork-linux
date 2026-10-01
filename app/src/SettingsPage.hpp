@@ -55,6 +55,7 @@
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "Ui.hpp"
+#include "UpdateChecker.hpp"
 
 namespace urnw {
 
@@ -93,6 +94,14 @@ class SettingsPage : public Gtk::Box {
   // No-op when the switch already reads `on`; otherwise written under the echo
   // guard so the apply cannot echo back out through SdkHost as a user edit.
   void SetAdvancedMode(bool on);
+
+  // The window's updater (UpdateChecker.hpp). The auto-check toggle writes
+  // its preference through it, and every snapshot it publishes is replayed
+  // into the "Update available" row under the toggle: Install / Relaunch for
+  // the AppImage, the release page plus the package-manager command for every
+  // other install. Bind-then-replay, like the advanced-mode handler.
+  void SetUpdateChecker(UpdateChecker* checker);
+  void ApplyUpdate(const UpdateChecker::Snapshot& snap);
 
   // The spec's pane-fold table (1400 / 900 dip). A folded pane is hidden
   // together with its rule — never left as a zero-width column.
@@ -181,6 +190,19 @@ class SettingsPage : public Gtk::Box {
   bool applyingPreference_ = false;  // echo guard: the load writes IsOn
   bool preferencesLoaded_ = false;   // the toggle is inert until the value is known
   Gtk::Switch* autoCheckUpdates_ = nullptr;
+  // The update notice (hidden until a newer release is known): a two-line row
+  // whose action verb follows the checker's phase, plus a selectable prose
+  // row carrying the command or the saved file's path.
+  UpdateChecker* updates_ = nullptr;
+  UpdateChecker::Snapshot updateSnapshot_;  // what the button acts on
+  Gtk::Widget* updateRow_ = nullptr;
+  Gtk::Label* updateTitle_ = nullptr;
+  Gtk::Label* updateNote_ = nullptr;
+  Gtk::Button* updateButton_ = nullptr;
+  Gtk::Widget* updateCommandRow_ = nullptr;
+  Gtk::Label* updateCommand_ = nullptr;
+  void OnUpdateButton();
+  void OpenLink(const std::string& url);
 
   // ---- Pane A: Connections -------------------------------------------------
   // Local preference (prefs::kConnectOnLaunchKey), no echo guard: sole writer.

@@ -983,15 +983,180 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
          "ever installed without a click."));
   autoCheckUpdates_->set_active(prefs::Get<bool>(kAutoCheckKey, true));
   autoCheckUpdates_->property_active().signal_changed().connect([this] {
-    // Persisted immediately (whole-file read-modify-write, so it cannot
-    // clobber advanced_mode beside it).
-    prefs::Set(kAutoCheckKey, autoCheckUpdates_->get_active());
-    // TODO(sdk-wiring): urnw::UpdateChecker::SetAutoCheckEnabled — turning the
-    // preference ON must fire a check immediately ("answer now, not in six
-    // hours"); the checker itself (30s launch delay, 6h cadence) does not
-    // exist in this tree yet, so the preference is recorded and nothing is
-    // scheduled.
+    const bool on = autoCheckUpdates_->get_active();
+    if (updates_) {
+      // The checker persists the key (whole-file read-modify-write, so it
+      // cannot clobber advanced_mode beside it) and, when turned ON, checks
+      // right away -- "in six hours" would be a strange answer to a user who
+      // just asked for updates.
+      updates_->SetAutoCheckEnabled(on);
+    } else {
+      prefs::Set(kAutoCheckKey, on);
+    }
   });
+
+  // Row 3 -- the update notice. Hidden until a newer stable release is known
+  // (UpdateChecker -> ApplyUpdate). The verb on the right follows the phase:
+  // Install (the AppImage downloads, verifies and swaps itself), Relaunch,
+  // Try again, Show file -- or Release page for the installs the app does
+  // not replace, with the command for their package manager in the prose row
+  // beneath, where it can be selected and copied.
+  {
+    auto row = kit::MakePaneTwoLineRow({}, {}, kRowTall);
+    updateRow_ = row.root;
+    updateTitle_ = row.title;
+    updateNote_ = row.note;
+    updateButton_ = Gtk::make_managed<Gtk::Button>();
+    updateButton_->set_valign(Gtk::Align::CENTER);
+    updateButton_->signal_clicked().connect([this] { OnUpdateButton(); });
+    row.trailing->append(*updateButton_);
+    updateRow_->set_visible(false);
+    host.append(*updateRow_);
+
+    auto command = MakeProseRow({}, kStatePadY);
+    updateCommandRow_ = command.root;
+    updateCommand_ = command.line;
+    updateCommand_->set_selectable(true);
+    updateCommand_->add_css_class("ur-mono-13");  // a command reads as one
+    updateCommandRow_->set_visible(false);
+    host.append(*updateCommandRow_);
+  }
+}
+
+void SettingsPage::SetUpdateChecker(UpdateChecker* checker) { updates_ = checker; }
+
+void SettingsPage::ApplyUpdate(const UpdateChecker::Snapshot& snap) {
+  if (!updateRow_) return;
+  updateSnapshot_ = snap;
+  using Phase = UpdateChecker::Phase;
+  if (snap.phase == Phase::None) {
+    updateRow_->set_visible(false);
+    updateCommandRow_->set_visible(false);
+    return;
+  }
+
+  const bool appimage = snap.kind == update::InstallKind::AppImage;
+  Glib::ustring title = Format(T_("upd_available_title_version", "Update available: v{}"),
+                               snap.version);
+  Glib::ustring note;
+  Glib::ustring command;
+  Glib::ustring action;
+  bool enabled = true;
+  switch (snap.phase) {
+    case Phase::None:
+      break;
+    case Phase::Available:
+      if (appimage) {
+        note = T_("upd_available_appimage_message",
+                  "One click downloads the release, verifies it against the release's "
+                  "checksum and replaces this AppImage. The VPN service updates separately.");
+        action = T_("upd_install", "Install");
+      } else {
+        note = Format(T_("upd_available_package_message",
+                         "Download {} from the release page, then run the command below."),
+                      snap.assetName);
+        command = snap.command;
+        action = T_("upd_release_page", "Release page");
+      }
+      break;
+    case Phase::Downloading:
+      note = T_("upd_stage_downloading", "Downloading the update…");
+      action = T_("upd_install", "Install");
+      enabled = false;
+      break;
+    case Phase::Verifying:
+      note = T_("upd_stage_verifying", "Verifying the download…");
+      action = T_("upd_install", "Install");
+      enabled = false;
+      break;
+    case Phase::Installing:
+      note = T_("upd_stage_replacing", "Replacing the AppImage…");
+      action = T_("upd_install", "Install");
+      enabled = false;
+      break;
+    case Phase::Ready:
+      title = Format(T_("upd_ready_title", "Ready to relaunch: v{}"), snap.version);
+      note = T_("upd_ready_message",
+                "The new AppImage is in place and verified. Relaunch to start using it; "
+                "the previous file is kept beside it until then.");
+      action = T_("upd_relaunch", "Relaunch");
+      break;
+    case Phase::Downloaded:
+      note = T_("upd_downloaded_message",
+                "This AppImage's folder is not writable, so the verified download was saved "
+                "below. Replace the AppImage with it by hand.");
+      command = snap.installedPath;
+      action = T_("upd_show_file", "Show file");
+      break;
+    case Phase::Failed:
+      switch (snap.failure) {
+        case UpdateChecker::Failure::Checksum:
+          note = T_("upd_failed_checksum",
+                    "The download didn't match the release's checksums, so it was "
+                    "discarded. Click to try again.");
+          break;
+        case UpdateChecker::Failure::Install:
+          note = T_("upd_failed_install",
+                    "The AppImage couldn't be replaced. Check the folder's permissions "
+                    "and click to try again.");
+          break;
+        case UpdateChecker::Failure::Download:
+        case UpdateChecker::Failure::None:
+          note = T_("upd_failed_download",
+                    "The download didn't finish. Check the connection and click to try "
+                    "again.");
+          break;
+      }
+      action = T_("upd_try_again", "Try again");
+      break;
+  }
+  updateTitle_->set_text(title);
+  kit::SetTextOrCollapse(*updateNote_, note);
+  updateButton_->set_label(action);
+  updateButton_->set_sensitive(enabled);
+  kit::SetAccessibleLabel(*updateButton_, action + ". " + title);
+  kit::SetTextOrCollapse(*updateCommand_, command);
+  updateCommandRow_->set_visible(!command.empty());
+  updateRow_->set_visible(true);
+}
+
+void SettingsPage::OnUpdateButton() {
+  using Phase = UpdateChecker::Phase;
+  const UpdateChecker::Snapshot& snap = updateSnapshot_;
+  switch (snap.phase) {
+    case Phase::Available:
+    case Phase::Failed:
+      if (snap.kind == update::InstallKind::AppImage && updates_) {
+        updates_->BeginInstall();
+      } else {
+        OpenLink(snap.releasePage.empty() ? update::ReleasePageUrl({}) : snap.releasePage);
+      }
+      break;
+    case Phase::Ready:
+      if (updates_) updates_->Relaunch();  // returns only on failure
+      break;
+    case Phase::Downloaded: {
+      // The folder, not the file: launching the file would RUN the AppImage.
+      char* dir = g_path_get_dirname(snap.installedPath.c_str());
+      OpenLink(std::string("file://") + dir);
+      g_free(dir);
+      break;
+    }
+    case Phase::None:
+    case Phase::Downloading:
+    case Phase::Verifying:
+    case Phase::Installing:
+      break;
+  }
+}
+
+void SettingsPage::OpenLink(const std::string& url) {
+  GError* err = nullptr;
+  if (!g_app_info_launch_default_for_uri(url.c_str(), nullptr, &err)) {
+    g_warning("settings: could not open %s: %s", url.c_str(), err ? err->message : "?");
+    if (err) g_error_free(err);
+    Snack(T_("something_went_wrong", "Something went wrong."), true);
+  }
 }
 
 // ---- Pane A: Connections (§3.2) --------------------------------------------

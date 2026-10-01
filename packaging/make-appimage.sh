@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build URnetwork-<version>-<arch>.AppImage (+ .zsync) -- the unprivileged
-# GUI artifact (MIGRATION.md normative names).
+# Build URnetwork-<version>-<arch>.AppImage -- the unprivileged GUI artifact
+# (MIGRATION.md normative names).
 #
 # *** LINUX ONLY. This script CANNOT run on macOS. ***
 # It bundles the build host's own GTK4/libadwaita stack via ldd, so it must
@@ -33,19 +33,27 @@
 # Fontconfig/freetype, Mesa/GL, libstdc++, X11/wayland client libs are
 # host-provided -- rationale in ./excludelist.
 #
+# UPDATES come from the in-app checker (app/src/UpdateChecker.cpp), which
+# polls the official urnetwork/linux GitHub releases, verifies the own-arch
+# AppImage against the release asset's SHA-256 digest and swaps it over
+# $APPIMAGE. NO embedded update information: GitHub Releases answers the
+# multi-range requests zsync needs with HTTP 501 (APPIMAGE.md section 5), the
+# self-hosted download host the old update info named was never stood up, and
+# update info that cannot work is worse than none (AppImageLauncher offers an
+# "update" that fails). appimagetool therefore emits no sidecar either.
+#
 # Pipeline entry point (name and invocation pinned in MIGRATION.md): called
 # with VERSION, ARCH (amd64|arm64), STAGING_DIR (the `meson install --destdir`
 # tree) and OUT_DIR in the environment; writes
-# URnetwork-${VERSION}-${ARCH}.AppImage and its .zsync into $OUT_DIR. The
-# builder image (Ubuntu 24.04) already carries appimagetool, zsyncmake,
-# mksquashfs and patchelf; linuxdeploy is present there too but its GTK
-# plugin must NOT be used (see above). Flags override the environment for
-# manual runs:
+# URnetwork-${VERSION}-${ARCH}.AppImage into $OUT_DIR. The builder image
+# (Ubuntu 24.04) already carries appimagetool, mksquashfs and patchelf;
+# linuxdeploy is present there too but its GTK plugin must NOT be used (see
+# above). Flags override the environment for manual runs:
 #   make-appimage.sh [--staging <dir>] [--arch <a>] [--out <dir>] \
 #                    [--version <v>]
 # Env overrides: UR_GUI_BIN (staged GUI path, default usr/bin/urnetwork-gui),
-# APPIMAGETOOL (path to appimagetool), UR_ZSYNC_URL (update-info URL),
-# UR_GLIBC_CEILING (default 2.35), UR_SKIP_GLIBC_GATE=1.
+# APPIMAGETOOL (path to appimagetool), UR_GLIBC_CEILING (default 2.35),
+# UR_SKIP_GLIBC_GATE=1.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,7 +62,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 usage() {
-    sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,56p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     exit "${1:-0}"
 }
 
@@ -314,10 +322,9 @@ log "bundled $(find "${APPDIR}/usr/lib" -maxdepth 1 -name '*.so*' | wc -l | tr -
 # Package
 # ---------------------------------------------------------------------------
 APPIMAGE="${OUT}/URnetwork-${VERSION}-${ARCH}.AppImage"
-# Self-hosted zsync only: GitHub Releases answers the multi-range requests
-# zsync needs with HTTP 501 (APPIMAGE.md section 5). The URL points at the
-# stable "latest" alias so embedded update info never goes stale.
-ZSYNC_URL="${UR_ZSYNC_URL:-https://get.ur.network/URnetwork-latest-${ARCH}.AppImage.zsync}"
+# No update-information flag (see the header): the in-app UpdateChecker is
+# the update channel, and appimagetool only writes a sidecar when update info
+# is embedded, so none is produced or expected downstream.
 
 # appimagetool fetches the type2 runtime from GitHub on EVERY invocation and
 # has no retry, so a blip fails the whole build after all the AppDir work:
@@ -337,41 +344,16 @@ else
 fi
 
 ARCH="${APPIMAGE_ARCH}" "${APPIMAGETOOL}" \
-    --updateinformation "zsync|${ZSYNC_URL}" \
     "${runtime_args[@]}" \
     "${APPDIR}" "${APPIMAGE}"
 
 [ -f "${APPIMAGE}" ] || die "appimagetool did not produce ${APPIMAGE}"
 
-# THE .zsync LANDS IN THE CURRENT DIRECTORY, NOT BESIDE THE APPIMAGE.
-# appimagetool takes the basename of its output path for the zsync's filename and
-# writes it relative to CWD, so with an absolute --output the AppImage goes to
-# $OUT_DIR and its .zsync is left wherever the build happened to be standing.
-# Measured twice: by hand during development (the file had to be moved manually
-# every time), and then by CI, which failed the payload check with
-# "URnetwork-<version>-<arch>.AppImage.zsync was not produced". Moving it here
-# means the script owns the whole contract rather than leaving one asset for the
-# caller to find, since the update channel needs the pair.
-ZSYNC_NAME="$(basename "${APPIMAGE}").zsync"
-if [ -f "${APPIMAGE}.zsync" ]; then
-    log "zsync: ${APPIMAGE}.zsync"
-elif [ -f "${ZSYNC_NAME}" ]; then
-    mv -f "${ZSYNC_NAME}" "${APPIMAGE}.zsync"
-    log "zsync: ${APPIMAGE}.zsync (moved out of $(pwd))"
-elif [ -f "${PWD}/${ZSYNC_NAME}" ]; then
-    mv -f "${PWD}/${ZSYNC_NAME}" "${APPIMAGE}.zsync"
-    log "zsync: ${APPIMAGE}.zsync (moved out of ${PWD})"
-else
-    warn "no .zsync produced -- older appimagetool? The update channel needs ${ZSYNC_NAME}"
-fi
-
-# Detached signatures (APPIMAGE.md 11f): appimagetool --sign embeds the key
-# in the file it validates, which is not a trust story -- sign detached, for
-# BOTH the AppImage and its .zsync, fingerprint published out of band.
+# Detached signature (APPIMAGE.md 11f): appimagetool --sign embeds the key
+# in the file it validates, which is not a trust story -- sign detached,
+# fingerprint published out of band. The in-app updater's integrity check is
+# the release asset's SHA-256 digest from the GitHub API, which the pipeline
+# does not mint: GitHub computes it at upload time.
 sha256_file "${APPIMAGE}"
 maybe_sign "${APPIMAGE}"
-if [ -f "${APPIMAGE}.zsync" ]; then
-    sha256_file "${APPIMAGE}.zsync"
-    maybe_sign "${APPIMAGE}.zsync"
-fi
 log "built: ${APPIMAGE}"

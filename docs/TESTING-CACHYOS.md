@@ -376,8 +376,7 @@ download from those official `urnetwork` repos. Current release at time of writi
 |---|---|
 | `urnetwork-daemon-<VERSION>-x86_64.pkg.tar.zst` | **The daemon, native pacman package — prefer this.** `sudo pacman -U ./<file>`. May be absent from older builds. |
 | `urnetwork-daemon-<VERSION>-amd64.install.tar.gz` | **The daemon, portable channel.** The fallback when the release has no pacman package, and the right choice on SteamOS (read-only `/usr`). |
-| `URnetwork-<VERSION>-amd64.AppImage` | The GUI, AppImage channel. |
-| `URnetwork-<VERSION>-amd64.AppImage.zsync` | Update control file. Attached for mirroring only — GitHub Releases answers zsync's multi-range requests with HTTP 501, so the in-app updater uses the self-hosted copy. You do not need it to test. |
+| `URnetwork-<VERSION>-amd64.AppImage` | The GUI, AppImage channel. Updates itself through the in-app checker (README "Updates"); there is no `.zsync` sidecar. |
 | `urnetwork-daemon_<VERSION>_amd64.deb` | **Ignore.** No use on Arch. |
 | `URnetwork-<VERSION>-amd64.flatpak` | The GUI, Flatpak channel — **if the release has it.** The pipeline builds the Flatpak for its build machine's architecture only, so a release may carry just the `arm64` bundle and no `amd64` one. §10 covers both cases. |
 

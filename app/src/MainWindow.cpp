@@ -1772,6 +1772,21 @@ void MainWindow::BuildHome() {
   // protective teardown is not sat on.
   Glib::signal_timeout().connect(sigc::mem_fun(*this, &MainWindow::PollDaemonHealth), 5000);
 
+  // The in-app updater. Bind-then-replay, like Advanced Mode below: the
+  // handler is bound before Start() so the launch check's outcome cannot be
+  // missed, and the current snapshot is replayed so Settings renders the
+  // install kind's notice state from the first paint. The checker publishes
+  // on the GTK main loop already (PostToMain), so no marshalling here.
+  updates_ = std::make_unique<UpdateChecker>();
+  developerPage_->SetUpdateChecker(updates_.get());
+  settingsPage_->SetUpdateChecker(updates_.get());
+  updates_->SetHandler([this](const UpdateChecker::Snapshot& snap) {
+    if (settingsPage_) settingsPage_->ApplyUpdate(snap);
+    if (developerPage_) developerPage_->ApplyUpdateCheck(snap);
+  });
+  settingsPage_->ApplyUpdate(updates_->Current());
+  updates_->Start();
+
   // Advanced Mode (D5): bind-then-replay — the handler is bound before the
   // stored value is replayed, so a restored-from-disk true cannot be lost.
   host_.SetAdvancedModeHandler([this](bool on) {

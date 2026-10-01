@@ -41,6 +41,7 @@
 
 #include "LogTailClient.hpp"
 #include "SdkHost.hpp"
+#include "UpdateChecker.hpp"
 
 namespace urnw {
 
@@ -52,6 +53,11 @@ class DeveloperPage : public Gtk::Box {
   // nav-select + auth-change API loads: bump the epoch, build on first
   // selection, reconcile the poll gate, read once.
   void Load();
+  // The window's updater: "Check for updates" queues a check on it, and every
+  // snapshot it publishes is replayed into the update-check line. Without one
+  // (a preview build) the button reports that the check did not run.
+  void SetUpdateChecker(UpdateChecker* checker);
+  void ApplyUpdateCheck(const UpdateChecker::Snapshot& snap);
   // The poll gate's four AND-ed inputs; the page reconciles internally.
   void SetAdvancedMode(bool on);
   void SetPresenting(bool presenting);  // window visible AND not minimized
@@ -198,6 +204,7 @@ class DeveloperPage : public Gtk::Box {
   void OnNumChanged(size_t uiIndex);
 
   SdkHost& host_;
+  UpdateChecker* updates_ = nullptr;  // owned by the window; bound after construction
   std::shared_ptr<uint64_t> epoch_ = std::make_shared<uint64_t>(0);  // stale-async guard
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 
