@@ -40,6 +40,7 @@
 #include <glibmm/main.h>
 
 #include "PricePresentation.hpp"
+#include "ReferralCodeState.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
@@ -103,7 +104,11 @@ class SubscriptionBalanceStore {
   int64_t MaxReferrals() const { return maxReferrals_; }
   int64_t BonusGibPerDay() const { return bonusGibPerDay_; }
   int64_t ReferredBonusGibPerDay() const { return referredBonusGibPerDay_; }
-  const std::string& ReferralCode() const { return referralCode_; }
+  const std::string& ReferralCode() const { return referral_.Code(); }
+  // what the referral panel shows where the code goes
+  ReferralCodeView ReferralView() const { return referral_.View(); }
+  // Read the code again now (the panel's Try again). Emits.
+  void RetryReferral();
 
   // The plan response's price tier (standard/regional, from the storefront
   // country the server resolved), the network's welcome offer and the
@@ -171,7 +176,7 @@ class SubscriptionBalanceStore {
   int64_t maxReferrals_ = 20;
   int64_t bonusGibPerDay_ = 3;
   int64_t referredBonusGibPerDay_ = 3;
-  std::string referralCode_;
+  ReferralCodeFetch referral_;
 
   PriceTierView tier_;
   OfferView offer_;

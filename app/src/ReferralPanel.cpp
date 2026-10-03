@@ -133,6 +133,24 @@ ReferralPanel::ReferralPanel() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   codePill_->append(*copy_);
   column->append(*codePill_);
 
+  // a failed read with no code says so, with the read again beside it
+  codeFailed_.set_text(
+      T_("load_failed", "Couldn't load. Check your connection and try again."));
+  codeFailed_.add_css_class("ur-onb-body");
+  codeFailed_.add_css_class("ur-onb-blue-light");
+  codeFailed_.set_wrap(true);
+  codeFailed_.set_justify(Gtk::Justification::CENTER);
+  codeFailed_.set_visible(false);
+  column->append(codeFailed_);
+  retry_ = Gtk::make_managed<Gtk::Button>(T_("try_again", "Try again"));
+  retry_->add_css_class("ur-onb-gold-btn");
+  retry_->set_halign(Gtk::Align::CENTER);
+  retry_->set_visible(false);
+  retry_->signal_clicked().connect([this] {
+    if (on_retry) on_retry();
+  });
+  column->append(*retry_);
+
   share_ = Gtk::make_managed<Gtk::Button>(T_("share", "Share"));
   share_->add_css_class("ur-onb-gold-btn");
   share_->set_margin_top(6);  // 12 under the pill, with the column's 6
@@ -197,8 +215,8 @@ ReferralPanel::~ReferralPanel() {
   if (tick_) remove_tick_callback(tick_);
 }
 
-void ReferralPanel::Update(const std::string& referralCode, int64_t totalReferrals,
-                           const ReferralTerms& terms) {
+void ReferralPanel::Update(const std::string& referralCode, ReferralCodeView view,
+                           int64_t totalReferrals, const ReferralTerms& terms) {
   referralCode_ = referralCode;
   crowned_ = 0 < totalReferrals;
   heading_.set_text(crowned_ ? T_("referral_royalty", "You're referral royalty!")
@@ -210,6 +228,8 @@ void ReferralPanel::Update(const std::string& referralCode, int64_t totalReferra
   code_.set_text(referralCode);
   codePill_->set_visible(!referralCode.empty());
   share_->set_visible(!referralCode.empty());
+  codeFailed_.set_visible(view == ReferralCodeView::Unavailable);
+  retry_->set_visible(view == ReferralCodeView::Unavailable);
   // the bar: friends joined out of the code's cap; once the cap is reached the
   // count says so in words (android ReferralProgressBar)
   const int64_t cap = std::max<int64_t>(1, terms.maxReferrals);

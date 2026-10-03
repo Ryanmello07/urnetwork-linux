@@ -8,10 +8,12 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #include <gtkmm.h>
 
+#include "ReferralCodeState.hpp"
 #include "ReferralRoyalty.hpp"  // ReferralTerms
 
 namespace urnw {
@@ -29,8 +31,11 @@ class ReferralPanel : public Gtk::Box {
  public:
   ReferralPanel();
   ~ReferralPanel() override;
-  void Update(const std::string& referralCode, int64_t totalReferrals,
+  // `view` says whether the code read is pending, answered or failed.
+  void Update(const std::string& referralCode, ReferralCodeView view, int64_t totalReferrals,
               const ReferralTerms& terms);
+  // Try again under a failed code read.
+  std::function<void()> on_retry;
 
  protected:
   void snapshot_vfunc(const Glib::RefPtr<Gtk::Snapshot>& snapshot) override;
@@ -44,6 +49,8 @@ class ReferralPanel : public Gtk::Box {
   Gtk::Label code_;
   Gtk::Button* copy_ = nullptr;
   Gtk::Button* share_ = nullptr;
+  Gtk::Label codeFailed_;
+  Gtk::Button* retry_ = nullptr;
   Gtk::DrawingArea* progressBar_ = nullptr;
   Gtk::Label progressCount_;
   double progressFraction_ = 0;

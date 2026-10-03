@@ -810,6 +810,7 @@ void OnboardingWindow::BuildReferral() {
   // drift; it carries the only referral progress bar on the step
   referralPanel_ = Gtk::make_managed<ReferralPanel>();
   referralPanel_->set_margin_top(32);
+  referralPanel_->on_retry = [this] { balance_.RetryReferral(); };
   top->append(*referralPanel_);
   page->append(*top);
 
@@ -910,7 +911,10 @@ void OnboardingWindow::RefreshReferral() {
                                          "Your friend gets +{} GiB/day for life"),
                                       terms.referredBonusGibPerDay));
   }
-  if (referralPanel_) referralPanel_->Update(balance_.ReferralCode(), balance_.TotalReferrals(), terms);
+  if (referralPanel_) {
+    referralPanel_->Update(balance_.ReferralCode(), balance_.ReferralView(),
+                           balance_.TotalReferrals(), terms);
+  }
 }
 
 // ---- the flow

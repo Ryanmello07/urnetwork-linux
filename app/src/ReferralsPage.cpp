@@ -457,6 +457,7 @@ void ReferralsPage::BuildPane() {
   //    screen shows it: the onboarding-only progress card is not repeated here)
   panel_ = Gtk::make_managed<ReferralPanel>();
   panel_->set_margin(kCardPad);
+  panel_->on_retry = [this] { balance_.RetryReferral(); };
   content->append(*panel_);
 
   // 2. the figures
@@ -542,7 +543,8 @@ void ReferralsPage::ApplyCard() {
   const bool session = CanCallApi();
   const int64_t total = session ? balance_.TotalReferrals() : 0;
   const std::string code = session ? balance_.ReferralCode() : std::string();
-  if (panel_) panel_->Update(code, total, terms);
+  const ReferralCodeView view = session ? balance_.ReferralView() : ReferralCodeView::Loading;
+  if (panel_) panel_->Update(code, view, total, terms);
 }
 
 void ReferralsPage::ApplyTotal(AccountFieldState state) {
