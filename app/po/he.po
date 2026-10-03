@@ -767,6 +767,11 @@ msgctxt "blocked_locations_2"
 msgid "Blocked locations"
 msgstr "מיקומים חסומים"
 
+#. Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.
+msgctxt "blocked_locations_could_not_be_loaded"
+msgid "Blocked locations could not be loaded."
+msgstr "לא ניתן היה לטעון את המיקומים החסומים."
+
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
 msgid "Blocks"
@@ -1080,6 +1085,11 @@ msgstr "חיבורים"
 msgctxt "connectivity_label"
 msgid "Connectivity"
 msgstr "קישוריות"
+
+#. An email alternative to the Discord support link on the Feedback and Settings screens. The email address and link must stay unchanged.
+msgctxt "contact_support_at_support_ur_io"
+msgid "Contact support at [support@ur.io](mailto:support@ur.io)"
+msgstr "צרו קשר עם התמיכה בכתובת [support@ur.io](mailto:support@ur.io)"
 
 #. Continue button label.
 msgctxt "continue_txt"
@@ -3870,6 +3880,11 @@ msgctxt "referral_code_capped"
 msgid "This code has been used up"
 msgstr "הקוד הזה נוצל במלואו"
 
+#. Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.
+msgctxt "referral_code_load_failed"
+msgid "Your referral code could not be loaded."
+msgstr "לא ניתן היה לטעון את קוד ההפניה שלך."
+
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"
 msgid "A friend has joined — you're earning +{1} GiB/day, for life."
@@ -4210,10 +4225,20 @@ msgctxt "seeker_multiplier_benefit"
 msgid "Doubles your points, free daily data and referral data."
 msgstr "מכפיל את הנקודות שלך, את הנתונים היומיים החינמיים ואת נתוני ההפניות."
 
+#. Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.
+msgctxt "seeker_token_not_found"
+msgid "No Seeker or Saga token found in wallet …{}"
+msgstr "לא נמצא אסימון Seeker או Saga בארנק …{}"
+
 #. Call to action
 msgctxt "seeker_token_verified"
 msgid "Seeker Token Verified!"
 msgstr "אסימון Seeker אומת!"
+
+#. Seeker token verification failed (wallet app error, the server could not be reached, the signature did not verify, or the token lookup failed).
+msgctxt "seeker_verify_failed"
+msgid "Couldn't verify the Seeker token. Please try again."
+msgstr "לא ניתן לאמת את אסימון ה-Seeker. נסו שוב."
 
 #. Seeker token verification: no Solana wallet app is installed to sign the verification message.
 msgctxt "seeker_verify_no_wallet_app"
@@ -5342,7 +5367,7 @@ msgctxt "verification_code_sent"
 msgid "Check your email/phone for a verification code."
 msgstr "בדקו את האימייל או הטלפון שלכם לקבלת קוד האימות."
 
-#. Snackbar shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift.
+#. Snackbar (apple) / toast (android) shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift and android LoginVerify.kt.
 msgctxt "verification_code_sent_2"
 msgid "Verification code sent."
 msgstr "קוד האימות נשלח."

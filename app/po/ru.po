@@ -54,7 +54,7 @@ msgctxt "account_auth_verified"
 msgid "{} (verified)"
 msgstr "{} (подтверждено)"
 
-#. Shown when a purchase is refused before contacting the App Store because the networkId is missing or unparseable — the purchase could never be credited to anyone (Shared/ViewModels/AppStoreSubscriptionManager.swift). This used to be a silent no-op.
+#. Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.
 msgctxt "account_isn_t_ready_for_purchases"
 msgid "Your account isn't ready for purchases. Please restart the app and try again."
 msgstr "Ваш аккаунт пока не готов к покупкам. Перезапустите приложение и попробуйте снова."
@@ -613,7 +613,7 @@ msgstr "Код аутентификации \n\n{0}...{1}"
 #. Used in Main/Account/Settings/AuthCodeCreate/AuthCodeCreate.swift.
 msgctxt "auth_code_create"
 msgid "Auth Code Create"
-msgstr "Создать код авторизации"
+msgstr "Создать код аутентификации"
 
 #. Call to action
 msgctxt "auth_code_created"
@@ -643,7 +643,7 @@ msgstr "Код аутентификации"
 #. Call to action
 msgctxt "auth_code_loading"
 msgid "Auth code loading"
-msgstr "Загрузка кода авторизации"
+msgstr "Загрузка кода аутентификации"
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "auth_code_login_button_text"
@@ -719,6 +719,11 @@ msgstr "Код баланса"
 msgctxt "balance_code_already_redeemed_message"
 msgid "This balance code has already been redeemed. If you redeemed it earlier, the data is already on your balance."
 msgstr "Этот код баланса уже активирован. Если вы активировали его ранее, данные уже зачислены на ваш баланс."
+
+#. Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.
+msgctxt "balance_code_data_added"
+msgid "{} of data added to your balance."
+msgstr "На ваш баланс добавлено {} данных."
 
 #. Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.
 msgctxt "balance_code_invalid_message"
@@ -820,6 +825,11 @@ msgctxt "blocked_locations_2"
 msgid "Blocked locations"
 msgstr "Заблокированные локации"
 
+#. Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.
+msgctxt "blocked_locations_could_not_be_loaded"
+msgid "Blocked locations could not be loaded."
+msgstr "Не удалось загрузить заблокированные местоположения."
+
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
 msgid "Blocks"
@@ -863,7 +873,7 @@ msgstr "Стройте интернет правильно вместе с URnet
 #. Used in Shared/Views/Introduction/IntroductionUsageBar.swift.
 msgctxt "by_default_you_get_10_gib_month_here_s_how_you"
 msgid "By default you get 10 GiB/month. Here's how you can earn extra bandwidth:"
-msgstr "По умолчанию вы получаете 10 ГиБ/месяц. Вот как можно заработать дополнительную пропускную способность:"
+msgstr "По умолчанию вы получаете 10 GiB/месяц. Вот как можно заработать дополнительную пропускную способность:"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "by_subscribing_you_agree_to_urnetwork_s_terms"
@@ -1263,6 +1273,11 @@ msgctxt "connectivity_label"
 msgid "Connectivity"
 msgstr "Подключение"
 
+#. An email alternative to the Discord support link on the Feedback and Settings screens. The email address and link must stay unchanged.
+msgctxt "contact_support_at_support_ur_io"
+msgid "Contact support at [support@ur.io](mailto:support@ur.io)"
+msgstr "Свяжитесь с поддержкой: [support@ur.io](mailto:support@ur.io)"
+
 #. Continue button label.
 msgctxt "continue_txt"
 msgid "Continue"
@@ -1409,7 +1424,7 @@ msgstr "Что-то пошло не так. Попробуйте еще раз."
 #. Used in Main/Account/Settings/SettingsForm-iOS.swift.
 msgctxt "created_auth_codes_expire_after_5_minutes"
 msgid "Created auth codes expire after 5 minutes"
-msgstr "Созданные коды авторизации истекают через 5 минут"
+msgstr "Созданные коды аутентификации истекают через 5 минут"
 
 #. A label showing the current network API and connect URLs.
 msgctxt "current_api_n"
@@ -3909,7 +3924,7 @@ msgstr "IPv6"
 #. 	Greeting text on Enter user auth password screen.
 msgctxt "its_nice_to_see_you_again"
 msgid "It's nice to see you again"
-msgstr "Приятно снова тебя видеть"
+msgstr "Приятно снова вас видеть"
 
 #. Settings
 msgctxt "join_community_discord"
@@ -4861,7 +4876,7 @@ msgctxt "pay_with_stripe"
 msgid "Join with Stripe"
 msgstr "Присоединиться через Stripe"
 
-#. Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase.
+#. Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.
 msgctxt "payment_confirmation_delayed"
 msgid "Confirmation is taking longer than expected. Your plan will update automatically once it's confirmed — there's no need to buy again."
 msgstr "Подтверждение занимает больше времени, чем ожидалось. Ваш тариф обновится автоматически, как только оплата будет подтверждена, — покупать повторно не нужно."
@@ -5371,7 +5386,7 @@ msgstr "Порекомендовать друга"
 #. Used in Shared/Views/Introduction/IntroductionUsageBar.swift.
 msgctxt "refer_a_friend_30_gib_month"
 msgid "Refer a friend = +30 GiB/Month"
-msgstr "Порекомендовать друга = +30 ГиБ/месяц"
+msgstr "Порекомендовать друга = +30 GiB/месяц"
 
 #. A bullet point in the introduction view that describes how much extra bandwidth you can earn by referring a friend.
 msgctxt "refer_a_friend_3_gib_day"
@@ -5451,6 +5466,11 @@ msgctxt "referral_code_capped"
 msgid "This code has been used up"
 msgstr "Этот код уже был использован"
 
+#. Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.
+msgctxt "referral_code_load_failed"
+msgid "Your referral code could not be loaded."
+msgstr "Не удалось загрузить ваш реферальный код."
+
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"
 msgid "A friend has joined — you're earning +{1} GiB/day, for life."
@@ -5472,7 +5492,7 @@ msgstr "Реферальная сеть обновлена"
 #. Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).
 msgctxt "referral_panel_detail"
 msgid "Every verified referral gives each of you {} GiB/day for free, for life."
-msgstr "Каждый подтверждённый реферал даёт каждому из вас по {} ГиБ в день бесплатно, навсегда."
+msgstr "Каждый подтверждённый реферал даёт каждому из вас по {} GiB в день бесплатно, навсегда."
 
 #. Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.
 msgctxt "referral_panel_heading"
@@ -5487,7 +5507,7 @@ msgstr "Пока нет друзей — поделитесь кодом, и п�
 #. Referrals screen: label of the points a network earned from its referrals (the payout_linked_account points), shown next to the total referral count.
 msgctxt "referral_points"
 msgid "Referral points"
-msgstr "Реферальные баллы"
+msgstr "Реферальные очки"
 
 #. A label displaying the number of referrals a user has made. The argument is the number of referrals.
 msgctxt "referral_progress_of_five"
@@ -5569,7 +5589,7 @@ msgstr "Предоставление необязательно. Если вкл
 #. Call to action
 msgctxt "reliability_weight"
 msgid "Reliability Weight"
-msgstr "надёжности"
+msgstr "Вес надёжности"
 
 #. Call to action
 msgctxt "reliability_with_value"
@@ -5853,10 +5873,20 @@ msgctxt "seeker_points_only"
 msgid "The Seeker multiplier applies to points only."
 msgstr "Множитель Seeker применяется только к очкам."
 
+#. Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.
+msgctxt "seeker_token_not_found"
+msgid "No Seeker or Saga token found in wallet …{}"
+msgstr "В кошельке …{} не найден токен Seeker или Saga"
+
 #. Call to action
 msgctxt "seeker_token_verified"
 msgid "Seeker Token Verified!"
 msgstr "Токен Seeker проверен!"
+
+#. Seeker token verification failed (wallet app error, the server could not be reached, the signature did not verify, or the token lookup failed).
+msgctxt "seeker_verify_failed"
+msgid "Couldn't verify the Seeker token. Please try again."
+msgstr "Не удалось проверить токен Seeker. Попробуйте ещё раз."
 
 #. Seeker token verification: no Solana wallet app is installed to sign the verification message.
 msgctxt "seeker_verify_no_wallet_app"
@@ -6127,12 +6157,12 @@ msgstr "разрешено"
 #. App settings: auth code limit error
 msgctxt "site_app_auth_code_limit"
 msgid "Auth code limit reached. Try again later."
-msgstr "Достигнут лимит кодов авторизации. Попробуйте позже."
+msgstr "Достигнут лимит кодов аутентификации. Попробуйте позже."
 
 #. App settings: auth code expiry note
 msgctxt "site_app_auth_code_note"
 msgid "Created auth codes expire after 5 minutes"
-msgstr "Созданные коды авторизации истекают через 5 минут"
+msgstr "Созданные коды аутентификации истекают через 5 минут"
 
 #. Reliability: average label
 msgctxt "site_app_average_reliability"
@@ -6297,7 +6327,7 @@ msgstr "Множители по странам"
 #. App settings: create auth code button
 msgctxt "site_app_create_auth_code"
 msgid "Create auth code"
-msgstr "Создать код авторизации"
+msgstr "Создать код аутентификации"
 
 #. App payout detail: created time
 msgctxt "site_app_created"
@@ -7609,6 +7639,11 @@ msgctxt "solana_one_time_payment"
 msgid "Paying with USDC on Solana is a one-time yearly payment, with no free trial."
 msgstr "Оплата в USDC в сети Solana — это разовый годовой платёж без бесплатного пробного периода."
 
+#. Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.
+msgctxt "solana_payment_still_checking"
+msgid "Still checking for your Solana payment. Confirmation on the network can take a minute or two."
+msgstr "Всё ещё проверяем ваш платёж в Solana. Подтверждение в сети может занять минуту-две."
+
 #. Call to action
 msgctxt "solana_sign_in"
 msgid "Sign in with Solana"
@@ -7921,7 +7956,7 @@ msgstr "Нажмите, чтобы повторить попытку получ�
 #. 
 msgctxt "terms_checkbox"
 msgid "I agree to URnetwork's {terms_start}Terms and Services{terms_end} and {privacy_start}Privacy Policy{privacy_end}"
-msgstr "Я принимаю {terms_start}Условия и Услуги{terms_end} и {privacy_start}Политику конфиденциальности{privacy_end} URnetwork"
+msgstr "Я принимаю {terms_start}Условия обслуживания{terms_end} и {privacy_start}Политику конфиденциальности{privacy_end} URnetwork"
 
 #. Get Pro screen: debug button that replays the Pro celebration animation.
 msgctxt "test_animation"
@@ -7956,7 +7991,7 @@ msgstr "Произошла ошибка при входе"
 #. Used in Authenticate/LoginInitial/AuthCodeLoginSheet.swift.
 msgctxt "there_was_an_error_validating_your_auth_code"
 msgid "There was an error validating your auth code. Please try again or generate a new one"
-msgstr "Ошибка при проверке вашего кода авторизации. Пожалуйста, попробуйте снова или сгенерируйте новый."
+msgstr "Ошибка при проверке вашего кода аутентификации. Пожалуйста, попробуйте снова или сгенерируйте новый."
 
 #. A warning message displayed in the seedphrase display view.
 msgctxt "this_is_the_only_time_you_ll"
@@ -8395,7 +8430,7 @@ msgctxt "verification_code_sent"
 msgid "Check your email/phone for a verification code."
 msgstr "Проверьте электронную почту или телефон — там код подтверждения."
 
-#. Snackbar shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift.
+#. Snackbar (apple) / toast (android) shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift and android LoginVerify.kt.
 msgctxt "verification_code_sent_2"
 msgid "Verification code sent."
 msgstr "Код подтверждения отправлен."
@@ -8566,7 +8601,7 @@ msgstr "Добро пожаловать в URnetwork"
 #. Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheet.swift.
 msgctxt "when_unlinking_your_referral_network_you_will_no"
 msgid "When unlinking your referral network, you will no longer be able to earn points from {}."
-msgstr "При отключении вашей реферальной сети вы больше не сможете получать баллы от {}."
+msgstr "При отключении вашей реферальной сети вы больше не сможете получать очки от {}."
 
 #. Call to action
 msgctxt "when_you_refer_a_friend"
@@ -8758,7 +8793,7 @@ msgstr "Да"
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "you_get_30_gib_month_for_life"
 msgid "You get 30 GiB/month for life"
-msgstr "Вы получаете 30 ГиБ/месяц навсегда"
+msgstr "Вы получаете 30 GiB/месяц навсегда"
 
 #. Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.
 msgctxt "you_get_3_gib_day_for_life"
@@ -8816,7 +8851,7 @@ msgstr "name@email.com"
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "your_friend_gets_30_gib_month_for_life"
 msgid "Your friend gets 30 GiB/month for life"
-msgstr "Ваш друг получает 30 ГиБ/месяц навсегда"
+msgstr "Ваш друг получает 30 GiB/месяц навсегда"
 
 #. Text displayed in a scrollable view within a VStack in the body of a view that is displayed in a modal.
 msgctxt "your_friend_gets_3_gib_day_for"
