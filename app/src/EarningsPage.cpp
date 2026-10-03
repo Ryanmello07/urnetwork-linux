@@ -347,7 +347,7 @@ PointsBreakdown AggregatePoints(const urnet::AccountPointsList& points) {
 
 // The points headline: the net figure over "net points earned", then the
 // Providing / Referral / Reliability cells, then the Seeker multiplier row
-// when one is earning — points only, it never touches the alpha.
+// when one is earning — its points 2x never touches the alpha.
 Gtk::Widget* BuildPointsBreakdown(const PointsBreakdown& points) {
   auto* column = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
 
@@ -383,9 +383,12 @@ Gtk::Widget* BuildPointsBreakdown(const PointsBreakdown& points) {
     text->append(*verified);
     text->append(*MakeSizedLabel(T_("you_re_earning_2x_points", "You're earning 2x points"),
                                  12, "ur-caption"));
+    // points AND the free daily and referral data grants (server pro.yml
+    // seeker.data_multiplier, subsidy seeker_holder_multiplier); never Pro
     text->append(*MakeSizedLabel(
-        T_("seeker_points_only", "The Seeker multiplier applies to points only."), 12,
-        "ur-caption"));
+        T_("seeker_multiplier_benefit",
+           "Doubles your points, free daily data and referral data."),
+        12, "ur-caption"));
     row->append(*text);
     auto* bonus = MakeCondensedValue(
         Format(T_("plus_amount", "+{}"), FormatPointsValue(points.multiplier)), 22, 1.f);
