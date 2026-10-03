@@ -243,6 +243,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       snapshot.startBalanceByteCount = balance_.StartBalanceByteCount();
       snapshot.isPro = balance_.IsPro();
       snapshot.guest = balance_.IsGuest();
+      snapshot.subscriptionStoreFamily = balance_.SubscriptionStoreFamily();
       snapshot.loaded = balance_.HasFetched();
       snapshot.confirming = balance_.IsPolling();
       snapshot.timedOut = balance_.PurchaseConfirmationTimedOut();
