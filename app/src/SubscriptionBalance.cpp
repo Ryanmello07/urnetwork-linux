@@ -43,7 +43,7 @@ void SubscriptionBalanceStore::Start() {
   didDetectUpgradeToPro_ = false;
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
   totalReferrals_ = 0;
-  referralCode_.clear();
+  referral_.Reset();
 
   // Offline Pro: the jwt's Pro (and GuestMode) claims are readable without a
   // network call — the plan label is right even before the first fetch.
@@ -79,7 +79,7 @@ void SubscriptionBalanceStore::Stop() {
   didDetectUpgradeToPro_ = false;
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
   totalReferrals_ = 0;
-  referralCode_.clear();
+  referral_.Reset();
   purchaseConfirmationTimedOut_ = false;
   Emit();
 }
@@ -272,9 +272,13 @@ void SubscriptionBalanceStore::FetchReferralCode() {
         PostToMain([this, epoch, issued, result = std::move(result), err = std::move(err)] {
           if (*epoch != issued) return;
           isLoadingReferral_ = false;
-          if (err || !result || result->error) return;  // the row just keeps its last value
+          if (err || !result || result->error) {
+            // the row just keeps its last value
+            if (referral_.Fail()) Emit();
+            return;
+          }
           totalReferrals_ = result->total_referrals;
-          referralCode_ = result->referral_code.value_or(std::string());
+          referral_.Succeed(result->referral_code.value_or(std::string()));
           // the program terms ride along (server pro.yml); zero means the
           // server reported none, so the display defaults stay
           auto gibPerDay = [](int64_t bytes, int64_t periodSeconds) -> int64_t {
