@@ -4483,6 +4483,11 @@ msgctxt "network_name_check_error"
 msgid "Not available. Must be at least 3 characters different than an existing network. Make it unique or longer."
 msgstr "不可用。必须与现有网络至少有 3 个字符不同。使其独特或更长。"
 
+#. Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.
+msgctxt "network_name_check_failed"
+msgid "Couldn't check availability. You can still continue."
+msgstr "无法检查是否可用。你仍可以继续。"
+
 #. Supporting text for a text field that is invalid.
 msgctxt "network_name_is_too_short_try_one_with_at_least"
 msgid "Network name is too short. Try one with at least 6 characters"
