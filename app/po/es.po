@@ -99,6 +99,11 @@ msgctxt "add_emoji"
 msgid "Add emoji"
 msgstr "Añadir emojis"
 
+#. Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.
+msgctxt "add_local_split_rule"
+msgid "Route locally"
+msgstr "Enrutar localmente"
+
 #. Call to action
 msgctxt "add_referral_code"
 msgid "Add referral code"
@@ -3945,6 +3950,11 @@ msgctxt "kill_switch_exception_detail"
 msgid "While the VPN is connected, IPv6 is not routed through URnetwork and may use your local network, even when the kill switch is on. Outbound SMTP on TCP port 25 also bypasses the VPN. These exceptions may expose your local public IP to those destinations. SMTP on ports 465 and 587 stays in the VPN and must establish TLS."
 msgstr "Mientras la VPN está conectada, IPv6 no se enruta a través de URnetwork y puede usar tu red local, incluso con el Kill switch activado. El SMTP saliente por el puerto TCP 25 también evita la VPN. Estas excepciones pueden exponer tu IP pública local a esos destinos. El SMTP por los puertos 465 y 587 permanece en la VPN y debe establecer TLS."
 
+#. Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.
+msgctxt "kill_switch_exception_unrecognized_encrypted"
+msgid "When the kill switch is off, traffic that URnetwork safety rules keep off the network, such as unrecognized encrypted protocols, bypasses the VPN and uses your local public IP. With the kill switch on, that traffic is blocked."
+msgstr "Con el Kill switch desactivado, el tráfico que las reglas de seguridad de URnetwork mantienen fuera de la red, como protocolos cifrados no reconocidos, evita la VPN y usa tu IP pública local. Con el Kill switch activado, ese tráfico se bloquea."
+
 #. Button text for entering the one-time authentication code and entering the app
 msgctxt "launch"
 msgid "Launch"
@@ -5682,6 +5692,16 @@ msgstr "Tú"
 msgctxt "rules"
 msgid "Rules"
 msgstr "Reglas"
+
+#. A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.
+msgctxt "safety_rule"
+msgid "Safety rule"
+msgstr "Regla de seguridad"
+
+#. Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.
+msgctxt "safety_rule_detail"
+msgid "URnetwork safety rules keep this traffic off the network, for example an encrypted protocol it cannot recognize. A local split rule sends it outside the VPN from your own IP."
+msgstr "Las reglas de seguridad de URnetwork mantienen este tráfico fuera de la red, por ejemplo un protocolo cifrado que no pueden reconocer. Una regla de división local lo envía fuera de la VPN desde tu propia IP."
 
 #. Profile
 msgctxt "save"

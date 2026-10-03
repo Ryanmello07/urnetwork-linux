@@ -298,6 +298,17 @@ void ConnectDrawer::BuildControlsCard() {
     body->set_wrap(true);
     content->append(*body);
 
+    // the safety-rule exception: what the URnetwork safety rules keep off the
+    // providers bypasses the VPN while the kill switch is off
+    auto* safetyBody = Gtk::make_managed<Gtk::Label>(T_(
+        "kill_switch_exception_unrecognized_encrypted",
+        "When the kill switch is off, traffic that URnetwork safety rules keep off the network, "
+        "such as unrecognized encrypted protocols, bypasses the VPN and uses your local public "
+        "IP. With the kill switch on, that traffic is blocked."));
+    safetyBody->set_xalign(0);
+    safetyBody->set_wrap(true);
+    content->append(*safetyBody);
+
     popover->set_child(*content);
     killInfo->set_popover(*popover);
   }

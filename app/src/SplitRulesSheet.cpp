@@ -8,6 +8,7 @@
 
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "SafetyRulePresentation.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -125,6 +126,7 @@ void SplitRulesSheet::Refresh() {
       item.hasBlockOverride = it->BlockOverride.has_value();
       item.hasRouteOverride = it->RouteOverride.has_value();
       item.byteCount = it->ByteCount;
+      item.reason = it->Reason;
       actions.push_back(std::move(item));
     }
   }
@@ -258,6 +260,34 @@ void SplitRulesSheet::RebuildActivity() {
     textColumn->append(*captionLabel);
     row->append(*textColumn);
 
+    // the URnetwork safety rules decided this action: say so, with the detail on
+    // hover, and when a local rule can make it work outside the tunnel, offer
+    // one through the same editor a row tap opens
+    const auto safety = safety_rule::PresentActivityRow(
+        action.reason, action.block,
+        safety_rule::OverrideApplied(action.overrideId, action.hasBlockOverride,
+                                     action.hasRouteOverride));
+    const ActionItem actionCopy = action;
+    if (safety.safetyRule) {
+      const auto detail = T_("safety_rule_detail",
+                             "URnetwork safety rules keep this traffic off the network, for "
+                             "example an encrypted protocol it cannot recognize. A local split "
+                             "rule sends it outside the VPN from your own IP.");
+      auto* safetyChip = MakeChip(T_("safety_rule", "Safety rule"), "coral", false);
+      safetyChip->set_tooltip_text(detail);
+      flow->insert(*safetyChip, 0);
+      row->set_tooltip_text(detail);
+    }
+    if (safety.offerRouteLocal) {
+      auto* routeLocal =
+          Gtk::make_managed<Gtk::Button>(T_("add_local_split_rule", "Route locally"));
+      routeLocal->add_css_class("flat");
+      routeLocal->set_valign(Gtk::Align::CENTER);
+      routeLocal->signal_clicked().connect(
+          [this, actionCopy] { OpenEditorForAction(actionCopy); });
+      row->append(*routeLocal);
+    }
+
     // the decision chips light solid when an override decided this action
     row->append(*MakeChip(action.block ? T_("blocked", "Blocked") : T_("allowed", "Allowed"),
                           action.block ? "coral" : "muted", action.hasBlockOverride));
@@ -265,7 +295,6 @@ void SplitRulesSheet::RebuildActivity() {
                           action.local ? "green" : "muted", action.hasRouteOverride));
 
     auto gesture = Gtk::GestureClick::create();
-    const ActionItem actionCopy = action;
     gesture->signal_released().connect(
         [this, actionCopy](int, double, double) { OpenEditorForAction(actionCopy); });
     row->add_controller(gesture);
