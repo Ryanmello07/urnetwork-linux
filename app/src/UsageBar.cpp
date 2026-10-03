@@ -6,6 +6,7 @@
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
+#include "UsageBarReferralRow.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -94,26 +95,43 @@ UsageBar::UsageBar() : Gtk::Box(Gtk::Orientation::VERTICAL, 8) {
   });
   append(*referralButton_);
 
-  SetData(0, 0, 0, 0, 0);
+  SetData(UsageBarData{});
 }
 
-void UsageBar::SetData(int64_t usedByteCount, int64_t pendingByteCount,
-                       int64_t availableByteCount, int64_t dailyBalanceByteCount,
-                       int64_t totalReferrals) {
-  used_ = std::max<int64_t>(0, usedByteCount);
-  pending_ = std::max<int64_t>(0, pendingByteCount);
-  available_ = std::max<int64_t>(0, availableByteCount);
+void UsageBar::SetData(const UsageBarData& data) {
+  data_ = data;
+  data_.usedByteCount = std::max<int64_t>(0, data.usedByteCount);
+  data_.pendingByteCount = std::max<int64_t>(0, data.pendingByteCount);
+  data_.availableByteCount = std::max<int64_t>(0, data.availableByteCount);
   bar_.queue_draw();
 
-  dailyBalanceValue_->set_text(FormatByteCountCompact(dailyBalanceByteCount));
-  referralCount_->set_text(
-      Format(TN_("total_referral_count", "Total referrals: {}", "Total referrals: {}",
-                 totalReferrals),
-             totalReferrals));
-  // 3 GiB per referral per DAY (server pro.yml referral; this said GiB/Month * 30)
-  totalReferrals_ = totalReferrals;
-  const int64_t paid = (0 < maxReferrals_ && maxReferrals_ < totalReferrals) ? maxReferrals_ : totalReferrals;
-  referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), std::max<int64_t>(0, paid) * bonusGibPerDay_));
+  dailyBalanceValue_->set_text(FormatByteCountCompact(data.dailyBalanceByteCount));
+  ApplyReferralRow();
+}
+
+// GiB per referral per DAY, on the server's terms (pro.yml referral)
+void UsageBar::ApplyReferralRow() {
+  if (!referralCount_ || !referralBonus_) return;
+  const UsageBarReferralRow row = UsageBarReferralRowFor(data_);
+  switch (row.kind) {
+    case UsageBarReferralKind::Earned:
+      referralCount_->set_text(
+          Format(TN_("total_referral_count", "Total referrals: {}", "Total referrals: {}",
+                     row.totalReferrals),
+                 row.totalReferrals));
+      referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), row.bonusGibPerDay));
+      break;
+    case UsageBarReferralKind::Loading:
+      // the count is not known yet: not "+0"
+      referralCount_->set_text(T_("total_referrals", "Total referrals"));
+      referralBonus_->set_text(T_("loading", "Loading..."));
+      break;
+    case UsageBarReferralKind::Unavailable:
+      // a failed read is not "+0"; the Referrals page the row opens offers Try again
+      referralCount_->set_text(T_("total_referrals", "Total referrals"));
+      referralBonus_->set_text("");
+      break;
+  }
   UpdateReferralAccessibleName();
 }
 
@@ -121,23 +139,15 @@ void UsageBar::SetData(int64_t usedByteCount, int64_t pendingByteCount,
 // plain text and would otherwise read as an unnamed button.
 void UsageBar::UpdateReferralAccessibleName() {
   if (!referralButton_ || !referralCount_ || !referralBonus_) return;
-  kit::SetAccessibleLabel(*referralButton_,
-                          referralCount_->get_text() + ", " + referralBonus_->get_text());
+  const Glib::ustring bonus = referralBonus_->get_text();
+  kit::SetAccessibleLabel(*referralButton_, bonus.empty()
+                                                ? referralCount_->get_text()
+                                                : referralCount_->get_text() + ", " + bonus);
 }
 
 void UsageBar::SetShowReferrals(bool show) {
   if (referralSeparator_) referralSeparator_->set_visible(show);
   if (referralButton_) referralButton_->set_visible(show);
-}
-
-void UsageBar::SetReferralTerms(int64_t maxReferrals, int64_t bonusGibPerDay) {
-  maxReferrals_ = maxReferrals;
-  bonusGibPerDay_ = bonusGibPerDay;
-  const int64_t paid = (0 < maxReferrals_ && maxReferrals_ < totalReferrals_) ? maxReferrals_ : totalReferrals_;
-  if (referralBonus_) {
-    referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), std::max<int64_t>(0, paid) * bonusGibPerDay_));
-  }
-  UpdateReferralAccessibleName();
 }
 
 void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {
@@ -154,7 +164,10 @@ void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int h
   cr->close_path();
   cr->clip();
 
-  const double total = static_cast<double>(used_ + pending_ + available_);
+  const int64_t used = data_.usedByteCount;
+  const int64_t pending = data_.pendingByteCount;
+  const int64_t available = data_.availableByteCount;
+  const double total = static_cast<double>(used + pending + available);
   if (total <= 0) {
     // empty state: a faint full-width track
     const Rgba& c = kUrTextFaint;
@@ -164,7 +177,7 @@ void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int h
   }
 
   // non-zero segments get a 1.5% floor so they stay visible (mac parity)
-  double fractions[3] = {used_ / total, pending_ / total, available_ / total};
+  double fractions[3] = {used / total, pending / total, available / total};
   const Rgba colors[3] = {UsedColor(), PendingColor(), AvailableColor()};
   double sum = 0;
   for (double& f : fractions) {
