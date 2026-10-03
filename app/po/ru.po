@@ -3218,7 +3218,7 @@ msgctxt "error_creating_network"
 msgid "There was an error creating your network. Please try again later."
 msgstr "Произошла ошибка при создании вашей сети. Пожалуйста, попробуйте позже."
 
-#. Snackbar shown when deleting the account fails. Used in Main/Account/Settings/SettingsView.swift.
+#. Shown when deleting the account fails, including when the server refuses the deletion (its reason follows on the next line). Apple Settings snackbar, android Settings, windows and linux delete-account sheet, web account settings.
 msgctxt "error_deleting_account"
 msgid "Sorry, there was an error deleting your account."
 msgstr "К сожалению, произошла ошибка при удалении вашего аккаунта."
