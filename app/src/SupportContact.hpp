@@ -21,9 +21,11 @@ enum class StayInTouchLink {
   DepinHub,      // verified_project_on_depin_hub_https_depinhub_io
 };
 
-// The card's rows, in order.
-constexpr std::array<StayInTouchLink, 2> kStayInTouchLinks = {
+// The card's rows, in order. The Discord invite is unreachable in some
+// regions, so the support address sits right under it.
+constexpr std::array<StayInTouchLink, 3> kStayInTouchLinks = {
     StayInTouchLink::Discord,
+    StayInTouchLink::SupportEmail,
     StayInTouchLink::DepinHub,
 };
 

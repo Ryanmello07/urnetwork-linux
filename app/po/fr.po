@@ -4198,11 +4198,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "Envoie"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "Envoyez-nous directement vos retours ou rejoignez notre {} pour un support direct."
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"

@@ -1390,6 +1390,8 @@ void SettingsPage::BuildStayInTouchSection(Gtk::Box& host) {
     }
     host.append(*row.root);
   };
+  // The Discord invite is unreachable in some regions, so the support address
+  // is offered beside it (support::kStayInTouchLinks).
   for (const auto row : support::kStayInTouchLinks) {
     switch (row) {
       case support::StayInTouchLink::Discord:

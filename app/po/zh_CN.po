@@ -5797,11 +5797,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "发送"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "直接向我们反馈，或加入我们的 {} 获取直接支持。"
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"

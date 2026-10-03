@@ -5892,11 +5892,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "أرسل"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "أرسل لنا ملاحظاتك مباشرة أو انضم إلى {} الخاص بنا للحصول على دعم مباشر."
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"

@@ -4184,11 +4184,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "發送"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "直接向我們發送反饋，或加入我們的 {} 獲取直接支持。"
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"

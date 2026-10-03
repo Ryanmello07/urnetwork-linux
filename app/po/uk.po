@@ -4212,11 +4212,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "Надіслати"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "Надішліть нам свій відгук безпосередньо або приєднайтеся до нашого {} для прямої підтримки."
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"

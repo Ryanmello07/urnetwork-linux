@@ -3668,11 +3668,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "Enviar"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "Envíanos tus comentarios directamente o únete a nuestro {} para soporte directo."
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"
