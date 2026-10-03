@@ -2420,7 +2420,12 @@ msgctxt "insufficient_balance_add_balance_or_plan"
 msgid "Insufficient balance — add balance or a plan"
 msgstr "餘額不足 — 請新增餘額或計劃"
 
-#. Body of the warning shown when the balance runs out; the tunnel disconnects without more balance or a plan.
+#. Alert body shown in the app and in a local notification when the account enters the insufficient balance state. Connect stays requested and the VPN keeps holding traffic (nothing leaves outside the tunnel); the user can upgrade or disconnect.
+msgctxt "insufficient_balance_held_notice"
+msgid "Your traffic is held in the tunnel until you upgrade or disconnect."
+msgstr "在你升級或斷開連接之前，你的流量會保留在隧道中。"
+
+#. Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.
 msgctxt "insufficient_balance_message"
 msgid "Add balance or a plan to keep connecting."
 msgstr "新增餘額或方案以繼續連接。"

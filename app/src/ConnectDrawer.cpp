@@ -7,6 +7,7 @@
 
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "InsufficientBalanceNotice.hpp"
 #include "KillSwitchCopy.hpp"
 #include "Ui.hpp"
 
@@ -126,13 +127,13 @@ void ConnectDrawer::BuildInsufficientBanner() {
   chevron->add_css_class("dim-label");
   header->append(*chevron);
   insufficientBanner_->append(*header);
-  auto* body = Gtk::make_managed<Gtk::Label>(
-      T_("insufficient_balance_message", "Add balance or a plan to keep connecting."));
-  body->add_css_class("dim-label");
-  body->add_css_class("caption");
-  body->set_xalign(0);
-  body->set_wrap(true);
-  insufficientBanner_->append(*body);
+  // the text is set in RefreshPlanCard (balance_notice::Banner)
+  insufficientBody_ = Gtk::make_managed<Gtk::Label>();
+  insufficientBody_->add_css_class("dim-label");
+  insufficientBody_->add_css_class("caption");
+  insufficientBody_->set_xalign(0);
+  insufficientBody_->set_wrap(true);
+  insufficientBanner_->append(*insufficientBody_);
   // Guests divert to account creation first, exactly like the plan card's
   // Create account button (CreateNetworkPage::Mode::UpgradeGuest via
   // on_create_account): a Pro subscription must never bind to a throwaway
@@ -665,6 +666,12 @@ void ConnectDrawer::SetInsufficientBalance(bool insufficient) {
   RefreshPlanCard();
 }
 
+void ConnectDrawer::SetConnectRequested(bool requested) {
+  if (connectRequested_ == requested) return;
+  connectRequested_ = requested;
+  RefreshPlanCard();
+}
+
 void ConnectDrawer::OpenUpgrade() { upgradeSheet_->Open(); }
 
 void ConnectDrawer::OpenLocationChooser() {
@@ -682,7 +689,14 @@ void ConnectDrawer::RefreshPlanCard() {
                      balance_.AvailableByteCount(), balance_.StartBalanceByteCount(),
                      balance_.TotalReferrals());
   // mac gate: contractStatus.insufficientBalance && !isPro && !isPolling
-  insufficientBanner_->set_visible(insufficientBalance_ && !isPro && !balance_.IsPolling());
+  balance_notice::Signals notice;
+  notice.insufficientBalance = insufficientBalance_;
+  notice.pro = isPro;
+  notice.polling = balance_.IsPolling();
+  notice.connectRequested = connectRequested_;
+  const balance_notice::BannerText text = balance_notice::Banner(notice);
+  insufficientBody_->set_text(T_(text.key, text.english));
+  insufficientBanner_->set_visible(balance_notice::Gate(notice));
 }
 
 // ---- refresh ---------------------------------------------------------------

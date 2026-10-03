@@ -229,6 +229,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // fan out to the drawer's plan card, banner, and the upgrade sheet states.
   balance_.SetChangedHandler([this] {
     if (drawer_) drawer_->OnBalanceChanged();
+    UpdateBalanceNotice();  // a Pro upgrade or a settled poll moves the gate
     // Earnings gates its upgrade door and its plan-flavoured copy on the same
     // two bits the drawer's plan card reads.
     if (earningsPage_) earningsPage_->SetBalanceState(balance_.IsPro(), balance_.IsGuest());
@@ -2335,10 +2336,51 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   }
   if (windowVisible_) status_.set_text(lastStatus_);
   if (connectPage_) connectPage_->ApplyConnectReading(reading);
+  if (drawer_) drawer_->SetConnectRequested(reading.destinationSelected);
+  UpdateBalanceNotice();
   if (on_connected_change && (connected_ != wasConnected || !trayConnectedPushed_)) {
     trayConnectedPushed_ = true;
     on_connected_change(connected_);
   }
+}
+
+// One fixed notification id, so a post replaces and a withdraw always finds it.
+constexpr const char* kBalanceNoticeId = "insufficient-balance";
+
+// Out of balance with a connection requested, the tunnel holds traffic with no
+// provider behind it. Tell the user once per episode, with a Disconnect button;
+// the tracker decides, this only talks to GApplication. It never disconnects.
+void MainWindow::UpdateBalanceNotice() {
+  struct Sink {
+    MainWindow& window;
+    void Post() {
+      auto app = window.get_application();
+      if (!app) return;
+      auto notification =
+          Gio::Notification::create(T_("insufficient_balance", "Insufficient balance"));
+      notification->set_body(
+          T_("insufficient_balance_held_notice",
+             "Your traffic is held in the tunnel until you upgrade or disconnect."));
+      notification->add_button(T_("disconnect", "Disconnect"),
+                               std::string("app.") + kBalanceNoticeDisconnectAction);
+      app->send_notification(kBalanceNoticeId, notification);
+    }
+    void Withdraw() {
+      if (auto app = window.get_application()) app->withdraw_notification(kBalanceNoticeId);
+    }
+  };
+  balance_notice::Signals signals;
+  signals.insufficientBalance = reading_.insufficientBalance;
+  signals.pro = balance_.IsPro();
+  signals.polling = balance_.IsPolling();
+  signals.connectRequested = reading_.destinationSelected;
+  Sink sink{*this};
+  balanceNotice_.Observe(signals, sink);
+}
+
+void MainWindow::DisconnectFromBalanceNotice() {
+  // the user's own Disconnect path, disconnect only
+  ToggleConnect(/*disconnect=*/true);
 }
 
 void MainWindow::OpenProviderLocations() {
