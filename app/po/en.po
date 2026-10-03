@@ -3433,6 +3433,16 @@ msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "Tell us how you really feel"
 
+#. Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.
+msgctxt "feedback_send_failed"
+msgid "Your feedback wasn't sent. Check your connection and try again."
+msgstr "Your feedback wasn't sent. Check your connection and try again."
+
+#. Feedback screen: label of the Send button while the feedback is being sent.
+msgctxt "feedback_sending"
+msgid "Sending…"
+msgstr "Sending…"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"

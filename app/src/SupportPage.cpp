@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "ClientEvents.hpp"
+#include "FeedbackSendState.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
 #include "Ui.hpp"
@@ -73,8 +74,7 @@ void SupportPage::Load() {
   // previous session and reset the in-flight gate so a hung callback cannot
   // wedge Send across a re-navigation.
   ++*epoch_;
-  sending_ = false;
-  if (sendButton_) sendButton_->set_sensitive(true);
+  SetSending(false);
 }
 
 void SupportPage::ApplyBreakpoint(int widthDip) {
@@ -206,11 +206,11 @@ void SupportPage::BuildMainStack() {
   sendIcon->set_pixel_size(14);
   kit::MarkDecorative(*sendIcon);
   sendContent->append(*sendIcon);
-  auto* sendLabel = Gtk::make_managed<Gtk::Label>(T_("send", "Send"));
-  sendLabel->set_valign(Gtk::Align::CENTER);
-  sendContent->append(*sendLabel);
+  sendLabel_ = Gtk::make_managed<Gtk::Label>();
+  sendLabel_->set_valign(Gtk::Align::CENTER);
+  sendContent->append(*sendLabel_);
   sendButton_->set_child(*sendContent);
-  kit::SetAccessibleLabel(*sendButton_, T_("send", "Send"));
+  SetSending(false);
   sendButton_->signal_clicked().connect([this] { OnSendFeedback(); });
   card->append(*sendButton_);
 
@@ -327,9 +327,8 @@ void SupportPage::OnSendFeedback() {
   const int64_t sentRating = args.star_count;   // for feedback.submitted
   const std::string sentText = text.raw();
 
-  // 3. Disable Send — the only in-flight gating; no spinner.
-  sending_ = true;
-  sendButton_->set_sensitive(false);
+  // 3. Disable Send and say "Sending…" — the only in-flight gating.
+  SetSending(true);
 
   // 4. Api::sendFeedback; the callback fires on an SDK thread — marshal via
   //    PostToMain and drop it if the epoch moved (Load()/dtor).
@@ -342,8 +341,7 @@ void SupportPage::OnSendFeedback() {
         PostToMain([this, epoch, seen, attachLogs, sentRating, sentText, result = std::move(result),
                     err = std::move(err)] {
           if (*epoch != seen) return;  // stale: a newer Load() owns the page
-          sending_ = false;
-          sendButton_->set_sensitive(true);  // on EVERY path
+          SetSending(false);  // on EVERY path
 
           // 5. Success test: FeedbackSendResult carries no error field, only
           //    an optional feedback_id — ok = no transport error AND a result
@@ -380,6 +378,18 @@ void SupportPage::OnSendFeedback() {
           if (attachLogs && !feedbackId.empty()) UploadLogs(feedbackId);
         });
       });
+}
+
+// Send reads "Sending…" and is insensitive while the request is out; the label
+// is also the button's accessible name (its content is a box).
+void SupportPage::SetSending(bool sending) {
+  sending_ = sending;
+  if (!sendButton_ || !sendLabel_) return;
+  const feedback::SendButton button = feedback::SendButtonFor(sending);
+  const char* label = g_dpgettext2(GETTEXT_PACKAGE, button.labelKey, button.labelEnglish);
+  sendButton_->set_sensitive(button.sensitive);
+  sendLabel_->set_text(label);
+  kit::SetAccessibleLabel(*sendButton_, label);
 }
 
 void SupportPage::UploadLogs(const std::string& feedbackId) {
