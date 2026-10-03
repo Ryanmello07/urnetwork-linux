@@ -1025,6 +1025,11 @@ msgctxt "connect_seeker_wallet"
 msgid "Connect a wallet with the Saga Genesis or Seeker Pre-Order Token"
 msgstr "Połącz portfel z tokenem Saga Genesis lub tokenem zamówienia przedpremierowego Seeker"
 
+#. Add sign-in method sheet (android): the wallet option's explanation.
+msgctxt "connect_solana_wallet_to_add_sign_in_method"
+msgid "Connect a Solana wallet to add it as a sign-in method."
+msgstr "Połącz portfel Solana, aby dodać go jako metodę logowania."
+
 #. Call to action
 msgctxt "connect_to_location"
 msgid "Connect to {}"
@@ -1155,6 +1160,11 @@ msgstr "Kopiuj ID klienta"
 msgctxt "copy_to_clipboard"
 msgid "Copy to Clipboard"
 msgstr "Kopiuj do schowka"
+
+#. Add sign-in method sheet (android): Google sign-in returned no identity token.
+msgctxt "could_not_get_google_id_token"
+msgid "Could not get Google ID token"
+msgstr "Nie udało się uzyskać tokena identyfikatora Google"
 
 #. Snackbar shown when the external wallet app could not be opened. Used in Shared/Views/SolanaSignMessageSheet.swift and Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "couldnt_open_wallet"
@@ -2115,6 +2125,11 @@ msgctxt "error_claiming_multiplier_with_reason"
 msgid "Sorry, there was an error claiming multiplier: {}"
 msgstr "Przepraszamy, wystąpił błąd podczas odbierania mnożnika: {}"
 
+#. Add sign-in method sheet (android): the wallet app could not be reached or did not sign.
+msgctxt "error_connecting_to_wallet"
+msgid "Error connecting to wallet"
+msgstr "Błąd połączenia z portfelem"
+
 #. Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "error_connecting_wallet"
 msgid "There was an error connecting your wallet."
@@ -2140,6 +2155,11 @@ msgctxt "error_loading_account_plan"
 msgid "Error loading your account plan."
 msgstr "Błąd podczas ładowania planu konta."
 
+#. Sign-in screen (android): a Google or wallet sign-in failed.
+msgctxt "error_logging_in_please_try_again"
+msgid "Error logging in, please try again."
+msgstr "Błąd logowania, spróbuj ponownie."
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "error_redeeming_transfer_balance_code"
 msgid "Error redeeming transfer balance code"
@@ -2164,6 +2184,11 @@ msgstr "Wystąpił błąd podczas wysyłania kodu weryfikacyjnego."
 msgctxt "error_setting_default_wallet_with_reason"
 msgid "Error setting default wallet: {}"
 msgstr "Błąd podczas ustawiania domyślnego portfela: {}"
+
+#. Add sign-in method sheet (android): Google sign-in failed or was cancelled.
+msgctxt "error_signing_in_with_google"
+msgid "Error signing in with Google"
+msgstr "Błąd logowania przez Google"
 
 #. Snackbar shown when saving the device name fails. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "error_updating_device_name"
@@ -3168,10 +3193,20 @@ msgctxt "no_blocked_locations"
 msgid "No blocked locations"
 msgstr "Brak zablokowanych lokalizacji"
 
+#. Add sign-in method sheet (android): no installed wallet app can sign the challenge.
+msgctxt "no_compatible_wallet_app_found"
+msgid "No compatible wallet app found on this device."
+msgstr "Nie znaleziono zgodnej aplikacji portfela na tym urządzeniu."
+
 #. A description of the benefits of creating an Instant Account.
 msgctxt "no_email_phone_or_password_needed_your"
 msgid "No email, phone, or password needed. Your account is secured by a seedphrase."
 msgstr "Nie potrzebujesz e-maila, telefonu ani hasła. Twoje konto chroni fraza seed."
+
+#. Sign-in screen (android, ethOS build): no ethOS system wallet is available.
+msgctxt "no_ethos_wallet_found"
+msgid "No EthOs wallet found"
+msgstr "Nie znaleziono portfela EthOs"
 
 #. App split rules: empty state when no installed apps were enumerated.
 msgctxt "no_installed_apps_found"
@@ -4438,6 +4473,11 @@ msgctxt "site_app_country_multipliers"
 msgid "Country multipliers"
 msgstr "Mnożniki krajów"
 
+#. App profile: email label
+msgctxt "site_app_email"
+msgid "Email"
+msgstr "E-mail"
+
 #. Connect drawer: fixed-IP toggle
 msgctxt "site_app_fixed_ip"
 msgid "Fixed IP"
@@ -5570,6 +5610,11 @@ msgstr "Jesteś użytkownikiem premium."
 msgctxt "your_email"
 msgid "Your email"
 msgstr "Twój e-mail"
+
+#. Placeholder text for the email field.
+msgctxt "your_email_com"
+msgid "your@email.com"
+msgstr "twoj@email.com"
 
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "your_friend_gets_30_gib_month_for_life"
