@@ -96,6 +96,9 @@ class SubscriptionBalanceStore {
 
   bool IsPro() const { return isPro_; }
   bool IsGuest() const { return isGuest_; }
+  // the current subscription's store family (urnet::classifySubscriptionStore:
+  // "stripe", "apple", "google", "other"), "" without a subscription
+  const std::string& SubscriptionStoreFamily() const { return subscriptionStoreFamily_; }
   // Set once when a free -> paid upgrade is first detected (mac
   // didDetectUpgradeToPro), so the app can reset provide mode to never at the
   // upgrade (the user can opt back in after). Stays up for the session; the
@@ -175,6 +178,7 @@ class SubscriptionBalanceStore {
 
   bool isPro_ = false;
   bool isGuest_ = false;
+  std::string subscriptionStoreFamily_;
   bool didDetectUpgradeToPro_ = false;
 
   int64_t usedByteCount_ = 0;

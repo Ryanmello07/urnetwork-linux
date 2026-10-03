@@ -117,6 +117,8 @@ struct AccountBalance {
   int64_t startBalanceByteCount = 0;
   bool isPro = false;
   bool guest = false;
+  // SubscriptionStoreFamily: Manage Subscription shows only for "stripe"
+  std::string subscriptionStoreFamily;
   bool loaded = false;      // HasFetched: a snapshot has landed at least once
   bool confirming = false;  // IsPolling: the post-checkout confirmation poll
   bool timedOut = false;    // PurchaseConfirmationTimedOut (relayed for parity)

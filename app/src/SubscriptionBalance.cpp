@@ -44,6 +44,7 @@ void SubscriptionBalanceStore::Start() {
   errorFetching_ = false;
   purchaseConfirmationTimedOut_ = false;
   didDetectUpgradeToPro_ = false;
+  subscriptionStoreFamily_.clear();
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
   totals_.Reset();
   referral_.Reset();
@@ -79,6 +80,7 @@ void SubscriptionBalanceStore::Stop() {
   hasFetched_ = false;
   isPro_ = false;
   isGuest_ = false;
+  subscriptionStoreFamily_.clear();
   didDetectUpgradeToPro_ = false;
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
   totals_.Reset();
@@ -207,6 +209,9 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
             // and a lapse — refresh the jwt whenever the two disagree, in
             // either direction (the mac view model learned this the hard way).
             const bool serverIsPro = result->current_subscription.has_value();
+            subscriptionStoreFamily_ =
+                serverIsPro ? urnet::classifySubscriptionStore(result->current_subscription->store)
+                            : std::string();
             if (serverIsPro) {
               // A Pro confirmation resolves an earlier confirmation give-up,
               // even when it lands late (background poll, next window focus):

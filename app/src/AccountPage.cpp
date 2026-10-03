@@ -16,6 +16,7 @@
 #include "DeleteAccountOutcome.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "ManageSubscription.hpp"
 #include "PaneKit.hpp"
 #include "RuntimePaths.hpp"
 #include "Ui.hpp"
@@ -1331,6 +1332,10 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
   } else {
     planValue_->set_cursor();
   }
+
+  // the Stripe customer portal only manages a Stripe subscription: a free
+  // network, or a store or crypto subscription, got the portal's raw error
+  if (portalRow_) portalRow_->set_visible(ShowsManageSubscription(balance_.subscriptionStoreFamily));
 
   // 2. the confirmation ring: active AND visible exactly while the poll runs.
   planRing_->set_visible(balance_.confirming);
