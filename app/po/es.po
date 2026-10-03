@@ -4005,6 +4005,11 @@ msgctxt "link_another_way_to_sign_in_to"
 msgid "Link another way to sign in to your account."
 msgstr "Vincula otra forma de iniciar sesión en tu cuenta."
 
+#. A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.
+msgctxt "load_failed"
+msgid "Couldn't load. Check your connection and try again."
+msgstr "No se pudo cargar. Revisa tu conexión y vuelve a intentarlo."
+
 #. Used in ContentView.swift.
 msgctxt "loading"
 msgid "Loading..."
