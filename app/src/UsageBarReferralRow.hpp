@@ -24,10 +24,17 @@ struct UsageBarReferralRow {
 };
 
 // The row for the referral count read (ReferralTotalsFetch) and the server's
-// terms (maxReferrals 0 = no cap).
+// terms (maxReferrals 0 = no cap). The count is 0 until the read lands and
+// stays 0 when it fails, so the raw count alone read as "+0 GiB/Day" for every
+// new user; the figures wait for the read. A failed background read keeps a
+// count already shown (the view stays Count).
 inline UsageBarReferralRow UsageBarReferralRowFor(ReferralTotalsView view, int64_t totalReferrals,
                                                   int64_t maxReferrals, int64_t bonusGibPerDay) {
-  (void)view;
+  switch (view) {
+    case ReferralTotalsView::Loading: return {UsageBarReferralKind::Loading};
+    case ReferralTotalsView::Unavailable: return {UsageBarReferralKind::Unavailable};
+    case ReferralTotalsView::Count: break;
+  }
   int64_t paid = (0 < maxReferrals && maxReferrals < totalReferrals) ? maxReferrals : totalReferrals;
   if (paid < 0) paid = 0;
   return {UsageBarReferralKind::Earned, totalReferrals, paid * bonusGibPerDay};
