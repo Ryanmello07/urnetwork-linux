@@ -4154,10 +4154,20 @@ msgctxt "seedphrase_word_count_warning"
 msgid "That's {} words — a seedphrase is 12 or 24 words"
 msgstr "這是 {} 個詞 — 助記詞應為 12 或 24 個詞"
 
+#. Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.
+msgctxt "seeker_multiplier_benefit"
+msgid "Doubles your points, free daily data and referral data."
+msgstr "將你的積分、每日免費數據及推薦數據加倍。"
+
 #. Call to action
 msgctxt "seeker_token_verified"
 msgid "Seeker Token Verified!"
 msgstr "Seeker 權杖已驗證！"
+
+#. Seeker token verification: no Solana wallet app is installed to sign the verification message.
+msgctxt "seeker_verify_no_wallet_app"
+msgid "No Solana wallet app was found on this device."
+msgstr "此裝置上找不到 Solana 錢包應用程式。"
 
 #. Used in Main/Account/BlockedLocations/BlockedLocationsView.swift.
 msgctxt "select_country_to_block"
