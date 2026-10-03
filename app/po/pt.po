@@ -2211,10 +2211,10 @@ msgctxt "fast_dns_on_connect"
 msgid "Fast DNS on connect"
 msgstr "DNS rápido ao ligar"
 
-#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).
 msgctxt "fast_dns_on_connect_description"
-msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network. When off, DNS only resolves through the tunnel."
-msgstr "Responde ao DNS através da rede local enquanto o DNS do túnel arranca. Isto pode revelar as suas pesquisas à rede local. Quando desativado, o DNS só é resolvido através do túnel."
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network and return answers that don't match your exit location. When off, DNS only resolves through the tunnel."
+msgstr "Responde ao DNS através da rede local enquanto o DNS do túnel arranca. Isto pode revelar as suas pesquisas à rede local e devolver respostas que não correspondem à sua localização de saída. Quando desativado, o DNS só é resolvido através do túnel."
 
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"

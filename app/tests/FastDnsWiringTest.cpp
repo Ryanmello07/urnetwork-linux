@@ -11,6 +11,8 @@
 #include <sstream>
 #include <string>
 
+#include "FastDnsCopy.hpp"
+
 #ifndef UR_SRC_DIR
 #define UR_SRC_DIR ""
 #endif
@@ -52,6 +54,17 @@ UR_TEST(FastDnsCatalogCarriesTheOptInKey) {
   UR_EXPECT_TRUE(catalog.find("msgctxt \"fast_dns_on_connect_description\"") !=
                  std::string::npos);
   UR_EXPECT_TRUE(catalog.find("msgctxt \"local_dns_fallback\"") == std::string::npos);
+}
+
+// T_ looks the copy up by msgctxt and msgid, so the English fallback in FastDnsCopy.hpp must be
+// the catalog's msgid exactly or every locale shows the stale English.
+UR_TEST(FastDnsEnglishMatchesTheCatalogMsgid) {
+  const std::string catalog = ReadFastDnsSource("../po/en.po");
+  for (const urnw::FastDnsCopy& copy : {urnw::kFastDnsLabel, urnw::kFastDnsDescription}) {
+    const std::string entry = std::string("msgctxt \"") + copy.key + "\"\nmsgid \"" +
+                              copy.english + "\"\n";
+    UR_EXPECT_TRUE(catalog.find(entry) != std::string::npos);
+  }
 }
 
 }  // namespace
