@@ -678,9 +678,7 @@ void ConnectDrawer::RefreshPlanCard() {
                                : (isPro ? T_("supporter", "Pro") : T_("free", "Free")));
   createAccountBtn_->set_visible(isGuest);
   getProBtn_->set_visible(!isPro && !isGuest);
-  usageBar_->SetData(balance_.UsedByteCount(), balance_.PendingByteCount(),
-                     balance_.AvailableByteCount(), balance_.StartBalanceByteCount(),
-                     balance_.TotalsView(), balance_.TotalReferrals());
+  usageBar_->SetData(UsageBarDataFrom(balance_));
   // mac gate: contractStatus.insufficientBalance && !isPro && !isPolling
   insufficientBanner_->set_visible(insufficientBalance_ && !isPro && !balance_.IsPolling());
 }

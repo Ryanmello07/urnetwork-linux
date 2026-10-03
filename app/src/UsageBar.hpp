@@ -1,9 +1,11 @@
 // Usage bar (port of the apple Shared/Views/UsageBar.swift, with the android
 // port's legend): the stacked used / pending / available balance bar, the
 // series legend, the daily-data-balance row, and the referral row
-// ("Total referrals: N" / "+N*30 GiB/Month"). Non-zero segments are widened to
-// a 1.5% floor so a sliver of pending data still reads (mac minNonZeroValue),
-// and the bar's 12px corner radius matches the card system.
+// ("Total referrals: N" / "+N GiB/Day": the GiB per day the network's paid
+// referrals earn, capped and priced by the server's referral terms). Non-zero
+// segments are widened to a 1.5% floor so a sliver of pending data still reads
+// (mac minNonZeroValue), and the bar's 12px corner radius matches the card
+// system.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -12,7 +14,7 @@
 
 #include <gtkmm.h>
 
-#include "ReferralTotalsState.hpp"
+#include "UsageBarData.hpp"
 
 namespace urnw {
 
@@ -20,15 +22,11 @@ class UsageBar : public Gtk::Box {
  public:
   UsageBar();
 
-  // referralView: the referral count read (the store's TotalsView()); the row's
-  // figures follow it, see UsageBarReferralRow.hpp
-  void SetData(int64_t usedByteCount, int64_t pendingByteCount, int64_t availableByteCount,
-               int64_t dailyBalanceByteCount, ReferralTotalsView referralView,
-               int64_t totalReferrals);
+  // UsageBarDataFrom(store): the figures with the server's referral terms; the
+  // referral row follows the count read, see UsageBarReferralRow.hpp
+  void SetData(const UsageBarData& data);
   // the referral row; off where referrals have their own page
   void SetShowReferrals(bool show);
-  // the program's cap and bonus (server terms), for the referral bonus line
-  void SetReferralTerms(int64_t maxReferrals, int64_t bonusGibPerDay);
 
   // The referral row is a flat button: tapping "Total referrals" opens the one
   // Referrals page (Account > Referrals), the same as the android/apple drawer
@@ -47,14 +45,7 @@ class UsageBar : public Gtk::Box {
   Gtk::Separator* referralSeparator_ = nullptr;
   Gtk::Box* referralRow_ = nullptr;
   Gtk::Button* referralButton_ = nullptr;  // wraps referralRow_
-  int64_t maxReferrals_ = 20;
-  int64_t bonusGibPerDay_ = 3;
-  int64_t totalReferrals_ = 0;
-  ReferralTotalsView referralView_ = ReferralTotalsView::Loading;
-
-  int64_t used_ = 0;
-  int64_t pending_ = 0;
-  int64_t available_ = 0;
+  UsageBarData data_;
 };
 
 }  // namespace urnw

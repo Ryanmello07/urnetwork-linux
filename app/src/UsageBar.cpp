@@ -95,28 +95,24 @@ UsageBar::UsageBar() : Gtk::Box(Gtk::Orientation::VERTICAL, 8) {
   });
   append(*referralButton_);
 
-  SetData(0, 0, 0, 0, ReferralTotalsView::Loading, 0);
+  SetData(UsageBarData{});
 }
 
-void UsageBar::SetData(int64_t usedByteCount, int64_t pendingByteCount,
-                       int64_t availableByteCount, int64_t dailyBalanceByteCount,
-                       ReferralTotalsView referralView, int64_t totalReferrals) {
-  used_ = std::max<int64_t>(0, usedByteCount);
-  pending_ = std::max<int64_t>(0, pendingByteCount);
-  available_ = std::max<int64_t>(0, availableByteCount);
+void UsageBar::SetData(const UsageBarData& data) {
+  data_ = data;
+  data_.usedByteCount = std::max<int64_t>(0, data.usedByteCount);
+  data_.pendingByteCount = std::max<int64_t>(0, data.pendingByteCount);
+  data_.availableByteCount = std::max<int64_t>(0, data.availableByteCount);
   bar_.queue_draw();
 
-  dailyBalanceValue_->set_text(FormatByteCountCompact(dailyBalanceByteCount));
-  referralView_ = referralView;
-  totalReferrals_ = totalReferrals;
+  dailyBalanceValue_->set_text(FormatByteCountCompact(data.dailyBalanceByteCount));
   ApplyReferralRow();
 }
 
-// 3 GiB per referral per DAY (server pro.yml referral; this said GiB/Month * 30)
+// GiB per referral per DAY, on the server's terms (pro.yml referral)
 void UsageBar::ApplyReferralRow() {
   if (!referralCount_ || !referralBonus_) return;
-  const UsageBarReferralRow row =
-      UsageBarReferralRowFor(referralView_, totalReferrals_, maxReferrals_, bonusGibPerDay_);
+  const UsageBarReferralRow row = UsageBarReferralRowFor(data_);
   switch (row.kind) {
     case UsageBarReferralKind::Earned:
       referralCount_->set_text(
@@ -154,12 +150,6 @@ void UsageBar::SetShowReferrals(bool show) {
   if (referralButton_) referralButton_->set_visible(show);
 }
 
-void UsageBar::SetReferralTerms(int64_t maxReferrals, int64_t bonusGibPerDay) {
-  maxReferrals_ = maxReferrals;
-  bonusGibPerDay_ = bonusGibPerDay;
-  ApplyReferralRow();
-}
-
 void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {
   const double w = width;
   const double h = std::min<double>(height, kBarHeight);
@@ -174,7 +164,10 @@ void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int h
   cr->close_path();
   cr->clip();
 
-  const double total = static_cast<double>(used_ + pending_ + available_);
+  const int64_t used = data_.usedByteCount;
+  const int64_t pending = data_.pendingByteCount;
+  const int64_t available = data_.availableByteCount;
+  const double total = static_cast<double>(used + pending + available);
   if (total <= 0) {
     // empty state: a faint full-width track
     const Rgba& c = kUrTextFaint;
@@ -184,7 +177,7 @@ void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int h
   }
 
   // non-zero segments get a 1.5% floor so they stay visible (mac parity)
-  double fractions[3] = {used_ / total, pending_ / total, available_ / total};
+  double fractions[3] = {used / total, pending / total, available / total};
   const Rgba colors[3] = {UsedColor(), PendingColor(), AvailableColor()};
   double sum = 0;
   for (double& f : fractions) {
