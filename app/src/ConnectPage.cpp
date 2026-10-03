@@ -10,6 +10,7 @@
 #include <gtk/gtk.h>
 
 #include "ExtenderProvideRowPaint.hpp"
+#include "FastDnsCopy.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
@@ -1087,7 +1088,7 @@ void ConnectPage::BuildDnsGroup() {
   dnsRowsPanel_->append(*dnsUnencryptedRow_.root);
   dnsLocalRow_ = MakeDnsStatusRow(T_("local_dns", "Local DNS"));
   dnsRowsPanel_->append(*dnsLocalRow_.root);
-  dnsFallbackRow_ = MakeDnsStatusRow(T_("local_dns_fallback", "Local DNS fallback"));
+  dnsFallbackRow_ = MakeDnsStatusRow(T_(kFastDnsLabel.key, kFastDnsLabel.english));
   dnsRowsPanel_->append(*dnsFallbackRow_.root);
   paneC_.content->append(*dnsRowsPanel_);
 
@@ -1669,7 +1670,7 @@ void ConnectPage::ApplyDnsCard() {
     placeholder(dnsDohRow_, T_("dns_over_https", "DNS over HTTPS"));
     placeholder(dnsUnencryptedRow_, T_("unencrypted_dns", "Unencrypted DNS"));
     placeholder(dnsLocalRow_, T_("local_dns", "Local DNS"));
-    placeholder(dnsFallbackRow_, T_("local_dns_fallback", "Local DNS fallback"));
+    placeholder(dnsFallbackRow_, T_(kFastDnsLabel.key, kFastDnsLabel.english));
     return;
   }
   if (!present) return;
@@ -1693,7 +1694,7 @@ void ConnectPage::ApplyDnsCard() {
         dnsSettings_->EnableRemoteDns || dnsSettings_->EnableLocalDns);
   apply(dnsLocalRow_, T_("local_dns", "Local DNS"),
         dnsSettings_->EnableLocalDoh || dnsSettings_->EnableLocalDns);
-  apply(dnsFallbackRow_, T_("local_dns_fallback", "Local DNS fallback"),
+  apply(dnsFallbackRow_, T_(kFastDnsLabel.key, kFastDnsLabel.english),
         dnsSettings_->EnableFallback);
 }
 

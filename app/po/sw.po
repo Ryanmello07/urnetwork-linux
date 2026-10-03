@@ -2206,6 +2206,16 @@ msgctxt "failed_to_start_urnetwork_vpn"
 msgid "Failed to start URnetwork VPN"
 msgstr "Imeshindwa kuanzisha URnetwork VPN"
 
+#. DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.
+msgctxt "fast_dns_on_connect"
+msgid "Fast DNS on connect"
+msgstr "DNS ya haraka wakati wa kuunganisha"
+
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.
+msgctxt "fast_dns_on_connect_description"
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network. When off, DNS only resolves through the tunnel."
+msgstr "Hujibu DNS kupitia mtandao wa ndani wakati DNS ya tuneli inaanza. Hii inaweza kufichua utafutaji wako kwa mtandao wa ndani. Ikizimwa, DNS husuluhishwa kupitia tuneli pekee."
+
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"
 msgid "Feedback"
@@ -2615,16 +2625,6 @@ msgstr "Ndani"
 msgctxt "local_dns"
 msgid "Local DNS"
 msgstr "DNS ya ndani"
-
-#. A label displayed in the custom dns settings section.
-msgctxt "local_dns_fallback"
-msgid "Local DNS fallback"
-msgstr "Mbadala wa DNS ya ndani"
-
-#. A description of the local DNS fallback setting.
-msgctxt "local_dns_fallback_description"
-msgid "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
-msgstr "Hushindanisha kisuluhishi cha ndani wakati tuneli inaanza. Ikizimwa, DNS husuluhishwa kupitia tuneli pekee."
 
 #. A label displayed above a list of local DNS servers.
 msgctxt "local_dns_servers"

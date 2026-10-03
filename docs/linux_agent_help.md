@@ -1358,7 +1358,7 @@ cadence only while Advanced + presenting); blocked chart + local chart (both Hei
 Advanced adds raw status + session mode); contracts group (→ ClientContractsSheet; Advanced
 shows full client ids); split rules group (→ SplitRulesSheet); custom DNS group (→
 DnsEditorSheet): 4 status rows with dots — "dns_over_https", "unencrypted_dns", "local_dns",
-"local_dns_fallback" — plus an unapplied-recommendation pill (coral-subtle: applied settings vs
+"fast_dns_on_connect" — plus an unapplied-recommendation pill (coral-subtle: applied settings vs
 the connected country's regional recommendation) and "dns_settings_unavailable".
 
 ### 7.8 Network destination (provider locations)

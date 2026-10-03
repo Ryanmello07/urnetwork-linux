@@ -235,7 +235,7 @@ group/series labels.
   `dns_over_https` → "DNS over HTTPS" = `EnableRemoteDoh || EnableLocalDoh`;
   `unencrypted_dns` → "Unencrypted DNS" = `EnableRemoteDns || EnableLocalDns`;
   `local_dns` → "Local DNS" = `EnableLocalDoh || EnableLocalDns`;
-  `local_dns_fallback` → "Local DNS fallback" = `EnableFallback`.
+  `fast_dns_on_connect` → "Fast DNS on connect" = `EnableFallback` (opt-in, off by default).
 - **Unavailable state**: rows hidden, dim label `dns_settings_unavailable` → "DNS settings
   unavailable" (distinct from all-off — this is the no-settings/no-device state).
 Card tappable → `DnsSheet::Open()` (which returns false and does not present when unavailable).
@@ -432,9 +432,10 @@ Layout (scroller; form margin 16 spacing 16):
   `EnableRemoteDoh`; `dns_over_https`+`local_lowercase` → "local" ↔ `EnableLocalDoh`;
   `unencrypted_dns`+remote ↔ `EnableRemoteDns`; `unencrypted_dns`+local ↔ `EnableLocalDns`.
   Every switch writes its draft flag (guard `updating_`), then RebuildPanel + RefreshDirty.
-- Fallback card: `local_dns_fallback` ↔ `EnableFallback`; footer
-  `local_dns_fallback_description` → "Races a local resolver while the tunnel starts. When
-  off, DNS only resolves through the tunnel."
+- Fast DNS on connect card (opt-in, off by default): `fast_dns_on_connect` ↔ `EnableFallback`;
+  footer `fast_dns_on_connect_description` → "Answers DNS over the local network while the
+  tunnel's DNS starts. This can reveal your lookups to the local network. When off, DNS only
+  resolves through the tunnel." (src/FastDnsCopy.hpp)
 - **Suggestions**: caption `suggested_remote_dns_servers` → "Suggested remote DNS servers";
   card (spacing 10); rows from `urnet::getRegionalDnsServers()` sorted connected-country
   first, then code, then name; connected-country rows carry the country color dot; row =

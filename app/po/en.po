@@ -3408,6 +3408,16 @@ msgctxt "failed_to_start_urnetwork_vpn"
 msgid "Failed to start URnetwork VPN"
 msgstr "Failed to start URnetwork VPN"
 
+#. DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.
+msgctxt "fast_dns_on_connect"
+msgid "Fast DNS on connect"
+msgstr "Fast DNS on connect"
+
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.
+msgctxt "fast_dns_on_connect_description"
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network. When off, DNS only resolves through the tunnel."
+msgstr "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network. When off, DNS only resolves through the tunnel."
+
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"
 msgid "Feedback"
@@ -4023,16 +4033,6 @@ msgstr "Local"
 msgctxt "local_dns"
 msgid "Local DNS"
 msgstr "Local DNS"
-
-#. A label displayed in the custom dns settings section.
-msgctxt "local_dns_fallback"
-msgid "Local DNS fallback"
-msgstr "Local DNS fallback"
-
-#. A description of the local DNS fallback setting.
-msgctxt "local_dns_fallback_description"
-msgid "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
-msgstr "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
 
 #. A label displayed above a list of local DNS servers.
 msgctxt "local_dns_servers"
@@ -6285,11 +6285,6 @@ msgstr "DNS"
 msgctxt "site_app_dns_encrypted"
 msgid "Encrypted (DoH)"
 msgstr "Encrypted (DoH)"
-
-#. App connect DNS: fallback toggle
-msgctxt "site_app_dns_fallback"
-msgid "Fast fallback during startup"
-msgstr "Fast fallback during startup"
 
 #. App connect DNS: local plain DNS toggle
 msgctxt "site_app_dns_local_dns"

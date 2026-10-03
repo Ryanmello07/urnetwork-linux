@@ -5,6 +5,7 @@
 #include <cctype>
 #include <string>
 
+#include "FastDnsCopy.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
@@ -431,7 +432,7 @@ void ConnectDrawer::BuildDnsCard() {
   dnsDohRow_ = addStatusRow(T_("dns_over_https", "DNS over HTTPS"));
   dnsUnencryptedRow_ = addStatusRow(T_("unencrypted_dns", "Unencrypted DNS"));
   dnsLocalRow_ = addStatusRow(T_("local_dns", "Local DNS"));
-  dnsFallbackRow_ = addStatusRow(T_("local_dns_fallback", "Local DNS fallback"));
+  dnsFallbackRow_ = addStatusRow(T_(kFastDnsLabel.key, kFastDnsLabel.english));
   card->append(*dnsRowsBox_);
 
   dnsUnavailable_ =

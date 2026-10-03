@@ -556,6 +556,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/EarningsPageTeardownTest.cpp',
     'tests/ReleaseSelectionTest.cpp',
     'tests/UpdateWiringTest.cpp',
+    'tests/FastDnsCopyTest.cpp',
+    'tests/FastDnsWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -571,6 +573,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # that only exercises the predicate.
               # EarningsPageTeardownTest reads EarningsPage.cpp the same way:
               # its destructor must touch no widget (issue #13).
+              # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

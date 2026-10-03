@@ -2206,6 +2206,16 @@ msgctxt "failed_to_start_urnetwork_vpn"
 msgid "Failed to start URnetwork VPN"
 msgstr "URnetwork VPN शुरू नहीं हो सका"
 
+#. DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.
+msgctxt "fast_dns_on_connect"
+msgid "Fast DNS on connect"
+msgstr "कनेक्ट करते समय तेज़ DNS"
+
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.
+msgctxt "fast_dns_on_connect_description"
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network. When off, DNS only resolves through the tunnel."
+msgstr "टनल का DNS शुरू होने तक स्थानीय नेटवर्क से DNS का जवाब देता है। इससे आपके लुकअप स्थानीय नेटवर्क को दिख सकते हैं। बंद होने पर DNS केवल टनल से ही रिज़ॉल्व होता है।"
+
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"
 msgid "Feedback"
@@ -2615,16 +2625,6 @@ msgstr "स्थानीय"
 msgctxt "local_dns"
 msgid "Local DNS"
 msgstr "स्थानीय DNS"
-
-#. A label displayed in the custom dns settings section.
-msgctxt "local_dns_fallback"
-msgid "Local DNS fallback"
-msgstr "स्थानीय DNS फ़ॉलबैक"
-
-#. A description of the local DNS fallback setting.
-msgctxt "local_dns_fallback_description"
-msgid "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
-msgstr "टनल शुरू होते समय स्थानीय रिज़ॉल्वर को साथ-साथ आज़माता है। बंद होने पर DNS केवल टनल से ही रिज़ॉल्व होता है।"
 
 #. A label displayed above a list of local DNS servers.
 msgctxt "local_dns_servers"

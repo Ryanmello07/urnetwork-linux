@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdio>
 
+#include "FastDnsCopy.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "Ui.hpp"
@@ -147,15 +148,13 @@ void DnsSheet::BuildUi() {
                &urnet::DnsResolverSettings::EnableLocalDns);
   form->append(*resolvers);
 
-  // local dns fallback
+  // fast dns on connect: the opt-in host-network resolver race while the tunnel's dns starts
   auto* fallbackCard = MakeCard(10);
-  AddSwitchRow(*fallbackCard, T_("local_dns_fallback", "Local DNS fallback"), "", fallbackSwitch_,
-               &urnet::DnsResolverSettings::EnableFallback);
+  AddSwitchRow(*fallbackCard, T_(kFastDnsLabel.key, kFastDnsLabel.english), "",
+               fallbackSwitch_, &urnet::DnsResolverSettings::EnableFallback);
   form->append(*fallbackCard);
   auto* fallbackFooter = Gtk::make_managed<Gtk::Label>(
-      T_("local_dns_fallback_description",
-         "Races a local resolver while the tunnel starts. When off, DNS only resolves through "
-         "the tunnel."));
+      T_(kFastDnsDescription.key, kFastDnsDescription.english));
   fallbackFooter->add_css_class("dim-label");
   fallbackFooter->add_css_class("caption");
   fallbackFooter->set_wrap(true);

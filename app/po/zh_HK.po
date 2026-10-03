@@ -2202,6 +2202,16 @@ msgctxt "failed_to_start_urnetwork_vpn"
 msgid "Failed to start URnetwork VPN"
 msgstr "無法啟動 URnetwork VPN"
 
+#. DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.
+msgctxt "fast_dns_on_connect"
+msgid "Fast DNS on connect"
+msgstr "連接時快速 DNS"
+
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.
+msgctxt "fast_dns_on_connect_description"
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network. When off, DNS only resolves through the tunnel."
+msgstr "在隧道 DNS 啟動期間透過本地網絡回應 DNS。這可能會向本地網絡暴露你的查詢。關閉後，DNS 只會透過隧道解析。"
+
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"
 msgid "Feedback"
@@ -2609,16 +2619,6 @@ msgstr "本地"
 msgctxt "local_dns"
 msgid "Local DNS"
 msgstr "本地 DNS"
-
-#. A label displayed in the custom dns settings section.
-msgctxt "local_dns_fallback"
-msgid "Local DNS fallback"
-msgstr "本地 DNS 後備"
-
-#. A description of the local DNS fallback setting.
-msgctxt "local_dns_fallback_description"
-msgid "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
-msgstr "隧道啟動時並行查詢本地解析器，取最先返回的結果。關閉後，DNS 只會透過隧道解析。"
 
 #. A label displayed above a list of local DNS servers.
 msgctxt "local_dns_servers"
