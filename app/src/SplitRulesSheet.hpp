@@ -46,12 +46,15 @@ class SplitRulesSheet : public Gtk::Window {
     bool hasBlockOverride = false;
     bool hasRouteOverride = false;
     int64_t byteCount = 0;
+    // what decided the action (urnet::BlockActionReason*); empty for ordinary
+    // provider-routed traffic. See SafetyRulePresentation.hpp.
+    std::string reason;
     bool operator==(const ActionItem& o) const {
       return id == o.id && timeMs == o.timeMs && hosts == o.hosts && ips == o.ips &&
              matchedHosts == o.matchedHosts && matchedIps == o.matchedIps &&
              block == o.block && local == o.local && overrideId == o.overrideId &&
              hasBlockOverride == o.hasBlockOverride && hasRouteOverride == o.hasRouteOverride &&
-             byteCount == o.byteCount;
+             byteCount == o.byteCount && reason == o.reason;
     }
   };
 

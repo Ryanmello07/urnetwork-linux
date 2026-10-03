@@ -1230,6 +1230,18 @@ void SettingsPage::BuildConnectionsSection(Gtk::Box& host) {
                       "URnetwork can reach its servers; everything else stays blocked."),
                    kProsePadY)
                    .root);
+  // Row 3b — the kill switch exception for the safety rules: what they keep
+  // off the providers leaves from this device's own address while the switch
+  // is off, and is blocked while it is on (the same disclosure the connect
+  // drawer's kill switch exception popover carries).
+  host.append(*MakeProseRow(
+                   T_("kill_switch_exception_unrecognized_encrypted",
+                      "When the kill switch is off, traffic that URnetwork safety rules keep off the "
+                      "network, such as unrecognized encrypted protocols, bypasses the VPN and "
+                      "uses your local public IP. With the kill switch on, that traffic is "
+                      "blocked."),
+                   kProsePadY)
+                   .root);
 
   // Row 4 — blocked locations (the Network destination is a second door).
   auto blockedRow =

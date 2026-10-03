@@ -514,7 +514,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # and connect-sheet rules, the wallet bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
-# install-kind probe, the launch throttle) and its wiring, and the daemon
+# install-kind probe, the launch throttle) and its wiring, the split-rules
+# activity row's reading of the block action reason (the safety-rule chip and
+# the route-locally offer), and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -556,6 +558,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/EarningsPageTeardownTest.cpp',
     'tests/ReleaseSelectionTest.cpp',
     'tests/UpdateWiringTest.cpp',
+    'tests/SafetyRulePresentationTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
