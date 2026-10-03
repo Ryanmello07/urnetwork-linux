@@ -2982,8 +2982,8 @@ msgstr "เลือกโดเมนเครือข่ายที่แอ
 
 #. Help text under the network domain field of the network API selector.
 msgctxt "network_api_domain_help"
-msgid "Example: ur.network or your custom domain."
-msgstr "ตัวอย่าง: ur.network หรือโดเมนที่คุณกำหนดเอง"
+msgid "Example: bringyour.com or your custom domain."
+msgstr "ตัวอย่าง: bringyour.com หรือโดเมนที่คุณกำหนดเอง"
 
 #. Label of the network domain field in the network API selector.
 msgctxt "network_api_domain_label"
