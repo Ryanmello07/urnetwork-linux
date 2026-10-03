@@ -42,7 +42,7 @@ void SubscriptionBalanceStore::Start() {
   purchaseConfirmationTimedOut_ = false;
   didDetectUpgradeToPro_ = false;
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
-  totalReferrals_ = 0;
+  totals_.Reset();
   referral_.Reset();
 
   // Offline Pro: the jwt's Pro (and GuestMode) claims are readable without a
@@ -78,7 +78,7 @@ void SubscriptionBalanceStore::Stop() {
   isGuest_ = false;
   didDetectUpgradeToPro_ = false;
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
-  totalReferrals_ = 0;
+  totals_.Reset();
   referral_.Reset();
   purchaseConfirmationTimedOut_ = false;
   Emit();
@@ -279,10 +279,11 @@ void SubscriptionBalanceStore::FetchReferralCode() {
                                                      : "(no result)"));
             // the rows keep their last value (the poll retries), but a panel
             // with no code says the read failed
+            totals_.Fail();
             if (referral_.Fail()) Emit();
             return;
           }
-          totalReferrals_ = result->total_referrals;
+          totals_.Succeed(result->total_referrals);
           referral_.Succeed(result->referral_code.value_or(std::string()));
           // the program terms ride along (server pro.yml); zero means the
           // server reported none, so the display defaults stay
@@ -335,6 +336,7 @@ void SubscriptionBalanceStore::MaybeCelebrateReferrals(int64_t count) {
 void SubscriptionBalanceStore::RetryReferral() {
   if (!started_) return;
   referral_.Retry();
+  totals_.Retry();
   Emit();
   FetchReferralCode();  // an in-flight read answers this retry instead
 }

@@ -4,10 +4,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <utility>
 
 #include "I18n.hpp"
 #include "ReferralPanel.hpp"
+#include "ReferralTotalsState.hpp"
 #include "Ui.hpp"
 #include "UrTheme.hpp"
 
@@ -111,6 +113,27 @@ std::string FormatPointsValue(double value) {
     text.insert(insertAt, ",");
   }
   return text;
+}
+
+// A "Total referrals" figure in the field vocabulary.
+AccountFieldState TotalsFieldState(ReferralTotalsView view) {
+  switch (view) {
+    case ReferralTotalsView::Count: return AccountFieldState::Loaded;
+    case ReferralTotalsView::Unavailable: return AccountFieldState::Failed;
+    case ReferralTotalsView::Loading: return AccountFieldState::Loading;
+  }
+  return AccountFieldState::Loading;
+}
+
+// A Try again after a key/value row's value, shown only on a failed read.
+Gtk::Button* AppendRowRetry(Gtk::Label& value, std::function<void()> retry) {
+  auto* retryButton = Gtk::make_managed<Gtk::Button>(T_("try_again", "Try again"));
+  retryButton->set_valign(Gtk::Align::CENTER);
+  retryButton->set_margin_start(8);
+  retryButton->set_visible(false);
+  retryButton->signal_clicked().connect(std::move(retry));
+  if (auto* inner = dynamic_cast<Gtk::Box*>(value.get_parent())) inner->append(*retryButton);
+  return retryButton;
 }
 
 }  // namespace
@@ -465,11 +488,14 @@ void ReferralsPage::BuildPane() {
   {
     auto row = kit::MakePaneKeyValueRow(T_("total_referrals", "Total referrals"));
     totalValue_ = row.value;
+    // reads again through the store, as the panel's Try again does
+    totalRetry_ = AppendRowRetry(*totalValue_, [this] { balance_.RetryReferral(); });
     content->append(*row.root);
   }
   {
     auto row = kit::MakePaneKeyValueRow(T_("referral_points", "Referral points"));
     pointsValue_ = row.value;
+    pointsRetry_ = AppendRowRetry(*pointsValue_, [this] { LoadPoints(); });
     content->append(*row.root);
   }
 
@@ -548,12 +574,15 @@ void ReferralsPage::ApplyCard() {
 }
 
 void ReferralsPage::ApplyTotal(AccountFieldState state) {
+  // with a session, the store's figure once its referral read lands; a failed
+  // read is not "0"
+  if (state == AccountFieldState::Loaded) state = TotalsFieldState(balance_.TotalsView());
   if (state == AccountFieldState::Loaded) {
-    // the store's figure, "0" until its referral read lands
     ApplyFieldState(*totalValue_, state, std::to_string(balance_.TotalReferrals()));
   } else {
     ApplyFieldState(*totalValue_, state);
   }
+  if (totalRetry_) totalRetry_->set_visible(state == AccountFieldState::Failed);
   kit::SetAccessibleLabel(*totalValue_, Glib::ustring(T_("total_referrals", "Total referrals")) +
                                             ", " + totalValue_->get_text());
 }
@@ -564,6 +593,7 @@ void ReferralsPage::ApplyPoints(AccountFieldState state, double points) {
   } else {
     ApplyFieldState(*pointsValue_, state);
   }
+  if (pointsRetry_) pointsRetry_->set_visible(state == AccountFieldState::Failed);
   kit::SetAccessibleLabel(*pointsValue_, Glib::ustring(T_("referral_points", "Referral points")) +
                                              ", " + pointsValue_->get_text());
 }

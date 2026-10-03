@@ -41,6 +41,7 @@
 
 #include "PricePresentation.hpp"
 #include "ReferralCodeState.hpp"
+#include "ReferralTotalsState.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
@@ -99,7 +100,9 @@ class SubscriptionBalanceStore {
   int64_t PendingByteCount() const { return pendingByteCount_; }
   int64_t AvailableByteCount() const { return availableByteCount_; }
   int64_t StartBalanceByteCount() const { return startBalanceByteCount_; }
-  int64_t TotalReferrals() const { return totalReferrals_; }
+  int64_t TotalReferrals() const { return totals_.Total(); }
+  // what a "Total referrals" figure shows: the count, or an error until a read lands
+  ReferralTotalsView TotalsView() const { return totals_.View(); }
   // the referral program's numbers, from the server (defaults until fetched)
   int64_t MaxReferrals() const { return maxReferrals_; }
   int64_t BonusGibPerDay() const { return bonusGibPerDay_; }
@@ -172,7 +175,7 @@ class SubscriptionBalanceStore {
   int64_t startBalanceByteCount_ = 0;
 
   bool isLoadingReferral_ = false;
-  int64_t totalReferrals_ = 0;
+  ReferralTotalsFetch totals_;
   int64_t maxReferrals_ = 20;
   int64_t bonusGibPerDay_ = 3;
   int64_t referredBonusGibPerDay_ = 3;

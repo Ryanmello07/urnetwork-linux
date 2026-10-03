@@ -59,6 +59,7 @@
 #include "ExtenderSection.hpp"
 #include "ExtenderShareSheet.hpp"
 #include "PaneKit.hpp"
+#include "ReferralTotalsState.hpp"
 #include "SdkHost.hpp"
 #include "Ui.hpp"
 
@@ -205,6 +206,7 @@ class AccountPage : public Gtk::Box {
   // ---- loads -----------------------------------------------------------------
   void LoadAccount();          // getNetworkUser: name, auth line, login methods
   void LoadReferralInfo();     // getNetworkReferralCode: the Referrals row + pane A
+  void RetryReferralInfo();    // pane A's Try again: back to Loading, read again
   void ApplyClientId();        // DEVICE read, no round trip
 
   // ---- appliers (one writer per surface) -------------------------------------
@@ -285,6 +287,7 @@ class AccountPage : public Gtk::Box {
   Gtk::Label* dailyValue_ = nullptr;
   Gtk::Label* referralTotals_ = nullptr;
   Gtk::Label* referralBonus_ = nullptr;
+  Gtk::Button* referralRetry_ = nullptr;  // shown only on a failed read
   Gtk::Button* portalRow_ = nullptr;  // Manage Subscription (disabled in flight)
 
   // ---- pane B: profile -------------------------------------------------------
@@ -323,7 +326,7 @@ class AccountPage : public Gtk::Box {
   std::string acknowledgedName_;  // the server-acknowledged name; the box is never truth
   std::vector<std::string> authMethods_;
   std::string referralCode_;
-  int64_t totalReferrals_ = 0;
+  ReferralTotalsFetch referralCount_;
   std::string clientId_;
   std::vector<urnet::RedeemedBalanceCode> codes_;
 

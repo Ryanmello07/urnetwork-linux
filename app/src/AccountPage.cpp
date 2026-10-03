@@ -1280,7 +1280,7 @@ void AccountPage::SettleNoSession() {
   needsNameClaim_ = false;
   acknowledgedName_.clear();
   referralCode_.clear();
-  totalReferrals_ = 0;
+  referralCount_.Reset();
   authMethods_.clear();
   codes_.clear();
 
@@ -1365,16 +1365,29 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
   }
 
   // 6. the referral pair (repainted whenever the referral load lands, which
-  //    calls back through here). These two DO start at zero by spec: pane A
-  //    reads AccountPage::totalReferrals(), "0 until the referral load lands".
-  referralTotals_->set_text(
-      Format(T_("total_referrals_lld", "Total Referrals: {}"), totalReferrals_));
-  const ReferralTerms& terms = CurrentReferralTerms();
-  const Glib::ustring bonus =
-      Format(T_("referral_bonus", "+{} GiB/Day"),
-             terms.PaidReferrals(totalReferrals_) * terms.bonusGibPerDay);
-  SetToned(*referralBonus_, kOffWhite, bonus);
-  kit::SetAccessibleLabel(*referralBonus_, referralTotals_->get_text() + ", " + bonus);
+  //    calls back through here): the count once the read lands. It used to
+  //    start at 0 and stay 0 on a failed read; like the daily figure it now
+  //    renders its state until then, and a failed read offers Try again.
+  const ReferralTotalsView referralView = referralCount_.View();
+  if (referralView == ReferralTotalsView::Count) {
+    const int64_t totalReferrals = referralCount_.Total();
+    referralTotals_->set_text(
+        Format(T_("total_referrals_lld", "Total Referrals: {}"), totalReferrals));
+    const ReferralTerms& terms = CurrentReferralTerms();
+    const Glib::ustring bonus =
+        Format(T_("referral_bonus", "+{} GiB/Day"),
+               terms.PaidReferrals(totalReferrals) * terms.bonusGibPerDay);
+    SetToned(*referralBonus_, kOffWhite, bonus);
+  } else {
+    referralTotals_->set_text(T_("total_referrals", "Total referrals"));
+    ApplyFieldState(*referralBonus_, referralView == ReferralTotalsView::Unavailable
+                                         ? AccountFieldState::Failed
+                                     : CanCallApi() ? AccountFieldState::Loading
+                                                    : AccountFieldState::NoSession);
+  }
+  kit::SetAccessibleLabel(*referralBonus_,
+                          referralTotals_->get_text() + ", " + referralBonus_->get_text());
+  referralRetry_->set_visible(referralView == ReferralTotalsView::Unavailable);
 }
 
 // ---- PANE A: PLAN (360) ------------------------------------------------------
@@ -1461,6 +1474,14 @@ void AccountPage::BuildPlanPane() {
     auto row = kit::MakePaneKeyValueRow({}, {}, kRowKeyValue);
     referralTotals_ = row.key;
     referralBonus_ = row.value;
+    referralRetry_ = Gtk::make_managed<Gtk::Button>(T_("try_again", "Try again"));
+    referralRetry_->set_valign(Gtk::Align::CENTER);
+    referralRetry_->set_margin_start(8);
+    referralRetry_->set_visible(false);
+    referralRetry_->signal_clicked().connect([this] { RetryReferralInfo(); });
+    if (auto* inner = dynamic_cast<Gtk::Box*>(referralBonus_->get_parent())) {
+      inner->append(*referralRetry_);
+    }
     content->append(*row.root);
   }
 
@@ -2283,7 +2304,8 @@ void AccountPage::ApplyClientId() {
 void AccountPage::ApplyReferralsRow(AccountFieldState state) {
   if (state == AccountFieldState::Loaded) {
     ApplyFieldState(*referralsRow_.value, state,
-                    Format(T_("total_referrals_lld", "Total Referrals: {}"), totalReferrals_));
+                    Format(T_("total_referrals_lld", "Total Referrals: {}"),
+                           referralCount_.Total()));
   } else {
     ApplyFieldState(*referralsRow_.value, state);
   }
@@ -2295,7 +2317,7 @@ void AccountPage::LoadReferralInfo() {
   referralFlow_.Abandon();
   if (!CanCallApi()) {
     referralCode_.clear();
-    totalReferrals_ = 0;
+    referralCount_.Reset();
     ApplyReferralsRow(AccountFieldState::NoSession);
     ApplyBalance(balance_);  // pane A's referral rows follow the same figure
     return;
@@ -2307,7 +2329,7 @@ void AccountPage::LoadReferralInfo() {
   // 20 s: the Referrals row and pane A's referral lines both hang off this one.
   const uint32_t flow = referralFlow_.Begin(kApiTimeoutMs, [this] {
     referralCode_.clear();
-    totalReferrals_ = 0;
+    referralCount_.Fail();
     ApplyReferralsRow(AccountFieldState::Failed);
     ApplyBalance(balance_);
   });
@@ -2324,13 +2346,13 @@ void AccountPage::LoadReferralInfo() {
                           : (result && result->error ? result->error->message.c_str()
                                                      : "(no result)"));
             referralCode_.clear();
-            totalReferrals_ = 0;
+            referralCount_.Fail();  // a count already shown stays
             ApplyReferralsRow(AccountFieldState::Failed);
             ApplyBalance(balance_);
             return;
           }
           referralCode_ = result->referral_code.value_or(std::string());
-          totalReferrals_ = result->total_referrals;
+          referralCount_.Succeed(result->total_referrals);
           // §3.3.4: a successful read gets exactly ONE render, the count —
           // a network with referrals but no code still earned them.
           ApplyReferralsRow(AccountFieldState::Loaded);
@@ -2338,6 +2360,12 @@ void AccountPage::LoadReferralInfo() {
           ApplyBalance(balance_);
         });
       });
+}
+
+void AccountPage::RetryReferralInfo() {
+  referralCount_.Retry();
+  ApplyBalance(balance_);
+  LoadReferralInfo();
 }
 
 // ---- sheets ------------------------------------------------------------------
