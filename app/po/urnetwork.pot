@@ -1223,6 +1223,11 @@ msgctxt "connect_solana_wallet_note"
 msgid "Connect a Solana wallet app, or enter a Solana USDC address manually."
 msgstr ""
 
+#. Add sign-in method sheet (android): the wallet option's explanation.
+msgctxt "connect_solana_wallet_to_add_sign_in_method"
+msgid "Connect a Solana wallet to add it as a sign-in method."
+msgstr ""
+
 #. Call to action
 msgctxt "connect_to_location"
 msgid "Connect to {}"
@@ -1360,6 +1365,11 @@ msgstr ""
 #. Button text to copy the seedphrase to the clipboard.
 msgctxt "copy_to_clipboard"
 msgid "Copy to Clipboard"
+msgstr ""
+
+#. Add sign-in method sheet (android): Google sign-in returned no identity token.
+msgctxt "could_not_get_google_id_token"
+msgid "Could not get Google ID token"
 msgstr ""
 
 #. Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).
@@ -3238,6 +3248,11 @@ msgctxt "error_claiming_multiplier_with_reason"
 msgid "Sorry, there was an error claiming multiplier: {}"
 msgstr ""
 
+#. Add sign-in method sheet (android): the wallet app could not be reached or did not sign.
+msgctxt "error_connecting_to_wallet"
+msgid "Error connecting to wallet"
+msgstr ""
+
 #. Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "error_connecting_wallet"
 msgid "There was an error connecting your wallet."
@@ -3263,6 +3278,11 @@ msgctxt "error_loading_account_plan"
 msgid "Error loading your account plan."
 msgstr ""
 
+#. Sign-in screen (android): a Google or wallet sign-in failed.
+msgctxt "error_logging_in_please_try_again"
+msgid "Error logging in, please try again."
+msgstr ""
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "error_redeeming_transfer_balance_code"
 msgid "Error redeeming transfer balance code"
@@ -3286,6 +3306,11 @@ msgstr ""
 #. Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.
 msgctxt "error_setting_default_wallet_with_reason"
 msgid "Error setting default wallet: {}"
+msgstr ""
+
+#. Add sign-in method sheet (android): Google sign-in failed or was cancelled.
+msgctxt "error_signing_in_with_google"
+msgid "Error signing in with Google"
 msgstr ""
 
 #. Snackbar shown when saving the device name fails. Used in Main/Account/Settings/SettingsView.swift.
@@ -4633,9 +4658,19 @@ msgctxt "no_claims_yet_linux"
 msgid "Nothing to claim yet. Alpha accrues from the next finalized epoch."
 msgstr ""
 
+#. Add sign-in method sheet (android): no installed wallet app can sign the challenge.
+msgctxt "no_compatible_wallet_app_found"
+msgid "No compatible wallet app found on this device."
+msgstr ""
+
 #. A description of the benefits of creating an Instant Account.
 msgctxt "no_email_phone_or_password_needed_your"
 msgid "No email, phone, or password needed. Your account is secured by a seedphrase."
+msgstr ""
+
+#. Sign-in screen (android, ethOS build): no ethOS system wallet is available.
+msgctxt "no_ethos_wallet_found"
+msgid "No EthOs wallet found"
 msgstr ""
 
 #. App split rules: empty state when no installed apps were enumerated.

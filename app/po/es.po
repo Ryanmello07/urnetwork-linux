@@ -1208,6 +1208,11 @@ msgctxt "connect_solana_wallet_note"
 msgid "Connect a Solana wallet app, or enter a Solana USDC address manually."
 msgstr "Conecta una app de billetera de Solana o introduce manualmente una dirección USDC de Solana."
 
+#. Add sign-in method sheet (android): the wallet option's explanation.
+msgctxt "connect_solana_wallet_to_add_sign_in_method"
+msgid "Connect a Solana wallet to add it as a sign-in method."
+msgstr "Conecta una billetera de Solana para añadirla como método de inicio de sesión."
+
 #. Call to action
 msgctxt "connect_to_location"
 msgid "Connect to {}"
@@ -1346,6 +1351,11 @@ msgstr "Copiar texto para compartir"
 msgctxt "copy_to_clipboard"
 msgid "Copy to Clipboard"
 msgstr "Copia al portapapeles"
+
+#. Add sign-in method sheet (android): Google sign-in returned no identity token.
+msgctxt "could_not_get_google_id_token"
+msgid "Could not get Google ID token"
+msgstr "No se pudo obtener el token de ID de Google"
 
 #. Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).
 msgctxt "couldn_t_load_subscription_options"
@@ -3218,6 +3228,11 @@ msgctxt "error_claiming_multiplier_with_reason"
 msgid "Sorry, there was an error claiming multiplier: {}"
 msgstr "Lo sentimos, se ha producido un error al reclamar el multiplicador: {}"
 
+#. Add sign-in method sheet (android): the wallet app could not be reached or did not sign.
+msgctxt "error_connecting_to_wallet"
+msgid "Error connecting to wallet"
+msgstr "Error al conectar con la billetera"
+
 #. Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "error_connecting_wallet"
 msgid "There was an error connecting your wallet."
@@ -3243,6 +3258,11 @@ msgctxt "error_loading_account_plan"
 msgid "Error loading your account plan."
 msgstr "Error al cargar el plan de tu cuenta."
 
+#. Sign-in screen (android): a Google or wallet sign-in failed.
+msgctxt "error_logging_in_please_try_again"
+msgid "Error logging in, please try again."
+msgstr "Error al iniciar sesión, inténtalo de nuevo."
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "error_redeeming_transfer_balance_code"
 msgid "Error redeeming transfer balance code"
@@ -3267,6 +3287,11 @@ msgstr "Se produjo un error al enviar el código de verificación."
 msgctxt "error_setting_default_wallet_with_reason"
 msgid "Error setting default wallet: {}"
 msgstr "Error al establecer la billetera predeterminada: {}"
+
+#. Add sign-in method sheet (android): Google sign-in failed or was cancelled.
+msgctxt "error_signing_in_with_google"
+msgid "Error signing in with Google"
+msgstr "Error al iniciar sesión con Google"
 
 #. Snackbar shown when saving the device name fails. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "error_updating_device_name"
@@ -4608,10 +4633,20 @@ msgctxt "no_claims_yet_linux"
 msgid "Nothing to claim yet. Alpha accrues from the next finalized epoch."
 msgstr "Aún no hay nada que reclamar. El Alpha se acumula a partir de la próxima época finalizada."
 
+#. Add sign-in method sheet (android): no installed wallet app can sign the challenge.
+msgctxt "no_compatible_wallet_app_found"
+msgid "No compatible wallet app found on this device."
+msgstr "No se encontró ninguna app de billetera compatible en este dispositivo."
+
 #. A description of the benefits of creating an Instant Account.
 msgctxt "no_email_phone_or_password_needed_your"
 msgid "No email, phone, or password needed. Your account is secured by a seedphrase."
 msgstr "No necesitas correo, teléfono ni contraseña. Tu cuenta se protege con una frase semilla."
+
+#. Sign-in screen (android, ethOS build): no ethOS system wallet is available.
+msgctxt "no_ethos_wallet_found"
+msgid "No EthOs wallet found"
+msgstr "No se encontró ninguna billetera EthOs"
 
 #. App split rules: empty state when no installed apps were enumerated.
 msgctxt "no_installed_apps_found"

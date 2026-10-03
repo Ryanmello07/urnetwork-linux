@@ -1021,6 +1021,11 @@ msgctxt "connect_seeker_wallet"
 msgid "Connect a wallet with the Saga Genesis or Seeker Pre-Order Token"
 msgstr "Kết nối ví có token Saga Genesis hoặc token đặt trước Seeker"
 
+#. Add sign-in method sheet (android): the wallet option's explanation.
+msgctxt "connect_solana_wallet_to_add_sign_in_method"
+msgid "Connect a Solana wallet to add it as a sign-in method."
+msgstr "Kết nối ví Solana để thêm làm phương thức đăng nhập."
+
 #. Call to action
 msgctxt "connect_to_location"
 msgid "Connect to {}"
@@ -1147,6 +1152,11 @@ msgstr "Sao chép ID máy khách"
 msgctxt "copy_to_clipboard"
 msgid "Copy to Clipboard"
 msgstr "Sao chép vào bộ nhớ tạm"
+
+#. Add sign-in method sheet (android): Google sign-in returned no identity token.
+msgctxt "could_not_get_google_id_token"
+msgid "Could not get Google ID token"
+msgstr "Không thể lấy mã thông báo ID Google"
 
 #. Snackbar shown when the external wallet app could not be opened. Used in Shared/Views/SolanaSignMessageSheet.swift and Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "couldnt_open_wallet"
@@ -2107,6 +2117,11 @@ msgctxt "error_claiming_multiplier_with_reason"
 msgid "Sorry, there was an error claiming multiplier: {}"
 msgstr "Rất tiếc, đã xảy ra lỗi khi yêu cầu hệ số nhân: {}"
 
+#. Add sign-in method sheet (android): the wallet app could not be reached or did not sign.
+msgctxt "error_connecting_to_wallet"
+msgid "Error connecting to wallet"
+msgstr "Lỗi kết nối với ví"
+
 #. Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "error_connecting_wallet"
 msgid "There was an error connecting your wallet."
@@ -2132,6 +2147,11 @@ msgctxt "error_loading_account_plan"
 msgid "Error loading your account plan."
 msgstr "Lỗi khi tải gói tài khoản của bạn."
 
+#. Sign-in screen (android): a Google or wallet sign-in failed.
+msgctxt "error_logging_in_please_try_again"
+msgid "Error logging in, please try again."
+msgstr "Lỗi đăng nhập, vui lòng thử lại."
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "error_redeeming_transfer_balance_code"
 msgid "Error redeeming transfer balance code"
@@ -2156,6 +2176,11 @@ msgstr "Đã xảy ra lỗi khi gửi mã xác minh."
 msgctxt "error_setting_default_wallet_with_reason"
 msgid "Error setting default wallet: {}"
 msgstr "Lỗi khi đặt ví mặc định: {}"
+
+#. Add sign-in method sheet (android): Google sign-in failed or was cancelled.
+msgctxt "error_signing_in_with_google"
+msgid "Error signing in with Google"
+msgstr "Lỗi khi đăng nhập bằng Google"
 
 #. Snackbar shown when saving the device name fails. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "error_updating_device_name"
@@ -3152,10 +3177,20 @@ msgctxt "no_blocked_locations"
 msgid "No blocked locations"
 msgstr "Không có vị trí bị chặn"
 
+#. Add sign-in method sheet (android): no installed wallet app can sign the challenge.
+msgctxt "no_compatible_wallet_app_found"
+msgid "No compatible wallet app found on this device."
+msgstr "Không tìm thấy ứng dụng ví tương thích trên thiết bị này."
+
 #. A description of the benefits of creating an Instant Account.
 msgctxt "no_email_phone_or_password_needed_your"
 msgid "No email, phone, or password needed. Your account is secured by a seedphrase."
 msgstr "Không cần email, số điện thoại hay mật khẩu. Tài khoản của bạn được bảo vệ bằng cụm từ khôi phục."
+
+#. Sign-in screen (android, ethOS build): no ethOS system wallet is available.
+msgctxt "no_ethos_wallet_found"
+msgid "No EthOs wallet found"
+msgstr "Không tìm thấy ví EthOs"
 
 #. App split rules: empty state when no installed apps were enumerated.
 msgctxt "no_installed_apps_found"
@@ -4408,6 +4443,11 @@ msgctxt "site_app_country_multipliers"
 msgid "Country multipliers"
 msgstr "Hệ số quốc gia"
 
+#. App profile: email label
+msgctxt "site_app_email"
+msgid "Email"
+msgstr "Email"
+
 #. Connect drawer: fixed-IP toggle
 msgctxt "site_app_fixed_ip"
 msgid "Fixed IP"
@@ -5534,6 +5574,11 @@ msgstr "Bạn là thành viên cao cấp."
 msgctxt "your_email"
 msgid "Your email"
 msgstr "Email của bạn"
+
+#. Placeholder text for the email field.
+msgctxt "your_email_com"
+msgid "your@email.com"
+msgstr "ban@email.com"
 
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "your_friend_gets_30_gib_month_for_life"
