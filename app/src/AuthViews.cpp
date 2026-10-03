@@ -57,7 +57,31 @@ Gtk::Label* MakeStepHeading(const Glib::ustring& text) {
 // ---- CreateNetworkPage -------------------------------------------------------
 
 CreateNetworkPage::CreateNetworkPage(SdkHost& host)
-    : Gtk::Box(Gtk::Orientation::VERTICAL, 12), host_(host) {
+    : Gtk::Box(Gtk::Orientation::VERTICAL, 12),
+      host_(host),
+      nameChecker_(
+          [this](const std::string& name, NetworkNameChecker::CheckDone done) {
+            auto epoch = epoch_;
+            const uint64_t issued = *epoch;
+            host_.CheckNetworkName(name, [this, epoch, issued, done](bool ok, bool available) {
+              PostToMain([epoch, issued, done, ok, available] {
+                if (*epoch != issued) return;
+                done(ok, available);
+              });
+            });
+          },
+          [this](unsigned delayMs, std::function<void()> task) {
+            nameDebounce_.disconnect();
+            nameDebounce_ = Glib::signal_timeout().connect(
+                [task]() -> bool {
+                  task();
+                  return false;
+                },
+                delayMs);
+          },
+          [this] { nameDebounce_.disconnect(); },
+          [this](NetworkNameState state) { OnNameStateChanged(state); },
+          kNameDebounceMs) {
   EnsureDrawerCss();
   set_margin(24);
   set_valign(Gtk::Align::CENTER);
@@ -224,12 +248,10 @@ void CreateNetworkPage::Configure(Mode mode, const std::string& userAuth) {
   ++*epoch_;
   mode_ = mode;
   creating_ = false;
-  nameState_ = NameState::NotChecked;
   referralValid_ = false;
   referralCapped_ = false;
   validatingReferral_ = false;
-  nameDebounce_.disconnect();
-  ++nameCheckGeneration_;
+  nameChecker_.Clear();
 
   email_->set_text(userAuth);
   networkName_->set_text("");
@@ -271,55 +293,41 @@ void CreateNetworkPage::SetNameSupporting(const char* text, const char* cssClass
 
 void CreateNetworkPage::OnNetworkNameChanged() {
   errorLabel_->set_text("");
-  nameDebounce_.disconnect();
-  ++nameCheckGeneration_;
-
   const std::string name = TrimWhitespace(networkName_->get_text());
   if (static_cast<int>(name.size()) < kMinNetworkNameLength) {
-    nameState_ = NameState::NotChecked;
-    SetNameSupporting(
-        T_("network_name_length_error", "Network names must be 6 characters or more"), nullptr);
-    UpdateFormValid();
-    return;
+    nameChecker_.Clear();
+  } else {
+    // debounced (mac delays the work item 250ms)
+    nameChecker_.SetName(name);
   }
-
-  nameState_ = NameState::Validating;
-  UpdateFormValid();
-  // debounce the availability check (mac delays the work item 250ms)
-  nameDebounce_ = Glib::signal_timeout().connect(
-      [this, name]() -> bool {
-        RunNetworkCheck(name);
-        return false;
-      },
-      kNameDebounceMs);
 }
 
-void CreateNetworkPage::RunNetworkCheck(const std::string& name) {
-  const uint64_t generation = nameCheckGeneration_;
-  auto epoch = epoch_;
-  const uint64_t issued = *epoch;
-  host_.CheckNetworkName(name, [this, epoch, issued, generation](bool ok, bool available) {
-    PostToMain([this, epoch, issued, generation, ok, available] {
-      if (*epoch != issued) return;
-      if (generation != nameCheckGeneration_) return;  // the field changed since
-      if (!ok) {
-        nameState_ = NameState::Invalid;
-        SetNameSupporting(T_("there_was_an_error_checking_the_network_name",
-                             "There was an error checking the network name"),
-                          "ur-error-text");
-      } else if (available) {
-        nameState_ = NameState::Valid;
-        SetNameSupporting(
-            T_("nice_this_network_name_is_available", "Nice! This network name is available"),
-            "ur-value-on");
-      } else {
-        nameState_ = NameState::Invalid;
-        SetNameSupporting(T_("network_name_taken", "This network name is already taken"),
-                          "ur-error-text");
-      }
-      UpdateFormValid();
-    });
-  });
+// A failed check is not a verdict on the name (see NetworkNameCheck.hpp): it
+// says so and keeps Continue usable; the checker re-runs it.
+void CreateNetworkPage::OnNameStateChanged(NetworkNameState state) {
+  switch (state) {
+    case NetworkNameState::NotChecked:
+      SetNameSupporting(
+          T_("network_name_length_error", "Network names must be 6 characters or more"), nullptr);
+      break;
+    case NetworkNameState::Validating:
+      break;
+    case NetworkNameState::Valid:
+      SetNameSupporting(
+          T_("nice_this_network_name_is_available", "Nice! This network name is available"),
+          "ur-value-on");
+      break;
+    case NetworkNameState::Taken:
+      SetNameSupporting(T_("network_name_taken", "This network name is already taken"),
+                        "ur-error-text");
+      break;
+    case NetworkNameState::CheckFailed:
+      SetNameSupporting(T_("there_was_an_error_checking_the_network_name",
+                           "There was an error checking the network name"),
+                        "ur-error-text");
+      break;
+  }
+  UpdateFormValid();
 }
 
 void CreateNetworkPage::OnValidateReferral() {
@@ -363,9 +371,10 @@ void CreateNetworkPage::OnValidateReferral() {
 }
 
 void CreateNetworkPage::UpdateFormValid() {
-  // mac validateForm: name available, terms agreed, and (for the password auth
-  // type) a 12+ character password
-  bool valid = nameState_ == NameState::Valid && termsSwitch_->get_active();
+  // mac validateForm: name available (or its check failed; the server
+  // re-checks on create), terms agreed, and (for the password auth type) a
+  // 12+ character password
+  bool valid = NetworkNameAllowsCreate(nameChecker_.State()) && termsSwitch_->get_active();
   if (mode_ != Mode::Wallet && mode_ != Mode::Sso) {
     valid = valid && !TrimWhitespace(email_->get_text()).empty() &&
             std::string(password_->get_text()).size() >= kMinPasswordLength;

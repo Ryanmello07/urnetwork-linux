@@ -28,6 +28,7 @@
 
 #include <gtkmm.h>
 
+#include "NetworkNameCheck.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
@@ -42,6 +43,8 @@ class CreateNetworkPage : public Gtk::Box {
   };
 
   explicit CreateNetworkPage(SdkHost& host);
+  // the pending name check timer captures this page
+  ~CreateNetworkPage() override { nameDebounce_.disconnect(); }
 
   // Reset the form for a fresh navigation. userAuth prefills the email field
   // (it stays editable — the login page may not have one yet).
@@ -57,11 +60,9 @@ class CreateNetworkPage : public Gtk::Box {
   std::function<void()> on_back;
 
  private:
-  enum class NameState { NotChecked, Validating, Valid, Invalid };
-
   void BuildUi();
   void OnNetworkNameChanged();
-  void RunNetworkCheck(const std::string& name);
+  void OnNameStateChanged(NetworkNameState state);
   void SetNameSupporting(const char* text, const char* cssClass);
   void OnValidateReferral();
   void UpdateFormValid();
@@ -71,12 +72,12 @@ class CreateNetworkPage : public Gtk::Box {
   SdkHost& host_;
   Mode mode_ = Mode::Password;
   bool creating_ = false;
-  NameState nameState_ = NameState::NotChecked;
   bool referralValid_ = false;
   bool referralCapped_ = false;
   bool validatingReferral_ = false;
-  sigc::connection nameDebounce_;  // 250ms debounce before networkCheck (mac parity)
-  uint64_t nameCheckGeneration_ = 0;  // drops stale availability answers
+  // the pending debounce or recheck timer of nameChecker_
+  sigc::connection nameDebounce_;
+  NetworkNameChecker nameChecker_;
   // invalidates in-flight SDK completions across Configure()
   std::shared_ptr<uint64_t> epoch_ = std::make_shared<uint64_t>(0);
 
