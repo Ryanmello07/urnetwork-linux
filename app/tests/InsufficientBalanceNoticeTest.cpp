@@ -170,3 +170,50 @@ UR_TEST(balanceNoticeIsWiredIntoTheWindowAndTheDrawer) {
   UR_EXPECT_TRUE(Has(drawer, "balance_notice::Banner("));
   UR_EXPECT_TRUE(Has(app, "kBalanceNoticeDisconnectAction"));
 }
+
+UR_TEST(balanceNoticeHeldAlertTable) {
+  // gate x connect requested x pro x polling: the alert (and its Upgrade and
+  // Disconnect) shows only for an unfunded, non-Pro, settled account whose
+  // tunnel is asked to carry traffic
+  for (int bits = 0; bits < 32; ++bits) {
+    Signals s;
+    s.insufficientBalance = bits & 1;
+    s.connectRequested = bits & 2;
+    s.pro = bits & 4;
+    s.polling = bits & 8;
+    const bool expected = s.insufficientBalance && s.connectRequested && !s.pro && !s.polling;
+    if (urnw::balance_notice::HeldAlert(s) != expected) {
+      UR_FAIL("held alert wrong for case " + std::to_string(bits));
+    }
+    // the banner text and the alert are one decision
+    const bool bannerHeld = std::string(Banner(s).key) == "insufficient_balance_held_notice";
+    if (bannerHeld != expected) {
+      UR_FAIL("banner disagrees with the alert, case " + std::to_string(bits));
+    }
+  }
+}
+
+UR_TEST(balanceNoticeHeldAlertIsOnTheReachableConnectPage) {
+  // the drawer banner lives on the legacy column the navigation cannot reach;
+  // the Connect page the user sees must host the alert and both ways out
+  const std::string page = ReadSource("ConnectPage.cpp");
+  const std::string window = ReadSource("MainWindow.cpp");
+  const size_t alertAt = page.find("heldAlert_ = Gtk::make_managed");
+  UR_EXPECT_TRUE(alertAt != std::string::npos);
+  if (alertAt != std::string::npos) {
+    const size_t endAt = page.find("paneAContent_->append(*heldAlert_)", alertAt);
+    const std::string block = page.substr(alertAt, endAt - alertAt);
+    UR_EXPECT_TRUE(Has(block, "T_(\"insufficient_balance_held_notice\""));
+    UR_EXPECT_TRUE(Has(block, "T_(\"upgrade\", \"Upgrade\")"));
+    UR_EXPECT_TRUE(Has(block, "T_(\"disconnect\", \"Disconnect\")"));
+    UR_EXPECT_TRUE(Has(block, "on_open_upgrade()"));
+    UR_EXPECT_TRUE(Has(block, "on_balance_disconnect()"));
+    // always enabled, and never the connect path
+    UR_EXPECT_FALSE(Has(block, "set_sensitive"));
+    UR_EXPECT_FALSE(Has(block, "RelayConnectPress"));
+  }
+  UR_EXPECT_TRUE(Has(page, "heldAlert_->set_visible(balance_notice::HeldAlert(signals))"));
+  UR_EXPECT_TRUE(Has(window, "connectPage_->ApplyBalanceNotice(signals)"));
+  UR_EXPECT_TRUE(Has(window, "on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); }"));
+  UR_EXPECT_TRUE(Has(window, "connectPage_->on_open_upgrade"));
+}

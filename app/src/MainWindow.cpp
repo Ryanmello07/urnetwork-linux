@@ -1647,6 +1647,16 @@ void MainWindow::BuildHome() {
   connectPage_->on_open_provider_locations = [this] { OpenProviderLocations(); };
   // the easter egg: five taps on the connected dot play the Pro celebration
   connectPage_->on_connected_icon_tap = [this] { LaunchProCelebration(); };
+  // the out-of-balance held alert: the same guest fork as Account's upgrade,
+  // and the notification's disconnect-only path
+  connectPage_->on_open_upgrade = [this] {
+    if (balance_.IsGuest()) {
+      NavigateCreate(CreateNetworkPage::Mode::UpgradeGuest, "", /*fromHome=*/true);
+    } else if (drawer_) {
+      drawer_->OpenUpgrade();
+    }
+  };
+  connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
   shell_->SetPage("connect", *connectPage_);
   shell_->SetPage("connect-legacy", *scroller);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
@@ -2374,6 +2384,7 @@ void MainWindow::UpdateBalanceNotice() {
   signals.pro = balance_.IsPro();
   signals.polling = balance_.IsPolling();
   signals.connectRequested = reading_.destinationSelected;
+  if (connectPage_) connectPage_->ApplyBalanceNotice(signals);
   Sink sink{*this};
   balanceNotice_.Observe(signals, sink);
 }

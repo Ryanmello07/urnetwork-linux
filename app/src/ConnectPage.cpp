@@ -499,6 +499,43 @@ void ConnectPage::BuildPaneA() {
   connectBtn_->signal_clicked().connect([this] { RelayConnectPress(); });
   paneAContent_->append(*connectBtn_);
 
+  // 2.4b out of balance with a connection requested, the tunnel holds traffic
+  // with no provider behind it: say so and offer both ways out. Disconnect is
+  // its own always-enabled control so the way out never depends on the
+  // connect action's reading.
+  heldAlert_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
+  heldAlert_->set_margin_top(8);
+  {
+    auto* text = Gtk::make_managed<Gtk::Label>(
+        T_("insufficient_balance_held_notice",
+           "Your traffic is held in the tunnel until you upgrade or disconnect."));
+    text->add_css_class("ur-error-text");
+    text->set_xalign(0);
+    text->set_wrap(true);
+    CapNatural(text, 20);
+    heldAlert_->append(*text);
+    auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    actions->set_homogeneous(true);
+    auto* upgrade = Gtk::make_managed<Gtk::Button>(T_("upgrade", "Upgrade"));
+    upgrade->add_css_class("ur-pane-primary");
+    upgrade->signal_clicked().connect([this] {
+      if (on_open_upgrade) on_open_upgrade();
+    });
+    actions->append(*upgrade);
+    auto* disconnect = Gtk::make_managed<Gtk::Button>(T_("disconnect", "Disconnect"));
+    disconnect->add_css_class("ur-pane-secondary");
+    disconnect->signal_clicked().connect([this] {
+      // the same in-flight feedback as the connect action's Disconnect
+      disconnectRequestedAtUs_ = g_get_monotonic_time();
+      ApplyConnectStatus();
+      if (on_balance_disconnect) on_balance_disconnect();
+    });
+    actions->append(*disconnect);
+    heldAlert_->append(*actions);
+  }
+  heldAlert_->set_visible(false);
+  paneAContent_->append(*heldAlert_);
+
   // "More options" disclosure (Simple only) gating provide/options/peers
   moreOptionsToggle_ = Gtk::make_managed<Gtk::Button>(
       T_("more_options", "More options"));
@@ -1273,6 +1310,10 @@ void ConnectPage::ApplyConnectStatus() {
   // (kDisconnectIntentUs), so this can never latch off.
   connectBtn_->set_sensitive(!disconnecting);
   hero_->set_sensitive(!disconnecting);
+}
+
+void ConnectPage::ApplyBalanceNotice(const balance_notice::Signals& signals) {
+  heldAlert_->set_visible(balance_notice::HeldAlert(signals));
 }
 
 void ConnectPage::SetDaemonNotice(const Glib::ustring& notice) {

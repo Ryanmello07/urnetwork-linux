@@ -36,6 +36,10 @@ struct Signals {
 // The existing out-of-balance gate (mac ConnectActions, ConnectDrawer banner).
 inline bool Gate(const Signals& s) { return s.insufficientBalance && !s.pro && !s.polling; }
 
+// The tunnel is holding traffic for an out-of-balance account: the Connect
+// page shows the held alert with Upgrade and Disconnect.
+inline bool HeldAlert(const Signals& s) { return Gate(s) && s.connectRequested; }
+
 struct BannerText {
   const char* key;
   const char* english;
@@ -44,7 +48,7 @@ struct BannerText {
 // The drawer banner body. While a connection is requested the tunnel is
 // holding traffic, so the banner says so and names the way out.
 inline BannerText Banner(const Signals& s) {
-  if (Gate(s) && s.connectRequested) {
+  if (HeldAlert(s)) {
     return BannerText{"insufficient_balance_held_notice",
                       "Your traffic is held in the tunnel until you upgrade or disconnect."};
   }

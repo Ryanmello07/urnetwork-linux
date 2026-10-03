@@ -35,6 +35,7 @@
 #include "ContractsSheet.hpp"
 #include "DnsSheet.hpp"
 #include "ExtenderProvidePresentation.hpp"
+#include "InsufficientBalanceNotice.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
@@ -67,6 +68,9 @@ class ConnectPage : public Gtk::Box {
   // (connectPage_->SetDaemonNotice(text)) or a user whose urnetworkd is
   // missing/stopped/mismatched reads only "Disconnected" on the new Home.
   void SetDaemonNotice(const Glib::ustring& notice);
+  // The out-of-balance held alert under the connect action (urnetwork/android#483):
+  // shown when balance_notice::HeldAlert holds, with Upgrade and Disconnect.
+  void ApplyBalanceNotice(const balance_notice::Signals& signals);
   // The drawer's change feed (SdkHost::DrawerEvent), dispatched per group
   // exactly as ConnectDrawer::OnHostEvent does: every case re-reads through the
   // SdkHost accessors on the GTK thread and re-applies ONE surface.
@@ -121,6 +125,10 @@ class ConnectPage : public Gtk::Box {
   // Silent: no counter, no toast, no announcement; taps while not connected
   // are ignored.
   std::function<void()> on_connected_icon_tap;
+  // the held alert's Upgrade (the window owns the guest fork and the sheet)
+  std::function<void()> on_open_upgrade;
+  // the held alert's Disconnect: the user disconnect path only, never connects
+  std::function<void()> on_balance_disconnect;
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off
@@ -375,6 +383,8 @@ class ConnectPage : public Gtk::Box {
   Gtk::Label* trafficHeldText_ = nullptr;
   Gtk::Label* statusReasonText_ = nullptr;
   Gtk::Label* daemonNoticeText_ = nullptr;
+  // the out-of-balance held alert (ApplyBalanceNotice)
+  Gtk::Box* heldAlert_ = nullptr;
   Gtk::Button* hero_ = nullptr;
   ConnectCanvas* canvas_ = nullptr;
   Gtk::Label* locationText_ = nullptr;
