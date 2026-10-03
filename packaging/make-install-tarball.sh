@@ -2,8 +2,11 @@
 # Build urnetwork-daemon-<version>-<arch>.install.tar.gz (MIGRATION.md
 # normative name) -- the native install/upgrade channel:
 #
-#   curl -fsSL https://get.ur.network/urnetwork-daemon.tar.gz | tar xz \
+#   tar xzf urnetwork-daemon-<version>-<arch>.install.tar.gz \
 #       && sudo urnetwork-daemon/install.sh
+#
+# Published under this exact name on the stable urnetwork/linux GitHub
+# releases (listed on ur.io); install.sh --update finds it there by name.
 #
 # Layout (normative): a SINGLE top-level directory `urnetwork-daemon/` --
 # never a tarbomb -- containing install.sh, uninstall.sh, VERSION and a

@@ -1,7 +1,11 @@
 #!/bin/bash
 # URnetwork daemon installer -- the native (non-apt) path, APPIMAGE.md 11g.
 #
-#   curl -fsSL https://get.ur.network/urnetwork-daemon.tar.gz | tar xz \
+#   Download urnetwork-daemon-<version>-<amd64|arm64>.install.tar.gz from
+#   ur.io or https://github.com/urnetwork/linux/releases (the stable
+#   releases), then:
+#
+#   tar xzf urnetwork-daemon-<version>-<arch>.install.tar.gz \
 #       && sudo urnetwork-daemon/install.sh
 #
 # The SAME command installs and upgrades: the script detects an existing
@@ -31,8 +35,17 @@
 #                   (/usr/local + /etc/systemd, for ostree/bootc hosts like
 #                   Fedora Silverblue, Bazzite, Kinoite and MicroOS).
 #                   DETECTED automatically; this only overrides the detection.
-#   --update        fetch the current tarball from get.ur.network and run its
-#                   installer (the opt-in update channel where there is no apt)
+#   --update        fetch the newest stable release's install tarball and run
+#                   its installer (the opt-in update channel where there is no
+#                   apt). The release is the latest non-draft, non-prerelease
+#                   one of github.com/urnetwork/linux, read from the GitHub
+#                   releases API; the tarball must match the sha256 digest the
+#                   API reports for it before anything in it runs.
+#   --url <url>     with --update: fetch this tarball instead of asking the
+#                   API (also UR_TARBALL_URL)
+#   --sha256 <hex>  with --url: the tarball's expected sha256 (also
+#                   UR_TARBALL_SHA256); without it an explicit URL is
+#                   installed unverified, with a warning
 #   --force         override downgrade/preflight refusals
 #   --yes           assume yes on prompts
 #   --skip-selftest do not run the post-install egress self-test. That test
@@ -51,7 +64,15 @@ PKG_NAME='urnetwork-daemon'
 UNIT='urnetworkd.service'
 GLIBC_FLOOR='2.35'      # SDK is cross-built against glibc 2.35 (jammy)
 GEOCLUE_FLOOR='2.7.0'   # static-source location override needs >= 2.7.0
-DEFAULT_URL_BASE='https://get.ur.network'
+# The update source is ONE repository: the stable releases published by hand
+# to urnetwork/linux under the same asset names the build pipeline mints
+# (build/all/run.sh require_linux_artifacts). Never urnetwork/build (the
+# nightlies) and never a fork -- the same rule as the app's updater
+# (app/src/ReleaseSelection.hpp kUpdateRepo).
+UPDATE_REPO='urnetwork/linux'
+UPDATE_API_URL="https://api.github.com/repos/${UPDATE_REPO}/releases/latest"
+UPDATE_DOWNLOAD_PREFIX="https://github.com/${UPDATE_REPO}/releases/download/"
+UPDATE_RELEASES_PAGE="https://github.com/${UPDATE_REPO}/releases"
 
 # ---------------------------------------------------------------------------
 # Immutable / image-based hosts (ostree: Fedora Silverblue, Bazzite, Kinoite;
@@ -136,6 +157,9 @@ PREFIX=''
 FORCE=0
 ASSUME_YES=0
 DO_UPDATE=0
+UPDATE_URL_OVERRIDE="${UR_TARBALL_URL:-}"
+UPDATE_SHA256="${UR_TARBALL_SHA256:-}"
+UPDATE_SOURCE_FLAG=0
 GROUP_ADDED=0
 SKIP_SELFTEST=0
 # Accumulated across preflight so the last thing on screen can be ONE install
@@ -251,6 +275,8 @@ while [ $# -gt 0 ]; do
                    case "${LAYOUT}" in standard|immutable) ;; *) die "--layout must be 'standard' or 'immutable'" ;; esac
                    shift 2 ;;
         --update)  DO_UPDATE=1; shift ;;
+        --url)     UPDATE_URL_OVERRIDE="${2:?--url needs a tarball URL}"; UPDATE_SOURCE_FLAG=1; shift 2 ;;
+        --sha256)  UPDATE_SHA256="${2:?--sha256 needs a hex digest}"; UPDATE_SOURCE_FLAG=1; shift 2 ;;
         --skip-selftest) SKIP_SELFTEST=1; shift ;;
         --force)   FORCE=1; shift ;;
         --yes|-y)  ASSUME_YES=1; shift ;;
@@ -447,24 +473,186 @@ selinux_active() {
     esac
 }
 
-# --update: re-fetch the published tarball and hand over to ITS installer.
-# Opt-in only -- nothing ever auto-upgrades a daemon that may hold a live
-# tunnel without the user asking (APPIMAGE.md 11g).
+# --update: fetch the newest stable install tarball and hand over to ITS
+# installer. Opt-in only -- nothing ever auto-upgrades a daemon that may hold a
+# live tunnel without the user asking (APPIMAGE.md 11g).
+#
+# The asset names are versioned (urnetwork-daemon-<v>-<arch>.install.tar.gz),
+# so there is no fixed download URL to guess: the GitHub releases API names
+# the latest stable release (/releases/latest never answers a draft or a
+# prerelease; both are refused here anyway), the own-arch asset in it, and
+# GitHub's upload-time sha256 of exactly those bytes. The tarball is verified
+# against that digest BEFORE it is extracted, and its URL must be under
+# urnetwork/linux's own download path.
+
+# json_flatten: GitHub's JSON on stdin -> one "<path><TAB><scalar>" line per
+# leaf (".tag_name", ".assets[3].name"). A real tokenizer, not a grep: the
+# release body is free markdown that can hold quotes, braces and a
+# "name":"..." pair of its own. awk because jq/python are not on every host
+# this script supports.
+json_flatten() {
+    awk '
+    { buf = buf $0 "\n" }
+    function path(   k, p) {
+        p = ""
+        for (k = 1; k <= d; k++) p = p (typ[k] == "o" ? "." key[k] : "[" idx[k] "]")
+        return p
+    }
+    function leaf(v) {
+        if (d > 0 && !(typ[d] == "o" && expectkey[d])) print path() "\t" v
+    }
+    END {
+        n = length(buf); d = 0; i = 1
+        while (i <= n) {
+            c = substr(buf, i, 1)
+            if (c == "{") { d++; typ[d] = "o"; key[d] = ""; expectkey[d] = 1; i++; continue }
+            if (c == "[") { d++; typ[d] = "a"; idx[d] = 0; i++; continue }
+            if (c == "}" || c == "]") { d--; i++; continue }
+            if (c == ",") { if (typ[d] == "a") idx[d]++; else expectkey[d] = 1; i++; continue }
+            if (c == ":") { expectkey[d] = 0; i++; continue }
+            if (c == " " || c == "\t" || c == "\r" || c == "\n") { i++; continue }
+            if (c == "\"") {
+                s = ""; i++; st = i
+                while (i <= n) {
+                    c = substr(buf, i, 1)
+                    if (c == "\\") {
+                        s = s substr(buf, st, i - st)
+                        e = substr(buf, i + 1, 1)
+                        if (e == "n" || e == "t" || e == "r" || e == "b" || e == "f") s = s " "
+                        else if (e == "u") s = s "\\u"
+                        else s = s e
+                        i += 2; st = i; continue
+                    }
+                    if (c == "\"") break
+                    i++
+                }
+                s = s substr(buf, st, i - st); i++
+                if (typ[d] == "o" && expectkey[d]) key[d] = s
+                else leaf(s)
+                continue
+            }
+            st = i
+            while (i <= n) {
+                c = substr(buf, i, 1)
+                if (c == "," || c == "}" || c == "]" || c == " " || c == "\t" || c == "\r" || c == "\n") break
+                i++
+            }
+            leaf(substr(buf, st, i - st))
+        }
+    }'
+}
+
+# json_field <flat> <path> -> the scalar at <path>, or empty.
+json_field() {
+    printf '%s\n' "$1" | awk -F '\t' -v p="$2" '$1 == p { print $2; exit }'
+}
+
+sha256_hex() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{ print $1 }'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{ print $1 }'
+    elif command -v openssl >/dev/null 2>&1; then
+        openssl dgst -sha256 -r "$1" | awk '{ print $1 }'
+    else
+        return 1
+    fi
+}
+
+# verify_sha256 <file> <expected lowercase hex> -- dies on mismatch.
+verify_sha256() {
+    local actual
+    actual="$(sha256_hex "$1")" || die "cannot verify the download: no sha256sum, shasum or openssl on this host"
+    if [ "${actual}" != "$2" ]; then
+        rm -f "$1"
+        die "sha256 mismatch for the downloaded tarball: expected $2, got ${actual} -- refusing to install it"
+    fi
+    log "sha256 verified: ${actual}"
+}
+
+CURL_SAFE=(--proto '=https' --proto-redir '=https' --tlsv1.2)
+
+if [ "${DO_UPDATE}" != 1 ] && [ "${UPDATE_SOURCE_FLAG}" = 1 ]; then
+    die "--url and --sha256 only apply with --update"
+fi
 if [ "${DO_UPDATE}" = 1 ]; then
     [ "${HOST_ARCH}" != 'unsupported' ] || die "unsupported architecture '${HOST_ARCH_RAW}' -- URnetwork ships amd64 and arm64 only"
-    # The documented one-liner URL (urnetwork-daemon.tar.gz) is served
-    # per-arch by the download host; this client fetches the explicit
-    # per-arch alias. Override the full URL with UR_TARBALL_URL.
-    UPDATE_URL="${UR_TARBALL_URL:-${DEFAULT_URL_BASE}/urnetwork-daemon-${HOST_ARCH}.tar.gz}"
+    UPDATE_SHA256="$(printf '%s' "${UPDATE_SHA256}" | tr 'A-F' 'a-f')"
+    UPDATE_SHA256="${UPDATE_SHA256#sha256:}"
+    if [ -n "${UPDATE_SHA256}" ]; then
+        [ -n "${UPDATE_URL_OVERRIDE}" ] || die "--sha256 needs --url: the default source is verified against the release's own digest"
+        printf '%s' "${UPDATE_SHA256}" | grep -Eq '^[0-9a-f]{64}$' || die "--sha256 must be 64 hex digits"
+    fi
     if [ "${DRY_RUN}" = 1 ]; then
-        log "would fetch ${UPDATE_URL}, extract to a temp dir, and run its install.sh"
+        if [ -n "${UPDATE_URL_OVERRIDE}" ]; then
+            log "would fetch ${UPDATE_URL_OVERRIDE}${UPDATE_SHA256:+, verify sha256 ${UPDATE_SHA256}}, extract to a temp dir, and run its install.sh"
+        else
+            log "would ask ${UPDATE_API_URL} for the latest stable ${UPDATE_REPO} release, fetch its urnetwork-daemon-<version>-${HOST_ARCH}.install.tar.gz, verify it against the release's sha256 asset digest, extract to a temp dir, and run its install.sh"
+        fi
         exit 0
     fi
     command -v curl >/dev/null 2>&1 || die "--update needs curl"
-    UPDATE_TMP="$(mktemp -d /tmp/urnetwork-update.XXXXXX)"
+    UPDATE_TMP_BASE="${TMPDIR:-/tmp}"; UPDATE_TMP_BASE="${UPDATE_TMP_BASE%/}"
+    UPDATE_TMP="$(mktemp -d "${UPDATE_TMP_BASE}/urnetwork-update.XXXXXX")"
+    # Removed on every refusal below; the handover (exec) keeps it, because
+    # the extracted installer runs from it.
+    trap 'rm -rf "${UPDATE_TMP}"' EXIT
+    UPDATE_TARBALL="${UPDATE_TMP}/download.tar.gz"
+
+    if [ -n "${UPDATE_URL_OVERRIDE}" ]; then
+        UPDATE_URL="${UPDATE_URL_OVERRIDE}"
+        UPDATE_DIGEST="${UPDATE_SHA256}"
+        [ -n "${UPDATE_DIGEST}" ] || warn "explicit --url without --sha256: ${UPDATE_URL} will be installed UNVERIFIED"
+    else
+        log "asking ${UPDATE_API_URL} for the latest stable release ..."
+        UPDATE_JSON="${UPDATE_TMP}/release.json"
+        UPDATE_HTTP="$(curl -sSL "${CURL_SAFE[@]}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -A 'urnetwork-daemon-install.sh' \
+            -o "${UPDATE_JSON}" -w '%{http_code}' "${UPDATE_API_URL}")" || \
+            die "could not reach api.github.com to find the latest release; pass --url <tarball URL> to update from a downloaded release instead"
+        case "${UPDATE_HTTP}" in
+            200) ;;
+            404) die "${UPDATE_REPO} has no stable release yet (${UPDATE_API_URL} answered 404) -- there is nothing to update to; see ${UPDATE_RELEASES_PAGE}" ;;
+            403|429) die "the GitHub API refused the request (HTTP ${UPDATE_HTTP}, most likely its rate limit) -- try again later" ;;
+            *) die "the GitHub API answered HTTP ${UPDATE_HTTP} for ${UPDATE_API_URL}" ;;
+        esac
+        UPDATE_FLAT="$(json_flatten < "${UPDATE_JSON}")"
+        UPDATE_TAG="$(json_field "${UPDATE_FLAT}" '.tag_name')"
+        [ "$(json_field "${UPDATE_FLAT}" '.draft')" = 'false' ] && \
+            [ "$(json_field "${UPDATE_FLAT}" '.prerelease')" = 'false' ] || \
+            die "the latest ${UPDATE_REPO} release (${UPDATE_TAG:-no tag}) is a draft or prerelease -- refusing it"
+        # v<YYYY.M.D>-<code>[-beta]: the tag grammar every platform mints.
+        printf '%s' "${UPDATE_TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+(-beta)?$' || \
+            die "the latest ${UPDATE_REPO} release has an unrecognized tag '${UPDATE_TAG}'"
+        UPDATE_ASSET="urnetwork-daemon-${UPDATE_TAG#v}-${HOST_ARCH}.install.tar.gz"
+        UPDATE_INDEX="$(printf '%s\n' "${UPDATE_FLAT}" | awk -F '\t' -v n="${UPDATE_ASSET}" '
+            $1 ~ /^\.assets\[[0-9]+\]\.name$/ && $2 == n {
+                sub(/^\.assets\[/, "", $1); sub(/\]\.name$/, "", $1); print $1; exit }')"
+        [ -n "${UPDATE_INDEX}" ] || \
+            die "the latest stable release ${UPDATE_TAG} of ${UPDATE_REPO} does not include ${UPDATE_ASSET} -- no install tarball to update from; see ${UPDATE_RELEASES_PAGE}/tag/${UPDATE_TAG}"
+        UPDATE_URL="$(json_field "${UPDATE_FLAT}" ".assets[${UPDATE_INDEX}].browser_download_url")"
+        case "${UPDATE_URL}" in
+            "${UPDATE_DOWNLOAD_PREFIX}"*) ;;
+            *) die "${UPDATE_ASSET} in ${UPDATE_TAG} is not hosted by ${UPDATE_REPO} (${UPDATE_URL:-no URL}) -- refusing it" ;;
+        esac
+        case "${UPDATE_URL}" in
+            *[[:space:]]*|*..*) die "${UPDATE_ASSET} has a malformed download URL -- refusing it" ;;
+        esac
+        UPDATE_DIGEST="$(json_field "${UPDATE_FLAT}" ".assets[${UPDATE_INDEX}].digest" | tr 'A-F' 'a-f')"
+        printf '%s' "${UPDATE_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$' || \
+            die "${UPDATE_ASSET} in ${UPDATE_TAG} has no usable sha256 digest in the GitHub API -- refusing to install it unverified"
+        UPDATE_DIGEST="${UPDATE_DIGEST#sha256:}"
+        log "latest stable release: ${UPDATE_TAG} (${UPDATE_ASSET})"
+    fi
+
     log "fetching ${UPDATE_URL} ..."
-    curl -fsSL "${UPDATE_URL}" | tar xz -C "${UPDATE_TMP}"
+    curl -fsSL "${CURL_SAFE[@]}" -o "${UPDATE_TARBALL}" "${UPDATE_URL}" || die "download failed: ${UPDATE_URL}"
+    [ -z "${UPDATE_DIGEST}" ] || verify_sha256 "${UPDATE_TARBALL}" "${UPDATE_DIGEST}"
+    tar xzf "${UPDATE_TARBALL}" -C "${UPDATE_TMP}" || die "the downloaded tarball did not extract"
     [ -f "${UPDATE_TMP}/urnetwork-daemon/install.sh" ] || die "downloaded tarball has no urnetwork-daemon/install.sh"
+    trap - EXIT
     UPDATE_ARGS=()
     [ "${FORCE}" = 1 ] && UPDATE_ARGS[${#UPDATE_ARGS[@]}]='--force'
     [ "${ASSUME_YES}" = 1 ] && UPDATE_ARGS[${#UPDATE_ARGS[@]}]='--yes'

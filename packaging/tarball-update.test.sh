@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# Deterministic regression for `install.sh --update`, the install tarball's
+# update channel.
+#
+# The default source must be the newest STABLE release of urnetwork/linux,
+# resolved through the GitHub releases API (never a made-up download host,
+# never urnetwork/build nightlies or a fork), and the downloaded tarball must
+# match the sha256 digest GitHub reports for that asset before anything from
+# it runs. An explicit --url / UR_TARBALL_URL override keeps working.
+#
+# No network: curl and uname are fakes on PATH. The fake curl answers only the
+# URLs a test case maps and fails any other request the way an unresolvable
+# host does (exit 6), logging every URL it was asked for.
+set -euo pipefail
+umask 077
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+installer="$here/tarball/install.sh"
+
+run_dir="$(mktemp -d "${TMPDIR:-/tmp}/urnetwork-tarball-update.test.XXXXXX")"
+trap 'rm -rf "$run_dir"' EXIT
+
+failures=0
+fail() {
+    echo "FAIL: $*" >&2
+    failures=$((failures + 1))
+}
+
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+# ---- fakes -----------------------------------------------------------------
+
+bin="$run_dir/bin"
+mkdir -p "$bin"
+
+cat >"$bin/uname" <<'EOF'
+#!/bin/sh
+case "$1" in
+    -m) echo x86_64 ;;
+    *)  echo Linux ;;
+esac
+EOF
+
+# The map file: one "<url> <http code> <body file>" per line.
+cat >"$bin/curl" <<'EOF'
+#!/bin/sh
+out='' wfmt='' fail_on_http=0 url=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        -w) wfmt="$2"; shift 2 ;;
+        -H|-A|--proto|--proto-redir|--max-time|--connect-timeout|--retry) shift 2 ;;
+        --*) shift ;;
+        -*) case "$1" in *f*) fail_on_http=1 ;; esac; shift ;;
+        *) url="$1"; shift ;;
+    esac
+done
+printf '%s\n' "$url" >>"$FAKE_CURL_LOG"
+line="$(awk -v u="$url" '$1 == u { print; exit }' "$FAKE_CURL_MAP")"
+if [ -z "$line" ]; then
+    echo "curl: (6) Could not resolve host: $(printf '%s' "$url" | sed 's|^[a-z]*://||; s|/.*||')" >&2
+    exit 6
+fi
+code="$(printf '%s' "$line" | awk '{print $2}')"
+body="$(printf '%s' "$line" | awk '{print $3}')"
+if [ "$fail_on_http" = 1 ] && [ "$code" -ge 400 ]; then
+    echo "curl: (22) The requested URL returned error: $code" >&2
+    exit 22
+fi
+if [ -n "$out" ]; then cat "$body" >"$out"; else cat "$body"; fi
+[ -n "$wfmt" ] && printf '%s' "$code"
+exit 0
+EOF
+chmod 0755 "$bin/uname" "$bin/curl"
+
+# ---- fixtures --------------------------------------------------------------
+
+version='2026.10.1-1060587890'
+tag="v$version"
+asset="urnetwork-daemon-$version-amd64.install.tar.gz"
+api_url='https://api.github.com/repos/urnetwork/linux/releases/latest'
+asset_url="https://github.com/urnetwork/linux/releases/download/$tag/$asset"
+nightly_url="https://github.com/urnetwork/build/releases/download/$tag/$asset"
+
+# A tarball whose install.sh only records that it ran, and with what.
+mkdir -p "$run_dir/src/urnetwork-daemon"
+cat >"$run_dir/src/urnetwork-daemon/install.sh" <<'EOF'
+#!/bin/bash
+printf 'ran %s\n' "$*" >"$UPDATE_MARKER"
+EOF
+chmod 0755 "$run_dir/src/urnetwork-daemon/install.sh"
+tarball="$run_dir/$asset"
+tar -czf "$tarball" -C "$run_dir/src" urnetwork-daemon
+good_digest="sha256:$(sha256_of "$tarball")"
+printf 'something else entirely\n' >"$run_dir/other"
+bad_digest="sha256:$(sha256_of "$run_dir/other")"
+
+# release_json <file> <draft> <prerelease> <assets json> -- the shape GitHub's
+# API answers, including the parts a naive grep trips on: a markdown body full
+# of quotes, commas and braces, and a nested uploader object per asset.
+release_json() {
+    printf '{"url":"https://api.github.com/repos/urnetwork/linux/releases/1","html_url":"https://github.com/urnetwork/linux/releases/tag/%s","tag_name":"%s","name":"%s","draft":%s,"prerelease":%s,"assets":[%s],"body":"Notes: \\"quoted\\", {braces}, [brackets], \\\\ and a \\"name\\":\\"decoy\\" pair."}\n' \
+        "$tag" "$tag" "$tag" "$2" "$3" "$4" >"$1"
+}
+
+asset_json() {  # asset_json <name> <url> <digest>
+    printf '{"url":"https://api.github.com/repos/urnetwork/linux/releases/assets/9","name":"%s","uploader":{"login":"someone","name":"decoy-uploader"},"content_type":"application/gzip","size":1,"digest":"%s","browser_download_url":"%s"}' \
+        "$1" "$3" "$2"
+}
+
+arm_asset="$(asset_json "urnetwork-daemon-$version-arm64.install.tar.gz" \
+    "https://github.com/urnetwork/linux/releases/download/$tag/urnetwork-daemon-$version-arm64.install.tar.gz" \
+    "$bad_digest")"
+
+# ---- runner ----------------------------------------------------------------
+
+case_dir=''
+# setup_case <name>: fresh map, log, marker and TMPDIR for one case.
+setup_case() {
+    case_dir="$run_dir/case-$1"
+    mkdir -p "$case_dir/tmp"
+    : >"$case_dir/map"
+    : >"$case_dir/curl.log"
+}
+
+map_url() {  # map_url <url> <code> <file>
+    printf '%s %s %s\n' "$1" "$2" "$3" >>"$case_dir/map"
+}
+
+# run_update [installer args...] -> sets rc; stdout/stderr in $case_dir.
+rc=0
+run_update() {
+    rc=0
+    env PATH="$bin:$PATH" TMPDIR="$case_dir/tmp" \
+        FAKE_CURL_MAP="$case_dir/map" FAKE_CURL_LOG="$case_dir/curl.log" \
+        UPDATE_MARKER="$case_dir/marker" \
+        bash "$installer" --update "$@" \
+        >"$case_dir/out" 2>"$case_dir/err" </dev/null || rc=$?
+}
+
+requested() { grep -qxF "$1" "$case_dir/curl.log"; }
+ran_update() { [ -f "$case_dir/marker" ]; }
+stderr_has() { grep -qiF "$1" "$case_dir/err"; }
+show() { sed 's/^/    | /' "$case_dir/err" >&2; }
+
+never_unofficial() {  # the default path never asks any host but GitHub's official repo
+    if grep -q 'get\.ur\.network' "$case_dir/curl.log"; then
+        fail "$1: requested the unresolvable get.ur.network host"
+    fi
+    if grep -q 'urnetwork/build' "$case_dir/curl.log"; then
+        fail "$1: requested the urnetwork/build nightly repo"
+    fi
+}
+
+# ---- cases -----------------------------------------------------------------
+
+# 1. Default: latest stable urnetwork/linux release, own-arch asset, verified.
+setup_case default
+release_json "$case_dir/release.json" false false "$arm_asset,$(asset_json "$asset" "$asset_url" "$good_digest")"
+map_url "$api_url" 200 "$case_dir/release.json"
+map_url "$asset_url" 200 "$tarball"
+run_update --yes
+never_unofficial default
+requested "$api_url" || fail "default: did not ask $api_url for the latest stable release"
+requested "$asset_url" || fail "default: did not download $asset from urnetwork/linux"
+if [ "$rc" -ne 0 ] || ! ran_update; then
+    fail "default: the verified stable tarball's installer did not run (exit $rc)"; show
+elif ! grep -qx 'ran --yes' "$case_dir/marker"; then
+    fail "default: --yes was not handed to the downloaded installer"
+fi
+
+# 2. The downloaded bytes do not match GitHub's digest: nothing from them runs.
+setup_case mismatch
+release_json "$case_dir/release.json" false false "$(asset_json "$asset" "$asset_url" "$bad_digest")"
+map_url "$api_url" 200 "$case_dir/release.json"
+map_url "$asset_url" 200 "$tarball"
+run_update --yes
+never_unofficial mismatch
+if [ "$rc" -eq 0 ] || ran_update; then
+    fail "mismatch: a tarball that does not match the API digest was installed (exit $rc)"
+fi
+requested "$asset_url" || fail "mismatch: never downloaded the asset, so the digest was never checked"
+stderr_has 'sha256' || { fail "mismatch: the refusal does not say the sha256 did not match"; show; }
+[ -z "$(ls -A "$case_dir/tmp")" ] || fail "mismatch: the refused download was left behind in TMPDIR"
+
+# 3. No digest on the asset: refused rather than installed unverified.
+setup_case nodigest
+release_json "$case_dir/release.json" false false "$(asset_json "$asset" "$asset_url" "")"
+map_url "$api_url" 200 "$case_dir/release.json"
+map_url "$asset_url" 200 "$tarball"
+run_update --yes
+if [ "$rc" -eq 0 ] || ran_update; then
+    fail "nodigest: an asset without a sha256 digest was installed (exit $rc)"
+fi
+stderr_has 'digest' || { fail "nodigest: the refusal does not mention the digest"; show; }
+
+# 4. urnetwork/linux has no stable release yet (API 404): clear error, no guess.
+setup_case norelease
+printf '{"message":"Not Found","documentation_url":"https://docs.github.com"}\n' >"$case_dir/404.json"
+map_url "$api_url" 404 "$case_dir/404.json"
+run_update --yes
+never_unofficial norelease
+requested "$api_url" || fail "norelease: did not ask $api_url"
+if [ "$rc" -eq 0 ] || ran_update; then fail "norelease: exited $rc"; fi
+[ "$(wc -l <"$case_dir/curl.log" | tr -d ' ')" = 1 ] || \
+    fail "norelease: guessed a download URL after the API said there is no release: $(tr '\n' ' ' <"$case_dir/curl.log")"
+stderr_has 'no stable release' || { fail "norelease: the error does not say there is no stable release"; show; }
+
+# 5. The stable release does not carry the install tarball: clear error naming it.
+setup_case noasset
+release_json "$case_dir/release.json" false false "$arm_asset"
+map_url "$api_url" 200 "$case_dir/release.json"
+run_update --yes
+never_unofficial noasset
+if [ "$rc" -eq 0 ] || ran_update; then fail "noasset: exited $rc"; fi
+stderr_has "$asset" || { fail "noasset: the error does not name $asset"; show; }
+
+# 6. Named right, hosted elsewhere (the nightly repo): refused, not followed.
+setup_case offrepo
+release_json "$case_dir/release.json" false false "$(asset_json "$asset" "$nightly_url" "$good_digest")"
+map_url "$api_url" 200 "$case_dir/release.json"
+map_url "$nightly_url" 200 "$tarball"
+run_update --yes
+if [ "$rc" -eq 0 ] || ran_update; then fail "offrepo: installed an asset hosted outside urnetwork/linux"; fi
+requested "$nightly_url" && fail "offrepo: downloaded from the urnetwork/build nightly repo"
+
+# 7. A prerelease (or draft) answer is never installed.
+setup_case prerelease
+release_json "$case_dir/release.json" false true "$(asset_json "$asset" "$asset_url" "$good_digest")"
+map_url "$api_url" 200 "$case_dir/release.json"
+map_url "$asset_url" 200 "$tarball"
+run_update --yes
+if [ "$rc" -eq 0 ] || ran_update; then fail "prerelease: installed a prerelease"; fi
+
+# 8. Explicit override, both spellings: fetched as given, no API call.
+override_url='https://mirror.example.test/urnetwork-daemon.tar.gz'
+for spelling in env flag; do
+    setup_case "override-$spelling"
+    map_url "$override_url" 200 "$tarball"
+    if [ "$spelling" = env ]; then
+        UR_TARBALL_URL="$override_url" run_update --yes
+    else
+        run_update --yes --url "$override_url"
+    fi
+    if [ "$rc" -ne 0 ] || ! ran_update; then
+        fail "override-$spelling: the explicit URL was not installed (exit $rc)"; show
+    fi
+    requested "$api_url" && fail "override-$spelling: queried the API despite an explicit URL"
+done
+
+# 9. Explicit override with a pinned sha256 that does not match: refused.
+setup_case override-mismatch
+map_url "$override_url" 200 "$tarball"
+run_update --yes --url "$override_url" --sha256 "${bad_digest#sha256:}"
+if [ "$rc" -eq 0 ] || ran_update; then fail "override-mismatch: installed despite a sha256 mismatch"; fi
+stderr_has 'sha256' || { fail "override-mismatch: the refusal does not mention sha256"; show; }
+
+# 10. --dry-run touches nothing, not even the API.
+setup_case dryrun
+run_update --dry-run
+[ "$rc" -eq 0 ] || { fail "dryrun: exited $rc"; show; }
+[ -s "$case_dir/curl.log" ] && fail "dryrun: made a request: $(tr '\n' ' ' <"$case_dir/curl.log")"
+grep -q 'urnetwork/linux' "$case_dir/out" || fail "dryrun: the plan does not name urnetwork/linux"
+
+if [ "$failures" -gt 0 ]; then
+    echo "$failures failure(s)" >&2
+    exit 1
+fi
+echo "ok: install.sh --update resolves, verifies and refuses as specified"

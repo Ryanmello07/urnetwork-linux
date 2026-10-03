@@ -1167,7 +1167,9 @@ fi
 say "INSTALL CHANNEL FOR THIS HOST:"
 if [ "${LAYOUT}" = 'immutable' ]; then
     say "  the install tarball -- it is the only channel that handles a read-only /usr"
-    say "    curl -fsSL https://get.ur.network/urnetwork-daemon.tar.gz | tar xz \\"
+    say "  urnetwork-daemon-<version>-${UR_ARCH:-<arch>}.install.tar.gz from ur.io or"
+    say "  https://github.com/urnetwork/linux/releases, then:"
+    say "    tar xzf urnetwork-daemon-<version>-${UR_ARCH:-<arch>}.install.tar.gz \\"
     say "      && sudo urnetwork-daemon/install.sh"
 elif [ "${PKG_CHANNEL}" = 'deb' ]; then
     say "  urnetwork-daemon_<version>_${UR_ARCH:-amd64}.deb   (sudo apt install ./…deb)"
@@ -1175,11 +1177,14 @@ elif [ "${PKG_CHANNEL}" = 'deb' ]; then
 elif [ "${PKG_CHANNEL}" = 'rpm' ]; then
     say "  urnetwork-daemon-<version>.$(uname -m).rpm if your release publishes one"
     say "  (sudo dnf install ./…rpm); otherwise the install tarball, which covers"
-    say "  every rpm-family host including the immutable ones:"
-    say "    curl -fsSL https://get.ur.network/urnetwork-daemon.tar.gz | tar xz \\"
+    say "  every rpm-family host including the immutable ones (from ur.io or"
+    say "  https://github.com/urnetwork/linux/releases):"
+    say "    tar xzf urnetwork-daemon-<version>-${UR_ARCH:-<arch>}.install.tar.gz \\"
     say "      && sudo urnetwork-daemon/install.sh"
 else
     say "  the install tarball (no supported native package for this distro yet)"
+    say "  urnetwork-daemon-<version>-${UR_ARCH:-<arch>}.install.tar.gz from ur.io or"
+    say "  https://github.com/urnetwork/linux/releases"
 fi
 if [ "${SELINUX_ON}" = 1 ]; then
     say "  on this SELinux host the installer also builds and loads packaging/selinux/urnetwork.te"
