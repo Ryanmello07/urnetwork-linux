@@ -2206,6 +2206,16 @@ msgctxt "failed_to_start_urnetwork_vpn"
 msgid "Failed to start URnetwork VPN"
 msgstr "Não foi possível iniciar a URnetwork VPN"
 
+#. DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.
+msgctxt "fast_dns_on_connect"
+msgid "Fast DNS on connect"
+msgstr "DNS rápido ao ligar"
+
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).
+msgctxt "fast_dns_on_connect_description"
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network and return answers that don't match your exit location. When off, DNS only resolves through the tunnel."
+msgstr "Responde ao DNS através da rede local enquanto o DNS do túnel arranca. Isto pode revelar as suas pesquisas à rede local e devolver respostas que não correspondem à sua localização de saída. Quando desativado, o DNS só é resolvido através do túnel."
+
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"
 msgid "Feedback"
@@ -2625,16 +2635,6 @@ msgstr "Local"
 msgctxt "local_dns"
 msgid "Local DNS"
 msgstr "DNS local"
-
-#. A label displayed in the custom dns settings section.
-msgctxt "local_dns_fallback"
-msgid "Local DNS fallback"
-msgstr "Fallback de DNS local"
-
-#. A description of the local DNS fallback setting.
-msgctxt "local_dns_fallback_description"
-msgid "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
-msgstr "Consulta um resolvedor local em paralelo enquanto o túnel arranca. Quando desativado, o DNS só é resolvido através do túnel."
 
 #. A label displayed above a list of local DNS servers.
 msgctxt "local_dns_servers"

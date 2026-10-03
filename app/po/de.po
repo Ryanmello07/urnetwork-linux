@@ -3408,6 +3408,16 @@ msgctxt "failed_to_start_urnetwork_vpn"
 msgid "Failed to start URnetwork VPN"
 msgstr "URnetwork VPN konnte nicht gestartet werden"
 
+#. DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.
+msgctxt "fast_dns_on_connect"
+msgid "Fast DNS on connect"
+msgstr "Schnelles DNS beim Verbinden"
+
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).
+msgctxt "fast_dns_on_connect_description"
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network and return answers that don't match your exit location. When off, DNS only resolves through the tunnel."
+msgstr "Beantwortet DNS-Anfragen über das lokale Netzwerk, während das DNS des Tunnels startet. Dadurch können deine Abfragen im lokalen Netzwerk sichtbar werden, und die Antworten passen möglicherweise nicht zu deinem Exit-Standort. Wenn aus, wird DNS nur über den Tunnel aufgelöst."
+
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"
 msgid "Feedback"
@@ -4038,16 +4048,6 @@ msgstr "Lokal"
 msgctxt "local_dns"
 msgid "Local DNS"
 msgstr "Lokales DNS"
-
-#. A label displayed in the custom dns settings section.
-msgctxt "local_dns_fallback"
-msgid "Local DNS fallback"
-msgstr "Lokales DNS-Fallback"
-
-#. A description of the local DNS fallback setting.
-msgctxt "local_dns_fallback_description"
-msgid "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
-msgstr "Fragt beim Start des Tunnels parallel einen lokalen Resolver ab. Wenn aus, wird DNS nur über den Tunnel aufgelöst."
 
 #. A label displayed above a list of local DNS servers.
 msgctxt "local_dns_servers"
@@ -6307,11 +6307,6 @@ msgstr "DNS"
 msgctxt "site_app_dns_encrypted"
 msgid "Encrypted (DoH)"
 msgstr "Verschlüsselt (DoH)"
-
-#. App connect DNS: fallback toggle
-msgctxt "site_app_dns_fallback"
-msgid "Fast fallback during startup"
-msgstr "Schneller Fallback beim Start"
 
 #. App connect DNS: local plain DNS toggle
 msgctxt "site_app_dns_local_dns"

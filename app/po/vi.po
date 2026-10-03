@@ -2202,6 +2202,16 @@ msgctxt "failed_to_start_urnetwork_vpn"
 msgid "Failed to start URnetwork VPN"
 msgstr "Không thể khởi động URnetwork VPN"
 
+#. DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.
+msgctxt "fast_dns_on_connect"
+msgid "Fast DNS on connect"
+msgstr "DNS nhanh khi kết nối"
+
+#. DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).
+msgctxt "fast_dns_on_connect_description"
+msgid "Answers DNS over the local network while the tunnel's DNS starts. This can reveal your lookups to the local network and return answers that don't match your exit location. When off, DNS only resolves through the tunnel."
+msgstr "Trả lời DNS qua mạng cục bộ trong khi DNS của đường hầm khởi động. Điều này có thể để lộ các truy vấn của bạn cho mạng cục bộ và trả về kết quả không khớp với vị trí thoát của bạn. Khi tắt, DNS chỉ phân giải qua đường hầm."
+
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "feedback"
 msgid "Feedback"
@@ -2619,16 +2629,6 @@ msgstr "Cục bộ"
 msgctxt "local_dns"
 msgid "Local DNS"
 msgstr "DNS cục bộ"
-
-#. A label displayed in the custom dns settings section.
-msgctxt "local_dns_fallback"
-msgid "Local DNS fallback"
-msgstr "DNS dự phòng cục bộ"
-
-#. A description of the local DNS fallback setting.
-msgctxt "local_dns_fallback_description"
-msgid "Races a local resolver while the tunnel starts. When off, DNS only resolves through the tunnel."
-msgstr "Chạy song song một bộ phân giải cục bộ trong khi đường hầm khởi động. Khi tắt, DNS chỉ phân giải qua đường hầm."
 
 #. A label displayed above a list of local DNS servers.
 msgctxt "local_dns_servers"
