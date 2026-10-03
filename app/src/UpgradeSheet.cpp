@@ -40,10 +40,10 @@ constexpr const char* kUiModeEmbedded = "embedded";
 // control back by navigating to the redirect_link:
 //   done:  urnetwork://checkout?status=complete&session_id=cs_...
 //   error: urnetwork://checkout?errorCode=-1&errorMessage=...
-// There is no cancel url: Stripe's embedded flow never leaves the page, so
-// the sheet's own close (X) is the only way out.
-constexpr const char* kCheckoutPage = "https://ur.io/checkout";
-constexpr const char* kCheckoutRedirect = "urnetwork://checkout";
+// The url and the hand-back are the SDK's envelope (urnet::buildCheckoutBridgeUrl,
+// urnet::parseCheckoutRedirect; windows UpgradeSheet parity). There is no
+// cancel url: Stripe's embedded flow never leaves the page, so the sheet's
+// own close (X) is the only way out.
 // The ur.io embedded pay page (mmm/ur.io /app/pay-sheet): mounts Stripe's
 // Payment Element for the payment sheet's client secret, confirms the intent,
 // and hands control back by navigating to the return url (success) or posting
@@ -447,6 +447,10 @@ void UpgradeSheet::RequestSession(bool embedded) {
   urnet::StripeCreateCheckoutSessionArgs args;
   args.item_id = plans_->Yearly() ? kItemProYearly : kItemProMonthly;
   args.ui_mode = embedded ? kUiModeEmbedded : kUiModeHosted;
+  // redirect_on_completion stays unset: the bridge page hands control back
+  // only when Stripe returns the customer to the server's return_url.
+  // "never" would complete through Stripe's onComplete callback, which
+  // EmbeddedCheckout.jsx does not handle, so no hand-back would ever arrive.
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
   host_.api().createStripeCheckoutSession(
@@ -670,9 +674,7 @@ void UpgradeSheet::OpenEmbedded(const std::string& clientSecret) {
   pageLoaded_ = false;
   webFallbackTried_ = false;
   paySheetActive_ = false;
-  const std::string url = std::string(kCheckoutPage) +
-                          "?client_secret=" + Escape(clientSecret) +
-                          "&redirect_link=" + Escape(kCheckoutRedirect);
+  const std::string url = urnet::buildCheckoutBridgeUrl(clientSecret);
   SetState(State::Checkout);
   webkit_web_view_load_uri(WEBKIT_WEB_VIEW(webView_), url.c_str());
 }
@@ -680,10 +682,27 @@ void UpgradeSheet::OpenEmbedded(const std::string& clientSecret) {
 void UpgradeSheet::HandleCheckoutCallback(const std::string& uri) {
   // deferred: this arrives mid "decide-policy" emission
   PostToMain([this, uri] {
-    const auto params = ParseQuery(uri);
-    const auto status = params.find("status");
-    const bool payDone = uri.rfind(kPayReturn, 0) == 0;
-    if (payDone || (status != params.end() && status->second == "complete")) {
+    // the checkout bridge's hand-back is the SDK's envelope; the pay page's
+    // (urnetwork://pay/done, urnetwork://pay/error?errorMessage=) is this sheet's
+    bool complete = false;
+    std::string errorMessage;
+    if (urnet::isCheckoutRedirect(uri)) {
+      try {
+        if (auto redirect = urnet::parseCheckoutRedirect(uri)) {
+          complete = redirect->Complete;
+          errorMessage = redirect->ErrorMessage;
+        }
+      } catch (...) {
+        // a malformed hand-back: an error with no message of its own
+      }
+    } else {
+      complete = uri.rfind(kPayReturn, 0) == 0;
+      const auto params = ParseQuery(uri);
+      if (const auto message = params.find("errorMessage"); message != params.end()) {
+        errorMessage = message->second;
+      }
+    }
+    if (complete) {
       // paid in the webview — the server only believes the Stripe webhook, so
       // bridge the gap with the confirmation poll exactly like hosted
       waitingLabel_->set_text(T_("processing_payment", "Processing payment"));
@@ -692,12 +711,11 @@ void UpgradeSheet::HandleCheckoutCallback(const std::string& uri) {
       return;
     }
     if (state_ != State::Checkout) return;  // stale error after close
-    const auto message = params.find("errorMessage");
     EmitPurchase("failed", paySheetActive_ ? "payment_sheet" : "checkout");
     purchaseEmitted_ = true;
     SetState(State::Options);
-    errorLabel_->set_text(message != params.end() && !message->second.empty()
-                              ? message->second
+    errorLabel_->set_text(!errorMessage.empty()
+                              ? Glib::ustring(errorMessage)
                               : T_("something_went_wrong_please_try_again_later",
                                    "Something went wrong. Please try again later."));
     errorLabel_->set_visible(true);
