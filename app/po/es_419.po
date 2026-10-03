@@ -3655,10 +3655,20 @@ msgctxt "seedphrase_leave_confirm_body"
 msgid "Are you sure? This is the ONLY time you'll see your seedphrase. Make sure you've saved it before going back."
 msgstr "¿Seguro? Esta es la ÚNICA vez que verás tu frase semilla. Asegúrate de haberla guardado antes de volver."
 
+#. Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.
+msgctxt "seeker_multiplier_benefit"
+msgid "Doubles your points, free daily data and referral data."
+msgstr "Duplica tus puntos, tus datos diarios gratuitos y tus datos por referidos."
+
 #. Call to action
 msgctxt "seeker_token_verified"
 msgid "Seeker Token Verified!"
 msgstr "¡Token Seeker verificado!"
+
+#. Seeker token verification: no Solana wallet app is installed to sign the verification message.
+msgctxt "seeker_verify_no_wallet_app"
+msgid "No Solana wallet app was found on this device."
+msgstr "No se encontró ninguna app de billetera Solana en este dispositivo."
 
 #. Used in Main/Account/BlockedLocations/BlockedLocationsView.swift.
 msgctxt "select_country_to_block"
