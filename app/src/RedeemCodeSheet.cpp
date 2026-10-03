@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "RedeemCodeSheet.hpp"
 
+#include "BalanceCodeRedeem.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
 namespace {
-// balance codes are always 26 characters (mac gates the Redeem button on this)
-constexpr int kBalanceCodeLength = 26;
-
 // first 3 ... last 3 of a redeemed code's secret (mac TransferBalanceCodesView)
 std::string MaskSecret(const std::string& secret) {
   constexpr size_t keep = 3;
@@ -50,14 +48,12 @@ void RedeemCodeSheet::BuildUi() {
 
   codeEntry_ = Gtk::make_managed<Gtk::Entry>();
   codeEntry_->set_placeholder_text(T_("enter_balance_code", "Enter balance code"));
-  codeEntry_->set_max_length(kBalanceCodeLength);
+  codeEntry_->set_max_length(static_cast<int>(urnet::BalanceCodeLength));
   codeEntry_->add_css_class("ur-mono-13");
   codeEntry_->signal_changed().connect([this] {
     errorLabel_->set_visible(false);
     codeEntry_->remove_css_class("error");
-    redeemBtn_->set_sensitive(!redeeming_ &&
-                              static_cast<int>(TrimWhitespace(codeEntry_->get_text()).size()) ==
-                                  kBalanceCodeLength);
+    redeemBtn_->set_sensitive(!redeeming_ && urnet::isBalanceCodeFormatValid(codeEntry_->get_text()));
   });
   codeEntry_->signal_activate().connect([this] {
     if (redeemBtn_->get_sensitive()) Redeem();
@@ -251,15 +247,14 @@ void RedeemCodeSheet::SetRedeeming(bool redeeming) {
     spinner_->stop();
   }
   codeEntry_->set_sensitive(!redeeming);
-  redeemBtn_->set_sensitive(!redeeming &&
-                            static_cast<int>(TrimWhitespace(codeEntry_->get_text()).size()) ==
-                                kBalanceCodeLength);
+  redeemBtn_->set_sensitive(!redeeming && urnet::isBalanceCodeFormatValid(codeEntry_->get_text()));
 }
 
 void RedeemCodeSheet::Redeem() {
   if (redeeming_) return;
   const std::string code = TrimWhitespace(codeEntry_->get_text());
-  if (static_cast<int>(code.size()) != kBalanceCodeLength) return;
+  // the SDK's cheap pre-submit gate (the exact code length)
+  if (!urnet::isBalanceCodeFormatValid(code)) return;
   SetRedeeming(true);
   errorLabel_->set_visible(false);
 
@@ -268,42 +263,82 @@ void RedeemCodeSheet::Redeem() {
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
   host_.api().redeemBalanceCode(
-      args, [this, epoch, issued](std::optional<urnet::RedeemBalanceCodeResult> result,
-                                  std::optional<std::string> err) {
-        PostToMain([this, epoch, issued, result = std::move(result), err = std::move(err)] {
+      args, [this, epoch, issued, code](std::optional<urnet::RedeemBalanceCodeResult> result,
+                                        std::optional<std::string> err) {
+        // a transport failure has no result to classify: the outcome is unknown
+        if (err) result.reset();
+        PostToMain([this, epoch, issued, code, result = std::move(result)] {
           if (*epoch != issued) return;  // sheet was reset since
-          SetRedeeming(false);
-          if (err || !result) {
-            // Transport failure / no response: the server may have COMMITTED
-            // the redemption before the response was lost — never call the
-            // code invalid (and don't mark the entry as wrong), point at the
-            // balance instead.
-            errorLabel_->set_text(
-                T_("balance_code_transport_error",
-                   "We couldn't reach the server — check your connection. If you were charged, "
-                   "the code may already be applied; check your balance before trying again."));
-            errorLabel_->set_visible(true);
+          const std::string outcome = urnet::classifyBalanceCodeRedeem(result, std::nullopt, code);
+          if (!BalanceCodeRedeemNeedsCodeList(outcome)) {
+            ShowRedeemOutcome(outcome, result);
             return;
           }
-          if (result->error) {
-            // the server rejected the code: surface its reason when it gives
-            // one, falling back to the generic invalid-code copy
-            errorLabel_->set_text(result->error->message.empty()
-                                      ? T_("invalid_balance_code", "Invalid balance code")
-                                      : result->error->message.c_str());
-            errorLabel_->set_visible(true);
-            codeEntry_->add_css_class("error");
-            return;
-          }
-          // success: show the confirmation and re-poll the balance so the new
-          // transfer balance lands in the usage bar (mac startPolling()); the
-          // fresh code joins the history list right away (mac onSuccess)
-          entryBox_->set_visible(false);
-          successBox_->set_visible(true);
-          balance_.StartConfirmationPolling();
-          RefreshCodes();
+          // Not credited by this call. The server's refusal is the same for an
+          // unknown code and one this network already redeemed, and a lost
+          // response may have committed: ask the network's redeemed-code list
+          // before saying anything.
+          host_.api().getNetworkRedeemedBalanceCodes(
+              [this, epoch, issued, code, result](
+                  std::optional<urnet::GetNetworkRedeemedBalanceCodesResult> list,
+                  std::optional<std::string> listErr) {
+                std::optional<urnet::RedeemedBalanceCodeList> codes;
+                if (!listErr && list && !list->error) {
+                  codes = list->balance_codes.value_or(urnet::RedeemedBalanceCodeList{});
+                }
+                PostToMain([this, epoch, issued, code, result, codes = std::move(codes)] {
+                  if (*epoch != issued) return;  // sheet was reset since
+                  ShowRedeemOutcome(urnet::classifyBalanceCodeRedeem(result, codes, code), result);
+                });
+              });
         });
       });
+}
+
+void RedeemCodeSheet::ShowRedeemOutcome(const std::string& outcome,
+                                        const std::optional<urnet::RedeemBalanceCodeResult>& result) {
+  SetRedeeming(false);
+  switch (BalanceCodeRedeemNoticeFor(outcome)) {
+    case BalanceCodeRedeemNotice::Redeemed:
+      // success: show the confirmation and re-poll the balance so the new
+      // transfer balance lands in the usage bar (mac startPolling()); the
+      // fresh code joins the history list right away (mac onSuccess)
+      entryBox_->set_visible(false);
+      successBox_->set_visible(true);
+      balance_.StartConfirmationPolling();
+      RefreshCodes();
+      return;
+    case BalanceCodeRedeemNotice::AlreadyRedeemed:
+      // this network has the code: the data is on the balance (a retry after a
+      // lost-but-credited response lands here). Not an error on the entry.
+      errorLabel_->set_text(
+          T_("balance_code_already_redeemed_message",
+             "This balance code has already been redeemed. If you redeemed it earlier, the data "
+             "is already on your balance."));
+      errorLabel_->set_visible(true);
+      balance_.FetchNow();
+      RefreshCodes();
+      return;
+    case BalanceCodeRedeemNotice::Invalid:
+      // the server rejected the code: surface its reason when it gives one,
+      // falling back to the generic invalid-code copy
+      errorLabel_->set_text(result && result->error && !result->error->message.empty()
+                                ? Glib::ustring(result->error->message)
+                                : T_("invalid_balance_code", "Invalid balance code"));
+      errorLabel_->set_visible(true);
+      codeEntry_->add_css_class("error");
+      return;
+    case BalanceCodeRedeemNotice::Unknown:
+      // No answer (or an empty one): the server may have COMMITTED the
+      // redemption before the response was lost — never call the code
+      // invalid (and don't mark the entry as wrong), point at the balance.
+      errorLabel_->set_text(
+          T_("balance_code_transport_error",
+             "We couldn't reach the server — check your connection. If you were charged, "
+             "the code may already be applied; check your balance before trying again."));
+      errorLabel_->set_visible(true);
+      return;
+  }
 }
 
 }  // namespace urnw
