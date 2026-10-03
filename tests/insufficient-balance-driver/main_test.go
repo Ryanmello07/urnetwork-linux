@@ -591,3 +591,143 @@ func TestRedactIsOneBoundedLine(t *testing.T) {
 		t.Fatalf("redact = %q", s)
 	}
 }
+
+// ---- the held alert on the Connect page (linux fix/insufficient-balance-disconnect e66d69e) ----
+
+// connectPageTree models e66d69e's widget hierarchy as AT-SPI reports it:
+//
+//	frame "URnetwork"
+//	  nav: button "Connect", button "Account"
+//	  stack
+//	    ConnectPage > pane A clamp > paneAContent_ (vertical box):
+//	      statusRow [status dot, status column [status text]]
+//	      hero_ button (named by the status text)
+//	      locationRow_ button "Selected provider, Best available provider"
+//	      connectBtn_ button (the round action; "Disconnect" while a session is up)
+//	      heldAlert_ box (ConnectPage.cpp:506-537):
+//	        label (the held notice)
+//	        actions box: button "Upgrade", button "Disconnect"
+//	      button "More options"
+//	      moreOptionsHost_ box [extra...]
+//	    connect-legacy page (not showing): the drawer banner with the same notice
+//
+// actions are the held alert's action-row buttons; extra goes into
+// moreOptionsHost_.
+func connectPageTree(roundLabel string, alertShowing bool, actions []string, extra ...map[string]any) string {
+	var row []map[string]any
+	for _, a := range actions {
+		row = append(row, node("push button", a, alertShowing))
+	}
+	heldAlert := node("panel", "", alertShowing,
+		node("label", heldNoticeText, alertShowing),
+		node("panel", "", alertShowing, row...))
+	paneAContent := node("panel", "", true,
+		node("panel", "", true, node("label", "", true), node("panel", "", true, node("label", "Connected", true))),
+		node("push button", "Connected", true),
+		node("push button", selectedProviderTag+", Best available provider", true),
+		node("push button", roundLabel, true),
+		heldAlert,
+		node("push button", moreOptionsText, true),
+		node("panel", "", true, extra...),
+	)
+	connectPage := node("panel", "", true, node("panel", "", true, paneAContent))
+	legacy := node("panel", "", false, heldBanner(false, "Get Pro"))
+	stack := node("panel", "", true, connectPage, legacy)
+	nav := node("panel", "", true, node("push button", connectText, true), node("push button", "Account", true))
+	return treeJson(node("application", "urnetwork-gui", false, node("frame", "URnetwork", true, nav, stack)))
+}
+
+// the alert's Disconnect, sibling of Upgrade: frame 0, stack 1, page 0,
+// clamp 0, paneAContent 0, its child 4 (heldAlert_), actions 1, button 1
+const heldAlertDisconnectPath = "0,1,0,0,0,4,1,1"
+
+// The round button: paneAContent child 3.
+const roundButtonPath = "0,1,0,0,0,3"
+
+func TestHeldAlertOnConnectPageWithTwoDisconnects(t *testing.T) {
+	r := &fakeRunner{
+		trees:     []string{connectPageTree(disconnectText, true, []string{"Upgrade", disconnectText})},
+		tunnel:    "up",
+		notifyLog: notifyLine(alertTitleText, heldNoticeText),
+	}
+	d := newTestDriver(t, r)
+	withContainer(t, d, 0)
+	o, err := d.observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !o.Alert || !o.DisconnectButton || !o.UpgradeButton || !o.ConnectRequested || o.Notifications != 1 {
+		t.Fatalf("observe = %+v", o)
+	}
+	if _, stderr, code := runVerb(t, d, "press-disconnect"); code != 0 {
+		t.Fatal(stderr)
+	}
+	got := r.actions()
+	if len(got) != 1 || got[0] != "action "+heldAlertDisconnectPath+" click" {
+		t.Fatalf("pressed %v, want the held alert's Disconnect %s (never the round button %s)", got, heldAlertDisconnectPath, roundButtonPath)
+	}
+}
+
+// A Disconnect elsewhere on the page is not "next to Upgrade".
+func TestHeldAlertDisconnectMustBeUpgradeSibling(t *testing.T) {
+	stray := node("push button", disconnectText, true)
+	r := &fakeRunner{trees: []string{connectPageTree(disconnectText, true, []string{"Upgrade"}, stray)}, tunnel: "up"}
+	d := newTestDriver(t, r)
+	withContainer(t, d, 0)
+	o, err := d.observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !o.Alert || o.DisconnectButton {
+		t.Fatalf("observe = %+v, want the alert without a sibling Disconnect", o)
+	}
+	_, stderr, code := runVerb(t, d, "press-disconnect")
+	if code == 0 || len(r.actions()) != 0 {
+		t.Fatalf("pressed %v (stderr %q), want a refusal", r.actions(), stderr)
+	}
+}
+
+// An Upgrade elsewhere on the page does not make the alert's Disconnect "next
+// to Upgrade", and does not count as the alert's Upgrade.
+func TestHeldAlertUpgradeMustBeDisconnectSibling(t *testing.T) {
+	stray := node("push button", "Upgrade", true)
+	r := &fakeRunner{trees: []string{connectPageTree(disconnectText, true, []string{disconnectText}, stray)}, tunnel: "up"}
+	d := newTestDriver(t, r)
+	withContainer(t, d, 0)
+	o, err := d.observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !o.Alert || o.UpgradeButton || o.DisconnectButton {
+		t.Fatalf("observe = %+v, want the alert without an Upgrade/Disconnect pair", o)
+	}
+}
+
+// The alert is the held notice. A bare "Insufficient balance" heading (the
+// legacy drawer's title) is not it.
+func TestHeadingWithoutHeldNoticeIsNoAlert(t *testing.T) {
+	heading := node("panel", "", true, node("label", alertTitleText, true),
+		node("panel", "", true, node("push button", "Upgrade", true), node("push button", disconnectText, true)))
+	root, err := parseTree([]byte(connectPageTree(disconnectText, false, []string{"Upgrade", disconnectText}, heading)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := findAlert(root); a.alert || a.disconnect != nil || a.upgrade != nil {
+		t.Fatalf("alert = %+v", a)
+	}
+}
+
+// Hidden (no held state): nothing is reported even though both Disconnects
+// and the legacy notice exist in the tree.
+func TestHiddenHeldAlertIsNoAlert(t *testing.T) {
+	root, err := parseTree([]byte(connectPageTree(disconnectText, false, []string{"Upgrade", disconnectText})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := findAlert(root); a.alert || a.disconnect != nil || a.upgrade != nil {
+		t.Fatalf("alert = %+v", a)
+	}
+	if b := connectActionButton(root); b == nil || pathArg(b.Path) != roundButtonPath {
+		t.Fatalf("round button = %+v", b)
+	}
+}

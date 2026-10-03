@@ -259,42 +259,60 @@ type alertState struct {
 	upgrade    *accessibleNode
 }
 
-// The alert's group is found from its text: the held notice, else the
-// "Insufficient balance" heading, climbing at most two levels (label -> header
-// row -> card). Only buttons inside that group count as "next to Upgrade", and
-// the round connect button never does, even when it reads Disconnect.
-const alertGroupLevels = 2
-
+// The alert is the block holding the held notice (on the Connect page,
+// ConnectPage's heldAlert_: the notice label and an action row with Upgrade
+// and Disconnect). Its Disconnect counts only as the sibling of an Upgrade in
+// one row inside that block, so the round connect button (also "Disconnect"
+// while a session is up) and any button elsewhere on the page never do. The
+// legacy drawer's "Insufficient balance" heading alone is not the alert.
+// upgrade_visible is any Upgrade inside the block.
 func findAlert(root *accessibleNode) alertState {
 	anchor := root.find(func(n *accessibleNode) bool { return n.showing() && n.Name == heldNoticeText })
 	if anchor == nil {
-		anchor = root.find(func(n *accessibleNode) bool {
-			return n.showing() && n.Name == alertTitleText && !n.isButton()
-		})
-	}
-	if anchor == nil {
 		return alertState{}
 	}
-	round := connectActionButton(root)
-	group := anchor
-	for i := 0; i < alertGroupLevels && group.parent != nil; i++ {
-		group = group.parent
-	}
 	state := alertState{alert: true}
-	group.walk(func(n *accessibleNode) bool {
-		if n == round || !n.isButton() || !n.showing() {
-			return true
-		}
-		if n.Name == disconnectText && state.disconnect == nil {
-			state.disconnect = n
-		}
-		for _, u := range upgradeTexts {
-			if n.Name == u && state.upgrade == nil {
-				state.upgrade = n
+	block := anchor.parent
+	if block == nil {
+		return state
+	}
+	round := connectActionButton(root)
+	block.walk(func(row *accessibleNode) bool {
+		var upgrade, disconnect *accessibleNode
+		for _, n := range row.Children {
+			if n == round || !n.isButton() || !n.showing() {
+				continue
 			}
+			if n.Name == disconnectText && disconnect == nil {
+				disconnect = n
+			}
+			for _, u := range upgradeTexts {
+				if n.Name == u && upgrade == nil {
+					upgrade = n
+				}
+			}
+		}
+		if upgrade != nil && disconnect != nil {
+			state.upgrade, state.disconnect = upgrade, disconnect
+			return false
 		}
 		return true
 	})
+	if state.upgrade == nil {
+		// Upgrade alone in the block: reported, so a missing Disconnect is
+		// named as such
+		state.upgrade = block.find(func(n *accessibleNode) bool {
+			if !n.isButton() || !n.showing() {
+				return false
+			}
+			for _, u := range upgradeTexts {
+				if n.Name == u {
+					return true
+				}
+			}
+			return false
+		})
+	}
 	return state
 }
 
