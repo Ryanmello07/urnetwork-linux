@@ -28,6 +28,7 @@
 
 #include <gtkmm.h>
 
+#include "NetworkNameCheck.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
@@ -42,6 +43,8 @@ class CreateNetworkPage : public Gtk::Box {
   };
 
   explicit CreateNetworkPage(SdkHost& host);
+  // the pending name check timer captures this page
+  ~CreateNetworkPage() override { nameDebounce_.disconnect(); }
 
   // Reset the form for a fresh navigation. userAuth prefills the email field
   // (it stays editable — the login page may not have one yet).
@@ -56,11 +59,9 @@ class CreateNetworkPage : public Gtk::Box {
   std::function<void()> on_back;
 
  private:
-  enum class NameState { NotChecked, Validating, Valid, Invalid };
-
   void BuildUi();
   void OnNetworkNameChanged();
-  void RunNetworkCheck(const std::string& name);
+  void RunNetworkCheck(const std::string& name, int failedCheckCount);
   void SetNameSupporting(const char* text, const char* cssClass);
   void OnValidateReferral();
   void UpdateFormValid();
@@ -70,7 +71,7 @@ class CreateNetworkPage : public Gtk::Box {
   SdkHost& host_;
   Mode mode_ = Mode::Password;
   bool creating_ = false;
-  NameState nameState_ = NameState::NotChecked;
+  NetworkNameState nameState_ = NetworkNameState::NotChecked;
   bool referralValid_ = false;
   bool referralCapped_ = false;
   bool validatingReferral_ = false;

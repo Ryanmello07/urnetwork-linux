@@ -224,7 +224,7 @@ void CreateNetworkPage::Configure(Mode mode, const std::string& userAuth) {
   ++*epoch_;
   mode_ = mode;
   creating_ = false;
-  nameState_ = NameState::NotChecked;
+  nameState_ = NetworkNameState::NotChecked;
   referralValid_ = false;
   referralCapped_ = false;
   validatingReferral_ = false;
@@ -276,46 +276,65 @@ void CreateNetworkPage::OnNetworkNameChanged() {
 
   const std::string name = TrimWhitespace(networkName_->get_text());
   if (static_cast<int>(name.size()) < kMinNetworkNameLength) {
-    nameState_ = NameState::NotChecked;
+    nameState_ = NetworkNameState::NotChecked;
     SetNameSupporting(
         T_("network_name_length_error", "Network names must be 6 characters or more"), nullptr);
     UpdateFormValid();
     return;
   }
 
-  nameState_ = NameState::Validating;
+  nameState_ = NetworkNameState::Validating;
   UpdateFormValid();
   // debounce the availability check (mac delays the work item 250ms)
   nameDebounce_ = Glib::signal_timeout().connect(
       [this, name]() -> bool {
-        RunNetworkCheck(name);
+        RunNetworkCheck(name, 0);
         return false;
       },
       kNameDebounceMs);
 }
 
-void CreateNetworkPage::RunNetworkCheck(const std::string& name) {
+// A failed check is not a verdict on the name (see NetworkNameCheck.hpp): it
+// says so, keeps Continue usable (the server re-checks on create), and
+// re-checks the same name a few times in the background.
+void CreateNetworkPage::RunNetworkCheck(const std::string& name, int failedCheckCount) {
   const uint64_t generation = nameCheckGeneration_;
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
-  host_.CheckNetworkName(name, [this, epoch, issued, generation](bool ok, bool available) {
-    PostToMain([this, epoch, issued, generation, ok, available] {
+  host_.CheckNetworkName(name, [this, epoch, issued, generation, name, failedCheckCount](
+                                   bool ok, bool available) {
+    PostToMain([this, epoch, issued, generation, name, failedCheckCount, ok, available] {
       if (*epoch != issued) return;
       if (generation != nameCheckGeneration_) return;  // the field changed since
-      if (!ok) {
-        nameState_ = NameState::Invalid;
-        SetNameSupporting(T_("there_was_an_error_checking_the_network_name",
-                             "There was an error checking the network name"),
-                          "ur-error-text");
-      } else if (available) {
-        nameState_ = NameState::Valid;
-        SetNameSupporting(
-            T_("nice_this_network_name_is_available", "Nice! This network name is available"),
-            "ur-value-on");
-      } else {
-        nameState_ = NameState::Invalid;
-        SetNameSupporting(T_("network_name_taken", "This network name is already taken"),
-                          "ur-error-text");
+      nameState_ = NetworkNameStateForCheck(ok, available);
+      switch (nameState_) {
+        case NetworkNameState::CheckFailed: {
+          SetNameSupporting(T_("there_was_an_error_checking_the_network_name",
+                               "There was an error checking the network name"),
+                            "ur-error-text");
+          const unsigned delayMs = NetworkNameRecheckDelayMs(failedCheckCount + 1);
+          if (0 < delayMs) {
+            nameDebounce_ = Glib::signal_timeout().connect(
+                [this, name, failedCheckCount]() -> bool {
+                  RunNetworkCheck(name, failedCheckCount + 1);
+                  return false;
+                },
+                delayMs);
+          }
+          break;
+        }
+        case NetworkNameState::Valid:
+          SetNameSupporting(
+              T_("nice_this_network_name_is_available", "Nice! This network name is available"),
+              "ur-value-on");
+          break;
+        case NetworkNameState::Taken:
+          SetNameSupporting(T_("network_name_taken", "This network name is already taken"),
+                            "ur-error-text");
+          break;
+        case NetworkNameState::NotChecked:
+        case NetworkNameState::Validating:
+          break;
       }
       UpdateFormValid();
     });
@@ -363,9 +382,10 @@ void CreateNetworkPage::OnValidateReferral() {
 }
 
 void CreateNetworkPage::UpdateFormValid() {
-  // mac validateForm: name available, terms agreed, and (for the password auth
-  // type) a 12+ character password
-  bool valid = nameState_ == NameState::Valid && termsSwitch_->get_active();
+  // mac validateForm: name available (or its check failed; the server
+  // re-checks on create), terms agreed, and (for the password auth type) a
+  // 12+ character password
+  bool valid = NetworkNameAllowsCreate(nameState_) && termsSwitch_->get_active();
   if (mode_ != Mode::Wallet && mode_ != Mode::Sso) {
     valid = valid && !TrimWhitespace(email_->get_text()).empty() &&
             std::string(password_->get_text()).size() >= kMinPasswordLength;
