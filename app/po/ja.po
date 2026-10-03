@@ -4210,11 +4210,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "送信"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "ご意見を直接お送りいただくか、直接サポートのために私たちの{}にご参加ください。"
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"

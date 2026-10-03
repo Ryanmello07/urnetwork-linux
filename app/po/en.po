@@ -3014,6 +3014,11 @@ msgctxt "email_e4_reason_trust"
 msgid "I'm not sure I trust a VPN"
 msgstr "I'm not sure I trust a VPN"
 
+#. Settings: label before the support email address link.
+msgctxt "email_support_at"
+msgid "Email support at"
+msgstr "Email support at"
+
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
 msgid "Activities"
@@ -5883,10 +5888,10 @@ msgctxt "send"
 msgid "Send"
 msgstr "Send"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "Send us your feedback directly or join our {} for direct support."
+#. Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.
+msgctxt "send_feedback_contact"
+msgid "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
+msgstr "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
 
 #. Settings
 msgctxt "send_product_updates"

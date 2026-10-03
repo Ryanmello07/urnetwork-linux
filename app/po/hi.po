@@ -4225,11 +4225,6 @@ msgctxt "send"
 msgid "Send"
 msgstr "भेजें"
 
-#. Call to action
-msgctxt "send_feedback"
-msgid "Send us your feedback directly or join our {} for direct support."
-msgstr "हमें सीधे अपनी प्रतिक्रिया भेजें या सीधे समर्थन के लिए हमारे {} से जुड़ें।"
-
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"

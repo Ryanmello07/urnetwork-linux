@@ -20,6 +20,7 @@
 #include "PaneKit.hpp"
 #include "PostQuantumIdentity.hpp"  // ProviderIdentitiesSheet (reused as-is)
 #include "SplitRulesSheet.hpp"      // reused as-is (the split-rule editor)
+#include "SupportContact.hpp"
 #include "Ui.hpp"
 #include "UrTheme.hpp"
 
@@ -1388,7 +1389,7 @@ void SettingsPage::BuildStayInTouchSection(Gtk::Box& host) {
   // `canonical` is what the row must still open if a translation loses the
   // [text](url) span — a community line that stops being clickable is a dead
   // row, so the whole sentence becomes the link instead.
-  auto link = [&host](const char* markdown, const char* canonical) {
+  auto link = [&host](const std::string& markdown, const char* canonical) {
     auto row = MakeProseRow({}, kProsePadY);
     row.line->remove_css_class("ur-caption");
     row.line->add_css_class("ur-row-title");  // 13px, the row voice
@@ -1401,12 +1402,26 @@ void SettingsPage::BuildStayInTouchSection(Gtk::Box& host) {
     }
     host.append(*row.root);
   };
-  link(T_("join_the_community_on_discord_https_discord_com",
-          "Join the community on [Discord](https://discord.com/invite/RUNZXMwPRK)"),
-       kDiscordUrl);
-  link(T_("verified_project_on_depin_hub_https_depinhub_io",
-          "Verified project on [DePIN Hub](https://depinhub.io/projects/urnetwork)"),
-       kDepinHubUrl);
+  // The Discord invite is unreachable in some regions, so the support address
+  // is offered beside it (support::kStayInTouchLinks).
+  for (const auto row : support::kStayInTouchLinks) {
+    switch (row) {
+      case support::StayInTouchLink::Discord:
+        link(T_("join_the_community_on_discord_https_discord_com",
+                "Join the community on [Discord](https://discord.com/invite/RUNZXMwPRK)"),
+             kDiscordUrl);
+        break;
+      case support::StayInTouchLink::SupportEmail:
+        link(support::SupportEmailMarkdown(T_("email_support_at", "Email support at")),
+             support::kSupportEmailUrl);
+        break;
+      case support::StayInTouchLink::DepinHub:
+        link(T_("verified_project_on_depin_hub_https_depinhub_io",
+                "Verified project on [DePIN Hub](https://depinhub.io/projects/urnetwork)"),
+             kDepinHubUrl);
+        break;
+    }
+  }
 
   // The protocol link rides a fixed 40px row (the single-line pane species).
   auto* protocolRow = kit::MakePaneRow(kRowSingle);
