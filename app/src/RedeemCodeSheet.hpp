@@ -1,7 +1,9 @@
 // "Redeem Code" sheet (port of the apple RedeemBalanceCodeSheet): a balance
-// code is a 26-character secret purchased at ur.io; the sheet validates the
-// length, redeems through Api::redeemBalanceCode, shows the invalid state
-// inline, and on success flips to a confirmation and re-polls the balance
+// code is a 26-character secret purchased at ur.io; the sheet gates on the
+// SDK's urnet::isBalanceCodeFormatValid, redeems through
+// Api::redeemBalanceCode, answers from the SDK's classification
+// (BalanceCodeRedeem.hpp: already redeemed / invalid / unknown inline), and
+// on success flips to a confirmation and re-polls the balance
 // (SubscriptionBalanceStore::StartConfirmationPolling, the same bridge-the-
 // webhook-gap poll the upgrade flow uses).
 //
@@ -28,6 +30,9 @@ class RedeemCodeSheet : public Gtk::Window {
  private:
   void BuildUi();
   void Redeem();
+  // the sheet's answer for one urnet::classifyBalanceCodeRedeem outcome
+  void ShowRedeemOutcome(const std::string& outcome,
+                         const std::optional<urnet::RedeemBalanceCodeResult>& result);
   void SetRedeeming(bool redeeming);
   void RefreshCodes();  // Api::getNetworkRedeemedBalanceCodes -> the history list
 
