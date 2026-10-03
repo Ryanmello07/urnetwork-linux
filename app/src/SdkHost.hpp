@@ -33,6 +33,7 @@
 #include "ControlClient.hpp"
 #include "Health.hpp"
 #include "RpcSession.hpp"
+#include "VerifySendNotice.hpp"
 #include "WalletBridgeRoute.hpp"
 #include "WalletConnect.hpp"
 
@@ -55,6 +56,9 @@ struct AuthResult {
   // attempt cannot sign it in; the UI names them (login_error_auth_allowed).
   std::string authAllowed = {};
   bool sso = false;  // the outcome of an sso attempt (its generic error copy)
+  // With verification_required: whether the server sent the code (its
+  // send_error); the verify page must not say a code was sent otherwise.
+  VerifySendNotice sendNotice = {};
 };
 
 // Outcome of the authLogin account discovery (macOS LoginInitialViewModel
@@ -518,7 +522,7 @@ class SdkHost {
   void VerifyCode(const std::string& userAuth, const std::string& code,
                   std::function<void(AuthResult)> done);
   void ResendVerifyCode(const std::string& userAuth,
-                        std::function<void(bool ok, std::string error)> done);
+                        std::function<void(VerifySendNotice notice)> done);
   void SendPasswordResetLink(const std::string& userAuth,
                              std::function<void(bool ok, std::string error)> done);
   // Network-name availability through the SDK's shared

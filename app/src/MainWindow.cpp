@@ -1822,7 +1822,11 @@ void MainWindow::BuildAuthPages() {
     prefs::Set(kOnboardingPendingKey, true);
     StartTunnelUi();  // auth handler flips the view
   };
-  createPage_->on_verify = [this](std::string userAuth) { NavigateVerify(userAuth); };
+  createPage_->on_verify = [this](std::string userAuth, VerifySendNotice notice) {
+    NavigateVerify(userAuth);
+    // a code that was not sent must not leave the page implying it was
+    if (notice.kind != VerifySendNoticeKind::Sent) verifyPage_->ShowSendNotice(notice);
+  };
   createPage_->on_back = [this] {
     stack_.set_visible_child(createPageFromHome_ ? "home" : "login");
   };
@@ -1919,13 +1923,11 @@ void MainWindow::OnSignIn() {
       signingIn_ = false;
       if (signInBtn_) signInBtn_->set_sensitive(true);
       if (r.verification_required) {
-        // the login sent a fresh numeric code; route into the verify page —
-        // and SAY a code was sent (windows raises the same informational)
+        // the login asked for a fresh numeric code; route into the verify
+        // page and say whether it was sent (windows raises the same
+        // informational)
         NavigateVerify(loginUserAuth_);
-        if (verifyPage_) {
-          verifyPage_->ShowNotice(
-              T_("verification_code_sent", "Check your email/phone for a verification code."));
-        }
+        if (verifyPage_) verifyPage_->ShowSendNotice(r.sendNotice);
       } else if (!r.ok) {
         passwordError_.set_text(r.error.empty() ? T_("sign_in_failed", "Sign in failed")
                                                 : r.error);

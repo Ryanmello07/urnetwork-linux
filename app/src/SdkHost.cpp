@@ -256,6 +256,21 @@ std::string RandomLoopbackRpcHostPort() {
 // bind and dial, the TLS handshake fails at connect time, and the symptom is
 // every screen empty forever. Tune against a real bring-up.
 constexpr int kRpcBindDeadlineSeconds = 8;
+
+// The verify page's notice for a server that was asked to send a code.
+VerifySendNotice SendErrorNotice(const std::optional<urnet::AuthVerifySendError>& sendError) {
+  if (!sendError) return DecideVerifySendNotice(false, "", "", 0);
+  return DecideVerifySendNotice(false, sendError->code, sendError->message,
+                                sendError->retry_after_seconds.value_or(0));
+}
+
+// A verification_required answer, carrying whether the code was sent.
+AuthResult VerificationRequired(const std::optional<urnet::AuthVerifySendError>& sendError) {
+  AuthResult r{false, true, ""};
+  r.sendNotice = SendErrorNotice(sendError);
+  return r;
+}
+
 }  // namespace
 
 SdkHost::~SdkHost() {
@@ -438,7 +453,10 @@ void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& 
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
-    if (result->verification_required) { done({false, true, ""}); return; }
+    if (result->verification_required) {
+      done(VerificationRequired(result->verification_required->send_error));
+      return;
+    }
     if (result->network && result->network->by_jwt) {
       RegisterNetworkClient(*result->network->by_jwt, done);
       return;
@@ -736,7 +754,10 @@ void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult
     done({false, false, result->error->message});
     return;
   }
-  if (result->verification_required) { done({false, true, ""}); return; }
+  if (result->verification_required) {
+    done(VerificationRequired(result->verification_required->send_error));
+    return;
+  }
   if (result->network && result->network->by_jwt) {
     {
       std::scoped_lock lock(mutex_);
@@ -869,15 +890,20 @@ void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
 }
 
 void SdkHost::ResendVerifyCode(const std::string& userAuth,
-                               std::function<void(bool ok, std::string error)> done) {
+                               std::function<void(VerifySendNotice notice)> done) {
   urnet::AuthVerifySendArgs args;
   args.user_auth = userAuth;
   args.use_numeric = true;  // the verify page's OTP entry is numeric
+  // a rate limit or failed send comes back as result->error (with the retry
+  // time) instead of an HTTP 429 / 502
+  args.result_errors = true;
   api_->authVerifySend(args, [done](std::optional<urnet::AuthVerifySendResult> result,
                                     std::optional<std::string> err) {
-    if (err) { done(false, *err); return; }
-    if (!result) { done(false, "no result"); return; }
-    done(true, "");
+    if (err || !result) {
+      done(DecideVerifySendNotice(true, "", "", 0));
+      return;
+    }
+    done(SendErrorNotice(result->error));
   });
 }
 

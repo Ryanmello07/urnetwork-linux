@@ -411,7 +411,7 @@ void CreateNetworkPage::OnContinue() {
       if (*epoch != issued) return;
       SetCreating(false);
       if (r.verification_required) {
-        if (on_verify) on_verify(userAuth);
+        if (on_verify) on_verify(userAuth, r.sendNotice);
         return;
       }
       if (!r.ok) {
@@ -518,8 +518,30 @@ void VerifyPage::BuildUi() {
   card->append(*resendStatus_);
 }
 
-void VerifyPage::ShowNotice(const std::string& text) {
-  resendStatus_->remove_css_class("ur-error-text");
+void VerifyPage::ShowSendNotice(const VerifySendNotice& notice) {
+  std::string text;
+  switch (notice.kind) {
+    case VerifySendNoticeKind::Sent:
+      resendStatus_->remove_css_class("ur-error-text");
+      resendStatus_->set_text(T_("verification_code_sent",
+                                 "Check your email/phone for a verification code."));
+      return;
+    case VerifySendNoticeKind::RateLimited:
+      text = Format(TN_("verify_code_rate_limited",
+                        "Too many attempts. You can request a new code in {} minute.",
+                        "Too many attempts. You can request a new code in {} minutes.",
+                        static_cast<unsigned long>(notice.minutes)),
+                    notice.minutes);
+      break;
+    case VerifySendNoticeKind::SendFailed:
+      text = T_("error_sending_verification_code",
+                "There was an error sending the verification code.");
+      break;
+    case VerifySendNoticeKind::ServerMessage:
+      text = notice.message;
+      break;
+  }
+  resendStatus_->add_css_class("ur-error-text");
   resendStatus_->set_text(text);
 }
 
@@ -587,20 +609,16 @@ void VerifyPage::Resend() {
 
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
-  host_.ResendVerifyCode(userAuth_, [this, epoch, issued](bool ok, std::string) {
-    PostToMain([this, epoch, issued, ok] {
+  host_.ResendVerifyCode(userAuth_, [this, epoch, issued](VerifySendNotice notice) {
+    PostToMain([this, epoch, issued, notice] {
       if (*epoch != issued) return;
       sending_ = false;
-      if (ok) {
-        resendStatus_->set_text(T_("verification_code_sent",
-                                   "Check your email/phone for a verification code."));
+      ShowSendNotice(notice);
+      if (notice.kind == VerifySendNoticeKind::Sent) {
         StartResendCooldown();
       } else {
         // a failed resend must leave the button usable (no timer re-enables it)
         resendBtn_->set_sensitive(true);
-        resendStatus_->add_css_class("ur-error-text");
-        resendStatus_->set_text(T_("error_sending_verification_code",
-                                   "There was an error sending the verification code."));
       }
     });
   });
