@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "DeleteAccountOutcome.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
@@ -1072,17 +1073,22 @@ class AccountDeleteSheet : public Gtk::Window {
             if (*epoch != seen) return;
             if (!deleteFlow_.Settle(flow, "network delete")) return;
             deleting_ = false;
-            // No error field: success is a result AND no transport error.
-            const bool ok = result.has_value() && !err.has_value();
-            if (!ok) {
+            // A refused deletion is a result with an error (HTTP 200): the
+            // account still exists, so only a result with no error signs out.
+            const bool serverError = result && result->error.has_value();
+            const auto outcome = account::DecideDeleteAccount(
+                err ? &*err : nullptr, result.has_value(), serverError,
+                serverError ? result->error->message : std::string());
+            if (!outcome.deleted) {
               g_warning("account: networkDelete failed: %s",
-                        err ? err->c_str() : "(no result)");
+                        err ? err->c_str()
+                            : (serverError ? result->error->message.c_str() : "(no result)"));
+              // still signed in: the sheet stays open and the gate re-arms for a retry
               SetToned(*error_, kUrDanger,
-                       err && !err->empty()
-                           ? Glib::ustring(*err)
-                           : Glib::ustring(T_("error_deleting_account",
-                                              "Sorry, there was an error deleting your "
-                                              "account.")));
+                       Glib::ustring(account::DeleteAccountErrorText(
+                           T_("error_deleting_account",
+                              "Sorry, there was an error deleting your account."),
+                           outcome.detail)));
               error_->set_visible(true);
               Gate();
               return;
