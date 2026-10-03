@@ -12,14 +12,19 @@
 
 #include <gtkmm.h>
 
+#include "ReferralTotalsState.hpp"
+
 namespace urnw {
 
 class UsageBar : public Gtk::Box {
  public:
   UsageBar();
 
+  // referralView: the referral count read (the store's TotalsView()); the row's
+  // figures follow it, see UsageBarReferralRow.hpp
   void SetData(int64_t usedByteCount, int64_t pendingByteCount, int64_t availableByteCount,
-               int64_t dailyBalanceByteCount, int64_t totalReferrals);
+               int64_t dailyBalanceByteCount, ReferralTotalsView referralView,
+               int64_t totalReferrals);
   // the referral row; off where referrals have their own page
   void SetShowReferrals(bool show);
   // the program's cap and bonus (server terms), for the referral bonus line
@@ -31,6 +36,7 @@ class UsageBar : public Gtk::Box {
   std::function<void()> on_referrals;
 
  private:
+  void ApplyReferralRow();
   void UpdateReferralAccessibleName();
   void DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height);
 
@@ -44,6 +50,7 @@ class UsageBar : public Gtk::Box {
   int64_t maxReferrals_ = 20;
   int64_t bonusGibPerDay_ = 3;
   int64_t totalReferrals_ = 0;
+  ReferralTotalsView referralView_ = ReferralTotalsView::Loading;
 
   int64_t used_ = 0;
   int64_t pending_ = 0;

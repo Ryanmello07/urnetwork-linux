@@ -6,6 +6,7 @@
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
+#include "UsageBarReferralRow.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -94,26 +95,47 @@ UsageBar::UsageBar() : Gtk::Box(Gtk::Orientation::VERTICAL, 8) {
   });
   append(*referralButton_);
 
-  SetData(0, 0, 0, 0, 0);
+  SetData(0, 0, 0, 0, ReferralTotalsView::Loading, 0);
 }
 
 void UsageBar::SetData(int64_t usedByteCount, int64_t pendingByteCount,
                        int64_t availableByteCount, int64_t dailyBalanceByteCount,
-                       int64_t totalReferrals) {
+                       ReferralTotalsView referralView, int64_t totalReferrals) {
   used_ = std::max<int64_t>(0, usedByteCount);
   pending_ = std::max<int64_t>(0, pendingByteCount);
   available_ = std::max<int64_t>(0, availableByteCount);
   bar_.queue_draw();
 
   dailyBalanceValue_->set_text(FormatByteCountCompact(dailyBalanceByteCount));
-  referralCount_->set_text(
-      Format(TN_("total_referral_count", "Total referrals: {}", "Total referrals: {}",
-                 totalReferrals),
-             totalReferrals));
-  // 3 GiB per referral per DAY (server pro.yml referral; this said GiB/Month * 30)
+  referralView_ = referralView;
   totalReferrals_ = totalReferrals;
-  const int64_t paid = (0 < maxReferrals_ && maxReferrals_ < totalReferrals) ? maxReferrals_ : totalReferrals;
-  referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), std::max<int64_t>(0, paid) * bonusGibPerDay_));
+  ApplyReferralRow();
+}
+
+// 3 GiB per referral per DAY (server pro.yml referral; this said GiB/Month * 30)
+void UsageBar::ApplyReferralRow() {
+  if (!referralCount_ || !referralBonus_) return;
+  const UsageBarReferralRow row =
+      UsageBarReferralRowFor(referralView_, totalReferrals_, maxReferrals_, bonusGibPerDay_);
+  switch (row.kind) {
+    case UsageBarReferralKind::Earned:
+      referralCount_->set_text(
+          Format(TN_("total_referral_count", "Total referrals: {}", "Total referrals: {}",
+                     row.totalReferrals),
+                 row.totalReferrals));
+      referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), row.bonusGibPerDay));
+      break;
+    case UsageBarReferralKind::Loading:
+      // the count is not known yet: not "+0"
+      referralCount_->set_text(T_("total_referrals", "Total referrals"));
+      referralBonus_->set_text(T_("loading", "Loading..."));
+      break;
+    case UsageBarReferralKind::Unavailable:
+      // a failed read is not "+0"; the Referrals page the row opens offers Try again
+      referralCount_->set_text(T_("total_referrals", "Total referrals"));
+      referralBonus_->set_text("");
+      break;
+  }
   UpdateReferralAccessibleName();
 }
 
@@ -121,8 +143,10 @@ void UsageBar::SetData(int64_t usedByteCount, int64_t pendingByteCount,
 // plain text and would otherwise read as an unnamed button.
 void UsageBar::UpdateReferralAccessibleName() {
   if (!referralButton_ || !referralCount_ || !referralBonus_) return;
-  kit::SetAccessibleLabel(*referralButton_,
-                          referralCount_->get_text() + ", " + referralBonus_->get_text());
+  const Glib::ustring bonus = referralBonus_->get_text();
+  kit::SetAccessibleLabel(*referralButton_, bonus.empty()
+                                                ? referralCount_->get_text()
+                                                : referralCount_->get_text() + ", " + bonus);
 }
 
 void UsageBar::SetShowReferrals(bool show) {
@@ -133,11 +157,7 @@ void UsageBar::SetShowReferrals(bool show) {
 void UsageBar::SetReferralTerms(int64_t maxReferrals, int64_t bonusGibPerDay) {
   maxReferrals_ = maxReferrals;
   bonusGibPerDay_ = bonusGibPerDay;
-  const int64_t paid = (0 < maxReferrals_ && maxReferrals_ < totalReferrals_) ? maxReferrals_ : totalReferrals_;
-  if (referralBonus_) {
-    referralBonus_->set_text(Format(T_("referral_bonus", "+{} GiB/Day"), std::max<int64_t>(0, paid) * bonusGibPerDay_));
-  }
-  UpdateReferralAccessibleName();
+  ApplyReferralRow();
 }
 
 void UsageBar::DrawBar(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {

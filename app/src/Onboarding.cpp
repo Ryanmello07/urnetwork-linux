@@ -685,7 +685,7 @@ void OnboardingWindow::RefreshBalance() {
   usage_->SetReferralTerms(balance_.MaxReferrals(), balance_.BonusGibPerDay());
   usage_->SetData(balance_.UsedByteCount(), balance_.PendingByteCount(),
                   balance_.AvailableByteCount(), balance_.StartBalanceByteCount(),
-                  balance_.TotalReferrals());
+                  balance_.TotalsView(), balance_.TotalReferrals());
   const int64_t daily = balance_.StartBalanceByteCount();
   if (dailyLine_) {
     // the free allowance the server grants, never a number typed into the app
