@@ -1717,7 +1717,7 @@ void MainWindow::BuildHome() {
   // and the notification's disconnect-only path
   connectPage_->on_open_upgrade = [this] {
     if (balance_.IsGuest()) {
-      NavigateCreate(CreateNetworkPage::Mode::UpgradeGuest, "", /*fromHome=*/true);
+      OfferGuestSignOut();
     } else if (drawer_) {
       drawer_->OpenUpgrade();
     }
