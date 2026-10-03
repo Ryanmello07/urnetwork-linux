@@ -3920,10 +3920,10 @@ msgctxt "kill_switch_exception"
 msgid "Kill switch exception"
 msgstr "Ausnahme vom Kill switch"
 
-#. Explains the deliberate IPv6 and SMTP exceptions to the VPN kill switch and the encrypted SMTP behavior.
-msgctxt "kill_switch_exception_detail"
-msgid "While the VPN is connected, IPv6 is not routed through URnetwork and may use your local network, even when the kill switch is on. Outbound SMTP on TCP port 25 also bypasses the VPN. These exceptions may expose your local public IP to those destinations. SMTP on ports 465 and 587 stays in the VPN and must establish TLS."
-msgstr "Während das VPN verbunden ist, wird IPv6 nicht über URnetwork geleitet und kann dein lokales Netzwerk nutzen, selbst wenn der Kill switch aktiviert ist. Ausgehendes SMTP über TCP-Port 25 umgeht das VPN ebenfalls. Durch diese Ausnahmen kann deine lokale öffentliche IP für diese Ziele sichtbar werden. SMTP über die Ports 465 und 587 bleibt im VPN und muss TLS aufbauen."
+#. Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.
+msgctxt "kill_switch_exception_smtp_detail"
+msgid "While the VPN is connected, IPv6 is routed through URnetwork like IPv4. Outbound SMTP on TCP port 25 bypasses the VPN, even when the kill switch is on, which may expose your local public IP to those mail servers. SMTP on ports 465 and 587 stays in the VPN and must establish TLS."
+msgstr "Während das VPN verbunden ist, wird IPv6 wie IPv4 über URnetwork geleitet. Ausgehendes SMTP über TCP-Port 25 umgeht das VPN, selbst wenn der Kill switch aktiviert ist. Dadurch kann deine lokale öffentliche IP für diese Mailserver sichtbar werden. SMTP über die Ports 465 und 587 bleibt im VPN und muss TLS aufbauen."
 
 #. Button text for entering the one-time authentication code and entering the app
 msgctxt "launch"
