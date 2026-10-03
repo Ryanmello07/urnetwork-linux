@@ -84,6 +84,9 @@ class UpgradeSheet : public Gtk::Window {
   void HandlePayMessage(const std::string& json);
   // Checkout page failed before it ever rendered: retry the purchase hosted.
   void OnCheckoutLoadFailed();
+  // The web process died (RouteCheckoutCrash): after the page loaded, confirm
+  // the payment (waiting + confirmation poll); before, the load-failure rescue.
+  void OnWebProcessTerminated();
   void TeardownWebView();
 #endif
 
