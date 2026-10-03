@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ProvideModeGlyph.hpp"
 #include "MainWindow.hpp"
+#include "ProUpgradeReaction.hpp"
 
 #include "SsoBridge.hpp"
 
@@ -251,20 +252,22 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     }
     // The Refer and earn page paints its card from the same store.
     if (referralsPage_) referralsPage_->OnBalanceChanged();
-    // The free -> Pro upgrade side effect (mac MainView reacts to
-    // didDetectUpgradeToPro): reset provide mode to never at the upgrade,
-    // exactly once — the user can opt back in afterward and that sticks.
-    if (balance_.DidDetectUpgradeToPro() && !provideResetOnUpgrade_) {
-      provideResetOnUpgrade_ = true;
-      host_.ResetProvideToNever();
-      SyncProvideControlMode();  // reflect it in the home controls
-    }
-    // The Pro celebration, once per purchase: the store confirms the free ->
-    // Pro flip after checkout (the upgrade sheet's success state reads the
-    // same snapshot), and the flight plays over whatever is on screen.
+    // The free -> Pro upgrade (ProUpgradeReaction.hpp): the provide control
+    // mode stands, and the Pro celebration plays once per purchase. The store
+    // confirms the flip after checkout (the upgrade sheet's success state
+    // reads the same snapshot), and the flight plays over whatever is on screen.
     if (balance_.DidDetectUpgradeToPro() && !proCelebrated_) {
-      proCelebrated_ = true;
-      LaunchProCelebration();
+      const std::string provideControlMode = host_.GetProvideControlMode();
+      const ProUpgradeReaction reaction =
+          ReactToProUpgrade(true, proCelebrated_, provideControlMode);
+      if (reaction.provideControlMode != provideControlMode) {
+        host_.SetProvideControlMode(reaction.provideControlMode);
+        SyncProvideControlMode();
+      }
+      if (reaction.celebrate) {
+        proCelebrated_ = true;
+        LaunchProCelebration();
+      }
     }
   });
 
@@ -2205,9 +2208,6 @@ void MainWindow::OpenOnboardingIfPending() {
 
 void MainWindow::ApplyAuthState(bool loggedIn) {
   stack_.set_visible_child(loggedIn ? "home" : "login");
-  // a fresh session (either way) re-arms the once-only Pro-upgrade provide
-  // reset; the balance store's detection flag resets in Start()/Stop() below
-  provideResetOnUpgrade_ = false;
   if (loggedIn) {
     SyncProvideControlMode();
     ApplyConnectReading(host_.CurrentConnectReading());

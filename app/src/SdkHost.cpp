@@ -3548,8 +3548,8 @@ void SdkHost::Disconnect() {
 void SdkHost::SetProvideControlMode(const std::string& mode) {
   std::scoped_lock lock(mutex_);
   if (device_) device_->setProvideControlMode(mode);
-  // Persist alongside the device write, like ResetProvideToNever below (mac
-  // handleProvideControlModeUpdate does both) — DeviceLocal.SetProvideControlMode
+  // Persist alongside the device write (mac handleProvideControlModeUpdate
+  // does both) — DeviceLocal.SetProvideControlMode
   // alone does not persist, and StartTunnel restores the persisted mode.
   if (localState_) localState_->setProvideControlMode(mode);
 }
@@ -3564,17 +3564,6 @@ std::string SdkHost::GetProvideControlMode() {
 bool SdkHost::ProvideEnabled() {
   std::scoped_lock lock(mutex_);
   return device_ && device_->getProvideEnabled();
-}
-
-// The free -> Pro upgrade side effect. mac handleProvideControlModeUpdate
-// (DeviceManager.provideControlMode's didSet) applies the mode to the device
-// AND persists it to local state — DeviceLocal.SetProvideControlMode alone
-// does not persist. Mirror both writes; with the tunnel down only the
-// persisted preference is written.
-void SdkHost::ResetProvideToNever() {
-  std::scoped_lock lock(mutex_);
-  if (device_) device_->setProvideControlMode("never");
-  if (localState_) localState_->setProvideControlMode("never");
 }
 
 // DeviceRemote teardown without touching the stored auth or the daemon:
