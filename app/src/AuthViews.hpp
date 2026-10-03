@@ -52,7 +52,8 @@ class CreateNetworkPage : public Gtk::Box {
   void FocusFirstField();
 
   std::function<void()> on_success;                        // network ready -> start tunnel
-  std::function<void(std::string userAuth)> on_verify;     // verification required
+  // verification required; notice says whether the code was sent
+  std::function<void(std::string userAuth, VerifySendNotice notice)> on_verify;
   std::function<void()> on_back;
 
  private:
@@ -107,9 +108,10 @@ class VerifyPage : public Gtk::Box {
   explicit VerifyPage(SdkHost& host);
 
   void Configure(const std::string& userAuth);
-  // An informational line under the resend row (e.g. "a code was sent" when a
-  // password sign-in routed here) — never the error voice.
-  void ShowNotice(const std::string& text);
+  // The line under the resend row after a code was requested: "a code was
+  // sent" in the informational voice, a code that was not sent in the error
+  // voice.
+  void ShowSendNotice(const VerifySendNotice& notice);
 
   std::function<void()> on_success;
   std::function<void()> on_back;

@@ -2141,7 +2141,7 @@ msgctxt "error_sending_password_reset_link"
 msgid "Error sending password reset link"
 msgstr "Σφάλμα κατά την αποστολή του συνδέσμου επαναφοράς κωδικού πρόσβασης"
 
-#. Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.
+#. Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.
 msgctxt "error_sending_verification_code"
 msgid "There was an error sending the verification code."
 msgstr "Παρουσιάστηκε σφάλμα κατά την αποστολή του κωδικού επαλήθευσης."
@@ -5315,6 +5315,13 @@ msgstr "Επαληθευμένο έργο στο [DePIN Hub](https://depinhub.io
 msgctxt "verify"
 msgid "Verify"
 msgstr "Επαλήθευση"
+
+#. Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.
+msgctxt "verify_code_rate_limited"
+msgid "Too many attempts. You can request a new code in {} minute."
+msgid_plural "Too many attempts. You can request a new code in {} minutes."
+msgstr[0] "Πάρα πολλές προσπάθειες. Μπορείτε να ζητήσετε νέο κωδικό σε {} λεπτό."
+msgstr[1] "Πάρα πολλές προσπάθειες. Μπορείτε να ζητήσετε νέο κωδικό σε {} λεπτά."
 
 #. Call to action
 msgctxt "verify_error"

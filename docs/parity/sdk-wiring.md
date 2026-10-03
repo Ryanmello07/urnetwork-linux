@@ -73,7 +73,7 @@ Event model difference (deliberate, both fine): Windows pushes typed payloads th
 | `Sdk().LoginWithSeedphrase` | `api_->authLogin{seedphrase}` (normalized lowercase/trim/single-space) | `LoginWithSeedphrase` | yes | EXISTS |
 | `Sdk().CreateNetwork(params)` | `api_->networkCreate` (3 modes: password / pending wallet auth / pending Google auth-jwt) | `CreateNetwork(name,userAuth,password,referral)` + `CreateNetworkWithPendingWallet(name,referral)`; **no auth-jwt mode** | yes | EXISTS for password+wallet; NEEDS-SDKHOST-METHOD for the auth-jwt (Google) mode |
 | `Sdk().CreateInstantAccount / ConfirmInstantAccount / DiscardInstantAccount` | `networkCreate{terms}` (no auth) -> held jwt -> confirm registers | same three methods | yes | EXISTS |
-| `Sdk().VerifyCode` / `ResendVerifyCode` | `api_->authVerify` / `api_->authVerifySend` | `VerifyCode` / `ResendVerifyCode(done(ok,error))` | yes | EXISTS (Linux resend also returns error text — keep) |
+| `Sdk().VerifyCode` / `ResendVerifyCode` | `api_->authVerify` / `api_->authVerifySend` | `VerifyCode` / `ResendVerifyCode(done(VerifySendNotice))` | yes | EXISTS (resend sets `result_errors`; the notice says sent, rate limited with minutes, send failed, or the server message — never "sent" for a code the server did not send) |
 | `Sdk().SendPasswordResetLink` | `api_->authPasswordReset` | `SendPasswordResetLink(done(ok,error))` | yes | EXISTS |
 | `Sdk().CheckNetworkName` (caller debounces) | `networkNameVc_->networkCheck` (`newNetworkNameValidationViewController(api)`) | `CheckNetworkName` | yes | EXISTS |
 | `Sdk().api().validateReferralCode` | Api direct | `ValidateReferralCode(done(ok,valid,capped))` wrapper (better) or `api()` | yes | EXISTS |

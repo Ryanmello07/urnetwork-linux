@@ -3238,7 +3238,7 @@ msgctxt "error_sending_password_reset_link"
 msgid "Error sending password reset link"
 msgstr "Fehler beim Senden des Links zum Zurücksetzen des Passworts"
 
-#. Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.
+#. Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.
 msgctxt "error_sending_verification_code"
 msgid "There was an error sending the verification code."
 msgstr "Beim Senden des Bestätigungscodes ist ein Fehler aufgetreten."
@@ -8354,6 +8354,13 @@ msgstr "Verifiziertes Projekt auf [DePIN Hub](https://depinhub.io/projects/urnet
 msgctxt "verify"
 msgid "Verify"
 msgstr "Bestätigen"
+
+#. Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.
+msgctxt "verify_code_rate_limited"
+msgid "Too many attempts. You can request a new code in {} minute."
+msgid_plural "Too many attempts. You can request a new code in {} minutes."
+msgstr[0] "Zu viele Versuche. Du kannst in {} Minute einen neuen Code anfordern."
+msgstr[1] "Zu viele Versuche. Du kannst in {} Minuten einen neuen Code anfordern."
 
 #. Call to action
 msgctxt "verify_error"

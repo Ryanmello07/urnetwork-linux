@@ -2137,7 +2137,7 @@ msgctxt "error_sending_password_reset_link"
 msgid "Error sending password reset link"
 msgstr "Lỗi khi gửi liên kết đặt lại mật khẩu"
 
-#. Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.
+#. Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.
 msgctxt "error_sending_verification_code"
 msgid "There was an error sending the verification code."
 msgstr "Đã xảy ra lỗi khi gửi mã xác minh."
@@ -5299,6 +5299,12 @@ msgstr "Dự án đã xác minh trên [DePIN Hub](https://depinhub.io/projects/u
 msgctxt "verify"
 msgid "Verify"
 msgstr "Xác minh"
+
+#. Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.
+msgctxt "verify_code_rate_limited"
+msgid "Too many attempts. You can request a new code in {} minute."
+msgid_plural "Too many attempts. You can request a new code in {} minutes."
+msgstr[0] "Quá nhiều lần thử. Bạn có thể yêu cầu mã mới sau {} phút."
 
 #. Call to action
 msgctxt "verify_error"
