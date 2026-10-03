@@ -17,10 +17,13 @@
 namespace urnw {
 namespace {
 constexpr unsigned kBackgroundPollingSeconds = 30;   // mac backgroundPollingInterval
-constexpr unsigned kConfirmationPollingSeconds = 5;  // mac pollingInterval
-// mac maxPollingDuration — but spent as a budget of ACTIVE polling time, not
-// wall clock: it pauses with the timers (see SetWindowVisible)
-constexpr gint64 kMaxPollingDurationUs = 120ll * G_USEC_PER_SEC;
+// mac pollingInterval. The give-up budget (kConfirmationBudgetMillis, mac
+// maxPollingDuration) is ACTIVE polling time: it pauses with this poll while
+// the window is hidden or the app is unfocused (ConfirmationPollGate).
+constexpr unsigned kConfirmationPollingSeconds = 5;
+
+// monotonic milliseconds for the gate (never jumps with the wall clock)
+int64_t NowMillis() { return g_get_monotonic_time() / 1000; }
 }  // namespace
 
 SubscriptionBalanceStore::SubscriptionBalanceStore(SdkHost& host) : host_(host) {}
@@ -87,16 +90,11 @@ void SubscriptionBalanceStore::Stop() {
 void SubscriptionBalanceStore::SetWindowVisible(bool visible) {
   const bool wasVisible = windowVisible_;
   windowVisible_ = visible;
+  // the gate banks the confirmation budget on hide and re-arms it on show
+  const bool resume = gate_.SetVisible(visible, NowMillis());
   if (!visible) {
     // Do not keep periodic main-loop wakeups merely to discover that the
-    // window is still hidden. The confirmation deadline is a budget of ACTIVE
-    // polling time: bank whatever is left so time spent in the browser's
-    // checkout — losing focus is exactly what paying looks like — never
-    // counts against the 2 minutes. It resumes ticking with the timers.
-    if (isPolling_ && hasPollingDeadline_) {
-      pollingBudgetUs_ = std::max<gint64>(0, pollingDeadlineUs_ - g_get_monotonic_time());
-      hasPollingDeadline_ = false;
-    }
+    // window is still hidden.
     backgroundTimer_.disconnect();
     pollingTimer_.disconnect();
     referralTimer_.disconnect();
@@ -104,8 +102,9 @@ void SubscriptionBalanceStore::SetWindowVisible(bool visible) {
   }
   if (!started_ || wasVisible) return;
   EnsureReferralPolling();
-  if (isPolling_) {
-    ResumeConfirmationPolling();  // immediate poll; the banked budget re-arms
+  if (gate_.Confirming()) {
+    // immediate poll with the banked budget, unless the app is still unfocused
+    if (resume) ResumeConfirmationPolling();
     return;
   }
   if (!isPro_) {
@@ -117,6 +116,18 @@ void SubscriptionBalanceStore::SetWindowVisible(bool visible) {
     // back to a tray-resident app.
     FetchNow();
   }
+}
+
+void SubscriptionBalanceStore::SetAppFocused(bool focused) {
+  const bool resume = gate_.SetFocused(focused, NowMillis());
+  if (!gate_.Running()) {
+    // focus loss (paying in the browser looks exactly like this): the
+    // confirmation poll and its budget pause; the background poll is not
+    // confirming and keeps its visibility gate
+    pollingTimer_.disconnect();
+    return;
+  }
+  if (resume && started_) ResumeConfirmationPolling();
 }
 
 void SubscriptionBalanceStore::FetchNow() {
@@ -216,10 +227,10 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
           // confirmation poll bookkeeping. mac runs these checks after EVERY
           // awaited fetch — errors included, or an unreachable server would
           // keep the confirmation poll spinning past its deadline forever.
-          if (isPolling_) {
+          if (gate_.Confirming()) {
             if (IsSupporterWithBalance()) {
               StopPolling();
-            } else if (hasPollingDeadline_ && g_get_monotonic_time() >= pollingDeadlineUs_) {
+            } else if (gate_.ExpiredAt(NowMillis())) {
               // the server never confirmed within the (active-time) window —
               // stop hammering the api and tell the user, rather than
               // spinning for the session
@@ -350,35 +361,28 @@ void SubscriptionBalanceStore::StartBackgroundPolling() {
 }
 
 void SubscriptionBalanceStore::StartConfirmationPolling() {
-  if (isPolling_) return;
+  if (gate_.Confirming()) return;
   backgroundTimer_.disconnect();
 
   // A fresh confirmation attempt: clear any previous give-up and grant the
-  // full budget. The budget is accumulated ACTIVE polling time — the deadline
-  // is armed from it in ResumeConfirmationPolling and banked back on pause —
-  // so hidden/unfocused stretches (the user paying in the browser) never
-  // count toward the 2 minutes.
+  // full budget. The gate spends it only while the poll runs, so hidden or
+  // unfocused stretches (the user paying in the browser) never count toward
+  // the 2 minutes.
   purchaseConfirmationTimedOut_ = false;
-  hasPollingDeadline_ = false;
-  pollingBudgetUs_ = kMaxPollingDurationUs;
-  isPolling_ = true;
+  gate_.Start(NowMillis());
 
   Emit();
   ResumeConfirmationPolling();
 }
 
 void SubscriptionBalanceStore::ResumeConfirmationPolling() {
-  if (!started_ || !windowVisible_ || !isPolling_) return;
-  if (!hasPollingDeadline_) {
-    if (pollingBudgetUs_ <= 0) {
-      // resumed with nothing left (the deadline hit exactly at pause time)
-      GiveUpConfirmationPolling();
-      Emit();
-      return;
-    }
-    // the budget resumes ticking only now that the timer actually runs
-    pollingDeadlineUs_ = g_get_monotonic_time() + pollingBudgetUs_;
-    hasPollingDeadline_ = true;
+  // hidden or unfocused: the gate holds the budget until it opens again
+  if (!started_ || !gate_.Running()) return;
+  if (gate_.ExpiredAt(NowMillis())) {
+    // resumed with nothing left (the budget ran out exactly at pause time)
+    GiveUpConfirmationPolling();
+    Emit();
+    return;
   }
 
   // immediate poll on resume: a webhook that landed while hidden confirms now
@@ -388,7 +392,7 @@ void SubscriptionBalanceStore::ResumeConfirmationPolling() {
       [this]() -> bool {
         // Check independently of the API callback. A callback that is delayed
         // or never arrives must not keep the confirmation timer alive forever.
-        if (hasPollingDeadline_ && g_get_monotonic_time() >= pollingDeadlineUs_) {
+        if (gate_.ExpiredAt(NowMillis())) {
           GiveUpConfirmationPolling();
           Emit();
           return false;
@@ -411,10 +415,8 @@ void SubscriptionBalanceStore::GiveUpConfirmationPolling() {
 void SubscriptionBalanceStore::StopPolling() {
   backgroundTimer_.disconnect();
   pollingTimer_.disconnect();
-  hasPollingDeadline_ = false;
-  pollingBudgetUs_ = 0;
-  if (isPolling_) {
-    isPolling_ = false;
+  if (gate_.Confirming()) {
+    gate_.Stop();
     Emit();
   }
 }

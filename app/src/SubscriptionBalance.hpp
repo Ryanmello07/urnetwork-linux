@@ -13,11 +13,13 @@
 //     checkout or a redeemed balance code: the purchase reaches the server
 //     asynchronously (Stripe webhook), so we poll to bridge the gap — and give
 //     up loudly instead of spinning forever when a webhook is lost. The
-//     deadline is a budget of ACTIVE polling time, not wall clock: it pauses
-//     with the timers while the window is hidden/unfocused (paying in the
-//     browser steals focus for well over 2 minutes) and resumes — with an
-//     immediate poll — when the window is shown again. A Pro confirmation
-//     that lands after a give-up still clears the timed-out state.
+//     deadline is a budget of ACTIVE polling time, not wall clock
+//     (ConfirmationPollGate): the confirmation poll and its budget pause
+//     while the window is hidden OR the app has lost focus (a hosted
+//     checkout keeps the window visible behind the browser for well over
+//     2 minutes) and resume — with an immediate poll — when both are back.
+//     A Pro confirmation that lands after a give-up still clears the
+//     timed-out state.
 //   * offline Pro: the jwt's Pro claim (LocalState::parseByJwt) seeds the
 //     state before the first fetch; the server is the source of truth, and
 //     the jwt is refreshed (Device::refreshToken) whenever the two disagree
@@ -39,6 +41,7 @@
 
 #include <glibmm/main.h>
 
+#include "ConfirmationPollGate.hpp"
 #include "PricePresentation.hpp"
 #include "SdkHost.hpp"
 
@@ -71,6 +74,10 @@ class SubscriptionBalanceStore {
   // The tray-app visibility gate (MainWindow::windowVisible_): the background
   // timers are stopped while the window is hidden and resync on show.
   void SetWindowVisible(bool visible);
+  // Whether any of the app's windows is active (MainWindow tracks the
+  // toplevels). Only the confirmation poll follows focus; the background and
+  // referral polls keep the visibility gate.
+  void SetAppFocused(bool focused);
 
   void FetchNow();
 
@@ -80,7 +87,8 @@ class SubscriptionBalanceStore {
   // reflected right away. Must be called on the GTK main thread.
   void OnJwtRefreshed();
 
-  // The upgrade/redeem confirmation poll: 5s interval, 2-minute deadline.
+  // The upgrade/redeem confirmation poll: 5s interval, 2 minutes of active
+  // (visible and focused) polling before it gives up.
   void StartConfirmationPolling();
   void ClearPurchaseConfirmationTimeout();
 
@@ -91,7 +99,7 @@ class SubscriptionBalanceStore {
   // upgrade (the user can opt back in after). Stays up for the session; the
   // observer applies the side effect once.
   bool DidDetectUpgradeToPro() const { return didDetectUpgradeToPro_; }
-  bool IsPolling() const { return isPolling_; }
+  bool IsPolling() const { return gate_.Confirming(); }
   bool PurchaseConfirmationTimedOut() const { return purchaseConfirmationTimedOut_; }
   bool HasFetched() const { return hasFetched_; }
   int64_t UsedByteCount() const { return usedByteCount_; }
@@ -136,7 +144,7 @@ class SubscriptionBalanceStore {
   void ResumeConfirmationPolling();
   // deadline spent: stop, flag timed-out, fall back to the background poll
   void GiveUpConfirmationPolling();
-  void StopPolling();  // both timers + deadline (mac stopPolling)
+  void StopPolling();  // both timers + the confirmation (mac stopPolling)
   bool IsSupporterWithBalance() const { return isPro_ && availableByteCount_ > 0; }
   void Emit();
 
@@ -178,16 +186,11 @@ class SubscriptionBalanceStore {
   std::vector<urnet::ExperimentAssignment> experiments_;
 
   // polling (mac: backgroundPollingTimer / pollingTimer / pollingDeadline).
-  // The confirmation deadline only elapses while the poll timer runs:
-  // hasPollingDeadline_ is armed (deadline = now + budget) on resume and
-  // disarmed on pause, banking the remainder into pollingBudgetUs_ — so a
-  // hidden/unfocused window never burns confirmation time.
+  // The gate holds whether a confirmation runs and its budget, which only
+  // elapses while the poll timer runs (visible and focused).
   sigc::connection backgroundTimer_;
   sigc::connection pollingTimer_;
-  bool isPolling_ = false;
-  bool hasPollingDeadline_ = false;  // armed only while actively polling
-  gint64 pollingDeadlineUs_ = 0;     // g_get_monotonic_time deadline (active)
-  gint64 pollingBudgetUs_ = 0;       // remaining active-time budget (paused)
+  ConfirmationPollGate gate_{kConfirmationBudgetMillis};
   bool purchaseConfirmationTimedOut_ = false;
 };
 
