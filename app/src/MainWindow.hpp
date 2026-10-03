@@ -34,6 +34,7 @@
 #include "SdkHost.hpp"
 #include "SeedphraseSheet.hpp"
 #include "ProCelebration.hpp"
+#include "GuestConversionSheet.hpp"
 #include "SubscriptionBalance.hpp"
 #include "UrMotion.hpp"
 
@@ -142,12 +143,10 @@ class MainWindow : public Gtk::ApplicationWindow {
   void NavigateCreate(CreateNetworkPage::Mode mode, const std::string& userAuth, bool fromHome);
   // Every create-account and purchase affordance for a legacy guest network
   // (the plan card, the insufficient-balance banner, Account's plan action,
-  // the upgrade sheet). The server removed the guest upgrade, and a login
-  // method added to a guest network cannot be verified (the verify-code
-  // lookup reads network_user.user_auth, which AddAuth never sets), so the
-  // account is created after signing out: a confirmation warns that the guest
-  // balance stays on the guest network, which has no login to come back to.
-  void OfferGuestSignOut();
+  // the upgrade sheet) opens the in-place conversion (GuestConversionSheet):
+  // a sign-in is added to THIS network and verified, so its plan and balance
+  // stay. Signing out would abandon the network for good (it has no login).
+  void OpenGuestConversion();
   void NavigateVerify(const std::string& userAuth);
   void ApplyAuthState(bool loggedIn);
   // ONE READING IN, EVERY WINDOW SURFACE OUT. There is no SetConnected(bool)
@@ -277,6 +276,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // Account's Redeem row opens the same sheet the drawer owns, but the
   // drawer exposes no opener, so the window keeps its own (lazily built).
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;
+  std::unique_ptr<GuestConversionSheet> guestConversionSheet_;  // lazily built
   std::unique_ptr<OnboardingWindow> onboarding_;
   void OpenOnboardingIfPending();
   // urnetwork://onboarding/<connect|widgets|offer|feedback> (the campaign

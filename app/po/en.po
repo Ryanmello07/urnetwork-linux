@@ -3637,15 +3637,10 @@ msgctxt "guest"
 msgid "Guest"
 msgstr "Guest"
 
-#. Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.
-msgctxt "guest_sign_out_and_create_account"
-msgid "Sign out and create an account"
-msgstr "Sign out and create an account"
-
-#. Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.
-msgctxt "guest_sign_out_balance_warning"
-msgid "To create an account, sign out of this guest network first. Its balance stays on the guest network and does not move to your new account. A guest network has no login, so you can't sign back in to it after signing out."
-msgstr "To create an account, sign out of this guest network first. Its balance stays on the guest network and does not move to your new account. A guest network has no login, so you can't sign back in to it after signing out."
+#. Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).
+msgctxt "guest_convert_explanation"
+msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
+msgstr "Add an email and a password to sign in to this network. Its plan and balance stay with it."
 
 msgctxt "hash_count"
 msgid "#{}"

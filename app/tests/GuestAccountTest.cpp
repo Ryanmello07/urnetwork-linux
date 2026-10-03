@@ -1,9 +1,11 @@
-// A legacy guest network (UPGRADE.md D8, S6): the server removed the guest
+// A legacy guest network (UPGRADE.md D8, A4, S6): the server removed the guest
 // upgrade routes and the SDK's UpgradeGuest now always fails, so nothing may
 // call it (or create guest networks). Every create-account and upgrade action
-// for a guest offers to sign out instead, warning that the guest balance stays
-// on the guest network, and no checkout opens for a guest. The sources need
-// GTK and the SDK, so they are read as text.
+// for a guest converts the network in place (GuestConversionSheet: add a
+// sign-in, verify it), never signing out, and no checkout opens for a guest.
+// Who is a guest includes the server's `guest`, since a refreshed jwt has lost
+// its GuestMode claim. The sources need GTK and the SDK, so they are read as
+// text; the conversion itself is tested in GuestConversionTest.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -54,24 +56,38 @@ UR_TEST(nothingCallsTheRemovedGuestUpgrade) {
   }
 }
 
-UR_TEST(guestGetsTheSignOutOfferWithTheBalanceWarning) {
+UR_TEST(guestConvertsInPlaceAndNeverSignsOut) {
   const std::string window = ReadSource("MainWindow.cpp");
-  const std::string offer = FunctionBody(window, "void MainWindow::OfferGuestSignOut()");
-  UR_EXPECT_TRUE(Has(offer, "\"guest_sign_out_balance_warning\""));
-  UR_EXPECT_TRUE(Has(offer, "\"guest_sign_out_and_create_account\""));
-  // signing out abandons the guest network: cancel is the default
-  UR_EXPECT_TRUE(Has(offer, "adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), \"cancel\")"));
-  UR_EXPECT_TRUE(Has(offer, "host_.Logout()"));
-  UR_EXPECT_TRUE(Has(window, "drawer_->on_create_account = [this] { OfferGuestSignOut(); };"));
+  UR_EXPECT_TRUE(!Has(window, "OfferGuestSignOut"));
+  const std::string open = FunctionBody(window, "void MainWindow::OpenGuestConversion()");
+  UR_EXPECT_TRUE(Has(open, "guestConversionSheet_->Open()"));
+  UR_EXPECT_TRUE(!Has(open, "Logout"));
+  UR_EXPECT_TRUE(Has(window, "drawer_->on_create_account = [this] { OpenGuestConversion(); };"));
+  // the sheet adds and verifies on this network, and never signs in or out
+  const std::string sheet = ReadSource("GuestConversionSheet.cpp");
+  UR_EXPECT_TRUE(Has(sheet, "host_.api().addAuth("));
+  UR_EXPECT_TRUE(Has(sheet, "host_.api().authVerify("));
+  UR_EXPECT_TRUE(Has(sheet, "host_.RefreshJwt()"));
+  UR_EXPECT_TRUE(!Has(sheet, "Logout"));
+  UR_EXPECT_TRUE(!Has(sheet, "host_.VerifyCode("));  // the variant that signs in
   // the guest's upgrade door never reaches checkout
   const std::string drawer = ReadSource("ConnectDrawer.cpp");
   const std::string openUpgrade = FunctionBody(drawer, "void ConnectDrawer::OpenUpgrade()");
   UR_EXPECT_TRUE(Has(openUpgrade, "if (balance_.IsGuest())"));
   UR_EXPECT_TRUE(Has(openUpgrade, "on_create_account()"));
-  // the catalog carries the copy
+  // the sign-out copy is gone; the conversion copy is in the catalog
   const std::string pot = ReadSource("../po/urnetwork.pot");
-  UR_EXPECT_TRUE(Has(pot, "msgctxt \"guest_sign_out_balance_warning\""));
-  UR_EXPECT_TRUE(Has(pot, "msgctxt \"guest_sign_out_and_create_account\""));
+  UR_EXPECT_TRUE(!Has(pot, "msgctxt \"guest_sign_out_balance_warning\""));
+  UR_EXPECT_TRUE(Has(pot, "msgctxt \"guest_convert_explanation\""));
+  UR_EXPECT_TRUE(Has(pot, "msgctxt \"sign_in_method_added_successfully\""));
+}
+
+UR_TEST(refreshedGuestIsStillAGuest) {
+  // the store reads the server's guest, not only the jwt claim a refresh clears
+  const std::string store = ReadSource("SubscriptionBalance.cpp");
+  UR_EXPECT_TRUE(Has(store, "serverGuest_ = result->guest.value_or(false);"));
+  UR_EXPECT_TRUE(Has(store, "isGuest_ = IsGuestNetwork(jwtGuest_, serverGuest_);"));
+  UR_EXPECT_TRUE(!Has(store, "isGuest_ = byJwt->GuestMode;"));
 }
 
 }  // namespace

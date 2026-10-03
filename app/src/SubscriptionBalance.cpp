@@ -5,6 +5,8 @@
 
 #include "ReferralRoyalty.hpp"
 
+#include "GuestConversion.hpp"
+
 #include "AppPrefs.hpp"
 
 #include <algorithm>
@@ -51,13 +53,15 @@ void SubscriptionBalanceStore::Start() {
 
   // Offline Pro: the jwt's Pro (and GuestMode) claims are readable without a
   // network call — the plan label is right even before the first fetch.
+  serverGuest_ = false;
   if (auto byJwt = host_.ParseByJwt()) {
     isPro_ = byJwt->Pro;
-    isGuest_ = byJwt->GuestMode;
+    jwtGuest_ = byJwt->GuestMode;
   } else {
     isPro_ = false;
-    isGuest_ = false;
+    jwtGuest_ = false;
   }
+  isGuest_ = IsGuestNetwork(jwtGuest_, serverGuest_);
 
   if (windowVisible_) {
     if (!isPro_) {
@@ -80,6 +84,8 @@ void SubscriptionBalanceStore::Stop() {
   hasFetched_ = false;
   isPro_ = false;
   isGuest_ = false;
+  jwtGuest_ = false;
+  serverGuest_ = false;
   subscriptionStoreFamily_.clear();
   didDetectUpgradeToPro_ = false;
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
@@ -143,8 +149,12 @@ void SubscriptionBalanceStore::OnJwtRefreshed() {
   auto byJwt = host_.ParseByJwt();
   if (!byJwt) return;
   const bool before = isPro_;
+  const bool guestBefore = isGuest_;
   UpdateIsPro(byJwt->Pro);  // flips the polling mode if Pro changed
-  if (isPro_ != before) Emit();
+  // a refresh signs the jwt without GuestMode; the server's guest still holds
+  jwtGuest_ = byJwt->GuestMode;
+  isGuest_ = IsGuestNetwork(jwtGuest_, serverGuest_);
+  if (isPro_ != before || isGuest_ != guestBefore) Emit();
 }
 
 // mac updateIsPro: Pro stops all polling; a lapse back to free restarts the
@@ -209,6 +219,10 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
             // and a lapse — refresh the jwt whenever the two disagree, in
             // either direction (the mac view model learned this the hard way).
             const bool serverIsPro = result->current_subscription.has_value();
+            // no login method on the network (a legacy guest), read live by
+            // the server: right even after a refresh cleared the jwt claim
+            serverGuest_ = result->guest.value_or(false);
+            isGuest_ = IsGuestNetwork(jwtGuest_, serverGuest_);
             subscriptionStoreFamily_ =
                 serverIsPro ? urnet::classifySubscriptionStore(result->current_subscription->store)
                             : std::string();
