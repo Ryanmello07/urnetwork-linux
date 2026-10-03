@@ -90,6 +90,8 @@ class ReferralsPage : public Gtk::Box {
   ReferralPanel* panel_ = nullptr;
   Gtk::Label* totalValue_ = nullptr;
   Gtk::Label* pointsValue_ = nullptr;
+  Gtk::Button* totalRetry_ = nullptr;   // shown only on a failed read
+  Gtk::Button* pointsRetry_ = nullptr;
   kit::PaneTwoLineRowButton referralNetworkRow_;
 
   AccountFlow pointsFlow_;
