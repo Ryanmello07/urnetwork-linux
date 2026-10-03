@@ -42,6 +42,7 @@ namespace urnw {
 class MainWindow : public Gtk::ApplicationWindow {
  public:
   explicit MainWindow(SdkHost& host);
+  ~MainWindow() override;
 
   // THE ACTION IS A PARAMETER. `disconnect` is the action that wrote the label
   // the user clicked, carried with the press by ConnectPage::on_connect_action.
@@ -124,6 +125,14 @@ class MainWindow : public Gtk::ApplicationWindow {
  private:
   // run the carousel only on the initial login step while the window shows
   void UpdateCarouselRunning();
+  // App focus for the purchase-confirmation poll: true while ANY of the
+  // process's toplevels is active (the upgrade and redeem sheets are their
+  // own transient windows). Hooks every toplevel's notify::is-active as it
+  // appears and coalesces the reading onto one idle.
+  void TrackAppFocus();
+  void ScheduleAppFocusSync();
+  void UntrackAppFocus();
+  static void OnToplevelActiveChanged(GObject* window, GParamSpec* pspec, gpointer self);
   // one label, two voices: a coral inline error vs a muted progress notice
   void SetLoginError(const Glib::ustring& text);
   void SetLoginNotice(const Glib::ustring& text);
@@ -299,6 +308,8 @@ class MainWindow : public Gtk::ApplicationWindow {
   // tray app: skip window-widget updates while hidden (resynced on show) so a
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;
+  sigc::connection appFocusSync_;      // the pending coalesced focus reading
+  sigc::connection toplevelsChanged_;  // the toplevel list's items-changed hook
   std::string lastStatus_ = "Disconnected";
   LiveStats lastStats_;  // resynced into the widgets when the window is shown
 

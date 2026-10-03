@@ -213,6 +213,10 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   property_visible().signal_changed().connect(reconcilePresentation);
   signal_map().connect(reconcilePresentation);
   signal_unmap().connect(reconcilePresentation);
+  // Focus is NOT part of the presentation gate (see above), but the purchase
+  // confirmation poll also pauses on it: a hosted checkout leaves this window
+  // visible behind the browser while the user pays (UPGRADE.md D1).
+  TrackAppFocus();
   // The window reveal (Hero Bloom): plays once per show on the signed-out
   // frame; hiding mid-reveal must never leave a hero pinned at 0.92 —
   // CancelToFinal on unmap.
@@ -996,6 +1000,67 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 // Only the initial step shows the carousel, and only while the window is on
 // screen — a tray app spends most of its life hidden, and a slideshow nobody
 // can see is pure wakeups.
+MainWindow::~MainWindow() { UntrackAppFocus(); }
+
+void MainWindow::TrackAppFocus() {
+  auto toplevels = Gtk::Window::get_toplevels();
+  auto hook = [this, toplevels] {
+    for (guint i = 0; i < toplevels->get_n_items(); ++i) {
+      GObject* window = static_cast<GObject*>(g_list_model_get_item(toplevels->gobj(), i));
+      if (!window) continue;
+      // marked on the window itself, so a destroyed window takes its mark along
+      if (!g_object_get_data(window, "urnw-app-focus")) {
+        g_object_set_data(window, "urnw-app-focus", GINT_TO_POINTER(1));
+        g_signal_connect(window, "notify::is-active", G_CALLBACK(&MainWindow::OnToplevelActiveChanged),
+                         this);
+      }
+      g_object_unref(window);
+    }
+    ScheduleAppFocusSync();
+  };
+  toplevelsChanged_ = toplevels->signal_items_changed().connect(
+      [hook](guint, guint, guint) { hook(); });
+  hook();
+}
+
+void MainWindow::UntrackAppFocus() {
+  // the hooks carry `this`: drop every one before the window goes away
+  toplevelsChanged_.disconnect();
+  appFocusSync_.disconnect();
+  auto toplevels = Gtk::Window::get_toplevels();
+  for (guint i = 0; i < toplevels->get_n_items(); ++i) {
+    GObject* window = static_cast<GObject*>(g_list_model_get_item(toplevels->gobj(), i));
+    if (!window) continue;
+    if (g_signal_handlers_disconnect_by_func(
+            window, reinterpret_cast<gpointer>(&MainWindow::OnToplevelActiveChanged), this) > 0) {
+      g_object_set_data(window, "urnw-app-focus", nullptr);
+    }
+    g_object_unref(window);
+  }
+}
+
+void MainWindow::OnToplevelActiveChanged(GObject*, GParamSpec*, gpointer self) {
+  static_cast<MainWindow*>(self)->ScheduleAppFocusSync();
+}
+
+void MainWindow::ScheduleAppFocusSync() {
+  // Moving between two of the app's windows deactivates one before the other
+  // activates; reading once on idle keeps that from pausing the poll.
+  if (appFocusSync_.connected()) return;
+  appFocusSync_ = Glib::signal_idle().connect([this] {
+    auto toplevels = Gtk::Window::get_toplevels();
+    bool focused = false;
+    for (guint i = 0; i < toplevels->get_n_items() && !focused; ++i) {
+      GObject* window = static_cast<GObject*>(g_list_model_get_item(toplevels->gobj(), i));
+      if (!window) continue;
+      focused = gtk_window_is_active(GTK_WINDOW(window));
+      g_object_unref(window);
+    }
+    balance_.SetAppFocused(focused);
+    return false;
+  });
+}
+
 void MainWindow::UpdateCarouselRunning() {
   if (!carousel_) return;
   carousel_->SetActive(windowVisible_ && stack_.get_visible_child_name() == "login");
