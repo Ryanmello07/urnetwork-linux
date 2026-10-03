@@ -10,11 +10,6 @@ msgstr ""
 "Language: hi\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#. A description of the seedphrase generation process.
-msgctxt "a_new_seedphrase_will_be_generated_and"
-msgid "A new seedphrase will be generated and linked to your account."
-msgstr "एक नया सीड फ़्रेज़ बनाया जाएगा और आपके खाते से जोड़ा जाएगा।"
-
 msgctxt "a_seedphrase_lets_you_recover_your_account"
 msgid "A seedphrase lets you recover your account if you lose access."
 msgstr "अगर आपकी पहुंच खो जाती है, तो सीड फ़्रेज़ से आप अपना खाता वापस पा सकते हैं।"
