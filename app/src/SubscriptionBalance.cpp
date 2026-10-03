@@ -273,7 +273,12 @@ void SubscriptionBalanceStore::FetchReferralCode() {
           if (*epoch != issued) return;
           isLoadingReferral_ = false;
           if (err || !result || result->error) {
-            // the row just keeps its last value
+            g_warning("balance: getNetworkReferralCode failed: %s",
+                      err ? err->c_str()
+                          : (result && result->error ? result->error->message.c_str()
+                                                     : "(no result)"));
+            // the rows keep their last value (the poll retries), but a panel
+            // with no code says the read failed
             if (referral_.Fail()) Emit();
             return;
           }
@@ -325,6 +330,13 @@ void SubscriptionBalanceStore::MaybeCelebrateReferrals(int64_t count) {
     // referrals can be unlinked; re-baseline quietly
     prefs::Set<int64_t>(key.c_str(), count);
   }
+}
+
+void SubscriptionBalanceStore::RetryReferral() {
+  if (!started_) return;
+  referral_.Retry();
+  Emit();
+  FetchReferralCode();  // an in-flight read answers this retry instead
 }
 
 // Unlike the balance poll, referral polling never stops for a Pro network:

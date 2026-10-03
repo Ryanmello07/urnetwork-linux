@@ -105,6 +105,10 @@ class SubscriptionBalanceStore {
   int64_t BonusGibPerDay() const { return bonusGibPerDay_; }
   int64_t ReferredBonusGibPerDay() const { return referredBonusGibPerDay_; }
   const std::string& ReferralCode() const { return referral_.Code(); }
+  // what the referral panel shows where the code goes
+  ReferralCodeView ReferralView() const { return referral_.View(); }
+  // Read the code again now (the panel's Try again). Emits.
+  void RetryReferral();
 
   // The plan response's price tier (standard/regional, from the storefront
   // country the server resolved), the network's welcome offer and the
