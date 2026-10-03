@@ -580,6 +580,12 @@ test('appimage-gsettings-schema-closure',
      find_program('../packaging/gsettings.test.sh'),
      protocol : 'exitcode')
 
+# install.sh --update: latest stable urnetwork/linux release via the GitHub
+# API, sha256 digest verified before anything runs. Fake curl/uname, no network.
+test('tarball-update-release-source',
+     find_program('../packaging/tarball-update.test.sh'),
+     protocol : 'exitcode')
+
 # ABI floor gate (APPIMAGE.md R9/§10c): the daemon and the vendored SDK must
 # reference no glibc symbol newer than the floor the packaging declares. The
 # declaration is hand-written (nfpm does not run dpkg-shlibdeps), so this test

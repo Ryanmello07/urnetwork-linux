@@ -8,10 +8,12 @@ a **privilege split**:
 
 The daemon gets distro-native packaging where we have it (`.deb`, later `.rpm`) and a
 distro-agnostic **`.tar.gz` + `install.sh`** — static binary + systemd unit —
-everywhere else, installed *and upgraded* by one line:
+everywhere else. Download `urnetwork-daemon-<version>-<arch>.install.tar.gz` from
+ur.io or the stable [urnetwork/linux releases](https://github.com/urnetwork/linux/releases);
+it is installed *and upgraded* by one line:
 
 ```sh
-curl -fsSL https://get.ur.network/urnetwork-daemon.tar.gz | tar xz && sudo urnetwork-daemon/install.sh
+tar xzf urnetwork-daemon-<version>-<amd64|arm64>.install.tar.gz && sudo urnetwork-daemon/install.sh
 ```
 
 The GUI is a single AppImage for every distro, run as the desktop user with **no
@@ -955,10 +957,14 @@ the closest analogue to this app — deleted its AppImage in 2023 over exactly t
 ### 11g. The `install.sh` tarball — one line to install *or* upgrade
 
 **Shape (decided 2026-08-05):** the native daemon path ships as a **`.tar.gz`** whose
-one-line extract-and-run both installs and upgrades:
+one-line extract-and-run both installs and upgrades. It is published as
+`urnetwork-daemon-<version>-<arch>.install.tar.gz` on the stable
+[urnetwork/linux releases](https://github.com/urnetwork/linux/releases), which ur.io's
+download page lists; there is no separate download host (the `get.ur.network` host
+planned here was never stood up and does not resolve):
 
 ```sh
-curl -fsSL https://get.ur.network/urnetwork-daemon.tar.gz | tar xz && sudo urnetwork-daemon/install.sh
+tar xzf urnetwork-daemon-<version>-<amd64|arm64>.install.tar.gz && sudo urnetwork-daemon/install.sh
 ```
 
 Shipping the script *inside* the tarball (rather than the `curl … | sh` idiom that
@@ -1006,5 +1012,11 @@ different payload.
       install for users who want it. A checksum embedded *inside* the tarball proves
       only that the archive is intact, not that it is ours — do not imply otherwise.
 - [ ] **`install.sh --update` / a periodic check** is the daemon's update channel where
-      there is no apt; it re-fetches this same tarball. Keep it opt-in, and never
-      auto-upgrade a daemon holding a live tunnel without the user's say-so.
+      there is no apt. It asks the GitHub releases API for the latest stable
+      `urnetwork/linux` release (`/releases/latest`; drafts and prereleases refused,
+      never `urnetwork/build` nightlies or a fork), downloads the own-arch
+      `.install.tar.gz` from that repo's download path, and verifies it against the
+      asset's API `digest` (sha256) before extracting it. No stable release, or no
+      tarball in it, is a clear error, never a guessed URL. `--url` (with optional
+      `--sha256`) overrides the source. Keep it opt-in, and never auto-upgrade a
+      daemon holding a live tunnel without the user's say-so.

@@ -183,6 +183,14 @@ What the app does with a newer release depends on how it was installed:
   plus its package-manager command (`apt`, `dnf`, `pacman`, `flatpak`, or the
   tarball's `install.sh`). The app never elevates and never runs a package
   manager.
+- **Daemon install tarball, from a shell** — `sudo urnetwork-daemon/install.sh
+  --update` (run from any extracted tarball) asks the GitHub API for the latest
+  stable urnetwork/linux release, downloads its
+  `urnetwork-daemon-<v>-<arch>.install.tar.gz`, verifies the SHA-256 against
+  the asset digest GitHub publishes, and runs that tarball's installer. It
+  fails with a clear message when there is no stable release or the release
+  has no tarball. `--url <url>` (optionally `--sha256 <hex>`) uses a specific
+  tarball instead. `packaging/tarball-update.test.sh` covers it.
 
 The daemon package and the GUI update independently; a GUI newer than the
 daemon shows the "service out of date" state until the daemon package is
