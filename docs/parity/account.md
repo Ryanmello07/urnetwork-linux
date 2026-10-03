@@ -132,7 +132,7 @@ CLAIM vs CHANGE — the account decides which call runs:
 Shared continuation: re-enable Save, clear saving flag. Error (server error.message, transport err, or null result → Loc('something_went_wrong')) → status verbatim, Invalid, editor STAYS OPEN. Success → adopt result.network_name as the acknowledged name (repaint the view row AND the copy the editor seeds from), CLOSE the editor, status ← the accepted name itself in Valid green #87FB67. Deliberate: the store has no 'Network name changed to {}' string — the server's accepted name in brand green IS the acknowledgement.
 
 #### 3.1.2 Password reset (SendPasswordReset)
-Guards: in-flight, empty userAuth, signed out. Disable Send. Api::authPasswordReset{user_auth}. No error field: success = result present AND no transport err. Re-enable. Success → status ← Format('password_reset_link_sent_to', userAuth) 'Password reset link sent to {}.' in Valid green. Failure → Loc('error_sending_password_reset_link') 'Error sending password reset link' in Invalid red.
+Guards: in-flight, empty userAuth, signed out, reset rate limit. Disable Send. SdkHost::SendPasswordResetLink → Api::authPasswordReset{user_auth, result_errors: true}. Success = result present, no transport err AND no result.error. Re-enable. Success → status ← Format('password_reset_link_sent_to', userAuth) 'Password reset link sent to {}.' in Valid green. Transport failure → Loc('error_sending_password_reset_link') 'Error sending password reset link' in Invalid red. result.error (AuthVerifySendError) → verify_send_failed: the same string; verify_rate_limited with retry_after_seconds: Loc plural 'reset_link_rate_limited' 'Too many attempts. You can request a new reset link in {} minutes.' with Send disabled until the retry time, the minutes counting down each second (ResendCooldown); another code: the server message.
 
 #### 3.1.3 Account load + gating (LoadAccount / ApplyAccountState)
 Not logged in → ApplyAccountState(NoSession), and still run the referral + balance-code loads (they set their own NoSession states). Logged in → Loading, then Api::getNetworkUser. Failure (error.message, transport err, or missing network_user) → Failed. Success → store needsNameClaim + userAuth, repaint the name, set the auth line, state Loaded, clear the status line.
@@ -253,7 +253,7 @@ No Adv()/Dev() fallback keys are used on this destination (they exist on Setting
 - Sdk().api().getNetworkUser — account load (network_name, user_auth, verified, auth_types/needsNameClaim); login-methods list; DeleteAccountSheet fresh-name read
 - Sdk().api().claimNetworkName{new_name} — save when the account still has its auto-generated name (no reclaim cooldown)
 - Sdk().api().changeNetworkName{new_name} — save otherwise (24h cooldown, server-enforced; refusal shown verbatim)
-- Sdk().api().authPasswordReset{user_auth} — Update password row (no error field; result + no transport err = success)
+- SdkHost::SendPasswordResetLink (Api::authPasswordReset{user_auth, result_errors}) — Update password row (success = result + no transport err + no result.error)
 - Sdk().api().getNetworkReferralCode — referral summary (referral_code + total_referrals) AND the bonus-referral-code row
 - Sdk().api().getReferralNetwork — referral-network row + sheet current value ('No referral network found' arrives on the error channel of a SUCCESS; only transport err is Failed)
 - Sdk().api().setNetworkReferral{referral_code} — ReferralNetworkSheet Update (gate: >= 6 chars)
