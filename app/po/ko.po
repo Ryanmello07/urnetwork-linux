@@ -10,11 +10,6 @@ msgstr ""
 "Language: ko\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#. A description of the seedphrase generation process.
-msgctxt "a_new_seedphrase_will_be_generated_and"
-msgid "A new seedphrase will be generated and linked to your account."
-msgstr "새 시드 문구가 생성되어 계정에 연결됩니다."
-
 msgctxt "a_seedphrase_lets_you_recover_your_account"
 msgid "A seedphrase lets you recover your account if you lose access."
 msgstr "시드 문구가 있으면 접근 권한을 잃어도 계정을 복구할 수 있습니다."

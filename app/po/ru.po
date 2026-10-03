@@ -10,11 +10,6 @@ msgstr ""
 "Language: ru\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 
-#. A description of the seedphrase generation process.
-msgctxt "a_new_seedphrase_will_be_generated_and"
-msgid "A new seedphrase will be generated and linked to your account."
-msgstr "Будет создана новая сид-фраза и привязана к вашему аккаунту."
-
 msgctxt "a_seedphrase_lets_you_recover_your_account"
 msgid "A seedphrase lets you recover your account if you lose access."
 msgstr "Сид-фраза позволяет восстановить аккаунт, если вы потеряете доступ."
