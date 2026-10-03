@@ -73,4 +73,22 @@ UR_TEST(redeemSheetClassifiesWithTheSdkAndTheRedeemedCodeList) {
   UR_EXPECT_EQ(0, Count(sheet, "if (result->error) {"));
 }
 
+// A balance code is data only: the server grants its transfer balance with
+// pro = false and the redeem answer has no Pro field. A credited redeem must
+// confirm the data the code added and read the balance once, never start the
+// Pro confirmation poll (it waits for a plan a code never grants, spinning the
+// plan ring for 2 minutes) or say a subscription is processing.
+UR_TEST(redeemSheetConfirmsTheDataAddedAndReadsTheBalanceOnce) {
+  const std::string sheet = ReadSource("RedeemCodeSheet.cpp");
+  const size_t start = sheet.find("case BalanceCodeRedeemNotice::Redeemed:");
+  UR_EXPECT_TRUE(start != std::string::npos);
+  if (start == std::string::npos) return;
+  const size_t end = sheet.find("case BalanceCodeRedeemNotice::", start + 1);
+  const std::string redeemed = sheet.substr(start, end - start);
+  UR_EXPECT_EQ(0, Count(redeemed, "StartConfirmationPolling("));
+  UR_EXPECT_EQ(1, Count(redeemed, "balance_.FetchNow();"));
+  UR_EXPECT_TRUE(Count(redeemed, "transfer_balance->balance_byte_count") > 0);
+  UR_EXPECT_EQ(0, Count(sheet, "\"processing_subscription_balance\""));
+}
+
 }  // namespace
