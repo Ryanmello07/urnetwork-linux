@@ -171,8 +171,8 @@ class AccountPage : public Gtk::Box {
   void ShowPreviewState();
 
   // ---- window-level routing --------------------------------------------------
-  // The plan pane's primary action. Guests go to the create-account (guest
-  // upgrade) flow, everyone else to the UpgradeSheet the window/drawer owns.
+  // The plan pane's primary action. Guests get the sign-out-and-create-account
+  // offer, everyone else the UpgradeSheet the window/drawer owns.
   std::function<void()> on_open_upgrade;
   // A Pro network's plan label ("Pro") replays the Pro celebration (android
   // AccountRootSubscription onPlanLabelTap); free and guest labels are inert.

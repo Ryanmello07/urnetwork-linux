@@ -3552,15 +3552,15 @@ msgctxt "guest"
 msgid "Guest"
 msgstr "Invitado"
 
-#. Guest-mode sheet explainer: what guest mode is and that a full account can come later.
-msgctxt "guest_mode_explainer"
-msgid "Try URnetwork without creating an account. You can upgrade to a full account at any time."
-msgstr "Prueba URnetwork sin crear una cuenta. Puedes pasar a una cuenta completa en cualquier momento."
+#. Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.
+msgctxt "guest_sign_out_and_create_account"
+msgid "Sign out and create an account"
+msgstr "Cerrar sesión y crear una cuenta"
 
-#. Error shown when starting a guest-mode network fails.
-msgctxt "guest_mode_failed"
-msgid "Guest mode failed"
-msgstr "Error en el modo invitado"
+#. Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.
+msgctxt "guest_sign_out_balance_warning"
+msgid "To create an account, sign out of this guest network first. Its balance stays on the guest network and does not move to your new account. A guest network has no login, so you can't sign back in to it after signing out."
+msgstr "Para crear una cuenta, primero cierra la sesión de esta red de invitado. Su saldo se queda en la red de invitado y no pasa a tu nueva cuenta. Una red de invitado no tiene inicio de sesión, así que no podrás volver a entrar en ella después de cerrar la sesión."
 
 msgctxt "hash_count"
 msgid "#{}"

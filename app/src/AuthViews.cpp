@@ -255,11 +255,7 @@ void CreateNetworkPage::Configure(Mode mode, const std::string& userAuth) {
 }
 
 void CreateNetworkPage::FocusFirstField() {
-  if (mode_ == Mode::UpgradeGuest && email_) {
-    email_->grab_focus();
-  } else if (networkName_) {
-    networkName_->grab_focus();
-  }
+  if (networkName_) networkName_->grab_focus();
 }
 
 void CreateNetworkPage::SetNameSupporting(const char* text, const char* cssClass) {
@@ -435,11 +431,6 @@ void CreateNetworkPage::OnContinue() {
       break;
     case Mode::Sso:
       host_.CreateNetworkWithPendingSso(networkName, referralCode, done);
-      break;
-    case Mode::UpgradeGuest:
-      // UpgradeGuestArgs has no referral_code field — the bonus only applies
-      // to a fresh create (the sdk/api shape, not a UI choice)
-      host_.UpgradeGuest(networkName, userAuth, password, done);
       break;
   }
 }

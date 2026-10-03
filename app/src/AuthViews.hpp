@@ -8,8 +8,7 @@
 //     Api::validateReferralCode. Three modes share the form the way the mac
 //     view does: password sign-up (email + password), wallet sign-up (the
 //     wallet_auth captured from a Solana/Bittensor sign-in that had no
-//     network — name + terms only), and guest -> full-account upgrade
-//     (Api::upgradeGuest).
+//     network — name + terms only), and the same for an SSO identity.
 //   * VerifyPage — CreateNetworkVerifyView: the 6-digit code entry with
 //     auto-submit, and resend with the 15s cooldown. Also the landing for the
 //     password-login "needs verification" path that used to dead-end.
@@ -38,7 +37,6 @@ class CreateNetworkPage : public Gtk::Box {
     Password,      // full sign-up: email + network name + password
     Wallet,        // wallet sign-in with no network yet: name + terms only
     Sso,           // Google/Apple (the provider's web flow) with no network yet: name + terms only
-    UpgradeGuest,  // guest -> full account (email + name + password)
   };
 
   explicit CreateNetworkPage(SdkHost& host);
@@ -46,9 +44,8 @@ class CreateNetworkPage : public Gtk::Box {
   // Reset the form for a fresh navigation. userAuth prefills the email field
   // (it stays editable — the login page may not have one yet).
   void Configure(Mode mode, const std::string& userAuth);
-  // Focus the first EMPTY field for the configured mode (windows
-  // EnterCreateStep parity): the guest upgrade starts at the email box,
-  // everything else at the network name.
+  // Focus the first field for the configured mode (windows EnterCreateStep
+  // parity): the network name.
   void FocusFirstField();
 
   std::function<void()> on_success;                        // network ready -> start tunnel

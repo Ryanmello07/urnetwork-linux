@@ -91,7 +91,8 @@ class ConnectDrawer : public Gtk::Box {
   // location row and from the home screen's peers status line.
   void OpenLocationChooser();
 
-  // Guest plan card: route into the guest -> full-account create page.
+  // Guest plan card (and any upgrade a guest reaches): offer to sign out and
+  // create an account (MainWindow::OfferGuestSignOut).
   std::function<void()> on_create_account;
   // Usage bar "Total referrals" row: open the one Referrals page (Account >
   // Referrals); the drawer has no referral view of its own.
