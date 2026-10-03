@@ -84,6 +84,9 @@ class ConnectDrawer : public Gtk::Box {
   void OnBalanceChanged();
   // ContractStatus.InsufficientBalance from the live stats feed.
   void SetInsufficientBalance(bool insufficient);
+  // A destination is selected: out of balance, the banner then says the
+  // tunnel is holding traffic.
+  void SetConnectRequested(bool requested);
   // Opens the upgrade sheet (also the target of the insufficient banner).
   void OpenUpgrade();
 
@@ -181,7 +184,9 @@ class ConnectDrawer : public Gtk::Box {
 
   // insufficient-balance banner + plan card
   Gtk::Box* insufficientBanner_ = nullptr;
+  Gtk::Label* insufficientBody_ = nullptr;
   bool insufficientBalance_ = false;
+  bool connectRequested_ = false;
   Gtk::Label* planLabel_ = nullptr;
   Gtk::Button* getProBtn_ = nullptr;
   Gtk::Button* createAccountBtn_ = nullptr;

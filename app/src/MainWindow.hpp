@@ -17,6 +17,7 @@
 #include "ConnectDrawer.hpp"
 #include "ConnectPage.hpp"
 #include "HomeShell.hpp"
+#include "InsufficientBalanceNotice.hpp"
 #include "AccountPage.hpp"
 #include "DeveloperPage.hpp"
 #include "EarningsPage.hpp"
@@ -54,6 +55,11 @@ class MainWindow : public Gtk::ApplicationWindow {
   // the tray menu — which must therefore ask the page what the press means.
   void ToggleConnect();
   bool connected() const { return connected_; }
+  // The out-of-balance notification's Disconnect button ("app." +
+  // kBalanceNoticeDisconnectAction, registered in main.cpp). Disconnect only:
+  // it never starts a connection.
+  static constexpr const char* kBalanceNoticeDisconnectAction = "balance-notice-disconnect";
+  void DisconnectFromBalanceNotice();
   // The screenshot hook (main.cpp URNETWORK_SHOOT) renders this window when a
   // URNW_ONBOARDING_PREVIEW review has it open, else null.
   Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
@@ -286,6 +292,10 @@ class MainWindow : public Gtk::ApplicationWindow {
   bool readingApplied_ = false;
   bool trayConnectedPushed_ = false;
   bool connected_ = false;
+  // The out-of-balance desktop notification (InsufficientBalanceNotice.hpp),
+  // fed from the connect reading and the balance store.
+  balance_notice::Tracker balanceNotice_;
+  void UpdateBalanceNotice();
   // the free -> Pro provide reset ran for this session's upgrade detection
   // (the store's flag stays up all session; the reset must apply exactly once
   // so the user's later opt-back-in sticks)

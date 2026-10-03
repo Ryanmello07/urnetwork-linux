@@ -126,6 +126,10 @@ int main(int argc, char** argv) {
     tray->on_activate = [&] { window->present(); };
     tray->on_show = [&] { window->present(); };
     tray->on_toggle_connect = [&] { window->ToggleConnect(); };
+    // the out-of-balance notification's Disconnect button
+    app->add_action(urnw::MainWindow::kBalanceNoticeDisconnectAction, [&] {
+      if (window) window->DisconnectFromBalanceNotice();
+    });
     tray->on_quit = [&] {
       // teardown WITHOUT Logout(): Logout wipes the stored jwt, and for a
       // guest network that jwt is the only credential — quitting from the
