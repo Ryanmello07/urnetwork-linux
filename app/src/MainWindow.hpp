@@ -286,10 +286,6 @@ class MainWindow : public Gtk::ApplicationWindow {
   bool readingApplied_ = false;
   bool trayConnectedPushed_ = false;
   bool connected_ = false;
-  // the free -> Pro provide reset ran for this session's upgrade detection
-  // (the store's flag stays up all session; the reset must apply exactly once
-  // so the user's later opt-back-in sticks)
-  bool provideResetOnUpgrade_ = false;
   // tray app: skip window-widget updates while hidden (resynced on show) so a
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;

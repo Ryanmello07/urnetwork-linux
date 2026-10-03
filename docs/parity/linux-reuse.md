@@ -680,14 +680,14 @@ feature with no Windows analogue — KEEP it** (the doc treats it as real and su
 - **Offline Pro + jwt refresh:** jwt claim seeds; server is truth; `RefreshJwt()`
   (`Device::refreshToken`) whenever the two disagree in EITHER direction; `OnJwtRefreshed()`
   re-derives Pro immediately (catches a Pro→free lapse a paused poll would miss).
-- `DidDetectUpgradeToPro()` sticky flag → MainWindow applies `ResetProvideToNever()` exactly
-  once per session (free→Pro resets provide mode; user can opt back in).
+- `DidDetectUpgradeToPro()` sticky flag → MainWindow plays the Pro celebration once per
+  session. Upgrading to Pro never changes the provide control mode.
 **Lands:** the data layer for Account PLAN pane, BalanceWarning, UpgradeSheet, RedeemCodeSheet,
 and Earnings' upgrade gating. §7.4 wires Account loads on destination selection + auth
 change — keep the store's poll as the richer superset (open question in flags).
 **Verdict:** REUSE-AS-IS.
 **API:** `api().subscriptionBalance`, `api().getNetworkReferralCode`,
-`SdkHost::ParseByJwt`, `SdkHost::RefreshJwt`, (side effect) `SdkHost::ResetProvideToNever`.
+`SdkHost::ParseByJwt`, `SdkHost::RefreshJwt`.
 
 ### 2.18 TransferChart → Pane B/C charts (RESTYLE heights)
 
@@ -903,7 +903,6 @@ Nothing else is orphaned: every control, chart, row, pill, and sheet has a §7 s
 - urnet::ProviderLocationsViewController via SdkHost::ConnectedProviderLocations / RemoveConnectedProvider / SelectedProviderClientId / SetSelectedProviderClientId / StepProviderSelection; urnet::ConnectedProviderLocationList{ClientId, Country, CountryCode, Region, City, HasLocation, HasCityCoordinates, CityLat, CityLon, HasRegionCoordinates, RegionLat, RegionLon, ConnectedSinceMillis} (ProviderLocationsSheet)
 - SdkHost::SetDrawerEventHandler + DrawerEvent enum {DeviceLifecycle, Throughput, BlockActions, BlockStats, Overrides, DnsSettings, Blocker, RouteLocal, Contracts, Location, Profile, Locations, Peers, ProviderIdentities, ProviderLocations, ProviderSelection} (event dispatch)
 - SdkHost::CurrentStats / SetStatsHandler -> LiveStats{connectionStatus, connected, providerCount, down/upBitsPerSecond, insufficientBalance, provideEnabled, providePaused, provideClients, provideMode, provideHasNetworkKey} (banner gate, Pane B header, tray)
-- SdkHost::ResetProvideToNever (free->Pro side effect, applied once by MainWindow)
 
 ## Flags (doc-vs-code drift / risks)
 - FLAG 1 (doc vs code): TransferChart content height is 128 in Linux code; §7.7 specifies Height 150 for the Pane B activity chart and 132 for the Pane C blocked/local charts. The Windows spec wins for the new panes — parameterize the height on port.

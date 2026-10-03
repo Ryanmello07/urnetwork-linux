@@ -250,14 +250,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     }
     // The Refer and earn page paints its card from the same store.
     if (referralsPage_) referralsPage_->OnBalanceChanged();
-    // The free -> Pro upgrade side effect (mac MainView reacts to
-    // didDetectUpgradeToPro): reset provide mode to never at the upgrade,
-    // exactly once — the user can opt back in afterward and that sticks.
-    if (balance_.DidDetectUpgradeToPro() && !provideResetOnUpgrade_) {
-      provideResetOnUpgrade_ = true;
-      host_.ResetProvideToNever();
-      SyncProvideControlMode();  // reflect it in the home controls
-    }
+    // Upgrading to Pro never changes the provide control mode: the user's
+    // choice stands, and a silent reset to Never stops a paying user earning.
     // The Pro celebration, once per purchase: the store confirms the free ->
     // Pro flip after checkout (the upgrade sheet's success state reads the
     // same snapshot), and the flight plays over whatever is on screen.
@@ -2192,9 +2186,6 @@ void MainWindow::OpenOnboardingIfPending() {
 
 void MainWindow::ApplyAuthState(bool loggedIn) {
   stack_.set_visible_child(loggedIn ? "home" : "login");
-  // a fresh session (either way) re-arms the once-only Pro-upgrade provide
-  // reset; the balance store's detection flag resets in Start()/Stop() below
-  provideResetOnUpgrade_ = false;
   if (loggedIn) {
     SyncProvideControlMode();
     ApplyConnectReading(host_.CurrentConnectReading());

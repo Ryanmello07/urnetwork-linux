@@ -566,12 +566,6 @@ class SdkHost {
   void SetProvideControlMode(const std::string& mode);
   std::string GetProvideControlMode();
   bool ProvideEnabled();
-  // The free -> Pro upgrade side effect (mac MainView reacts to
-  // SubscriptionBalanceViewModel.didDetectUpgradeToPro by setting
-  // DeviceManager.provideControlMode = .Never): stop providing and persist the
-  // mode — the two writes handleProvideControlModeUpdate does; DeviceLocal
-  // does not persist the control mode itself.
-  void ResetProvideToNever();
 
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
