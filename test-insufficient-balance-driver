@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MPL-2.0
+#
+# The Linux driver for MAIN's insufficient-balance case. The protocol (verbs,
+# one JSON object per call, environment) is tests/runner/RUN-MAIN.md
+# "Driver protocol"; tests/runner/balance/main.go is the only caller.
+#
+# The logic is the standard-library Go program in
+# tests/insufficient-balance-driver/. It is built once per source revision into
+# the private state directory and then executed directly, so a failing verb's
+# last stderr line is the driver's own redacted message, not `go run`'s
+# "exit status 1".
+set -euo pipefail
+umask 077
+
+here="$(cd "$(dirname "$0")" && pwd)"
+source_dir="$here/tests/insufficient-balance-driver"
+state="${URNETWORK_INSUFFICIENT_BALANCE_STATE:?URNETWORK_INSUFFICIENT_BALANCE_STATE is required}"
+case "$state" in
+  /*) ;;
+  *) echo "URNETWORK_INSUFFICIENT_BALANCE_STATE must be absolute" >&2; exit 2 ;;
+esac
+command -v go >/dev/null 2>&1 || { echo "go is required to build the Linux driver" >&2; exit 127; }
+
+bin_dir="$state/.driver"
+mkdir -p "$bin_dir"
+if command -v shasum >/dev/null 2>&1; then
+  revision="$(shasum -a 256 <"$source_dir/main.go" | cut -c1-16)"
+else
+  revision="$(sha256sum <"$source_dir/main.go" | cut -c1-16)"
+fi
+binary="$bin_dir/linux-insufficient-balance-driver-$revision"
+if [ ! -x "$binary" ]; then
+  # GOWORK=off: the program imports only the standard library and must not
+  # resolve against whatever workspace the caller happens to sit in.
+  if ! (cd "$source_dir" && GOWORK=off go build -trimpath -o "$binary.tmp" main.go) >"$bin_dir/build.log" 2>&1; then
+    echo "could not build the Linux driver; see $bin_dir/build.log" >&2
+    exit 1
+  fi
+  mv "$binary.tmp" "$binary"
+fi
+exec "$binary" --linux "$here" "$@"
