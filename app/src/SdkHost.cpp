@@ -478,24 +478,6 @@ void SdkHost::LoginWithCode(const std::string& authCode, std::function<void(Auth
   });
 }
 
-void SdkHost::LoginAsGuest(std::function<void(AuthResult)> done) {
-  urnet::NetworkCreateArgs args;
-  ApplySignupPreferences(args);
-  args.terms = true;
-  args.guest_mode = true;
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
-                                         std::optional<std::string> err) {
-    if (err) { done({false, false, *err}); return; }
-    if (!result) { done({false, false, "no result"}); return; }
-    if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
-    if (result->network && result->network->by_jwt) {
-      RegisterNetworkClient(*result->network->by_jwt, done);
-      return;
-    }
-    done({false, false, "guest create returned no network"});
-  });
-}
-
 namespace {
 // lowercase, trimmed, single-spaced — the normalization every client applies
 // before sending a seedphrase, so a phrase pasted with newlines or double
@@ -846,29 +828,6 @@ void SdkHost::CreateNetworkWithPendingWallet(const std::string& networkName,
 bool SdkHost::HasPendingWalletAuth() {
   std::scoped_lock lock(mutex_);
   return pendingWalletAuth_.has_value();
-}
-
-void SdkHost::UpgradeGuest(const std::string& networkName, const std::string& userAuth,
-                           const std::string& password, std::function<void(AuthResult)> done) {
-  urnet::UpgradeGuestArgs args;
-  args.network_name = networkName;
-  args.user_auth = userAuth;
-  args.password = password;
-  api_->upgradeGuest(args, [this, done](std::optional<urnet::UpgradeGuestResult> result,
-                                        std::optional<std::string> err) {
-    if (err) { done({false, false, *err}); return; }
-    if (!result) { done({false, false, "no result"}); return; }
-    if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
-    if (result->verification_required) { done({false, true, ""}); return; }
-    if (result->network && result->network->by_jwt) {
-      // the upgraded network needs a fresh device under the new jwt:
-      // RegisterNetworkClient tears the guest device down and re-registers;
-      // the UI restarts the tunnel (the mac handleSuccessWithJwt rebuild)
-      RegisterNetworkClient(*result->network->by_jwt, done);
-      return;
-    }
-    done({false, false, "guest upgrade returned no network"});
-  });
 }
 
 void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,

@@ -3596,15 +3596,15 @@ msgctxt "guest"
 msgid "Guest"
 msgstr "ضيف"
 
-#. Guest-mode sheet explainer: what guest mode is and that a full account can come later.
-msgctxt "guest_mode_explainer"
-msgid "Try URnetwork without creating an account. You can upgrade to a full account at any time."
-msgstr "جرب URnetwork دون إنشاء حساب. يمكنك الترقية إلى حساب كامل في أي وقت."
+#. Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.
+msgctxt "guest_sign_out_and_create_account"
+msgid "Sign out and create an account"
+msgstr "تسجيل الخروج وإنشاء حساب"
 
-#. Error shown when starting a guest-mode network fails.
-msgctxt "guest_mode_failed"
-msgid "Guest mode failed"
-msgstr "فشل وضع الضيف"
+#. Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.
+msgctxt "guest_sign_out_balance_warning"
+msgid "To create an account, sign out of this guest network first. Its balance stays on the guest network and does not move to your new account. A guest network has no login, so you can't sign back in to it after signing out."
+msgstr "لإنشاء حساب، سجّل الخروج من شبكة الضيف هذه أولًا. يبقى رصيدها في شبكة الضيف ولا يُنقل إلى حسابك الجديد. لا تملك شبكة الضيف وسيلة لتسجيل الدخول، لذا لن تتمكن من العودة إليها بعد تسجيل الخروج."
 
 msgctxt "hash_count"
 msgid "#{}"

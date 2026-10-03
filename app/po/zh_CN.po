@@ -3566,15 +3566,15 @@ msgctxt "guest"
 msgid "Guest"
 msgstr "访客"
 
-#. Guest-mode sheet explainer: what guest mode is and that a full account can come later.
-msgctxt "guest_mode_explainer"
-msgid "Try URnetwork without creating an account. You can upgrade to a full account at any time."
-msgstr "无需创建账户即可试用 URnetwork。您可以随时升级为完整账户。"
+#. Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.
+msgctxt "guest_sign_out_and_create_account"
+msgid "Sign out and create an account"
+msgstr "退出登录并创建账户"
 
-#. Error shown when starting a guest-mode network fails.
-msgctxt "guest_mode_failed"
-msgid "Guest mode failed"
-msgstr "访客模式失败"
+#. Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.
+msgctxt "guest_sign_out_balance_warning"
+msgid "To create an account, sign out of this guest network first. Its balance stays on the guest network and does not move to your new account. A guest network has no login, so you can't sign back in to it after signing out."
+msgstr "要创建账户，请先退出此访客网络。其余额会保留在访客网络中，不会转入您的新账户。访客网络没有登录方式，退出后您将无法再次登录该网络。"
 
 msgctxt "hash_count"
 msgid "#{}"

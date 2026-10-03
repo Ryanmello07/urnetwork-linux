@@ -136,9 +136,9 @@ void ConnectDrawer::BuildInsufficientBanner() {
   insufficientBody_->set_wrap(true);
   insufficientBanner_->append(*insufficientBody_);
   // Guests divert to account creation first, exactly like the plan card's
-  // Create account button (CreateNetworkPage::Mode::UpgradeGuest via
-  // on_create_account): a Pro subscription must never bind to a throwaway
-  // guest network. Full accounts go straight into checkout.
+  // Create account button (on_create_account: sign out, then create): a Pro
+  // subscription must never bind to a throwaway guest network. Full accounts
+  // go straight into checkout.
   MakeCardTappable(*insufficientBanner_, [this] {
     if (balance_.IsGuest()) {
       if (on_create_account) on_create_account();
@@ -686,7 +686,15 @@ void ConnectDrawer::SetConnectRequested(bool requested) {
   RefreshPlanCard();
 }
 
-void ConnectDrawer::OpenUpgrade() { upgradeSheet_->Open(); }
+void ConnectDrawer::OpenUpgrade() {
+  // No purchase for a legacy guest network: whatever was bought would stay on
+  // a network with no login (every upgrade entry point lands here)
+  if (balance_.IsGuest()) {
+    if (on_create_account) on_create_account();
+    return;
+  }
+  upgradeSheet_->Open();
+}
 
 void ConnectDrawer::OpenLocationChooser() {
   if (locationsSheet_) locationsSheet_->Open();

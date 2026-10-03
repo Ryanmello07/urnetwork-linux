@@ -2333,16 +2333,6 @@ msgctxt "guest"
 msgid "Guest"
 msgstr "अतिथि"
 
-#. Guest-mode sheet explainer: what guest mode is and that a full account can come later.
-msgctxt "guest_mode_explainer"
-msgid "Try URnetwork without creating an account. You can upgrade to a full account at any time."
-msgstr "बिना खाता बनाए URnetwork आज़माएँ। आप किसी भी समय पूर्ण खाते में अपग्रेड कर सकते हैं।"
-
-#. Error shown when starting a guest-mode network fails.
-msgctxt "guest_mode_failed"
-msgid "Guest mode failed"
-msgstr "गेस्ट मोड विफल"
-
 #. Used in Main/Connect/ConnectView-macOS.swift.
 msgctxt "hide_provider_list"
 msgid "Hide Provider List"

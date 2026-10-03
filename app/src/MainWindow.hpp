@@ -140,6 +140,14 @@ class MainWindow : public Gtk::ApplicationWindow {
   void RunSignedOutReveal();
   void SettleReveal();  // CancelToFinal: every ring to the settled pose
   void NavigateCreate(CreateNetworkPage::Mode mode, const std::string& userAuth, bool fromHome);
+  // Every create-account and purchase affordance for a legacy guest network
+  // (the plan card, the insufficient-balance banner, Account's plan action,
+  // the upgrade sheet). The server removed the guest upgrade, and a login
+  // method added to a guest network cannot be verified (the verify-code
+  // lookup reads network_user.user_auth, which AddAuth never sets), so the
+  // account is created after signing out: a confirmation warns that the guest
+  // balance stays on the guest network, which has no login to come back to.
+  void OfferGuestSignOut();
   void NavigateVerify(const std::string& userAuth);
   void ApplyAuthState(bool loggedIn);
   // ONE READING IN, EVERY WINDOW SURFACE OUT. There is no SetConnected(bool)

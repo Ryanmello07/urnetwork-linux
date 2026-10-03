@@ -1658,10 +1658,7 @@ void MainWindow::BuildHome() {
   // three stats cards, the block-ads-and-trackers toggle, and the plan +
   // usage card (with the upgrade + redeem flows behind it)
   drawer_ = Gtk::make_managed<ConnectDrawer>(host_, *this, balance_);
-  drawer_->on_create_account = [this] {
-    // guest -> full account: the create page in upgrade-guest mode
-    NavigateCreate(CreateNetworkPage::Mode::UpgradeGuest, "", /*fromHome=*/true);
-  };
+  drawer_->on_create_account = [this] { OfferGuestSignOut(); };
   // "Total referrals" in the drawer's usage bar opens the same Referrals page
   // Account's row opens (one referral screen everywhere)
   drawer_->on_open_referrals = [this] {
@@ -1761,7 +1758,7 @@ void MainWindow::BuildHome() {
   // Same guest fork as Earnings: a guest has no account to hang a plan on.
   accountPage_->on_open_upgrade = [this] {
     if (balance_.IsGuest()) {
-      NavigateCreate(CreateNetworkPage::Mode::UpgradeGuest, "", /*fromHome=*/true);
+      OfferGuestSignOut();
     } else if (drawer_) {
       drawer_->OpenUpgrade();
     }
@@ -2016,6 +2013,31 @@ void MainWindow::OnSignIn() {
       }
     });
   });
+}
+
+void MainWindow::OfferGuestSignOut() {
+  GtkWidget* dialog = adw_message_dialog_new(
+      GTK_WINDOW(gobj()), T_("create_an_account", "Create an account"),
+      T_("guest_sign_out_balance_warning",
+         "To create an account, sign out of this guest network first. Its balance stays on the "
+         "guest network and does not move to your new account. A guest network has no login, so "
+         "you can't sign back in to it after signing out."));
+  adw_message_dialog_add_responses(
+      ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"), "signout",
+      T_("guest_sign_out_and_create_account", "Sign out and create an account"), nullptr);
+  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "signout",
+                                             ADW_RESPONSE_DESTRUCTIVE);
+  // signing out abandons the guest network: never the default
+  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
+  adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
+                     if (g_strcmp0(response, "signout") != 0) return;
+                     // the auth handler swaps the home view for the sign-in flow
+                     static_cast<MainWindow*>(data)->host_.Logout();
+                   }),
+                   this);
+  gtk_window_present(GTK_WINDOW(dialog));
 }
 
 // android presents AuthCodeLoginSheet — a modal with its own field — instead

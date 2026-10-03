@@ -377,9 +377,6 @@ class SdkHost {
   void LoginWithPassword(const std::string& userAuth, const std::string& password,
                          std::function<void(AuthResult)> done);
   void LoginWithCode(const std::string& authCode, std::function<void(AuthResult)> done);
-  // Guest mode: create a throwaway network (no email/password), same as iOS/macOS.
-  // Upgradeable later via Api::upgradeGuest / upgradeGuestExisting.
-  void LoginAsGuest(std::function<void(AuthResult)> done);
 
   // Sign in with a BIP-39 seedphrase (macOS LoginSeedphraseView / windows
   // parity): authLogin{seedphrase}, normalized (lowercase, single-spaced)
@@ -513,11 +510,6 @@ class SdkHost {
                                    const std::string& referralCode,
                                    std::function<void(AuthResult)> done);
   bool HasPendingSsoAuth();
-  // Guest -> full account (Api::upgradeGuest). On success the guest device is
-  // torn down and the network client re-registered under the upgraded jwt;
-  // the UI restarts the tunnel.
-  void UpgradeGuest(const std::string& networkName, const std::string& userAuth,
-                    const std::string& password, std::function<void(AuthResult)> done);
   // Verify-code entry (Api::authVerify) and resend (Api::authVerifySend).
   void VerifyCode(const std::string& userAuth, const std::string& code,
                   std::function<void(AuthResult)> done);
