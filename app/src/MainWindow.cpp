@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ProvideModeGlyph.hpp"
 #include "MainWindow.hpp"
+#include "ProUpgradeReaction.hpp"
 
 #include "SsoBridge.hpp"
 
@@ -250,14 +251,22 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     }
     // The Refer and earn page paints its card from the same store.
     if (referralsPage_) referralsPage_->OnBalanceChanged();
-    // Upgrading to Pro never changes the provide control mode: the user's
-    // choice stands, and a silent reset to Never stops a paying user earning.
-    // The Pro celebration, once per purchase: the store confirms the free ->
-    // Pro flip after checkout (the upgrade sheet's success state reads the
-    // same snapshot), and the flight plays over whatever is on screen.
+    // The free -> Pro upgrade (ProUpgradeReaction.hpp): the provide control
+    // mode stands, and the Pro celebration plays once per purchase. The store
+    // confirms the flip after checkout (the upgrade sheet's success state
+    // reads the same snapshot), and the flight plays over whatever is on screen.
     if (balance_.DidDetectUpgradeToPro() && !proCelebrated_) {
-      proCelebrated_ = true;
-      LaunchProCelebration();
+      const std::string provideControlMode = host_.GetProvideControlMode();
+      const ProUpgradeReaction reaction =
+          ReactToProUpgrade(true, proCelebrated_, provideControlMode);
+      if (reaction.provideControlMode != provideControlMode) {
+        host_.SetProvideControlMode(reaction.provideControlMode);
+        SyncProvideControlMode();
+      }
+      if (reaction.celebrate) {
+        proCelebrated_ = true;
+        LaunchProCelebration();
+      }
     }
   });
 

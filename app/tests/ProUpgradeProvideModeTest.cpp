@@ -1,4 +1,5 @@
-// Upgrading to Pro never changes the provide control mode.
+// Upgrading to Pro never changes the provide control mode: the wiring.
+// ProUpgradeReactionTest proves the decision; this proves MainWindow uses it.
 //
 // The free -> Pro detection once reset provide mode to Never, so a paying user
 // silently stopped earning (in-app feedback theme earnings-not-updating).
@@ -45,15 +46,16 @@ bool Has(const std::string& haystack, const char* needle) {
 
 }  // namespace
 
-UR_TEST(proUpgradeDoesNotTouchProvideControlMode) {
+UR_TEST(proUpgradeRoutesThroughTheReaction) {
   const std::string window = ReadSource("MainWindow.cpp");
   UR_EXPECT_TRUE(!window.empty());
-  // the upgrade detection still drives the celebration
+  // the upgrade detection still drives the celebration, through the tested
+  // reaction (ProUpgradeReactionTest)
   UR_EXPECT_TRUE(Has(window, "DidDetectUpgradeToPro()"));
+  UR_EXPECT_TRUE(Has(GuardedBlock(window, "DidDetectUpgradeToPro()"), "ReactToProUpgrade("));
   size_t at = 0;
   while ((at = window.find("DidDetectUpgradeToPro()", at)) != std::string::npos) {
     const std::string block = GuardedBlock(window.substr(at), "DidDetectUpgradeToPro()");
-    UR_EXPECT_TRUE(!Has(block, "ProvideControlMode"));
     UR_EXPECT_TRUE(!Has(block, "ProvideToNever"));
     UR_EXPECT_TRUE(!Has(block, "\"never\""));
     at += 1;
