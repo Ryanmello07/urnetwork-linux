@@ -523,8 +523,9 @@ class SdkHost {
                   std::function<void(AuthResult)> done);
   void ResendVerifyCode(const std::string& userAuth,
                         std::function<void(VerifySendNotice notice)> done);
+  // The reset link send's outcome, decided like a verification code send.
   void SendPasswordResetLink(const std::string& userAuth,
-                             std::function<void(bool ok, std::string error)> done);
+                             std::function<void(VerifySendNotice notice)> done);
   // Network-name availability through the SDK's shared
   // NetworkNameValidationViewController (the caller debounces).
   void CheckNetworkName(const std::string& networkName,

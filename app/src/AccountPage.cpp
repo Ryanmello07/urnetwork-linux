@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "AuthViews.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
@@ -1154,6 +1155,7 @@ AccountPage::~AccountPage() {
   resetFlow_.Abandon();
   portalFlow_.Abandon();
   removeFlow_.Abandon();
+  resetRateLimitTick_.disconnect();
 }
 
 // ---- gating + messaging -----------------------------------------------------
@@ -1877,7 +1879,8 @@ void AccountPage::ApplyAccountState(AccountFieldState state) {
   nameRow_.root->set_sensitive(loaded);
   nameBox_->set_sensitive(loaded);
   saveNameButton_->set_sensitive(loaded && !savingName_);
-  sendResetButton_->set_sensitive(loaded && !userAuth_.empty() && !sendingReset_);
+  sendResetButton_->set_sensitive(loaded && !userAuth_.empty() && !sendingReset_ &&
+                                  resetRateLimit_.CanResend(MonotonicSeconds()));
   // if the state leaves Loaded while the editor is open, the editor is forced
   // closed — an editor over a field nobody can save is a trap
   if (!loaded && editingName_) CloseNameEditor();
@@ -2081,12 +2084,13 @@ void AccountPage::FinishNameSave(bool ok, const std::string& acceptedName,
 // ---- §3.1.2 password reset ---------------------------------------------------
 
 void AccountPage::SendPasswordReset() {
-  if (sendingReset_ || userAuth_.empty() || !CanCallApi()) return;
+  if (sendingReset_ || userAuth_.empty() || !CanCallApi() ||
+      !resetRateLimit_.CanResend(MonotonicSeconds())) {
+    return;
+  }
   sendingReset_ = true;
   sendResetButton_->set_sensitive(false);
 
-  urnet::AuthPasswordResetArgs args{};
-  args.user_auth = userAuth_;
   const std::string target = userAuth_;
 
   auto epoch = epoch_;
@@ -2102,36 +2106,54 @@ void AccountPage::SendPasswordReset() {
                        "Error sending password reset link"),
                     kit::ValidationState::Invalid);
   });
-  host_.api().authPasswordReset(
-      std::optional<urnet::AuthPasswordResetArgs>(args),
-      [this, epoch, seen, flow, target](
-          std::optional<urnet::AuthPasswordResetResult> result,
-          std::optional<std::string> err) {
-        PostToMain([this, epoch, seen, flow, target, result = std::move(result),
-                    err = std::move(err)] {
-          if (*epoch != seen) return;
-          if (!resetFlow_.Settle(flow, "password reset")) return;
-          sendingReset_ = false;
-          sendResetButton_->set_sensitive(accountState_ == AccountFieldState::Loaded &&
-                                          !userAuth_.empty());
-          // No error field: success is a result AND no transport error.
-          const bool ok = result.has_value() && !err.has_value();
-          if (!ok) {
-            g_warning("account: authPasswordReset failed: %s",
-                      err ? err->c_str() : "(no result)");
-            ApplySupporting(*statusLine_,
-                            T_("error_sending_password_reset_link",
-                               "Error sending password reset link"),
-                            kit::ValidationState::Invalid);
-            return;
-          }
-          ApplySupporting(
-              *statusLine_,
-              Format(T_("password_reset_link_sent_to", "Password reset link sent to {}."),
-                     target),
-              kit::ValidationState::Valid);
-        });
-      });
+  // the server reports a link it did not send (failed, rate limited) in the
+  // result's error; a result alone is not a sent link
+  host_.SendPasswordResetLink(target, [this, epoch, seen, flow, target](VerifySendNotice notice) {
+    PostToMain([this, epoch, seen, flow, target, notice] {
+      if (*epoch != seen) return;
+      if (!resetFlow_.Settle(flow, "password reset")) return;
+      sendingReset_ = false;
+      resetRateLimit_.Start(notice, MonotonicSeconds());
+      ApplyResetRateLimit();
+      if (notice.kind == VerifySendNoticeKind::Sent) {
+        ApplySupporting(
+            *statusLine_,
+            Format(T_("password_reset_link_sent_to", "Password reset link sent to {}."),
+                   target),
+            kit::ValidationState::Valid);
+        return;
+      }
+      g_warning("account: authPasswordReset not sent (%s)",
+                notice.transportError ? "request failed" : "server reported");
+      ApplySupporting(*statusLine_,
+                      notice.transportError ? T_("error_sending_password_reset_link",
+                                                 "Error sending password reset link")
+                                            : ResetSendNoticeText(notice),
+                      kit::ValidationState::Invalid);
+      if (!resetRateLimit_.CanResend(MonotonicSeconds())) {
+        resetRateLimitTick_.disconnect();
+        resetRateLimitTick_ = Glib::signal_timeout().connect_seconds(
+            [this]() -> bool {
+              const bool limited = !resetRateLimit_.CanResend(MonotonicSeconds());
+              if (limited) {
+                ApplySupporting(*statusLine_,
+                                ResetSendNoticeText(resetRateLimit_.NoticeAt(MonotonicSeconds())),
+                                kit::ValidationState::Invalid);
+              }
+              ApplyResetRateLimit();
+              return limited;
+            },
+            1);
+      }
+    });
+  });
+}
+
+// Send stays off while a reset rate limit lasts.
+void AccountPage::ApplyResetRateLimit() {
+  sendResetButton_->set_sensitive(accountState_ == AccountFieldState::Loaded &&
+                                  !userAuth_.empty() && !sendingReset_ &&
+                                  resetRateLimit_.CanResend(MonotonicSeconds()));
 }
 
 // ---- §3.2 the login methods --------------------------------------------------

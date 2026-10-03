@@ -103,9 +103,18 @@ class CreateNetworkPage : public Gtk::Box {
   Gtk::Label* errorLabel_ = nullptr;
 };
 
+// Seconds on the monotonic clock, for ResendCooldown.
+int64_t MonotonicSeconds();
+
+// What a password reset UI says for a reset link that was not sent: the
+// reset send error, the reset rate limit (plural on minutes), or the server's
+// message. Empty for Sent.
+std::string ResetSendNoticeText(const VerifySendNotice& notice);
+
 class VerifyPage : public Gtk::Box {
  public:
   explicit VerifyPage(SdkHost& host);
+  ~VerifyPage() override;
 
   void Configure(const std::string& userAuth);
   // The line under the resend row after a code was requested: "a code was
@@ -122,12 +131,17 @@ class VerifyPage : public Gtk::Box {
   void Resend();
   void SetSubmitting(bool submitting);
   void StartResendCooldown();
+  void ShowNoticeText(const VerifySendNotice& notice);
+  // while rate limited: Resend stays off and the notice counts down
+  bool TickRateLimit();
 
   SdkHost& host_;
   std::string userAuth_;
   bool submitting_ = false;
   bool sending_ = false;
   sigc::connection resendCooldown_;
+  ResendCooldown rateLimit_;
+  sigc::connection rateLimitTick_;
   std::shared_ptr<uint64_t> epoch_ = std::make_shared<uint64_t>(0);
 
   Gtk::Label* title_ = nullptr;
@@ -141,6 +155,7 @@ class VerifyPage : public Gtk::Box {
 class ResetPasswordPage : public Gtk::Box {
  public:
   explicit ResetPasswordPage(SdkHost& host);
+  ~ResetPasswordPage() override;
 
   void Configure(const std::string& userAuth);
 
@@ -149,9 +164,13 @@ class ResetPasswordPage : public Gtk::Box {
  private:
   void BuildUi();
   void Send();
+  // while rate limited: Send stays off and the notice counts down
+  bool TickRateLimit();
 
   SdkHost& host_;
   bool sending_ = false;
+  ResendCooldown rateLimit_;
+  sigc::connection rateLimitTick_;
   std::shared_ptr<uint64_t> epoch_ = std::make_shared<uint64_t>(0);
 
   Gtk::Box* formBox_ = nullptr;

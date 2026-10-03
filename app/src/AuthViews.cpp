@@ -444,6 +444,30 @@ void CreateNetworkPage::OnContinue() {
   }
 }
 
+// ---- send notices ---------------------------------------------------------------
+
+int64_t MonotonicSeconds() {
+  return g_get_monotonic_time() / G_USEC_PER_SEC;
+}
+
+std::string ResetSendNoticeText(const VerifySendNotice& notice) {
+  switch (notice.kind) {
+    case VerifySendNoticeKind::Sent:
+      return std::string();
+    case VerifySendNoticeKind::RateLimited:
+      return Format(TN_("reset_link_rate_limited",
+                        "Too many attempts. You can request a new reset link in {} minute.",
+                        "Too many attempts. You can request a new reset link in {} minutes.",
+                        static_cast<unsigned long>(notice.minutes)),
+                    notice.minutes);
+    case VerifySendNoticeKind::SendFailed:
+      return T_("error_sending_password_reset_link", "Error sending password reset link");
+    case VerifySendNoticeKind::ServerMessage:
+      return notice.message;
+  }
+  return std::string();
+}
+
 // ---- VerifyPage ---------------------------------------------------------------
 
 VerifyPage::VerifyPage(SdkHost& host) : Gtk::Box(Gtk::Orientation::VERTICAL, 12), host_(host) {
@@ -451,6 +475,11 @@ VerifyPage::VerifyPage(SdkHost& host) : Gtk::Box(Gtk::Orientation::VERTICAL, 12)
   set_margin(24);
   set_valign(Gtk::Align::CENTER);
   BuildUi();
+}
+
+VerifyPage::~VerifyPage() {
+  resendCooldown_.disconnect();
+  rateLimitTick_.disconnect();
 }
 
 void VerifyPage::BuildUi() {
@@ -519,6 +548,30 @@ void VerifyPage::BuildUi() {
 }
 
 void VerifyPage::ShowSendNotice(const VerifySendNotice& notice) {
+  ShowNoticeText(notice);
+  // a rate limit holds Resend off until the server will send again
+  rateLimitTick_.disconnect();
+  rateLimit_.Start(notice, MonotonicSeconds());
+  if (!rateLimit_.CanResend(MonotonicSeconds())) {
+    resendBtn_->set_sensitive(false);
+    rateLimitTick_ = Glib::signal_timeout().connect_seconds(
+        [this]() -> bool { return TickRateLimit(); }, 1);
+  }
+}
+
+bool VerifyPage::TickRateLimit() {
+  const int64_t now = MonotonicSeconds();
+  if (!rateLimit_.CanResend(now)) {
+    ShowNoticeText(rateLimit_.NoticeAt(now));
+    return true;
+  }
+  resendStatus_->set_text("");
+  resendStatus_->remove_css_class("ur-error-text");
+  if (!sending_) resendBtn_->set_sensitive(true);
+  return false;
+}
+
+void VerifyPage::ShowNoticeText(const VerifySendNotice& notice) {
   std::string text;
   switch (notice.kind) {
     case VerifySendNoticeKind::Sent:
@@ -551,6 +604,8 @@ void VerifyPage::Configure(const std::string& userAuth) {
   submitting_ = false;
   sending_ = false;
   resendCooldown_.disconnect();
+  rateLimitTick_.disconnect();
+  rateLimit_.Clear();
   code_->set_text("");
   errorLabel_->set_text("");
   resendStatus_->set_text("");
@@ -616,8 +671,9 @@ void VerifyPage::Resend() {
       ShowSendNotice(notice);
       if (notice.kind == VerifySendNoticeKind::Sent) {
         StartResendCooldown();
-      } else {
-        // a failed resend must leave the button usable (no timer re-enables it)
+      } else if (rateLimit_.CanResend(MonotonicSeconds())) {
+        // a failed resend must leave the button usable (no timer re-enables it);
+        // a rate limit keeps it off until the retry time (ShowSendNotice)
         resendBtn_->set_sensitive(true);
       }
     });
@@ -642,6 +698,10 @@ ResetPasswordPage::ResetPasswordPage(SdkHost& host)
   set_margin(24);
   set_valign(Gtk::Align::CENTER);
   BuildUi();
+}
+
+ResetPasswordPage::~ResetPasswordPage() {
+  rateLimitTick_.disconnect();
 }
 
 void ResetPasswordPage::BuildUi() {
@@ -713,6 +773,8 @@ void ResetPasswordPage::BuildUi() {
 void ResetPasswordPage::Configure(const std::string& userAuth) {
   ++*epoch_;
   sending_ = false;
+  rateLimitTick_.disconnect();
+  rateLimit_.Clear();
   // prefill from the login page but keep it editable (arriving with an empty
   // field must not be a dead end; the mac view has the value already)
   email_->set_text(userAuth);
@@ -727,7 +789,7 @@ void ResetPasswordPage::Configure(const std::string& userAuth) {
 }
 
 void ResetPasswordPage::Send() {
-  if (sending_) return;
+  if (sending_ || !rateLimit_.CanResend(MonotonicSeconds())) return;
   const std::string userAuth = TrimWhitespace(email_->get_text());
   if (userAuth.empty()) return;
   sending_ = true;
@@ -739,17 +801,28 @@ void ResetPasswordPage::Send() {
 
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
-  host_.SendPasswordResetLink(userAuth, [this, epoch, issued, userAuth](bool ok, std::string) {
-    PostToMain([this, epoch, issued, userAuth, ok] {
+  host_.SendPasswordResetLink(userAuth, [this, epoch, issued, userAuth](VerifySendNotice notice) {
+    PostToMain([this, epoch, issued, userAuth, notice] {
       if (*epoch != issued) return;
       sending_ = false;
       spinner_->set_visible(false);
       spinner_->stop();
       sendBtn_->set_sensitive(true);
       email_->set_sensitive(true);
-      if (!ok) {
+      if (notice.transportError) {
         errorLabel_->set_text(T_("something_went_wrong_please_try_again_later",
                                  "Something went wrong. Please try again later."));
+        return;
+      }
+      if (notice.kind != VerifySendNoticeKind::Sent) {
+        // the server did not send the link: say why, never "sent"
+        errorLabel_->set_text(ResetSendNoticeText(notice));
+        rateLimit_.Start(notice, MonotonicSeconds());
+        if (!rateLimit_.CanResend(MonotonicSeconds())) {
+          sendBtn_->set_sensitive(false);
+          rateLimitTick_ = Glib::signal_timeout().connect_seconds(
+              [this]() -> bool { return TickRateLimit(); }, 1);
+        }
         return;
       }
       sentTo_->set_text(userAuth);
@@ -757,6 +830,17 @@ void ResetPasswordPage::Send() {
       sentBox_->set_visible(true);
     });
   });
+}
+
+bool ResetPasswordPage::TickRateLimit() {
+  const int64_t now = MonotonicSeconds();
+  if (!rateLimit_.CanResend(now)) {
+    errorLabel_->set_text(ResetSendNoticeText(rateLimit_.NoticeAt(now)));
+    return true;
+  }
+  errorLabel_->set_text("");
+  if (!sending_) sendBtn_->set_sensitive(true);
+  return false;
 }
 
 }  // namespace urnw

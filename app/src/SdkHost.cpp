@@ -908,14 +908,19 @@ void SdkHost::ResendVerifyCode(const std::string& userAuth,
 }
 
 void SdkHost::SendPasswordResetLink(const std::string& userAuth,
-                                    std::function<void(bool ok, std::string error)> done) {
+                                    std::function<void(VerifySendNotice notice)> done) {
   urnet::AuthPasswordResetArgs args;
   args.user_auth = userAuth;
+  // a rate limit or failed send comes back as result->error (with the retry
+  // time) instead of an HTTP 429 / 502; it used to be read as sent
+  args.result_errors = true;
   api_->authPasswordReset(args, [done](std::optional<urnet::AuthPasswordResetResult> result,
                                        std::optional<std::string> err) {
-    if (err) { done(false, *err); return; }
-    if (!result) { done(false, "no result"); return; }
-    done(true, "");
+    if (err || !result) {
+      done(DecideVerifySendNotice(true, "", "", 0));
+      return;
+    }
+    done(SendErrorNotice(result->error));
   });
 }
 

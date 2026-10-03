@@ -2132,7 +2132,7 @@ msgctxt "error_sending_feedback"
 msgid "There was an error sending your feedback. Please try again later."
 msgstr "เกิดข้อผิดพลาดในการส่งข้อเสนอแนะของคุณ กรุณาลองใหม่ภายหลัง"
 
-#. Snackbar shown when sending the password reset link fails. Used in Main/Account/Profile/ProfileView.swift.
+#. Shown when sending the password reset link fails (the request failed, or the server reports it could not send the link). Used on the password reset and account screens.
 msgctxt "error_sending_password_reset_link"
 msgid "Error sending password reset link"
 msgstr "เกิดข้อผิดพลาดในการส่งลิงก์รีเซ็ตรหัสผ่าน"
@@ -3993,6 +3993,12 @@ msgstr "ส่งโค้ดใหม่"
 msgctxt "reset_it"
 msgid "Reset it."
 msgstr "ตั้งใหม่เลยสิ"
+
+#. Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.
+msgctxt "reset_link_rate_limited"
+msgid "Too many attempts. You can request a new reset link in {} minute."
+msgid_plural "Too many attempts. You can request a new reset link in {} minutes."
+msgstr[0] "พยายามหลายครั้งเกินไป คุณสามารถขอลิงก์รีเซ็ตใหม่ได้ในอีก {} นาที"
 
 #. Reset link sent
 msgctxt "reset_link_sent"

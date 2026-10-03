@@ -227,6 +227,7 @@ class AccountPage : public Gtk::Box {
 
   // ---- mutations -------------------------------------------------------------
   void SendPasswordReset();
+  void ApplyResetRateLimit();
   void OpenCustomerPortal();
   void ConfirmRemoveAuth(const std::string& authType, const Glib::ustring& label);
   void RemoveAuth(const std::string& authType);
@@ -344,6 +345,9 @@ class AccountPage : public Gtk::Box {
   // re-entry flags (§7): a button disabled in flight, re-enabled on EVERY path
   bool savingName_ = false;
   bool sendingReset_ = false;
+  // a reset rate limit: Send stays off until the server will send again
+  ResendCooldown resetRateLimit_;
+  sigc::connection resetRateLimitTick_;
   bool openingPortal_ = false;
   bool removingAuth_ = false;
   bool editingName_ = false;
