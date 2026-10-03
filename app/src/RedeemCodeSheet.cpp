@@ -112,12 +112,12 @@ void RedeemCodeSheet::BuildUi() {
   redeemed->set_wrap(true);
   redeemed->set_justify(Gtk::Justification::CENTER);
   successBox_->append(*redeemed);
-  auto* processing = Gtk::make_managed<Gtk::Label>(
-      T_("processing_subscription_balance", "Processing subscription balance..."));
-  processing->add_css_class("dim-label");
-  processing->add_css_class("caption");
-  processing->set_justify(Gtk::Justification::CENTER);
-  successBox_->append(*processing);
+  // the data the code added (Windows RedeemCodeSheet parity). A balance code
+  // is data only, so nothing here waits on a plan.
+  successAmount_ = Gtk::make_managed<Gtk::Label>("");
+  successAmount_->add_css_class("title-2");
+  successAmount_->set_justify(Gtk::Justification::CENTER);
+  successBox_->append(*successAmount_);
   auto* closeBtn = Gtk::make_managed<Gtk::Button>(T_("close", "Close"));
   closeBtn->add_css_class("suggested-action");
   closeBtn->set_halign(Gtk::Align::CENTER);
@@ -300,12 +300,20 @@ void RedeemCodeSheet::ShowRedeemOutcome(const std::string& outcome,
   SetRedeeming(false);
   switch (BalanceCodeRedeemNoticeFor(outcome)) {
     case BalanceCodeRedeemNotice::Redeemed:
-      // success: show the confirmation and re-poll the balance so the new
-      // transfer balance lands in the usage bar (mac startPolling()); the
-      // fresh code joins the history list right away (mac onSuccess)
+      // success: confirm the data the code added and read the balance once so
+      // it lands in the usage bar; the fresh code joins the history list right
+      // away. A balance code is data only (the server grants it with
+      // pro = false), so never the Pro confirmation poll: it waits for a plan
+      // a code never grants and spins the plan ring for 2 minutes.
+      successAmount_->set_text(
+          "+" + FormatByteCountCompact(result && result->transfer_balance
+                                           ? result->transfer_balance->balance_byte_count
+                                           : 0));
+      successAmount_->set_visible(result && result->transfer_balance &&
+                                  0 < result->transfer_balance->balance_byte_count);
       entryBox_->set_visible(false);
       successBox_->set_visible(true);
-      balance_.StartConfirmationPolling();
+      balance_.FetchNow();
       RefreshCodes();
       return;
     case BalanceCodeRedeemNotice::AlreadyRedeemed:

@@ -3,9 +3,9 @@
 // SDK's urnet::isBalanceCodeFormatValid, redeems through
 // Api::redeemBalanceCode, answers from the SDK's classification
 // (BalanceCodeRedeem.hpp: already redeemed / invalid / unknown inline), and
-// on success flips to a confirmation and re-polls the balance
-// (SubscriptionBalanceStore::StartConfirmationPolling, the same bridge-the-
-// webhook-gap poll the upgrade flow uses).
+// on success flips to a confirmation of the data the code added and reads the
+// balance once. A balance code is data only, never a plan, so it does not use
+// the upgrade flow's Pro confirmation poll.
 //
 // Below the entry, the redeemed-codes history (the apple Balance Codes screen
 // / the Windows Account panel list): Api::getNetworkRedeemedBalanceCodes ->
@@ -44,6 +44,7 @@ class RedeemCodeSheet : public Gtk::Window {
 
   Gtk::Box* entryBox_ = nullptr;    // the code form
   Gtk::Box* successBox_ = nullptr;  // the redeemed confirmation
+  Gtk::Label* successAmount_ = nullptr;  // "+5 GiB": the data the code added
   Gtk::Entry* codeEntry_ = nullptr;
   Gtk::Label* errorLabel_ = nullptr;
   Gtk::Button* redeemBtn_ = nullptr;
