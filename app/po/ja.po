@@ -2227,6 +2227,11 @@ msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "本音をお聞かせください"
 
+#. Feedback screen: label of the Send button while the feedback is being sent.
+msgctxt "feedback_sending"
+msgid "Sending…"
+msgstr "送信中…"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"

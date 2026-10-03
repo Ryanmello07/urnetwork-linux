@@ -2231,6 +2231,11 @@ msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "Dicci come ti senti davvero"
 
+#. Feedback screen: label of the Send button while the feedback is being sent.
+msgctxt "feedback_sending"
+msgid "Sending…"
+msgstr "Invio in corso…"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"

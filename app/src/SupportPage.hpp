@@ -74,6 +74,7 @@ class SupportPage : public Gtk::Box {
   void PaintStars();
   void OnSendFeedback();
   void UploadLogs(const std::string& feedbackId);
+  void SetSending(bool sending);
   void Snack(const Glib::ustring& message, bool error);
 
   SdkHost& host_;
@@ -100,7 +101,8 @@ class SupportPage : public Gtk::Box {
   Gtk::TextView* feedbackView_ = nullptr;
   Gtk::CheckButton* includeLogs_ = nullptr;
   Gtk::Button* sendButton_ = nullptr;
-  bool sending_ = false;  // in-flight: Send disabled, nothing else gated
+  Gtk::Label* sendLabel_ = nullptr;
+  bool sending_ = false;  // in-flight: Send disabled and "Sending…", nothing else gated
 };
 
 }  // namespace urnw
