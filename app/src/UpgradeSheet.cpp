@@ -16,6 +16,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "CheckoutCrashRoute.hpp"
 #include "ClientEvents.hpp"
 #include "I18n.hpp"
 #include "PricePresentation.hpp"
@@ -610,17 +611,7 @@ bool UpgradeSheet::EnsureWebView() {
   g_signal_connect(view, "web-process-terminated",
                    G_CALLBACK(+[](WebKitWebView*, WebKitWebProcessTerminationReason,
                                   gpointer data) {
-                     // a dead web process cannot take a payment: back to the
-                     // products with an inline error instead of a blank box
-                     auto* self = static_cast<UpgradeSheet*>(data);
-                     PostToMain([self] {
-                       if (self->state_ != State::Checkout) return;
-                       self->SetState(State::Options);
-                       self->errorLabel_->set_text(
-                           T_("something_went_wrong_please_try_again_later",
-                              "Something went wrong. Please try again later."));
-                       self->errorLabel_->set_visible(true);
-                     });
+                     static_cast<UpgradeSheet*>(data)->OnWebProcessTerminated();
                    }),
                    this);
 
@@ -735,6 +726,42 @@ void UpgradeSheet::OnCheckoutLoadFailed() {
     // the pay page failing falls back to the embedded checkout page; that
     // failing falls back to the browser
     RequestSession(/*embedded=*/fromPaySheet);
+  });
+}
+
+void UpgradeSheet::OnWebProcessTerminated() {
+  // deferred: this arrives from the view's own signal emission, and every
+  // route below tears the dead view down
+  PostToMain([this] {
+    if (state_ != State::Checkout) return;
+    switch (RouteCheckoutCrash(pageLoaded_, webFallbackTried_)) {
+      case CheckoutCrashRoute::ConfirmPayment:
+        // died after the form rendered: the card may have been charged with
+        // only the hand-back lost. Confirm with the server rather than
+        // inviting a second purchase.
+        waitingLabel_->set_text(
+            T_("checkout_interrupted_confirming",
+               "The checkout view closed unexpectedly. If your payment went through, your plan "
+               "updates here automatically — there's no need to buy again."));
+        balance_.StartConfirmationPolling();
+        SetState(State::Waiting);
+        return;
+      case CheckoutCrashRoute::RetryCheckout:
+        // died before the page rendered: nothing was paid, the next checkout
+        // path can still save the purchase
+        OnCheckoutLoadFailed();
+        return;
+      case CheckoutCrashRoute::ShowError:
+        if (!purchaseEmitted_) {
+          EmitPurchase("failed", paySheetActive_ ? "payment_sheet" : "checkout");
+          purchaseEmitted_ = true;
+        }
+        SetState(State::Options);
+        errorLabel_->set_text(T_("something_went_wrong_please_try_again_later",
+                                 "Something went wrong. Please try again later."));
+        errorLabel_->set_visible(true);
+        return;
+    }
   });
 }
 
