@@ -177,7 +177,11 @@ class SubscriptionBalanceStore {
   bool hasFetched_ = false;
 
   bool isPro_ = false;
+  // IsGuestNetwork(jwtGuest_, serverGuest_): the jwt's GuestMode claim (a
+  // refresh clears it) or the server's `guest` (no login method, read live)
   bool isGuest_ = false;
+  bool jwtGuest_ = false;
+  bool serverGuest_ = false;
   std::string subscriptionStoreFamily_;
   bool didDetectUpgradeToPro_ = false;
 

@@ -3587,15 +3587,10 @@ msgctxt "guest"
 msgid "Guest"
 msgstr "Gast"
 
-#. Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.
-msgctxt "guest_sign_out_and_create_account"
-msgid "Sign out and create an account"
-msgstr "Abmelden und ein Konto erstellen"
-
-#. Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.
-msgctxt "guest_sign_out_balance_warning"
-msgid "To create an account, sign out of this guest network first. Its balance stays on the guest network and does not move to your new account. A guest network has no login, so you can't sign back in to it after signing out."
-msgstr "Um ein Konto zu erstellen, melde dich zuerst von diesem Gastnetzwerk ab. Sein Guthaben bleibt im Gastnetzwerk und wird nicht auf dein neues Konto übertragen. Ein Gastnetzwerk hat keine Anmeldedaten, daher kannst du dich nach dem Abmelden nicht wieder dort anmelden."
+#. Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).
+msgctxt "guest_convert_explanation"
+msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
+msgstr "Füge eine E-Mail-Adresse und ein Passwort hinzu, um dich bei diesem Netzwerk anzumelden. Sein Tarif und sein Guthaben bleiben erhalten."
 
 msgctxt "hash_count"
 msgid "#{}"
@@ -4493,6 +4488,11 @@ msgstr "Netzwerkname geändert in {}"
 msgctxt "network_name_check_error"
 msgid "Not available. Must be at least 3 characters different than an existing network. Make it unique or longer."
 msgstr "Nicht verfügbar. Muss mindestens 3 Zeichen von einem bestehenden Netzwerk abweichen. Mach es einzigartig oder länger."
+
+#. Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.
+msgctxt "network_name_check_failed"
+msgid "Couldn't check availability. You can still continue."
+msgstr "Verfügbarkeit konnte nicht geprüft werden. Du kannst trotzdem fortfahren."
 
 #. Supporting text for a text field that is invalid.
 msgctxt "network_name_is_too_short_try_one_with_at_least"

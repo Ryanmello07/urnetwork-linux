@@ -1658,7 +1658,7 @@ void MainWindow::BuildHome() {
   // three stats cards, the block-ads-and-trackers toggle, and the plan +
   // usage card (with the upgrade + redeem flows behind it)
   drawer_ = Gtk::make_managed<ConnectDrawer>(host_, *this, balance_);
-  drawer_->on_create_account = [this] { OfferGuestSignOut(); };
+  drawer_->on_create_account = [this] { OpenGuestConversion(); };
   // "Total referrals" in the drawer's usage bar opens the same Referrals page
   // Account's row opens (one referral screen everywhere)
   drawer_->on_open_referrals = [this] {
@@ -1717,7 +1717,7 @@ void MainWindow::BuildHome() {
   // and the notification's disconnect-only path
   connectPage_->on_open_upgrade = [this] {
     if (balance_.IsGuest()) {
-      OfferGuestSignOut();
+      OpenGuestConversion();
     } else if (drawer_) {
       drawer_->OpenUpgrade();
     }
@@ -1758,7 +1758,7 @@ void MainWindow::BuildHome() {
   // Same guest fork as Earnings: a guest has no account to hang a plan on.
   accountPage_->on_open_upgrade = [this] {
     if (balance_.IsGuest()) {
-      OfferGuestSignOut();
+      OpenGuestConversion();
     } else if (drawer_) {
       drawer_->OpenUpgrade();
     }
@@ -2015,29 +2015,18 @@ void MainWindow::OnSignIn() {
   });
 }
 
-void MainWindow::OfferGuestSignOut() {
-  GtkWidget* dialog = adw_message_dialog_new(
-      GTK_WINDOW(gobj()), T_("create_an_account", "Create an account"),
-      T_("guest_sign_out_balance_warning",
-         "To create an account, sign out of this guest network first. Its balance stays on the "
-         "guest network and does not move to your new account. A guest network has no login, so "
-         "you can't sign back in to it after signing out."));
-  adw_message_dialog_add_responses(
-      ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"), "signout",
-      T_("guest_sign_out_and_create_account", "Sign out and create an account"), nullptr);
-  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "signout",
-                                             ADW_RESPONSE_DESTRUCTIVE);
-  // signing out abandons the guest network: never the default
-  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
-  adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
-  g_signal_connect(dialog, "response",
-                   G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
-                     if (g_strcmp0(response, "signout") != 0) return;
-                     // the auth handler swaps the home view for the sign-in flow
-                     static_cast<MainWindow*>(data)->host_.Logout();
-                   }),
-                   this);
-  gtk_window_present(GTK_WINDOW(dialog));
+void MainWindow::OpenGuestConversion() {
+  if (!guestConversionSheet_) {
+    guestConversionSheet_ = std::make_unique<GuestConversionSheet>(*this, host_, balance_);
+    guestConversionSheet_->on_done = [this] {
+      if (shell_) {
+        shell_->snackbar().Show(
+            T_("sign_in_method_added_successfully", "Sign-in method added successfully"),
+            kit::Snackbar::Severity::Success);
+      }
+    };
+  }
+  guestConversionSheet_->Open();
 }
 
 // android presents AuthCodeLoginSheet — a modal with its own field — instead
@@ -2299,8 +2288,8 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
   if (loggedIn) {
     SyncProvideControlMode();
     ApplyConnectReading(host_.CurrentConnectReading());
-    // (re)seed the balance/plan store from the (possibly new) jwt: login,
-    // guest upgrade, and app start all land here
+    // (re)seed the balance/plan store from the (possibly new) jwt: login and
+    // app start land here
     balance_.SetWindowVisible(windowVisible_);
     balance_.Start();
     // A new session invalidates every destination's cache; the one currently
@@ -2316,6 +2305,8 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // bool poked into a copy of the last one.
     ApplyConnectReading(ConnectReading{});
     balance_.Stop();
+    // a conversion belongs to the session that started it
+    if (guestConversionSheet_) guestConversionSheet_->set_visible(false);
     if (earningsPage_) earningsPage_->Load();  // settles every panel on empty
     if (settingsPage_) settingsPage_->Load();
     // Account carries account-SUBJECT state (name, login methods, referral
