@@ -668,6 +668,11 @@ msgctxt "connect_and_open"
 msgid "Connect and open link"
 msgstr "Conectar y abrir enlace"
 
+#. Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).
+msgctxt "connect_bittensor_wallet_to_add_sign_in_method"
+msgid "Connect a Bittensor wallet to add it as a sign-in method."
+msgstr "Conecta una billetera de Bittensor para agregarla como método de inicio de sesión."
+
 #. A label displayed above the options for connecting to a tunnel.
 msgctxt "connect_options"
 msgid "Connect options"

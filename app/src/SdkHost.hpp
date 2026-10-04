@@ -34,6 +34,7 @@
 #include "Health.hpp"
 #include "RpcSession.hpp"
 #include "VerifySendNotice.hpp"
+#include "AddSignInFlow.hpp"
 #include "BittensorWalletFlow.hpp"
 #include "WalletBridgeRoute.hpp"
 #include "WalletConnect.hpp"
@@ -511,6 +512,31 @@ class SdkHost {
   };
   void ConnectSolanaWallet(WalletConnect::Provider provider,
                            std::function<void(SolanaConnectResult)> done);
+
+  // ---- add a sign-in method to the signed-in network (AddSignInFlow.hpp) ----
+  // Account > Login methods. Each runs the login's own flow (the provider's web
+  // flow, the wallet bridge, the Bittensor session with purpose "add") but ends
+  // in POST /auth/add-auth on the current session: never authLogin, so the
+  // session's jwt is never replaced and the app never signs in as the added
+  // identity. A browser return is answered to the flow that opened it: an add's
+  // return never reaches a sign-in and a sign-in's never reaches the add.
+  // `done` runs on whatever thread the answer arrives on; callers marshal with
+  // PostToMain. A newer add, or any other wallet or sso flow, answers a waiting
+  // add "superseded by ..." (bridge::IsSuperseded).
+  struct AddSignInResult {
+    bool ok = false;
+    std::string error;
+  };
+  void AddSignInWithSso(const std::string& provider, std::function<void(AddSignInResult)> done);
+  void AddSignInWithSolana(WalletConnect::Provider provider,
+                           std::function<void(AddSignInResult)> done);
+  void AddSignInWithBittensor(const std::string& walletId,
+                              std::function<void(AddSignInResult)> done);
+  // The sheet closed: a waiting add is dropped unanswered, and a late return
+  // for it is ignored.
+  void CancelAddSignIn();
+  // POST /auth/add-auth with `args` on the current session.
+  void AddAuthMethod(const addsignin::Args& args, std::function<void(AddSignInResult)> done);
 
   // Route a urnetwork:// deep link (wallet callback, later OAuth) into the host.
   void HandleDeepLink(const std::string& url);
@@ -1218,6 +1244,17 @@ class SdkHost {
   std::string ssoProvider_;
   std::string ssoState_;
   std::string ssoNonce_;
+  // Who opened the sso attempt (guarded by mutex_): a sign-in (walletAuthDone_)
+  // or an add (ssoAddDone_). A verified return goes only to its owner
+  // (addsignin::RouteSso).
+  addsignin::Owner ssoOwner_ = addsignin::Owner::None;
+  std::function<void(AddSignInResult)> ssoAddDone_;
+  // A wallet being added (guarded by mutex_): its signature goes to add-auth
+  // (bridge::SignatureRoute::AnswerAdd), never to authLogin.
+  std::function<void(AddSignInResult)> walletAddDone_;
+  addsignin::WalletChain walletAddChain_ = addsignin::WalletChain::Solana;
+  // Answers a waiting add (wallet and sso) with `reason`. Takes mutex_.
+  void CancelPendingAddSignIn(const std::string& reason);
   // Identity from an sso sign-in with no network: the token and its type,
   // consumed by CreateNetworkWithPendingSso.
   bool pendingSsoAuth_ = false;

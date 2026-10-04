@@ -86,6 +86,9 @@ constexpr ContinueText ContinueTextFor(std::string_view walletId) noexcept {
 inline constexpr std::string_view kPurposeLogin = "login";
 inline constexpr std::string_view kPurposeCreate = "create";
 inline constexpr std::string_view kPurposeConnect = "connect";
+// adding the wallet as a sign-in method (AddSignInFlow.hpp): a login or create
+// session refuses its return (purpose_mismatch), so it never signs in
+inline constexpr std::string_view kPurposeAdd = "add";
 
 inline constexpr std::string_view kTransportBrowserBridge = "browser_bridge";
 inline constexpr std::string_view kTransportManual = "manual";
