@@ -27,10 +27,16 @@
 // they traverse the tunnel; held, they fail; released, they use the direct
 // path.
 //
-// Credentials reach this program only as a file path. It checks the file's
-// shape and permissions but never reads the values into memory it prints; the
-// container copies the file privately to the GUI user, and atspi.py types the
-// values into the GUI.
+// Credentials reach this program only as setup's one argument: the absolute
+// path of a private file the runner creates for this case's fresh account
+// (URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS and the vault are never read).
+// setup checks the file's shape and permissions but never reads the values
+// into memory it prints, and mounts it read-only into the case's container;
+// container.sh copies it privately to the GUI user, and atspi.py types the
+// values into the GUI. Later verbs need no credentials: they act on the
+// signed-in container recorded in the state directory, and teardown removes
+// that container with the session and the copy, so the next case's setup signs
+// in fresh with its own account.
 //
 // The verb logic is in pure functions over a commandRunner and a clock so
 // main_test.go exercises it with fakes. Build-free: go run, standard library.
@@ -379,10 +385,18 @@ func parseEgress(b []byte) (egressOutput, error) {
 
 // ---- credentials ----
 
-// checkCredentials validates the private file (mode 0600-like, exactly one
-// email and one password) without returning or printing the values.
+// checkCredentials validates setup's argument: an absolute path, mountable
+// as is, to a private regular file (mode 0600-like) with exactly one email and
+// one password. It never returns or prints the values.
 func checkCredentials(path string) error {
-	info, err := os.Stat(path)
+	if !filepath.IsAbs(path) {
+		return errors.New("the insufficient-balance credentials file path must be absolute")
+	}
+	if strings.Contains(path, ":") {
+		// docker run -v separates fields with ':'
+		return errors.New("the insufficient-balance credentials file path must not contain ':'")
+	}
+	info, err := os.Lstat(path)
 	if err != nil {
 		return errors.New("insufficient-balance credentials file is missing")
 	}
@@ -422,13 +436,12 @@ type driverState struct {
 }
 
 type driver struct {
-	linuxDir    string
-	stateDir    string
-	credentials string
-	outDir      string
-	version     string
-	runner      commandRunner
-	clock       clock
+	linuxDir string
+	stateDir string
+	outDir   string
+	version  string
+	runner   commandRunner
+	clock    clock
 }
 
 func (self *driver) statePath() string { return filepath.Join(self.stateDir, stateFileName) }
@@ -519,8 +532,10 @@ func (self *driver) artifacts() (deb, appImage string, err error) {
 	return deb, appImage, nil
 }
 
-func (self *driver) setup(ctx context.Context) (map[string]any, error) {
-	if err := checkCredentials(self.credentials); err != nil {
+// setup signs the case's account in. credentials is setup's argument, the only
+// source of the account; it is mounted, never copied on the host.
+func (self *driver) setup(ctx context.Context, credentials string) (map[string]any, error) {
+	if err := checkCredentials(credentials); err != nil {
 		return nil, err
 	}
 	deb, appImage, err := self.artifacts()
@@ -551,7 +566,7 @@ func (self *driver) setup(ctx context.Context) (map[string]any, error) {
 		"--cap-add", "NET_ADMIN", "--device", "/dev/net/tun",
 		"-v", self.outDir+":/out:ro",
 		"-v", contextDir+":"+containerHome+":ro",
-		"-v", self.credentials+":/opt/ib-private/credentials:ro",
+		"-v", credentials+":/opt/ib-private/credentials:ro",
 		"-v", logs+":/artifacts",
 		"-e", "UR_IB_DEB=/out/"+filepath.Base(deb),
 		"-e", "UR_IB_APPIMAGE=/out/"+filepath.Base(appImage),
@@ -868,8 +883,11 @@ func (self *driver) traffic(ctx context.Context) error {
 	return err
 }
 
-// teardown removes the container (and with it the install, the session and
-// the private credentials copy). It succeeds when there is nothing to remove.
+// teardown removes the container (and with it the install, the signed-in
+// session, its keyring and the private credentials copy, plus the mount of the
+// runner's file), so the next case's setup signs in fresh with a different
+// account. It never touches the account itself, and succeeds when there is
+// nothing to remove.
 func (self *driver) teardown(ctx context.Context) error {
 	state, err := self.loadState()
 	if err != nil {
@@ -900,7 +918,10 @@ func (self *driver) dispatch(ctx context.Context, args []string) (any, error) {
 		return nil, errors.New("usage: test-insufficient-balance-driver <verb> [arg]")
 	}
 	verb, rest := args[0], args[1:]
-	arity := map[string]int{"setup": 0, "direct-egress": 0, "connect": 0, "observe": 0, "egress": 0,
+	if verb == "setup" && len(rest) != 1 {
+		return nil, errors.New("setup takes exactly one argument: the absolute path of the insufficient-balance credentials file")
+	}
+	arity := map[string]int{"setup": 1, "direct-egress": 0, "connect": 0, "observe": 0, "egress": 0,
 		"traffic": 0, "press-disconnect": 0, "kill-switch": 1, "teardown": 0}
 	n, known := arity[verb]
 	if !known || len(rest) != n {
@@ -909,7 +930,7 @@ func (self *driver) dispatch(ctx context.Context, args []string) (any, error) {
 	empty := map[string]any{}
 	switch verb {
 	case "setup":
-		return self.setup(ctx)
+		return self.setup(ctx, rest[0])
 	case "direct-egress":
 		e, err := self.egress(ctx)
 		if err == nil && e.Ip == "" {
@@ -981,10 +1002,10 @@ func newDriverFromEnv(args []string) (*driver, []string, error) {
 		return nil, nil, errors.New("run through linux/test-insufficient-balance-driver")
 	}
 	linuxDir, rest := args[1], args[2:]
+	// credentials arrive only as setup's argument, never from the environment
 	stateDir := os.Getenv("URNETWORK_INSUFFICIENT_BALANCE_STATE")
-	credentials := os.Getenv("URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS")
-	if !filepath.IsAbs(stateDir) || !filepath.IsAbs(credentials) {
-		return nil, nil, errors.New("URNETWORK_INSUFFICIENT_BALANCE_STATE and _CREDENTIALS must be absolute")
+	if !filepath.IsAbs(stateDir) {
+		return nil, nil, errors.New("URNETWORK_INSUFFICIENT_BALANCE_STATE must be absolute")
 	}
 	outDir := os.Getenv("UR_ACCEPT_LINUX_OUT")
 	if outDir == "" {
@@ -998,13 +1019,12 @@ func newDriverFromEnv(args []string) (*driver, []string, error) {
 		return nil, nil, errors.New("EXTERNAL_WARP_VERSION contains unsupported characters")
 	}
 	return &driver{
-		linuxDir:    linuxDir,
-		stateDir:    stateDir,
-		credentials: credentials,
-		outDir:      outDir,
-		version:     version,
-		runner:      execRunner{},
-		clock:       realClock{},
+		linuxDir: linuxDir,
+		stateDir: stateDir,
+		outDir:   outDir,
+		version:  version,
+		runner:   execRunner{},
+		clock:    realClock{},
 	}, rest, nil
 }
 

@@ -48,6 +48,8 @@ start() {
     echo "installed daemon version does not match $UR_IB_VERSION" >&2; exit 1; }
   getent group urnetwork >/dev/null || { echo "the package did not create the urnetwork group" >&2; exit 1; }
   id "$user" >/dev/null 2>&1 || useradd -m -G urnetwork "$user"
+  # /opt/ib-private/credentials is the read-only mount of setup's argument, the
+  # runner's per-case account file; this copy goes away with the container
   install -o "$user" -m 0400 /opt/ib-private/credentials "$run/credentials"
 
   # The daemon's cgroup-BPF mark covers its whole cgroup: run only it in a
