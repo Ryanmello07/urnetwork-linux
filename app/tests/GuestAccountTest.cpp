@@ -74,7 +74,7 @@ UR_TEST(guestConvertsInPlaceAndNeverSignsOut) {
   const std::string drawer = ReadSource("ConnectDrawer.cpp");
   const std::string openUpgrade = FunctionBody(drawer, "void ConnectDrawer::OpenUpgrade()");
   UR_EXPECT_TRUE(Has(openUpgrade, "if (balance_.IsGuest())"));
-  UR_EXPECT_TRUE(Has(openUpgrade, "on_create_account()"));
+  UR_EXPECT_TRUE(Has(openUpgrade, "on_guest_upgrade("));
   // the sign-out copy is gone; the conversion copy is in the catalog
   const std::string pot = ReadSource("../po/urnetwork.pot");
   UR_EXPECT_TRUE(!Has(pot, "msgctxt \"guest_sign_out_balance_warning\""));
@@ -119,6 +119,33 @@ UR_TEST(accountAddedSignInIsVerifiedBeforeItCountsAsAdded) {
   const std::string guestSheet = ReadSource("GuestConversionSheet.cpp");
   UR_EXPECT_TRUE(Has(guestSheet, "resend_->set_sensitive(conversion_->CanResend());"));
   UR_EXPECT_TRUE(Has(guestSheet, "ShowVerifySendNotice(*notice_, conversion_->ShownNotice());"));
+}
+
+// A purchase entry that sent a guest to the conversion continues to the
+// upgrade it was opening once the conversion is done and the guest clears
+// (GuestUpgradeContinuation, tested in GuestConversionTest); it used to close
+// back to where the user started. The plan cards' "Create an account" asks
+// only for the conversion.
+UR_TEST(guestPurchaseContinuesAfterTheConversion) {
+  const std::string drawer = ReadSource("ConnectDrawer.cpp");
+  const std::string openUpgrade = FunctionBody(drawer, "void ConnectDrawer::OpenUpgrade()");
+  UR_EXPECT_TRUE_MSG("the drawer's upgrade continues after the conversion",
+                     Has(openUpgrade, "on_guest_upgrade([this] { OpenUpgrade(); });"));
+  const std::string window = ReadSource("MainWindow.cpp");
+  const std::string divert = FunctionBody(window, "void MainWindow::DivertGuestToConversion(");
+  UR_EXPECT_TRUE(Has(divert, "guestUpgrade_.Divert(std::move(checkout));"));
+  UR_EXPECT_TRUE(Has(divert, "OpenGuestConversion();"));
+  const std::string open = FunctionBody(window, "void MainWindow::OpenGuestConversion()");
+  UR_EXPECT_TRUE(Has(open, "guestUpgrade_.ConversionDone();"));
+  UR_EXPECT_TRUE(Has(open, "guestUpgrade_.ConversionClosed();"));
+  UR_EXPECT_TRUE(Has(open, "guestUpgrade_.Poll(balance_.IsGuest());"));
+  UR_EXPECT_TRUE_MSG("the balance change continues a waiting purchase",
+                     Has(window, "    guestUpgrade_.Poll(balance_.IsGuest());\n"));
+  // on_done runs before the hide the window's handler reads
+  const std::string sheet = ReadSource("GuestConversionSheet.cpp");
+  const size_t done = sheet.find("if (on_done) on_done();");
+  const size_t hide = sheet.find("set_visible(false);", sheet.find("case GuestConversionStep::Done:"));
+  UR_EXPECT_TRUE(done != std::string::npos && hide != std::string::npos && done < hide);
 }
 
 }  // namespace

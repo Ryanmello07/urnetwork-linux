@@ -281,8 +281,9 @@ void GuestConversionSheet::Render() {
       verify_->set_sensitive(!busy && !GuestConversion::Trim(code_->get_text().raw()).empty());
       return;
     case GuestConversionStep::Done:
-      set_visible(false);
+      // on_done before the hide: the window's hide handler reads it
       if (on_done) on_done();
+      set_visible(false);
       return;
   }
 }

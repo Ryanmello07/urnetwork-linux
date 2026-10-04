@@ -139,13 +139,7 @@ void ConnectDrawer::BuildInsufficientBanner() {
   // Create account button (on_create_account: add a sign-in to this network
   // in place): a Pro subscription must never bind to a network with no login.
   // Full accounts go straight into checkout.
-  MakeCardTappable(*insufficientBanner_, [this] {
-    if (balance_.IsGuest()) {
-      if (on_create_account) on_create_account();
-    } else {
-      OpenUpgrade();
-    }
-  });
+  MakeCardTappable(*insufficientBanner_, [this] { OpenUpgrade(); });
   insufficientBanner_->set_visible(false);
   append(*insufficientBanner_);
 }
@@ -690,8 +684,9 @@ void ConnectDrawer::OpenUpgrade() {
   // No purchase for a legacy guest network: whatever was bought would stay on
   // a network with no login (every upgrade entry point lands here). The gate
   // lifts once a sign-in is added (the server's `guest` turns false).
+  // A converted guest continues here to the upgrade it was opening.
   if (balance_.IsGuest()) {
-    if (on_create_account) on_create_account();
+    if (on_guest_upgrade) on_guest_upgrade([this] { OpenUpgrade(); });
     return;
   }
   upgradeSheet_->Open();
