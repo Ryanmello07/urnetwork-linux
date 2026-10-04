@@ -46,7 +46,7 @@ UR_TEST(AddSignInWiring_TheSheetOffersEveryMethod) {
   UR_EXPECT_TRUE(sheet.find("host_.AddSignInWithSso(") != std::string::npos);
   UR_EXPECT_TRUE(sheet.find("host_.AddSignInWithSolana(") != std::string::npos);
   UR_EXPECT_TRUE(sheet.find("host_.AddSignInWithBittensor(") != std::string::npos);
-  UR_EXPECT_TRUE(sheet.find("AppendBittensorWalletChoices(") != std::string::npos);
+  UR_EXPECT_TRUE(sheet.find("NewBittensorWalletChooser(") != std::string::npos);
   // the sheet never signs in
   UR_EXPECT_TRUE(sheet.find("host_.SignInWith") == std::string::npos);
   UR_EXPECT_TRUE(sheet.find("authLogin") == std::string::npos);

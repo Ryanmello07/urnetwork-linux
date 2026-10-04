@@ -103,16 +103,24 @@ UR_TEST(accountAddedSignInIsVerifiedBeforeItCountsAsAdded) {
   UR_EXPECT_TRUE(Has(sheet, "host_.ResendVerifyCode("));
   UR_EXPECT_TRUE(Has(sheet, "host_.api().authVerify("));
   UR_EXPECT_TRUE(!Has(sheet, "host_.VerifyCode("));  // the variant that signs in
-  // on_changed (the page's reload) runs only on the Done step
+  // on_changed (the page's reload) runs for an email or phone only on the Done
+  // step; the one other call is an Apple, Google or wallet add that add-auth
+  // accepted (no code step: AddSignInFlow.hpp NeedsVerification)
   size_t calls = 0;
   for (size_t at = sheet.find("if (on_changed) on_changed();"); at != std::string::npos;
        at = sheet.find("if (on_changed) on_changed();", at + 1)) {
     ++calls;
     const size_t done = sheet.rfind("case GuestConversionStep::", at);
-    UR_EXPECT_TRUE(done != std::string::npos &&
-                   sheet.compare(done, 31, "case GuestConversionStep::Done:") == 0);
+    const size_t added = sheet.rfind("addedMethod_ = method;", at);
+    const bool onDone = done != std::string::npos &&
+                        sheet.compare(done, 31, "case GuestConversionStep::Done:") == 0 &&
+                        (added == std::string::npos || added < done);
+    const bool onProviderAdded = added != std::string::npos && at - added < 200 &&
+                                 sheet.rfind("if (result.ok)", at) != std::string::npos &&
+                                 sheet.rfind("if (result.ok)", at) < added;
+    UR_EXPECT_TRUE(onDone || onProviderAdded);
   }
-  UR_EXPECT_EQ(size_t{1}, calls);
+  UR_EXPECT_EQ(size_t{2}, calls);
   // the code page waits out a rate limit
   UR_EXPECT_TRUE(Has(sheet, "resend_->set_sensitive(conversion_.CanResend());"));
   UR_EXPECT_TRUE(Has(sheet, "TickCooldown("));

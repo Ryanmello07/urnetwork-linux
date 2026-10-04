@@ -4,6 +4,7 @@
 #include "ReferralRoyalty.hpp"
 
 #include <glib.h>
+#include <adwaita.h>
 #include <gtk/gtk.h>
 
 #include <algorithm>
@@ -722,10 +723,12 @@ class AccountAddAuthSheet : public Gtk::Window {
           providerButtons_.push_back(wallet);
         }
       } else {
-        for (Gtk::Button* wallet : AppendBittensorWalletChoices(
-                 *row, [this](const std::string& walletId) { StartBittensor(walletId); })) {
-          providerButtons_.push_back(wallet);
-        }
+        // the shared chooser (Talisman, TAO.com and others, WalletConnect)
+        auto* choose = Gtk::make_managed<Gtk::Button>(
+            T_("bittensor_choose_wallet", "Choose your Bittensor wallet"));
+        choose->signal_clicked().connect([this] { ChooseBittensorWallet(); });
+        row->append(*choose);
+        providerButtons_.push_back(choose);
       }
       walletPage->append(*row);
     }
@@ -960,6 +963,20 @@ class AccountAddAuthSheet : public Gtk::Window {
   void StartSolana(WalletConnect::Provider provider) {
     if (!BeginProvider()) return;
     host_.AddSignInWithSolana(provider, Answer(addsignin::Method::Wallet));
+  }
+
+  void ChooseBittensorWallet() {
+    if (providerBusy_) return;
+    GtkWidget* dialog = NewBittensorWalletChooser(GTK_WINDOW(gobj()));
+    g_signal_connect(dialog, "response",
+                     G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
+                       auto* self = static_cast<AccountAddAuthSheet*>(data);
+                       const std::string_view walletId =
+                           bittensor::ChosenWallet(response ? response : "");
+                       if (!walletId.empty()) self->StartBittensor(std::string(walletId));
+                     }),
+                     this);
+    gtk_window_present(GTK_WINDOW(dialog));
   }
 
   void StartBittensor(const std::string& walletId) {
