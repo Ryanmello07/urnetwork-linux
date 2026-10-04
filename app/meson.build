@@ -157,9 +157,10 @@ endif
 qrcodegen_inc = include_directories('third_party' / 'qrcodegen', is_system : true)
 
 # Optional WalletConnect Cloud project id -> src/Config.hpp (kWalletConnectProjectId).
-# Empty is valid and is the default: the wallet-connect bridge then drives injected
-# (browser extension) wallets only. Keeps the id out of the source tree, the way
-# android (local.properties) and apple (Info.plist) do it.
+# Used by the Bittensor WalletConnect wallet on the ur.io bittensor-connect page.
+# Empty is valid and is the default: the page then uses its own id. Keeps the id
+# out of the source tree, the way android (local.properties) and apple
+# (Info.plist) do it.
 wc_project_id = get_option('walletconnect_project_id')
 wc_args = []
 if wc_project_id != ''

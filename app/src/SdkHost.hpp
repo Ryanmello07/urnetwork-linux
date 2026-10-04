@@ -603,11 +603,13 @@ class SdkHost {
   // chooser passes an SDK-supplied ConnectLocation as-is, or one built from a peer
   // (client id + display name). No-op with the tunnel down (no connect VC).
   void Connect(const std::optional<urnet::ConnectLocation>& location);
-  // The start-connect gate (InsufficientBalanceNotice.hpp BlockConnect),
-  // installed by MainWindow. Returns true when the connect must not happen; it
-  // shows the upgrade path itself. Called on the caller's thread (the GTK main
-  // loop) before mutex_ is taken, so it may touch window state.
-  void SetConnectGate(std::function<bool()> gate) { connectGate_ = std::move(gate); }
+  // The start-connect gate (InsufficientBalanceNotice.hpp DecideStartConnect),
+  // installed by MainWindow. Returns true when the connect must not happen now;
+  // it shows the upgrade path itself, or reads a stale balance first and then
+  // calls retry, which repeats the same connect. Called on the caller's thread
+  // (the GTK main loop) before mutex_ is taken, so it may touch window state.
+  using ConnectGate = std::function<bool(std::function<void()> retry)>;
+  void SetConnectGate(ConnectGate gate) { connectGate_ = std::move(gate); }
   void Disconnect();
   // Own presentation-only SDK view controllers only while the GTK window is
   // visible. The DeviceLocal, tunnel and packet loop remain alive in the tray.
@@ -1270,7 +1272,7 @@ class SdkHost {
   std::function<void(bool)> onAdvancedMode_;
 
   AuthStateHandler onAuth_;
-  std::function<bool()> connectGate_;
+  ConnectGate connectGate_;
   AuthInvalidHandler onAuthInvalid_;
   JwtRefreshedHandler onJwtRefreshed_;
   ConnectReadingHandler onReading_;

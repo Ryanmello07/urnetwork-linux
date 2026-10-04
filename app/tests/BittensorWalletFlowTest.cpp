@@ -50,7 +50,10 @@ std::string FunctionBody(const std::string& source, const std::string& signature
 UR_TEST(BittensorWalletFlow_ProofsContinueAndForeignAnswersAreDropped) {
   UR_EXPECT_TRUE(bt::Classify("", false) == bt::Outcome::Accept);
   UR_EXPECT_TRUE(bt::Classify("", true) == bt::Outcome::Accept);
-  for (const char* code : {"purpose_mismatch", "not_bittensor_return", "not_awaiting_wallet"}) {
+  // unsupported_wallet: a return naming another wallet's page (a stale tab
+  // from an earlier choice) is not this flow's either
+  for (const char* code : {"purpose_mismatch", "not_bittensor_return", "not_awaiting_wallet",
+                           "unsupported_wallet"}) {
     UR_EXPECT_TRUE_MSG(code, bt::Classify(code, false) == bt::Outcome::Ignore);
   }
 }
@@ -62,8 +65,7 @@ UR_TEST(BittensorWalletFlow_ManualTyposRetryBridgeRefusalsFail) {
     UR_EXPECT_TRUE_MSG(code, bt::Classify(code, true) == bt::Outcome::Retry);
     UR_EXPECT_TRUE_MSG(code, bt::Classify(code, false) == bt::Outcome::Fail);
   }
-  for (const char* code : {"challenge_expired", "message_mismatch", "wallet_error",
-                           "unsupported_wallet"}) {
+  for (const char* code : {"challenge_expired", "message_mismatch", "wallet_error"}) {
     UR_EXPECT_TRUE_MSG(code, bt::Classify(code, true) == bt::Outcome::Fail);
     UR_EXPECT_TRUE_MSG(code, bt::Classify(code, false) == bt::Outcome::Fail);
   }
@@ -172,4 +174,85 @@ UR_TEST(BittensorWalletFlow_TheHostRunsEveryFlowOnASession) {
   const std::string cancel = FunctionBody(host, "void SdkHost::CancelBittensorManual(");
   UR_EXPECT_TRUE_MSG("cancel leaves a newer flow alone",
                      cancel.find("walletFlows_.IsCurrent(flow)") != std::string::npos);
+}
+
+// WalletConnect is the third wallet (Nova, Nightly and other WalletConnect v2
+// substrate wallets), after Talisman and manual entry; the chooser's response
+// id is the wallet id and nothing else chooses a wallet.
+UR_TEST(BittensorWalletFlow_TheChooserOffersThreeWallets) {
+  const std::string_view expected[] = {"talisman", "taocom", "walletconnect"};
+  size_t n = 0;
+  for (const auto& wallet : bt::kChooserWallets) {
+    UR_EXPECT_TRUE_MSG(std::string(wallet.walletId), n < 3 && wallet.walletId == expected[n]);
+    ++n;
+  }
+  UR_EXPECT_TRUE(n == 3);
+  UR_EXPECT_TRUE(bt::kWalletWalletConnect == "walletconnect");
+  for (const auto& id : expected) UR_EXPECT_TRUE_MSG(std::string(id), bt::ChosenWallet(id) == id);
+  UR_EXPECT_TRUE(bt::ChosenWallet("cancel").empty());
+  UR_EXPECT_TRUE(bt::ChosenWallet("").empty());
+  UR_EXPECT_TRUE(bt::ChosenWallet("subwallet-js").empty());
+  // only the WalletConnect page is given the project id
+  UR_EXPECT_TRUE(bt::SendsWalletConnectProjectId("walletconnect"));
+  UR_EXPECT_FALSE(bt::SendsWalletConnectProjectId("talisman"));
+  UR_EXPECT_FALSE(bt::SendsWalletConnectProjectId("taocom"));
+  // pairing, approving the session and the signature get the challenge's life
+  UR_EXPECT_TRUE(bt::TimeoutMsFor(bt::kTransportBrowserBridge, "walletconnect") == 330'000u);
+  UR_EXPECT_TRUE(bt::TimeoutMsFor(bt::kTransportBrowserBridge, "talisman") == 180'000u);
+}
+
+// The chooser hints and the browser hand-off texts are store keys the linux
+// catalog carries, English as msgid.
+UR_TEST(BittensorWalletFlow_WalletConnectStringsAreInTheCatalog) {
+  const std::string pot = ReadFile("../po/urnetwork.pot");
+  if (pot.empty()) {
+    UR_FAIL("could not read po/urnetwork.pot");
+    return;
+  }
+  auto has = [&](std::string_view key, std::string_view english) {
+    return pot.find("msgctxt \"" + std::string(key) + "\"\nmsgid \"" + std::string(english) + "\"") !=
+           std::string::npos;
+  };
+  int hints = 0;
+  for (const auto& wallet : bt::kChooserWallets) {
+    if (wallet.hintKey.empty()) continue;
+    UR_EXPECT_TRUE_MSG(std::string(wallet.hintKey), has(wallet.hintKey, wallet.hintEnglish));
+    ++hints;
+  }
+  UR_EXPECT_TRUE(hints == 2);
+  const bt::ContinueText wc = bt::ContinueTextFor("walletconnect");
+  UR_EXPECT_TRUE(wc.key == "bittensor_walletconnect_continue" && !wc.takesWalletName);
+  UR_EXPECT_TRUE_MSG(std::string(wc.key), has(wc.key, wc.english));
+  const bt::ContinueText talisman = bt::ContinueTextFor("talisman");
+  UR_EXPECT_TRUE(talisman.key == "bittensor_continue_in_browser" && talisman.takesWalletName);
+  UR_EXPECT_TRUE_MSG(std::string(talisman.key), has(talisman.key, talisman.english));
+}
+
+// Both choosers (sign-in, Earnings) come from the shared three-row chooser,
+// and the session is given the build's project id for WalletConnect only.
+UR_TEST(BittensorWalletFlow_ChoosersAndSessionCarryWalletConnect) {
+  const std::string window = ReadFile("MainWindow.cpp");
+  const std::string earnings = ReadFile("EarningsPage.cpp");
+  const std::string host = ReadFile("SdkHost.cpp");
+  const std::string sheet = ReadFile("BittensorManualSheet.cpp");
+  if (window.empty() || earnings.empty() || host.empty() || sheet.empty()) {
+    UR_FAIL("could not read the sources");
+    return;
+  }
+  const std::string chooser = FunctionBody(sheet, "GtkWidget* NewBittensorWalletChooser(");
+  UR_EXPECT_TRUE_MSG("the chooser lists every kChooserWallets row",
+                     chooser.find("bittensor::kChooserWallets") != std::string::npos);
+  for (const auto& [source, fn] :
+       {std::pair<const std::string*, const char*>{&window, "void MainWindow::OnBittensor("},
+        {&earnings, "void EarningsPage::ChooseBittensorWallet("}}) {
+    const std::string body = FunctionBody(*source, fn);
+    UR_EXPECT_TRUE_MSG(std::string(fn) + " uses the shared chooser",
+                       body.find("NewBittensorWalletChooser(") != std::string::npos &&
+                           body.find("bittensor::ChosenWallet(") != std::string::npos);
+  }
+  const std::string start = FunctionBody(host, "void SdkHost::StartBittensorSession(");
+  const size_t guard = start.find("bittensor::SendsWalletConnectProjectId(walletId)");
+  const size_t set = start.find("session->setWalletConnectProjectId(kWalletConnectProjectId)");
+  UR_EXPECT_TRUE_MSG("the project id goes to the WalletConnect session only",
+                     guard != std::string::npos && set != std::string::npos && guard < set);
 }

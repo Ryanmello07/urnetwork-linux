@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <utility>
 
+#include "BittensorManualSheet.hpp"
 #include "BittensorWalletFlow.hpp"
 #include "EmojiKeyboard.hpp"
 #include "EmojiTagSheet.hpp"
@@ -2665,20 +2666,7 @@ void EarningsPage::OnConnectWithBridge() {
 
 void EarningsPage::ChooseBittensorWallet(const std::string& expectedAddress) {
   auto* window = dynamic_cast<Gtk::Window*>(get_root());
-  GtkWidget* dialog = adw_message_dialog_new(
-      window ? window->gobj() : nullptr,
-      T_("bittensor_choose_wallet", "Choose your Bittensor wallet"), nullptr);
-  // wallet names are product names: never translated (the SDK names them)
-  const std::string talisman =
-      urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTalisman));
-  const std::string taoCom =
-      urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTaoCom));
-  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
-                                   "talisman", talisman.c_str(), "taocom", taoCom.c_str(),
-                                   nullptr);
-  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "talisman",
-                                             ADW_RESPONSE_SUGGESTED);
-  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "talisman");
+  GtkWidget* dialog = NewBittensorWalletChooser(window ? window->gobj() : nullptr);
   struct Ctx {
     EarningsPage* self;
     std::string expectedAddress;
@@ -2690,12 +2678,9 @@ void EarningsPage::ChooseBittensorWallet(const std::string& expectedAddress) {
       G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
         auto* ctx = static_cast<Ctx*>(data);
         if (*ctx->epoch != ctx->seen) return;  // the page was reset meanwhile
-        if (g_strcmp0(response, "talisman") == 0) {
-          ctx->self->StartWalletSignature(std::string(bittensor::kWalletTalisman),
-                                          ctx->expectedAddress);
-        } else if (g_strcmp0(response, "taocom") == 0) {
-          ctx->self->StartWalletSignature(std::string(bittensor::kWalletTaoCom),
-                                          ctx->expectedAddress);
+        const std::string_view walletId = bittensor::ChosenWallet(response ? response : "");
+        if (!walletId.empty()) {
+          ctx->self->StartWalletSignature(std::string(walletId), ctx->expectedAddress);
         }
       }),
       new Ctx{this, expectedAddress, epoch_, *epoch_},
@@ -2838,8 +2823,19 @@ void EarningsPage::StartWalletSignature(const std::string& walletId,
   // minutes, not 20s: the bridge reports errors only when a deep link comes
   // BACK, and a closed browser tab produces nothing, ever; the manual sheet
   // lasts as long as its challenge
-  const uint32_t timeoutMs = bittensor::TimeoutMsFor(
-      urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform)));
+  const std::string transport =
+      urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
+  const uint32_t timeoutMs = bittensor::TimeoutMsFor(transport, walletId);
+  if (transport == bittensor::kTransportBrowserBridge) {
+    // the page in the browser carries the flow now: say where to look
+    const bittensor::ContinueText text = bittensor::ContinueTextFor(walletId);
+    const std::string key(text.key);
+    const std::string english(text.english);
+    const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
+    Notify(text.takesWalletName ? Format(localized, urnet::bittensorWalletDisplayName(walletId))
+                                : std::string(localized),
+           kit::Snackbar::Severity::Info);
+  }
   const uint32_t generation = BeginFlow(connectFlow_, static_cast<int>(timeoutMs), [this] {
     FinishConnecting();
     Notify(T_("wallet_connect_failed", "Failed to connect the wallet."),

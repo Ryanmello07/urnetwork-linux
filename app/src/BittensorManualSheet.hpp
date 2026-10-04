@@ -9,9 +9,6 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
-#include <string>
-#include <vector>
 
 #include <gtkmm.h>
 
@@ -19,13 +16,12 @@
 
 namespace urnw {
 
-// The Bittensor wallet chooser's buttons, one per wallet the SDK supports on
-// linux (urnet::bittensorWalletIdList, in its order, named by
-// bittensorWalletDisplayName), appended to `row`; `choose` gets the wallet id.
-// A wallet the SDK adds later appears without an app change. Returns the
-// buttons so the caller can grey them out while a flow runs.
-std::vector<Gtk::Button*> AppendBittensorWalletChoices(
-    Gtk::Box& row, std::function<void(const std::string& walletId)> choose);
+// The Bittensor wallet chooser (an AdwMessageDialog): one response per
+// bittensor::kChooserWallets row, its id the wallet id, its label the SDK's
+// product name; the body lists each wallet's hint (TAO.com: manual entry,
+// WalletConnect: which wallets it works with). Map a response with
+// bittensor::ChosenWallet. The caller connects "response" and presents it.
+GtkWidget* NewBittensorWalletChooser(GtkWindow* parent);
 
 class BittensorManualSheet : public Gtk::Window {
  public:

@@ -1,6 +1,7 @@
 // Connect with no balance is blocked; a connection that runs out of balance
-// stays up (urnetwork/android#483). The decision is balance_notice::BlockConnect
-// over the out-of-balance latch; the entry points (tray menu, Connect page,
+// stays up (urnetwork/android#483). The decision is
+// balance_notice::DecideStartConnect over the live reading, the out-of-balance
+// latch and a fresh account balance; the entry points (tray menu, Connect page,
 // location picks, connect on launch, post-sign-in connect) need GTK and the
 // SDK, so their wiring is read as text.
 //
@@ -13,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #ifndef UR_SRC_DIR
 #define UR_SRC_DIR ""
@@ -20,11 +22,16 @@
 
 namespace {
 
+using urnw::balance_notice::AccountBalance;
 using urnw::balance_notice::BlockConnect;
 using urnw::balance_notice::ClassifyConnect;
 using urnw::balance_notice::ConnectAttempt;
+using urnw::balance_notice::DecideStartConnect;
+using urnw::balance_notice::kBalanceFreshMillis;
 using urnw::balance_notice::OutOfBalanceLatch;
 using urnw::balance_notice::Signals;
+using urnw::balance_notice::StartConnectInputs;
+using urnw::balance_notice::StartConnectStep;
 
 std::string ReadSource(const std::string& relative) {
   std::ifstream in(std::string(UR_SRC_DIR) + "/" + relative, std::ios::binary);
@@ -82,6 +89,27 @@ urnw::health::Signals HeldSession() {
 // What the SDK reports right after the user's Disconnect: the destination is
 // gone and the contract status was cleared with it.
 urnw::health::Signals AfterDisconnect() { return urnw::health::Signals{}; }
+
+// An injected clock: the app has been up for an hour.
+constexpr int64_t kNow = 60 * 60 * 1000;
+
+AccountBalance Balance(int64_t availableBytes, int64_t openTransferBytes, int64_t ageMillis) {
+  AccountBalance b;
+  b.known = true;
+  b.availableBytes = availableBytes;
+  b.openTransferBytes = openTransferBytes;
+  b.fetchedAtMillis = kNow - ageMillis;
+  return b;
+}
+
+// What the window asks on a fresh start: no session, no contract status yet
+// and nothing latched, only the subscription balance the app fetched.
+StartConnectInputs FreshStart(const AccountBalance& balance) {
+  StartConnectInputs in;
+  in.balance = balance;
+  in.nowMillis = kNow;
+  return in;
+}
 
 }  // namespace
 
@@ -172,6 +200,87 @@ UR_TEST(outOfBalanceLatchClearsOnlyOnEvidence) {
   UR_EXPECT_FALSE(latch.OutOfBalance());
 }
 
+UR_TEST(freshStartWithAnEmptyAccountDoesNotStartTheTunnel) {
+  // the reported gap: the app starts with an account that is already empty;
+  // no contract status has been seen, so nothing was latched and the first
+  // Connect started a tunnel that could only hold traffic
+  const StartConnectInputs in = FreshStart(Balance(0, 0, 1000));
+  UR_EXPECT_FALSE(in.insufficientBalance || in.latched);
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::Upgrade);
+  // overdrawn reads the same
+  UR_EXPECT_TRUE(DecideStartConnect(FreshStart(Balance(-5, 0, 0))) == StartConnectStep::Upgrade);
+}
+
+UR_TEST(aFundedAccountStartsOnAFreshBalance) {
+  UR_EXPECT_TRUE(DecideStartConnect(FreshStart(Balance(1, 0, 1000))) == StartConnectStep::Start);
+  // bytes held in open contracts come back when they close
+  UR_EXPECT_TRUE(DecideStartConnect(FreshStart(Balance(0, 1, 1000))) == StartConnectStep::Start);
+  // Pro and a purchase poll are never blocked on the balance, and never wait on a read
+  StartConnectInputs pro = FreshStart(Balance(0, 0, 1000));
+  pro.balance.pro = true;
+  pro.pro = true;
+  UR_EXPECT_TRUE(DecideStartConnect(pro) == StartConnectStep::Start);
+  pro.balance.fetchedAtMillis = 0;
+  UR_EXPECT_TRUE(DecideStartConnect(pro) == StartConnectStep::Start);
+  StartConnectInputs polling = FreshStart(Balance(0, 0, 1000));
+  polling.polling = true;
+  UR_EXPECT_TRUE(DecideStartConnect(polling) == StartConnectStep::Start);
+}
+
+UR_TEST(aStaleBalanceIsReadAgainBeforeItCanBlock) {
+  // a zero read more than a minute ago may be a funded account by now
+  StartConnectInputs in = FreshStart(Balance(0, 0, kBalanceFreshMillis + 1));
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::FetchBalance);
+  // never fetched (a connect on launch, right after sign-in) reads it too
+  UR_EXPECT_TRUE(DecideStartConnect(FreshStart(AccountBalance{})) == StartConnectStep::FetchBalance);
+  // the read lands funded: start
+  in.balance = Balance(1000, 0, 0);
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::Start);
+  // the read lands empty: upgrade
+  in.balance = Balance(0, 0, 0);
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::Upgrade);
+}
+
+UR_TEST(aFailedBalanceReadDoesNotBlockTheConnect) {
+  // fail open: the server refuses the contract anyway, and the held alert and
+  // the notice cover it
+  StartConnectInputs in = FreshStart(Balance(0, 0, kBalanceFreshMillis + 1));
+  in.failedCheckAtMillis = kNow;
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::Start);
+  // only for a while: a later press reads again
+  in.nowMillis = kNow + kBalanceFreshMillis + 1;
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::FetchBalance);
+  // a failed read never overrides a known out-of-balance state
+  in.nowMillis = kNow;
+  in.latched = true;
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::Upgrade);
+}
+
+UR_TEST(aLiveSessionIsNeverBlockedOrHeldByTheBalance) {
+  // connected and then out of balance keeps the connection: whatever the
+  // reading, the latch or the balance say, a session that is up starts (or
+  // keeps) without a balance read, and the press offers Disconnect
+  for (int bits = 0; bits < 8; ++bits) {
+    StartConnectInputs in = FreshStart(Balance(0, 0, (bits & 4) ? kBalanceFreshMillis + 1 : 0));
+    in.insufficientBalance = bits & 1;
+    in.latched = bits & 2;
+    in.sessionUp = true;
+    if (DecideStartConnect(in) != StartConnectStep::Start) {
+      UR_FAIL("a live session was refused for case " + std::to_string(bits));
+    }
+  }
+  UR_EXPECT_TRUE(urnw::health::Render(HeldSession()).action == urnw::health::Action::Disconnect);
+}
+
+UR_TEST(theLatchAndTheLiveReadingStillBlockAStart) {
+  StartConnectInputs in = FreshStart(Balance(1000, 0, 0));
+  in.latched = true;
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::Upgrade);
+  in.latched = false;
+  in.insufficientBalance = true;
+  UR_EXPECT_TRUE(DecideStartConnect(in) == StartConnectStep::Upgrade);
+}
+
 UR_TEST(connectEntryPointsAskTheStartConnectGate) {
   const std::string window = ReadSource("MainWindow.cpp");
   const std::string host = ReadSource("SdkHost.cpp");
@@ -182,6 +291,11 @@ UR_TEST(connectEntryPointsAskTheStartConnectGate) {
   UR_EXPECT_TRUE(
       Has(window, "connectPage_->on_connect_action = [this](bool disconnect) { ToggleConnect(disconnect); };"));
   const std::string toggle = Body(window, "void MainWindow::ToggleConnect(bool disconnect) {");
+  // a stale balance read repeats the whole press, connect included
+  const size_t gateFirst =
+      toggle.find("if (ConnectBlockedByBalance([this] { ToggleConnect(/*disconnect=*/false); })) return;");
+  UR_EXPECT_TRUE(gateFirst != std::string::npos &&
+                 gateFirst < toggle.find("StartTunnelUi(/*connectDestination=*/false)"));
   const size_t startAt = toggle.find("StartTunnelUi(/*connectDestination=*/false)");
   const size_t connectAt = toggle.find("host_.ConnectBestAvailable()");
   UR_EXPECT_TRUE(startAt != std::string::npos && connectAt != std::string::npos &&
@@ -189,16 +303,22 @@ UR_TEST(connectEntryPointsAskTheStartConnectGate) {
   // StartTunnelUi asks the gate before it starts anything (connect on launch
   // and every post-sign-in connect pass through it too)
   const std::string start = Body(window, "TunnelStartResult MainWindow::StartTunnelUi(");
-  const size_t gateAt = start.find("if (ConnectBlockedByBalance()) return");
+  const size_t gateAt = start.find(
+      "if (ConnectBlockedByBalance([this, connectDestination] { StartTunnelUi(connectDestination); })) {");
   UR_EXPECT_TRUE(gateAt != std::string::npos);
   UR_EXPECT_TRUE(gateAt < start.find("host_.StartTunnel()"));
   // the location picks connect through the host, which asks the same gate
   // before it touches the device
-  UR_EXPECT_TRUE(Has(window, "host_.SetConnectGate([this] { return ConnectBlockedByBalance(); });"));
-  for (const char* signature :
-       {"void SdkHost::ConnectBestAvailable() {", "void SdkHost::Connect(const std::optional"}) {
+  UR_EXPECT_TRUE(Has(window, "return ConnectBlockedByBalance(std::move(retry)); });"));
+  const std::pair<const char*, const char*> gated[] = {
+      {"void SdkHost::ConnectBestAvailable() {",
+       "if (connectGate_ && connectGate_([this] { ConnectBestAvailable(); })) return;"},
+      {"void SdkHost::Connect(const std::optional",
+       "if (connectGate_ && connectGate_([this, location] { Connect(location); })) return;"},
+  };
+  for (const auto& [signature, gate] : gated) {
     const std::string body = Body(host, signature);
-    const size_t at = body.find("if (connectGate_ && connectGate_()) return;");
+    const size_t at = body.find(gate);
     UR_EXPECT_TRUE_MSG(signature, at != std::string::npos);
     UR_EXPECT_TRUE_MSG(signature, at < body.find("std::scoped_lock lock(mutex_);"));
   }
@@ -206,11 +326,26 @@ UR_TEST(connectEntryPointsAskTheStartConnectGate) {
 
 UR_TEST(connectGateIsTheBalanceDecision) {
   const std::string window = ReadSource("MainWindow.cpp");
-  const std::string gate = Body(window, "bool MainWindow::ConnectBlockedByBalance() {");
-  UR_EXPECT_TRUE(Has(gate, "reading_.insufficientBalance || outOfBalance_.OutOfBalance()"));
-  UR_EXPECT_TRUE(Has(gate, "signals.pro = balance_.IsPro();"));
-  UR_EXPECT_TRUE(Has(gate, "signals.polling = balance_.IsPolling();"));
-  UR_EXPECT_TRUE(Has(gate, "BlockConnect(balance_notice::ClassifyConnect(sessionUp), signals)"));
+  const std::string gate =
+      Body(window, "bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {");
+  UR_EXPECT_TRUE(Has(gate, "in.insufficientBalance = reading_.insufficientBalance;"));
+  UR_EXPECT_TRUE(Has(gate, "in.latched = outOfBalance_.OutOfBalance();"));
+  UR_EXPECT_TRUE(Has(gate, "in.pro = balance_.IsPro();"));
+  UR_EXPECT_TRUE(Has(gate, "in.polling = balance_.IsPolling();"));
+  UR_EXPECT_TRUE(Has(gate, "in.balance.fetchedAtMillis = balance_.FetchedAtMillis();"));
+  UR_EXPECT_TRUE(Has(gate, "in.balance.openTransferBytes = balance_.PendingByteCount();"));
+  UR_EXPECT_TRUE(Has(gate, "balance_notice::DecideStartConnect(in)"));
+  UR_EXPECT_TRUE(Has(gate, "CheckBalanceThen(std::move(retry));"));
+  // the read gives up after the timeout and a failure lets the connect go ahead
+  const std::string check =
+      Body(window, "void MainWindow::CheckBalanceThen(std::function<void()> retry) {");
+  UR_EXPECT_TRUE(Has(check, "balance_notice::kBalanceCheckTimeoutMillis"));
+  UR_EXPECT_TRUE(Has(check, "balanceCheckFailedAtMillis_ = ok ? -1 : BalanceClockMillis();"));
+  UR_EXPECT_TRUE(Has(check, "balance_.FetchBalanceThen(finish);"));
+  UR_EXPECT_FALSE(Has(check, "Disconnect"));
+  // a Disconnect withdraws a connect still waiting on the read
+  const std::string toggleBody = Body(window, "void MainWindow::ToggleConnect(bool disconnect) {");
+  UR_EXPECT_TRUE(toggleBody.find("CancelBalanceCheck();") < toggleBody.find("host_.Disconnect();"));
   // blocked: the upgrade path, never a disconnect
   UR_EXPECT_TRUE(Has(gate, "OpenUpgrade();"));
   UR_EXPECT_FALSE(Has(gate, "Disconnect"));

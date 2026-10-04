@@ -387,7 +387,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
 
   // The location picks (Network page, location chooser) connect through the
   // host directly; the host asks the same gate.
-  host_.SetConnectGate([this] { return ConnectBlockedByBalance(); });
+  host_.SetConnectGate(
+      [this](std::function<void()> retry) { return ConnectBlockedByBalance(std::move(retry)); });
 
   if (host_.IsLoggedIn()) {
     // AUTO-CONNECT IS OPT IN, DEFAULT OFF. Being signed in is not a request to
@@ -490,7 +491,9 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   // Out of balance, a new connection is not started at all: no tunnel, no
   // routes, the upgrade path instead. Every caller (the Connect press, connect
   // on launch, the post-sign-in connect) passes through here.
-  if (ConnectBlockedByBalance()) return TunnelStartResult::Failed;
+  if (ConnectBlockedByBalance([this, connectDestination] { StartTunnelUi(connectDestination); })) {
+    return TunnelStartResult::Failed;
+  }
   // Snapshot the reply counter BEFORE the attempt. LastAuthOutcome() describes
   // the last reply this client processed, and StartTunnel() has failure paths
   // that never send anything (not signed in; unusable device-rpc key material).
@@ -2160,29 +2163,19 @@ void MainWindow::OnSso(const std::string& provider) {
 }
 
 // The Bittensor tile asks which wallet first: Talisman signs on the ur.io
-// bridge in the browser (its extension), TAO.com on the manual sheet (it
-// documents no programmatic interface). BittensorWalletFlow.hpp.
+// bridge in the browser (its extension), TAO.com (or any wallet) on the manual
+// sheet (it documents no programmatic interface), WalletConnect on the bridge
+// page with a QR for Nova, Nightly and other WalletConnect wallets.
+// BittensorWalletFlow.hpp.
 void MainWindow::OnBittensor() {
   loginError_.set_text("");
-  GtkWidget* dialog = adw_message_dialog_new(
-      GTK_WINDOW(gobj()), T_("bittensor_choose_wallet", "Choose your Bittensor wallet"), nullptr);
-  // wallet names are product names: never translated (the SDK names them)
-  const std::string talisman = urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTalisman));
-  const std::string taoCom = urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTaoCom));
-  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
-                                   "talisman", talisman.c_str(), "taocom", taoCom.c_str(),
-                                   nullptr);
-  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "talisman",
-                                             ADW_RESPONSE_SUGGESTED);
-  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "talisman");
+  GtkWidget* dialog = NewBittensorWalletChooser(GTK_WINDOW(gobj()));
   g_signal_connect(dialog, "response",
                    G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
                      auto* self = static_cast<MainWindow*>(data);
-                     if (g_strcmp0(response, "talisman") == 0) {
-                       self->OnBittensorWallet(std::string(bittensor::kWalletTalisman));
-                     } else if (g_strcmp0(response, "taocom") == 0) {
-                       self->OnBittensorWallet(std::string(bittensor::kWalletTaoCom));
-                     }
+                     const std::string_view walletId =
+                         bittensor::ChosenWallet(response ? response : "");
+                     if (!walletId.empty()) self->OnBittensorWallet(std::string(walletId));
                    }),
                    this);
   gtk_window_present(GTK_WINDOW(dialog));
@@ -2192,10 +2185,13 @@ void MainWindow::OnBittensorWallet(const std::string& walletId) {
   const std::string transport =
       urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
   if (transport == bittensor::kTransportBrowserBridge) {
-    SetLoginNotice(Format(T_("bittensor_continue_in_browser",
-                             "Continue in your browser and approve the request in the {} "
-                             "extension."),
-                          urnet::bittensorWalletDisplayName(walletId)));
+    const bittensor::ContinueText text = bittensor::ContinueTextFor(walletId);
+    const std::string key(text.key);
+    const std::string english(text.english);
+    const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
+    SetLoginNotice(text.takesWalletName
+                       ? Format(localized, urnet::bittensorWalletDisplayName(walletId))
+                       : std::string(localized));
   }
   SetLoginBusy(true);
   host_.SignInWithBittensor(walletId, [this](AuthResult r) { OnWalletAuth(r); });
@@ -2385,6 +2381,8 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // A signed-out window has no session at all: the DEFAULT reading, not a
     // bool poked into a copy of the last one.
     ApplyConnectReading(ConnectReading{});
+    // a connect waiting on a balance read belonged to that session
+    CancelBalanceCheck();
     balance_.Stop();
     // a conversion, and the purchase waiting on it, belong to the session
     // that started it
@@ -2435,6 +2433,8 @@ void MainWindow::ToggleConnect(bool disconnect) {
     // Disconnect is safe to run unconditionally: SdkHost::Disconnect asks the
     // view controller to disconnect and then stops the daemon's tunnel, both
     // best-effort, both no-ops when there is nothing to stop.
+    // A connect still waiting on a balance read is withdrawn with it.
+    CancelBalanceCheck();
     host_.Disconnect();
     // Re-read every window surface once, now. The page is already showing
     // "Disconnecting…" from its own intent; this keeps the tray, the legacy
@@ -2457,8 +2457,10 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // not; the caller is not the right place to guess.
   // false: this path issues its own connect immediately below, deliberately
   // unconditional so a Connect press also self-heals a stale session.
-  // Out of balance, StartTunnelUi refuses before anything starts
-  // (ConnectBlockedByBalance) and this press opens the upgrade path instead.
+  // Out of balance, nothing starts (ConnectBlockedByBalance) and this press
+  // opens the upgrade path instead. Asked here first so that a stale balance
+  // read repeats the whole press, connect included, once it lands.
+  if (ConnectBlockedByBalance([this] { ToggleConnect(/*disconnect=*/false); })) return;
   if (StartTunnelUi(/*connectDestination=*/false) != TunnelStartResult::Started) return;
   host_.ConnectBestAvailable();
   // the connect-reading feed reflects the real state as it changes
@@ -2569,15 +2571,35 @@ void MainWindow::DisconnectFromBalanceNotice() {
   ToggleConnect(/*disconnect=*/true);
 }
 
-bool MainWindow::ConnectBlockedByBalance() {
-  balance_notice::Signals signals;
-  signals.insufficientBalance = reading_.insufficientBalance || outOfBalance_.OutOfBalance();
-  signals.pro = balance_.IsPro();
-  signals.polling = balance_.IsPolling();
-  signals.connectRequested = reading_.destinationSelected;
-  const bool sessionUp = health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
-  if (!balance_notice::BlockConnect(balance_notice::ClassifyConnect(sessionUp), signals)) {
-    return false;
+namespace {
+// the clock the balance store stamps its fetches with
+int64_t BalanceClockMillis() { return g_get_monotonic_time() / 1000; }
+}  // namespace
+
+bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {
+  balance_notice::StartConnectInputs in;
+  in.insufficientBalance = reading_.insufficientBalance;
+  in.latched = outOfBalance_.OutOfBalance();
+  in.pro = balance_.IsPro();
+  in.polling = balance_.IsPolling();
+  in.sessionUp = health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
+  in.balance.known = balance_.HasFetched();
+  in.balance.pro = balance_.IsPro();
+  in.balance.availableBytes = balance_.AvailableByteCount();
+  in.balance.openTransferBytes = balance_.PendingByteCount();
+  in.balance.fetchedAtMillis = balance_.FetchedAtMillis();
+  in.failedCheckAtMillis = balanceCheckFailedAtMillis_;
+  in.nowMillis = BalanceClockMillis();
+  switch (balance_notice::DecideStartConnect(in)) {
+    case balance_notice::StartConnectStep::Start:
+      return false;
+    case balance_notice::StartConnectStep::FetchBalance:
+      // nothing starts until the balance is read again (or the read gives up)
+      g_message("connect: reading the balance before starting");
+      CheckBalanceThen(std::move(retry));
+      return true;
+    case balance_notice::StartConnectStep::Upgrade:
+      break;
   }
   // nothing is started; the press opens the way to add balance instead, in
   // front of the user even when it came from the tray with the window hidden
@@ -2585,6 +2607,39 @@ bool MainWindow::ConnectBlockedByBalance() {
   present();
   OpenUpgrade();
   return true;
+}
+
+void MainWindow::CheckBalanceThen(std::function<void()> retry) {
+  // one press, one attempt: a newer press waiting on the same read replaces it
+  pendingConnect_ = std::move(retry);
+  if (balanceCheckPending_) return;
+  balanceCheckPending_ = true;
+  const uint64_t check = ++balanceCheck_;
+  auto finish = [this, check](bool ok) {
+    if (!balanceCheckPending_ || check != balanceCheck_) return;
+    balanceCheckPending_ = false;
+    balanceCheckTimeout_.disconnect();
+    // a failed read lets the connect go ahead (DecideStartConnect)
+    balanceCheckFailedAtMillis_ = ok ? -1 : BalanceClockMillis();
+    std::function<void()> connect = std::move(pendingConnect_);
+    pendingConnect_ = nullptr;
+    if (connect) connect();
+  };
+  balanceCheckTimeout_ = Glib::signal_timeout().connect(
+      [finish] {
+        finish(false);
+        return false;
+      },
+      static_cast<unsigned>(balance_notice::kBalanceCheckTimeoutMillis));
+  balance_.FetchBalanceThen(finish);
+}
+
+void MainWindow::CancelBalanceCheck() {
+  balanceCheckPending_ = false;
+  ++balanceCheck_;
+  balanceCheckTimeout_.disconnect();
+  pendingConnect_ = nullptr;
+  balanceCheckFailedAtMillis_ = -1;
 }
 
 void MainWindow::OpenUpgrade() {

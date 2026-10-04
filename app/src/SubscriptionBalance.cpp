@@ -48,6 +48,10 @@ void SubscriptionBalanceStore::Start() {
   didDetectUpgradeToPro_ = false;
   subscriptionStoreFamily_.clear();
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
+  fetchedAtMillis_ = 0;
+  // the epoch bump orphans a read in flight; a FetchBalanceThen waiter is
+  // served by this session's first read instead
+  isLoading_ = false;
   totals_.Reset();
   referral_.Reset();
 
@@ -71,6 +75,8 @@ void SubscriptionBalanceStore::Start() {
     }
     EnsureReferralPolling();  // referrals poll for Pro networks too
   }
+  // a connect waiting on a read (FetchBalanceThen) gets one with the window hidden too
+  if (!fetchWaiters_.empty()) FetchSubscriptionBalance();
   Emit();
 }
 
@@ -89,6 +95,8 @@ void SubscriptionBalanceStore::Stop() {
   subscriptionStoreFamily_.clear();
   didDetectUpgradeToPro_ = false;
   usedByteCount_ = pendingByteCount_ = availableByteCount_ = startBalanceByteCount_ = 0;
+  fetchedAtMillis_ = 0;
+  fetchWaiters_.clear();
   totals_.Reset();
   referral_.Reset();
   purchaseConfirmationTimedOut_ = false;
@@ -144,6 +152,16 @@ void SubscriptionBalanceStore::FetchNow() {
   FetchReferralCode();
 }
 
+void SubscriptionBalanceStore::FetchBalanceThen(std::function<void(bool ok)> done) {
+  // a connect right after sign-in (or on launch) can come before Start()
+  if (!started_ && !host_.IsLoggedIn()) {
+    done(false);
+    return;
+  }
+  fetchWaiters_.push_back(std::move(done));
+  FetchSubscriptionBalance();
+}
+
 void SubscriptionBalanceStore::OnJwtRefreshed() {
   if (!started_) return;
   auto byJwt = host_.ParseByJwt();
@@ -191,6 +209,7 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
           } else {
             errorFetching_ = false;
             hasFetched_ = true;
+            fetchedAtMillis_ = NowMillis();
             availableByteCount_ = result->balance_byte_count;
             pendingByteCount_ = result->open_transfer_byte_count;
             usedByteCount_ =
@@ -259,6 +278,10 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
             StopPolling();  // background poll stops once supporter-with-balance
           }
           Emit();
+          std::vector<std::function<void(bool)>> waiters;
+          waiters.swap(fetchWaiters_);
+          const bool ok = !err && result;
+          for (auto& waiter : waiters) waiter(ok);
         });
       });
 }

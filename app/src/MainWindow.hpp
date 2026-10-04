@@ -326,10 +326,22 @@ class MainWindow : public Gtk::ApplicationWindow {
   // (the SDK clears the contract status with the destination).
   balance_notice::OutOfBalanceLatch outOfBalance_;
   // The start-connect gate every connect entry point asks before starting
-  // anything (balance_notice::BlockConnect). True means the press was turned
-  // into the upgrade path and nothing was started. A session that is already
-  // up is never blocked.
-  bool ConnectBlockedByBalance();
+  // anything (balance_notice::DecideStartConnect). True means nothing was
+  // started: the press was turned into the upgrade path, or the balance is
+  // stale and is read first, after which retry repeats the press. A session
+  // that is already up is never blocked.
+  bool ConnectBlockedByBalance(std::function<void()> retry);
+  // Reads the balance (kBalanceCheckTimeoutMillis at most), then runs the
+  // waiting connect.
+  void CheckBalanceThen(std::function<void()> retry);
+  // Drops a connect waiting on a balance read (sign-in and sign-out).
+  void CancelBalanceCheck();
+  std::function<void()> pendingConnect_;
+  bool balanceCheckPending_ = false;
+  uint64_t balanceCheck_ = 0;
+  sigc::connection balanceCheckTimeout_;
+  // when the last balance read for a connect failed or timed out, -1 for none
+  int64_t balanceCheckFailedAtMillis_ = -1;
   // The upgrade path: guest conversion for a guest, else the upgrade sheet.
   void OpenUpgrade();
   // tray app: skip window-widget updates while hidden (resynced on show) so a

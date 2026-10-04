@@ -24,6 +24,7 @@
 #include <glib/gstdio.h>
 
 #include "AppPrefs.hpp"
+#include "Config.hpp"
 #include "NetworkSpaceConfig.hpp"
 // The Secret Service backend for the remembered rpc session. GUI-ONLY: this is
 // the one translation unit that links libsecret, and urnetworkd (which builds
@@ -1327,6 +1328,11 @@ void SdkHost::StartBittensorSession(const std::string& walletId, const std::stri
     session = std::make_shared<urnet::BittensorWalletSession>(urnet::newBittensorWalletSession(
         walletId, std::string(bittensor::kPlatform), purpose,
         std::string(bittensor::kRedirectLink)));
+    // the WalletConnect page pairs with this build's project id (empty: the
+    // page's own); the other wallets' pages never see it
+    if (bittensor::SendsWalletConnectProjectId(walletId)) {
+      session->setWalletConnectProjectId(kWalletConnectProjectId);
+    }
     // blockchain TAO, the purpose, and the typed address when there is one
     args = session->challengeArgs(expectedAddress);
   } catch (const std::exception& e) {
@@ -3766,7 +3772,7 @@ std::vector<uint8_t> SdkHost::PublicIdentityKey() {
 
 void SdkHost::ConnectBestAvailable() {
   // a location pick or a press while out of balance starts nothing
-  if (connectGate_ && connectGate_()) return;
+  if (connectGate_ && connectGate_([this] { ConnectBestAvailable(); })) return;
   std::scoped_lock lock(mutex_);
   // THE CALLER GOT HERE BELIEVING THERE IS A SESSION. Verify that with the
   // daemon before driving anything: if the service restarted (or another
@@ -3840,7 +3846,7 @@ void SdkHost::ConnectBestAvailable() {
 }
 
 void SdkHost::Connect(const std::optional<urnet::ConnectLocation>& location) {
-  if (connectGate_ && connectGate_()) return;
+  if (connectGate_ && connectGate_([this, location] { Connect(location); })) return;
   std::scoped_lock lock(mutex_);
   if (connectVc_) {
     connectVc_->connect(location);

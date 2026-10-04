@@ -15,7 +15,7 @@
 // within the episode.
 //
 // A new connect is a different matter: with no balance it is blocked and the
-// entry point shows the upgrade path instead (BlockConnect, below). That gate
+// entry point shows the upgrade path instead (DecideStartConnect, below). That gate
 // only ever applies to starting a session, never to one that is already up.
 //
 // Pure and dependency-free so tests/InsufficientBalanceNoticeTest.cpp runs
@@ -23,6 +23,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
+
+#include <cstdint>
 
 namespace urnw {
 namespace balance_notice {
@@ -186,6 +188,92 @@ class OutOfBalanceLatch {
   bool lowKnown_ = false;
   long long lowBytes_ = 0;
 };
+
+// ---- the account balance on a fresh start ------------------------------------
+// The latch and the live reading only know about a balance a session has run
+// into. On a fresh start with an account that is already empty there is no
+// contract status yet, so the first Connect used to start a tunnel that could
+// only hold traffic. The subscription balance the app already fetches answers
+// that, but only while it is fresh: a balance read minutes ago can be zero for
+// an account funded since (and the other way round), so a stale one is read
+// again before it can block, with a short timeout. A check that fails does not
+// block: the server refuses the contract anyway, and the held alert and the
+// notice cover that case. Same rule on every platform (android
+// accountBalanceExhausted, windows BalanceGate.h, apple
+// InsufficientBalancePolicy.swift).
+
+// How recent a fetched balance must be to block a connect on its own.
+inline constexpr int64_t kBalanceFreshMillis = 60 * 1000;
+// How long a start connect waits for a balance read before it goes ahead.
+inline constexpr int64_t kBalanceCheckTimeoutMillis = 5 * 1000;
+
+// The subscription balance as last fetched. Times are on one monotonic clock,
+// injected by the caller.
+struct AccountBalance {
+  bool known = false;
+  bool pro = false;
+  int64_t availableBytes = 0;
+  // bytes held in open contracts, returned when they close
+  int64_t openTransferBytes = 0;
+  int64_t fetchedAtMillis = 0;
+};
+
+// Nothing left: none available and none held in open contracts. Unknown and
+// Pro are never exhausted.
+inline bool AccountBalanceExhausted(const AccountBalance& b) {
+  return b.known && !b.pro && b.availableBytes <= 0 && b.openTransferBytes <= 0;
+}
+
+inline bool BalanceFresh(const AccountBalance& b, int64_t nowMillis) {
+  return b.known && nowMillis - b.fetchedAtMillis <= kBalanceFreshMillis;
+}
+
+struct StartConnectInputs {
+  // ContractStatus.InsufficientBalance from the live connect reading.
+  bool insufficientBalance = false;
+  // OutOfBalanceLatch::OutOfBalance
+  bool latched = false;
+  bool pro = false;
+  bool polling = false;
+  // health::SessionUp: a session is up, so this is not a start
+  bool sessionUp = false;
+  AccountBalance balance;
+  // When the last balance check for a start connect failed or timed out, or
+  // -1 for none. Within the fresh window it lets the connect go ahead.
+  int64_t failedCheckAtMillis = -1;
+  int64_t nowMillis = 0;
+};
+
+enum class StartConnectStep {
+  // start (or keep) the connection
+  Start,
+  // do not start: show the upgrade path
+  Upgrade,
+  // the balance is stale: read it, then decide again
+  FetchBalance,
+};
+
+// The start-connect decision every entry point asks. A session that is up is
+// never refused. A start is refused by the live reading or the latch, then by
+// a fresh balance with nothing left; with no fresh balance it is read first,
+// unless a read for this attempt just failed.
+inline StartConnectStep DecideStartConnect(const StartConnectInputs& in) {
+  const ConnectAttempt attempt = ClassifyConnect(in.sessionUp);
+  Signals s;
+  s.insufficientBalance = in.insufficientBalance || in.latched;
+  s.pro = in.pro;
+  s.polling = in.polling;
+  s.connectRequested = in.sessionUp;
+  if (BlockConnect(attempt, s)) return StartConnectStep::Upgrade;
+  if (attempt != ConnectAttempt::Start || in.pro || in.polling) return StartConnectStep::Start;
+  if (!BalanceFresh(in.balance, in.nowMillis)) {
+    const bool checkJustFailed = 0 <= in.failedCheckAtMillis &&
+                                 in.nowMillis - in.failedCheckAtMillis <= kBalanceFreshMillis;
+    return checkJustFailed ? StartConnectStep::Start : StartConnectStep::FetchBalance;
+  }
+  s.insufficientBalance = AccountBalanceExhausted(in.balance);
+  return BlockConnect(attempt, s) ? StartConnectStep::Upgrade : StartConnectStep::Start;
+}
 
 }  // namespace balance_notice
 }  // namespace urnw
