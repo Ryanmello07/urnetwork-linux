@@ -1,5 +1,5 @@
 // UPGRADE.md §4.4: the ur.io/checkout bridge url and its urnetwork://checkout
-// hand-back are the SDK's envelope (urnet::buildCheckoutBridgeUrl,
+// hand-back are the SDK's envelope (urnet::buildInlineCheckoutBridgeUrl,
 // urnet::isCheckoutRedirect, urnet::parseCheckoutRedirect), not a hand-built
 // copy that drifts from windows and the web. The sheet needs GTK, WebKit and
 // the SDK, so it is read as text.
@@ -30,7 +30,7 @@ bool Has(const std::string& haystack, const char* needle) {
 
 UR_TEST(checkoutBridgeEnvelopeComesFromTheSdk) {
   const std::string sheet = ReadSource("UpgradeSheet.cpp");
-  UR_EXPECT_TRUE(Has(sheet, "urnet::buildCheckoutBridgeUrl(clientSecret)"));
+  UR_EXPECT_TRUE(Has(sheet, "urnet::buildInlineCheckoutBridgeUrl(clientSecret)"));
   UR_EXPECT_TRUE(Has(sheet, "urnet::isCheckoutRedirect(uri)"));
   UR_EXPECT_TRUE(Has(sheet, "urnet::parseCheckoutRedirect(uri)"));
   // no hand-built bridge url or hand-parsed status
