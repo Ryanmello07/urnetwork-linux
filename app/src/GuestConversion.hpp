@@ -17,6 +17,10 @@
 // installed: the session never leaves the network, and there is no sign-out
 // anywhere in this flow.
 //
+// A rate-limited code send holds Resend off until its retry time, and the
+// notice counts the minutes down (ResendCooldown, as the login verify page).
+// The session supplies the clock, so the countdown is testable.
+//
 // Header-only and free of GTK and the SDK so the unit tests build anywhere.
 // Not thread safe: the session delivers every answer on the main loop.
 // SPDX-License-Identifier: MPL-2.0
@@ -59,6 +63,9 @@ class GuestConversionSession {
   // on success, else the message to show.
   virtual void VerifyCode(const std::string& userAuth, const std::string& code,
                           std::function<void(std::string error)> done) = 0;
+  // Seconds on the monotonic clock the Resend cooldown runs on
+  // (MonotonicSeconds() in the app).
+  virtual int64_t NowSeconds() = 0;
 };
 
 enum class GuestConversionStep {
@@ -94,8 +101,21 @@ class GuestConversion {
   // the last failure to show, "" for none
   const std::string& Error() const { return error_; }
   const std::string& UserAuth() const { return userAuth_; }
-  // the last code send's outcome, none before the first send answers
-  const std::optional<VerifySendNotice>& Notice() const { return notice_; }
+  // The last code send's outcome as it reads now, none before the first send
+  // answers. A rate limit counts its minutes down and is gone once its retry
+  // time has passed.
+  std::optional<VerifySendNotice> Notice() const {
+    if (!notice_ || notice_->kind != VerifySendNoticeKind::RateLimited) return notice_;
+    const int64_t now = session_.NowSeconds();
+    if (cooldown_.CanResend(now)) return std::nullopt;
+    return cooldown_.NoticeAt(now);
+  }
+  // A rate limit is holding Resend off; the sheet re-renders every second
+  // while it is, to count down and bring Resend back.
+  bool CoolingDown() const { return !cooldown_.CanResend(session_.NowSeconds()); }
+  bool CanResend() const {
+    return step_ == GuestConversionStep::EnterCode && !sending_ && !CoolingDown();
+  }
   bool Busy() const {
     return step_ == GuestConversionStep::AddingSignIn || step_ == GuestConversionStep::Verifying ||
            sending_;
@@ -119,6 +139,7 @@ class GuestConversion {
     error_.clear();
     userAuth_.clear();
     notice_.reset();
+    cooldown_.Clear();
     sending_ = false;
     Changed();
   }
@@ -147,7 +168,7 @@ class GuestConversion {
   }
 
   void Resend() {
-    if (step_ != GuestConversionStep::EnterCode || sending_) return;
+    if (!CanResend()) return;
     Send();
   }
 
@@ -176,6 +197,7 @@ class GuestConversion {
     Changed();
     session_.SendCode(userAuth_, Guard([this](VerifySendNotice notice) {
       sending_ = false;
+      cooldown_.Start(notice, session_.NowSeconds());
       notice_ = std::move(notice);
       Changed();
     }));
@@ -190,6 +212,7 @@ class GuestConversion {
   std::string error_;
   std::string userAuth_;
   std::optional<VerifySendNotice> notice_;
+  ResendCooldown cooldown_;
   bool sending_ = false;
 };
 

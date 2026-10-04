@@ -90,4 +90,18 @@ UR_TEST(refreshedGuestIsStillAGuest) {
   UR_EXPECT_TRUE(!Has(store, "isGuest_ = byJwt->GuestMode;"));
 }
 
+// The conversion sheet's Resend follows the rate limit the way the verify page
+// does (GuestConversion's ResendCooldown, tested in GuestConversionTest): off
+// until the retry time, with the notice re-rendered every second.
+UR_TEST(guestConversionResendFollowsTheRateLimit) {
+  const std::string sheet = ReadSource("GuestConversionSheet.cpp");
+  const std::string render = FunctionBody(sheet, "void GuestConversionSheet::Render()");
+  UR_EXPECT_TRUE(!render.empty());
+  UR_EXPECT_TRUE_MSG("Resend follows CanResend", Has(render, "resend_->set_sensitive(conversion_->CanResend());"));
+  UR_EXPECT_TRUE_MSG("Resend is not only gated on busy", !Has(render, "resend_->set_sensitive(!busy);"));
+  UR_EXPECT_TRUE_MSG("the countdown ticks", Has(render, "if (conversion_->CoolingDown())"));
+  UR_EXPECT_TRUE(Has(render, "Glib::signal_timeout().connect_seconds("));
+  UR_EXPECT_TRUE(Has(sheet, "int64_t NowSeconds() override { return MonotonicSeconds(); }"));
+}
+
 }  // namespace

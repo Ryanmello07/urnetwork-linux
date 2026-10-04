@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 
+#include "AuthViews.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "Ui.hpp"
@@ -86,6 +87,8 @@ class SdkGuestConversionSession : public GuestConversionSession {
                              });
                            });
   }
+
+  int64_t NowSeconds() override { return MonotonicSeconds(); }
 
  private:
   SdkHost& host_;
@@ -193,6 +196,7 @@ GuestConversionSheet::GuestConversionSheet(Gtk::Window& parent, SdkHost& host,
 }
 
 GuestConversionSheet::~GuestConversionSheet() {
+  cooldownTick_.disconnect();
   // the conversion goes first: it drops its answers before the session goes
   conversion_.reset();
   session_.reset();
@@ -252,15 +256,31 @@ void GuestConversionSheet::Render() {
       stack_.set_visible_child("verify");
       codeError_->set_text(conversion_->Error());
       codeError_->set_visible(!conversion_->Error().empty());
-      if (conversion_->Notice()) {
-        ShowNotice(*conversion_->Notice());
+      if (const auto notice = conversion_->Notice()) {
+        ShowNotice(*notice);
       } else {
         notice_->set_text("");
+        notice_->remove_css_class("ur-error-text");
       }
-      resend_->set_sensitive(!busy);
+      // a rate limit holds Resend off until its retry time, and the notice
+      // counts its minutes down once a second (the verify page's TickRateLimit)
+      resend_->set_sensitive(conversion_->CanResend());
+      if (conversion_->CoolingDown()) {
+        if (!cooldownTick_.connected()) {
+          cooldownTick_ = Glib::signal_timeout().connect_seconds(
+              [this]() -> bool {
+                Render();
+                return conversion_->CoolingDown();
+              },
+              1);
+        }
+      } else {
+        cooldownTick_.disconnect();
+      }
       verify_->set_sensitive(!busy && !GuestConversion::Trim(code_->get_text().raw()).empty());
       return;
     case GuestConversionStep::Done:
+      cooldownTick_.disconnect();
       set_visible(false);
       if (on_done) on_done();
       return;

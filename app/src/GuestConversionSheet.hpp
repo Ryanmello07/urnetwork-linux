@@ -44,6 +44,8 @@ class GuestConversionSheet : public Gtk::Window {
   Gtk::Label* notice_ = nullptr;
   Gtk::Button* verify_ = nullptr;
   Gtk::Button* resend_ = nullptr;
+  // re-renders while a rate limit holds Resend off (the minutes count down)
+  sigc::connection cooldownTick_;
 };
 
 }  // namespace urnw

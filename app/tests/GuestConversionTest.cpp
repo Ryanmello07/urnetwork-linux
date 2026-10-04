@@ -16,6 +16,7 @@ namespace {
 using urnw::GuestConversion;
 using urnw::GuestConversionStep;
 using urnw::VerifySendNotice;
+using urnw::VerifySendNoticeKind;
 
 // Records every call; answers are queued and delivered on demand.
 class FakeSession : public urnw::GuestConversionSession {
@@ -23,6 +24,10 @@ class FakeSession : public urnw::GuestConversionSession {
   std::vector<std::string> calls;
   std::string addError;
   std::string verifyError;
+  // what every code send answers
+  VerifySendNotice sendNotice;
+  // the injected monotonic clock, in seconds
+  int64_t now = 1000;
   std::function<void(std::string)> pendingAdd;
 
   void AddSignIn(const std::string& userAuth, const std::string& password,
@@ -34,13 +39,14 @@ class FakeSession : public urnw::GuestConversionSession {
   void RefreshBalance() override { calls.push_back("refreshBalance"); }
   void SendCode(const std::string& userAuth, std::function<void(VerifySendNotice)> done) override {
     calls.push_back("sendCode " + userAuth);
-    done(VerifySendNotice{});
+    done(sendNotice);
   }
   void VerifyCode(const std::string& userAuth, const std::string& code,
                   std::function<void(std::string)> done) override {
     calls.push_back("verify " + userAuth + " " + code);
     done(verifyError);
   }
+  int64_t NowSeconds() override { return now; }
   void AnswerAdd() {
     auto done = std::move(pendingAdd);
     pendingAdd = nullptr;
@@ -117,6 +123,70 @@ UR_TEST(answerAfterResetIsDropped) {
   session.AnswerAdd();
   UR_EXPECT_TRUE(conversion.Step() == GuestConversionStep::EnterSignIn);
   UR_EXPECT_TRUE(session.calls.size() == 1);
+}
+
+VerifySendNotice RateLimited(int64_t retryAfterSeconds) {
+  return urnw::DecideVerifySendNotice(false, "verify_rate_limited", "Too many attempts.",
+                                   retryAfterSeconds);
+}
+
+size_t SendCount(const FakeSession& session) {
+  size_t count = 0;
+  for (const auto& call : session.calls) {
+    if (call.rfind("sendCode ", 0) == 0) ++count;
+  }
+  return count;
+}
+
+// The login verify page holds Resend off for a rate limit's retry time and
+// counts the minutes down; the conversion's code step did neither, so Resend
+// asked again at once and the notice kept its first minute count.
+UR_TEST(rateLimitHoldsResendUntilItsRetryTime) {
+  FakeSession session;
+  GuestConversion conversion(session);
+  session.sendNotice = RateLimited(150);
+  conversion.SubmitSignIn("guest@example.com", "correct horse battery");
+  session.AnswerAdd();
+  UR_EXPECT_TRUE(conversion.Step() == GuestConversionStep::EnterCode);
+  UR_EXPECT_EQ(size_t{1}, SendCount(session));
+  conversion.Resend();
+  UR_EXPECT_TRUE_MSG("Resend sends no second code during a rate limit", SendCount(session) == 1);
+  UR_EXPECT_FALSE(conversion.CanResend());
+  UR_EXPECT_TRUE(conversion.CoolingDown());
+  auto notice = conversion.Notice();
+  UR_EXPECT_TRUE(notice && notice->kind == VerifySendNoticeKind::RateLimited);
+  UR_EXPECT_EQ(int64_t{3}, notice ? notice->minutes : 0);
+  session.now += 100;
+  notice = conversion.Notice();
+  UR_EXPECT_EQ(int64_t{1}, notice ? notice->minutes : 0);  // counted down
+  conversion.Resend();
+  UR_EXPECT_EQ(size_t{1}, SendCount(session));
+  session.now += 50;
+  UR_EXPECT_TRUE(conversion.CanResend());
+  UR_EXPECT_FALSE(conversion.CoolingDown());
+  UR_EXPECT_FALSE(conversion.Notice().has_value());
+  session.sendNotice = VerifySendNotice{};
+  conversion.Resend();
+  UR_EXPECT_EQ(size_t{2}, SendCount(session));
+  notice = conversion.Notice();
+  UR_EXPECT_TRUE(notice && notice->kind == VerifySendNoticeKind::Sent);
+}
+
+// A plain send failure keeps Resend usable, and reopening the sheet drops a
+// running rate limit.
+UR_TEST(sendFailureAndResetDoNotHoldResend) {
+  FakeSession session;
+  GuestConversion conversion(session);
+  session.sendNotice = urnw::DecideVerifySendNotice(false, "verify_send_failed", "", 0);
+  conversion.SubmitSignIn("guest@example.com", "correct horse battery");
+  session.AnswerAdd();
+  UR_EXPECT_TRUE(conversion.CanResend());
+  session.sendNotice = RateLimited(600);
+  conversion.Resend();
+  UR_EXPECT_FALSE(conversion.CanResend());
+  conversion.Reset();
+  UR_EXPECT_FALSE(conversion.CoolingDown());
+  UR_EXPECT_FALSE(conversion.Notice().has_value());
 }
 
 }  // namespace
