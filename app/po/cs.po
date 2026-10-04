@@ -3285,8 +3285,11 @@ msgstr "K dispozici do {}"
 
 #. Onboarding offer screen: the single primary button. The number is the months the discount equals.
 msgctxt "offer_cta_start_trial_months_free"
-msgid "Start free trial with {} months free"
-msgstr "Začít zkušební období s {} měsíci zdarma"
+msgid "Start free trial with {} month free"
+msgid_plural "Start free trial with {} months free"
+msgstr[0] "Začít zkušební období s {} měsícem zdarma"
+msgstr[1] "Začít zkušební období s {} měsíci zdarma"
+msgstr[2] "Začít zkušební období s {} měsíci zdarma"
 
 #. Plan card with the welcome offer: the billed first-year amount (most prominent line).
 msgctxt "offer_first_year_price"
@@ -3295,8 +3298,11 @@ msgstr "{} za první rok"
 
 #. Onboarding offer screen headline. The number is the months the discount equals.
 msgctxt "offer_months_free_headline"
-msgid "{} months of Pro, free"
-msgstr "{} měsíce Pro zdarma"
+msgid "{} month of Pro, free"
+msgid_plural "{} months of Pro, free"
+msgstr[0] "{} měsíc Pro zdarma"
+msgstr[1] "{} měsíce Pro zdarma"
+msgstr[2] "{} měsíců Pro zdarma"
 
 #. Onboarding offer screen sub-line under the headline. The number is the percent off the first year.
 msgctxt "offer_percent_off_first_year"
@@ -3305,8 +3311,11 @@ msgstr "{} % sleva na první rok"
 
 #. Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).
 msgctxt "offer_terms_first_year"
-msgid "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
-msgstr "{0} dní zdarma, poté {1} za první rok, poté {2}/rok. Zrušit lze kdykoli."
+msgid "{0} day free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgstr[0] "{0} den zdarma, poté {1} za první rok, poté {2}/rok. Zrušit lze kdykoli."
+msgstr[1] "{0} dny zdarma, poté {1} za první rok, poté {2}/rok. Zrušit lze kdykoli."
+msgstr[2] "{0} dní zdarma, poté {1} za první rok, poté {2}/rok. Zrušit lze kdykoli."
 
 #. Plan card with the welcome offer: the renewal price line under the first-year amount.
 msgctxt "offer_then_regular_price"
@@ -3530,8 +3539,11 @@ msgstr "Ušetřete {} %"
 
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
-msgid "{0} days free, then {1}/year. Cancel anytime."
-msgstr "{0} dní zdarma, poté {1}/rok. Zrušit lze kdykoli."
+msgid "{0} day free, then {1}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1}/year. Cancel anytime."
+msgstr[0] "{0} den zdarma, poté {1}/rok. Zrušit lze kdykoli."
+msgstr[1] "{0} dny zdarma, poté {1}/rok. Zrušit lze kdykoli."
+msgstr[2] "{0} dní zdarma, poté {1}/rok. Zrušit lze kdykoli."
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -3687,10 +3699,6 @@ msgid_plural "{} providers"
 msgstr[0] "{} poskytovatel"
 msgstr[1] "{} poskytovatelé"
 msgstr[2] "{} poskytovatelů"
-
-msgctxt "provider_count_int"
-msgid "{} providers"
-msgstr "{} poskytovatelů"
 
 #. Post quantum identity: title of the connected provider identity key details view.
 msgctxt "provider_identities"
@@ -4237,8 +4245,11 @@ msgstr "Zapište si ji a uložte na bezpečné místo. Když ji ztratíte, ztrat
 
 #. Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.
 msgctxt "seedphrase_word_count_warning"
-msgid "That's {} words — a seedphrase is 12 or 24 words"
-msgstr "To je {} slov — seed fráze má 12 nebo 24 slov"
+msgid "That's {} word — a seedphrase is 12 or 24 words"
+msgid_plural "That's {} words — a seedphrase is 12 or 24 words"
+msgstr[0] "To je {} slovo — seed fráze má 12 nebo 24 slov"
+msgstr[1] "To jsou {} slova — seed fráze má 12 nebo 24 slov"
+msgstr[2] "To je {} slov — seed fráze má 12 nebo 24 slov"
 
 #. Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.
 msgctxt "seeker_multiplier_benefit"
@@ -5573,13 +5584,12 @@ msgctxt "you_get_3_gib_day_for_life"
 msgid "You get 3 GiB/day for life"
 msgstr "Získáte 3 GiB/den navždy"
 
-msgctxt "you_have_1_other_device_online"
-msgid "You have 1 other device online"
-msgstr "Máte 1 další zařízení online"
-
 msgctxt "you_have_n_other_devices_online"
-msgid "You have {} other devices online"
-msgstr "Máte {} dalších zařízení online"
+msgid "You have {} other device online"
+msgid_plural "You have {} other devices online"
+msgstr[0] "Máte {} další zařízení online"
+msgstr[1] "Máte {} další zařízení online"
+msgstr[2] "Máte {} dalších zařízení online"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "you_ll_unlock_even_faster_speeds_and_first_dibs"

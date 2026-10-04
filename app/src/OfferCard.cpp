@@ -131,9 +131,14 @@ void OfferCard::Update(const OfferView& offer, const PriceTierView& tier, int64_
     chargeLine_->set_text(
         Format(T_("offer_timeline_first_charge", "{} for the year, cancel anytime before"), first));
   }
-  terms_->set_text(Format(T_("offer_terms_first_year",
-                             "{} days free, then {} for your first year, then {}/year. Cancel anytime."),
-                          trialDays, first, regular));
+  // the trial length selects the plural form ("1 day", "14 days"); the English
+  // must be the catalog's msgid exactly, positional markers included
+  terms_->set_text(
+      Format(TN_("offer_terms_first_year",
+                 "{0} day free, then {1} for your first year, then {2}/year. Cancel anytime.",
+                 "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime.",
+                 static_cast<unsigned long>(trialDays)),
+             trialDays, first, regular));
 }
 
 }  // namespace urnw

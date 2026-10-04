@@ -126,7 +126,7 @@ msgstr "Пополните TAO для оплаты газа"
 #. A description of the user's ability to provide bandwidth.
 msgctxt "adjust_setting_always_fill_data_faster"
 msgid "Providing is off by default. Choose when your device provides below."
-msgstr "Вы можете изменить настройку на «Всегда», чтобы быстрее получать бесплатные данные."
+msgstr "Предоставление по умолчанию выключено. Ниже выберите, когда ваше устройство будет предоставлять доступ."
 
 #. Connection inspector: label of the action id row.
 msgctxt "adv_action_id"
@@ -291,7 +291,7 @@ msgstr "Сейчас невозможно проверить, действует
 #. Kill switch: how to clear a block the service still has installed; {command} is the shell command to use if toggling does not work.
 msgctxt "adv_kill_switch_still_installed_fix"
 msgid "Turning the kill switch on and then off again asks the service to clear it; if that does not work, remove it with: {}"
-msgstr "Включение и повторное выключение Kill switch попросит службу снять её; если это не помогло, снимите её командой: {}"
+msgstr "Если включить и снова выключить Kill switch, служба получит запрос снять блокировку; если это не помогло, снимите её командой: {}"
 
 #. Connection inspector: label of the last routing decision row.
 msgctxt "adv_last_decision"
@@ -843,7 +843,7 @@ msgstr "Бонусный реферальный код"
 #. A description of how users can earn more data by referring friends.
 msgctxt "boost_bandwidth_details"
 msgid "You get free data every month, and can earn more by referring friends."
-msgstr "Участвуя в сети и предоставляя пропускную способность, вы можете получать награды."
+msgstr "Вы получаете бесплатные данные каждый месяц и можете заработать больше, приглашая друзей."
 
 #. A title for the introductory usage bar.
 msgctxt "boost_your_bandwidth"
@@ -1133,7 +1133,7 @@ msgstr "Версия для сообщества"
 #. Call to action
 msgctxt "community_edition_details"
 msgid "Get free access to the community edition."
-msgstr "Участвуйте в сети и получите бесплатный доступ к версии для сообщества."
+msgstr "Получите бесплатный доступ к версии для сообщества."
 
 #. A label displayed next to a companion contract.
 msgctxt "companion"
@@ -1304,7 +1304,7 @@ msgstr[2] "{} контрактов"
 #. A faint scale-reference label under a stack of contract circles, giving the size of the largest contract in the stack. The argument is a formatted byte size (e.g. "128 MiB").
 msgctxt "contract_stack_max"
 msgid "max {}"
-msgstr "макс {}"
+msgstr "макс. {}"
 
 #. A description of the contract details view.
 msgctxt "contracts_appear_connected"
@@ -2857,12 +2857,12 @@ msgstr "Безопасные настройки по умолчанию не п�
 #. dns settings
 msgctxt "dns_pill_recommended"
 msgid "There are unapplied recommended settings for {}"
-msgstr "Есть непримененные рекомендуемые настройки для {}"
+msgstr "{}: есть неприменённые рекомендуемые настройки"
 
 #. dns settings
 msgctxt "dns_recommendation_message"
 msgid "The strongest security rules are known not to work in {}. There are less secure recommended DNS settings that work better."
-msgstr "Известно, что самые строгие правила безопасности не работают в {}. Есть менее безопасные рекомендованные настройки DNS, которые работают лучше."
+msgstr "{}: известно, что здесь самые строгие правила безопасности не работают. Есть менее безопасные рекомендуемые настройки DNS, которые работают лучше."
 
 #. dns settings
 msgctxt "dns_restore_secure_message"
@@ -2877,7 +2877,7 @@ msgstr "Настройки DNS недоступны"
 #. dns settings
 msgctxt "dns_unapplied_recommended"
 msgid "There are unapplied recommended settings for {}"
-msgstr "Есть непримененные рекомендуемые настройки для {}"
+msgstr "{}: есть неприменённые рекомендуемые настройки"
 
 #. dns settings
 msgctxt "dns_using_recommended"
@@ -3647,7 +3647,7 @@ msgstr "{} ч назад"
 #. Call to action
 msgctxt "how_are_we_doing"
 msgid "How are we doing?"
-msgstr "Как наши успехи?"
+msgstr "Как мы справляемся?"
 
 #. Used in Authenticate/CreateNetwork/CreateNetworkView.swift.
 msgctxt "i_agree_to_urnetwork_s_terms_and_services_https"
@@ -4118,7 +4118,7 @@ msgstr "локально"
 #. Call to action
 msgctxt "local_provider_safety_description"
 msgid "A local provider will run when you are connected to the network. There are over 30k providers today, and we have zero known security or ISP incidents. We value the ability for people to participate without issues, and have built the protocol to put safety first."
-msgstr "Локальный провайдер будет работать, когда вы подключены к сети. Сегодня существует более 30 тысяч провайдеров, и у нас нет известных инцидентов с безопасностью или провайдерами. Мы ценим возможность участия без проблем и создали протокол с приоритетом безопасности."
+msgstr "Локальный провайдер будет работать, когда вы подключены к сети. Сегодня существует более 30 тысяч провайдеров, и у нас нет известных инцидентов, связанных с безопасностью или интернет-провайдерами. Мы ценим возможность участия без проблем и создали протокол с приоритетом безопасности."
 
 #. Title of a card that shows the local traffic statistics.
 msgctxt "local_statistics"
@@ -4228,7 +4228,7 @@ msgstr "Управление подпиской"
 #. A label at the bottom of the contract stack
 msgctxt "max_n"
 msgid "max {}"
-msgstr "макс {}"
+msgstr "макс. {}"
 
 #. Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.
 msgctxt "member"
@@ -4548,7 +4548,7 @@ msgstr "Название вашей сети"
 #. Call to action
 msgctxt "network_name_ready_to_connect"
 msgid "{} is ready to connect"
-msgstr "{} готово к подключению"
+msgstr "Сеть {} готова к подключению"
 
 #. Error for network name input to display when a network name is already taken.
 msgctxt "network_name_taken"
@@ -4669,7 +4669,7 @@ msgstr "К сожалению, нам не удалось найти локац�
 #. Call to action
 msgctxt "no_log_files_found"
 msgid "No log file found"
-msgstr "Файл журнала не найден"
+msgstr "Файл логов не найден"
 
 #. A label displayed when there are no open contracts.
 msgctxt "no_open_contracts"
@@ -4743,8 +4743,11 @@ msgstr "Доступно до {}"
 
 #. Onboarding offer screen: the single primary button. The number is the months the discount equals.
 msgctxt "offer_cta_start_trial_months_free"
-msgid "Start free trial with {} months free"
-msgstr "Начать пробный период с {} бесплатными месяцами"
+msgid "Start free trial with {} month free"
+msgid_plural "Start free trial with {} months free"
+msgstr[0] "Начать пробный период с {} бесплатным месяцем"
+msgstr[1] "Начать пробный период с {} бесплатными месяцами"
+msgstr[2] "Начать пробный период с {} бесплатными месяцами"
 
 #. Plan card with the welcome offer: the billed first-year amount (most prominent line).
 msgctxt "offer_first_year_price"
@@ -4753,8 +4756,11 @@ msgstr "{} за первый год"
 
 #. Onboarding offer screen headline. The number is the months the discount equals.
 msgctxt "offer_months_free_headline"
-msgid "{} months of Pro, free"
-msgstr "{} месяца Pro бесплатно"
+msgid "{} month of Pro, free"
+msgid_plural "{} months of Pro, free"
+msgstr[0] "{} месяц Pro бесплатно"
+msgstr[1] "{} месяца Pro бесплатно"
+msgstr[2] "{} месяцев Pro бесплатно"
 
 #. Onboarding offer screen sub-line under the headline. The number is the percent off the first year.
 msgctxt "offer_percent_off_first_year"
@@ -4763,8 +4769,11 @@ msgstr "Скидка {}% на первый год"
 
 #. Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).
 msgctxt "offer_terms_first_year"
-msgid "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
-msgstr "{0} дней бесплатно, далее {1} за первый год, затем {2}/год. Отмена в любой момент."
+msgid "{0} day free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgstr[0] "{0} день бесплатно, далее {1} за первый год, затем {2}/год. Отмена в любой момент."
+msgstr[1] "{0} дня бесплатно, далее {1} за первый год, затем {2}/год. Отмена в любой момент."
+msgstr[2] "{0} дней бесплатно, далее {1} за первый год, затем {2}/год. Отмена в любой момент."
 
 #. Plan card with the welcome offer: the renewal price line under the first-year amount.
 msgctxt "offer_then_regular_price"
@@ -4819,7 +4828,7 @@ msgstr "Подключиться к {0} и открыть ссылку {1}"
 #. Call to action
 msgctxt "open_source_transparent"
 msgid "100% open source and transparent"
-msgstr "100% с открытым исходным кодом и прозрачностью"
+msgstr "100% открытый исходный код и прозрачность"
 
 #. Tray menu item that shows the app window. The counterpart of quit_urnetwork.
 msgctxt "open_urnetwork"
@@ -5009,7 +5018,7 @@ msgstr "Списание ежемесячно · отмена в любой мо
 #. Plan picker on the regional price tier: the line under the yearly price instead of a per-month equivalent; the placeholder is the storefront country's name.
 msgctxt "plan_billed_yearly_price_for_country"
 msgid "Billed once a year · price for {}"
-msgstr "Списание раз в год · цена для {}"
+msgstr "Списание раз в год · цена для страны {}"
 
 #. Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).
 msgctxt "plan_monthly_equivalent_line"
@@ -5038,8 +5047,11 @@ msgstr "Экономия {}%"
 
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
-msgid "{0} days free, then {1}/year. Cancel anytime."
-msgstr "{0} дней бесплатно, далее {1}/год. Отмена в любой момент."
+msgid "{0} day free, then {1}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1}/year. Cancel anytime."
+msgstr[0] "{0} день бесплатно, далее {1}/год. Отмена в любой момент."
+msgstr[1] "{0} дня бесплатно, далее {1}/год. Отмена в любой момент."
+msgstr[2] "{0} дней бесплатно, далее {1}/год. Отмена в любой момент."
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -5106,7 +5118,7 @@ msgstr "В таблице лидеров по очкам пока никого �
 #. Points leaderboard: shown under the own-stats card while the name switch is off. The network is listed either way, as Anonymous until the switch is on.
 msgctxt "points_leaderboard_private_hint"
 msgid "Your network appears as Anonymous until you turn this on."
-msgstr "Ваша сеть отображается как Анонимно, пока вы не включите это."
+msgstr "Ваша сеть отображается как «Анонимно», пока вы не включите этот параметр."
 
 #. Points count with unit for history rows.
 msgctxt "points_short"
@@ -5255,10 +5267,6 @@ msgid_plural "{} providers"
 msgstr[0] "{} провайдер"
 msgstr[1] "{} провайдера"
 msgstr[2] "{} провайдеров"
-
-msgctxt "provider_count_int"
-msgid "{} providers"
-msgstr "{} провайдеров"
 
 #. Post quantum identity: title of the connected provider identity key details view.
 msgctxt "provider_identities"
@@ -5411,17 +5419,17 @@ msgstr "Активирован"
 #. Used in Shared/Views/Introduction/IntroductionUsageBar.swift.
 msgctxt "refer_a_friend"
 msgid "Refer a friend"
-msgstr "Порекомендовать друга"
+msgstr "Пригласить друга"
 
 #. Used in Shared/Views/Introduction/IntroductionUsageBar.swift.
 msgctxt "refer_a_friend_30_gib_month"
 msgid "Refer a friend = +30 GiB/Month"
-msgstr "Порекомендовать друга = +30 GiB/месяц"
+msgstr "Пригласите друга = +30 GiB/месяц"
 
 #. A bullet point in the introduction view that describes how much extra bandwidth you can earn by referring a friend.
 msgctxt "refer_a_friend_3_gib_day"
 msgid "Refer a friend = +3 GiB/Day"
-msgstr "Порекомендовать друга = +3 GiB/день"
+msgstr "Пригласите друга = +3 GiB/день"
 
 #. Account Screen
 msgctxt "refer_and_earn"
@@ -5436,7 +5444,7 @@ msgstr "Поделитесь своим кодом. Друзья вводят е
 #. Refer overlay
 msgctxt "refer_friends_detail"
 msgid "More connections help our community stay anonymous (and help you earn!)"
-msgstr "Больше подключений помогают нашему сообществу оставаться анонимным (и помогают вам зарабатывать!)"
+msgstr "Больше подключений помогает нашему сообществу оставаться анонимным (и помогает вам зарабатывать!)"
 
 #. Refer overlay
 msgctxt "refer_friends_header"
@@ -5527,7 +5535,7 @@ msgstr "Каждый подтверждённый реферал даёт каж
 #. Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.
 msgctxt "referral_panel_heading"
 msgid "Refer a friend and you both get free data"
-msgstr "Пригласите друга и вы оба получите бесплатный трафик"
+msgstr "Пригласите друга, и вы оба получите бесплатный трафик"
 
 #. Status line of the gold referral panel while the network has no referral yet.
 msgctxt "referral_panel_none"
@@ -5890,8 +5898,11 @@ msgstr "Запишите её и храните в надёжном месте. 
 
 #. Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.
 msgctxt "seedphrase_word_count_warning"
-msgid "That's {} words — a seedphrase is 12 or 24 words"
-msgstr "Это {} слов — сид-фраза состоит из 12 или 24 слов"
+msgid "That's {} word — a seedphrase is 12 or 24 words"
+msgid_plural "That's {} words — a seedphrase is 12 or 24 words"
+msgstr[0] "Это {} слово — сид-фраза состоит из 12 или 24 слов"
+msgstr[1] "Это {} слова — сид-фраза состоит из 12 или 24 слов"
+msgstr[2] "Это {} слов — сид-фраза состоит из 12 или 24 слов"
 
 #. Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.
 msgctxt "seeker_multiplier_benefit"
@@ -5951,7 +5962,7 @@ msgstr "Отправить"
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"
-msgstr "Присылайте мне обновления продукта"
+msgstr "Присылать мне новости о продукте"
 
 #. Forgot password
 msgctxt "send_reset_link"
@@ -6607,12 +6618,12 @@ msgstr "Пока нет заблокированных локаций"
 #. App provider: no provider throughput
 msgctxt "site_app_no_provider_activity"
 msgid "No providing activity in this window."
-msgstr "Нет активности раздачи за этот период."
+msgstr "Нет активности предоставления за этот период."
 
 #. App provider: no provider contracts
 msgctxt "site_app_no_provider_contracts"
 msgid "No active provider contracts."
-msgstr "Нет активных контрактов раздачи."
+msgstr "Нет активных контрактов предоставления."
 
 #. App provider: no reliability data
 msgctxt "site_app_no_reliability"
@@ -6682,27 +6693,27 @@ msgstr "Профиль"
 #. App account: provider row + screen title
 msgctxt "site_app_provider"
 msgid "Providing"
-msgstr "Раздача"
+msgstr "Предоставление"
 
 #. App provider: contracts section
 msgctxt "site_app_provider_contracts"
 msgid "Provider contracts"
-msgstr "Контракты раздачи"
+msgstr "Контракты предоставления"
 
 #. App provider screen: intro
 msgctxt "site_app_provider_intro"
 msgid "How your network's devices are providing bandwidth and earning."
-msgstr "Как устройства вашей сети раздают трафик и зарабатывают."
+msgstr "Как устройства вашей сети предоставляют пропускную способность и зарабатывают."
 
 #. App provider: connect prompt for live stats
 msgctxt "site_app_provider_needs_connect"
 msgid "Connect to see live providing statistics."
-msgstr "Подключитесь, чтобы видеть статистику раздачи в реальном времени."
+msgstr "Подключитесь, чтобы видеть статистику предоставления в реальном времени."
 
 #. App provider: throughput section
 msgctxt "site_app_provider_stats"
 msgid "Provider statistics"
-msgstr "Статистика раздачи"
+msgstr "Статистика предоставления"
 
 #. App connect screen: provider grid section title
 msgctxt "site_app_providers"
@@ -7246,8 +7257,11 @@ msgstr "Продолжить с бесплатным планом"
 
 #. Final offer screen: the one primary button. {months} is a whole number.
 msgctxt "site_offer_cta"
-msgid "Start free trial with {} months free"
-msgstr "Начать пробный период с {} бесплатными месяцами"
+msgid "Start free trial with {} month free"
+msgid_plural "Start free trial with {} months free"
+msgstr[0] "Начать пробный период с {} бесплатным месяцем"
+msgstr[1] "Начать пробный период с {} бесплатными месяцами"
+msgstr[2] "Начать пробный период с {} бесплатными месяцами"
 
 #. Trial timeline: a row label for day {day}.
 msgctxt "site_offer_day_n"
@@ -7266,8 +7280,11 @@ msgstr "{} за первый год"
 
 #. Final offer screen: the headline. {months} is a whole number.
 msgctxt "site_offer_headline"
-msgid "{} months of Pro, free"
-msgstr "{} месяца Pro бесплатно"
+msgid "{} month of Pro, free"
+msgid_plural "{} months of Pro, free"
+msgstr[0] "{} месяц Pro бесплатно"
+msgstr[1] "{} месяца Pro бесплатно"
+msgstr[2] "{} месяцев Pro бесплатно"
 
 #. Upgrade sheet: the welcome-offer line while the offer is active. {percent} whole number, {when} a local date and time.
 msgctxt "site_offer_sheet_line"
@@ -7411,8 +7428,11 @@ msgstr "Экономия {}%"
 
 #. Under the yearly CTA: the trial terms. {price} is the yearly amount.
 msgctxt "site_plan_trial_terms"
-msgid "{0} days free, then {1}/year. Cancel anytime."
-msgstr "{0} дней бесплатно, затем {1}/год. Отмена в любое время."
+msgid "{0} day free, then {1}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1}/year. Cancel anytime."
+msgstr[0] "{0} день бесплатно, затем {1}/год. Отмена в любое время."
+msgstr[1] "{0} дня бесплатно, затем {1}/год. Отмена в любое время."
+msgstr[2] "{0} дней бесплатно, затем {1}/год. Отмена в любое время."
 
 #. Account panel: client info — principal label
 msgctxt "site_principal"
@@ -7562,7 +7582,7 @@ msgstr "Тариф Free"
 #. Subscription: manage-on-platform button ({platform})
 msgctxt "site_sub_manage_on"
 msgid "Manage in {platform}"
-msgstr "Управлять в {platform}"
+msgstr "Управлять через {platform}"
 
 #. Subscription: manage-on-platform button, Apple. A full sentence rather than interpolating the store name, because the article and case around it differ per language.
 msgctxt "site_sub_manage_on_apple"
@@ -7607,7 +7627,7 @@ msgstr "Ваша подписка Pro оплачивается через Google
 #. Subscription: date line when auto-renew is on. {date} is a localized date.
 msgctxt "site_sub_renews_on"
 msgid "Renews on {date}"
-msgstr "Продлится {date}"
+msgstr "Продление {date}"
 
 #. Subscription: undo a pending cancellation while the paid period is still running.
 msgctxt "site_sub_resume"
@@ -8036,7 +8056,7 @@ msgstr "Эту покупку не удалось подтвердить в App 
 #. dns settings
 msgctxt "this_region"
 msgid "this region"
-msgstr "этом регионе"
+msgstr "Этот регион"
 
 #. Subtitle shown under the Quick Settings tile when the VPN is connected.
 msgctxt "tile_status_connected"
@@ -8631,7 +8651,7 @@ msgstr "Добро пожаловать в URnetwork"
 #. Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheet.swift.
 msgctxt "when_unlinking_your_referral_network_you_will_no"
 msgid "When unlinking your referral network, you will no longer be able to earn points from {}."
-msgstr "При отключении вашей реферальной сети вы больше не сможете получать очки от {}."
+msgstr "При отвязке реферальной сети вы больше не сможете получать очки от {}."
 
 #. Call to action
 msgctxt "when_you_refer_a_friend"
@@ -8684,7 +8704,7 @@ msgstr "Ваши подключённые провайдеры на глобус
 #. Provider globe widget: providers not shown in the list. The argument is a count.
 msgctxt "widget_more_providers"
 msgid "+{} more"
-msgstr "ещё {}"
+msgstr "+ ещё {}"
 
 #. Contracts widget empty state while connected with no open client contracts.
 msgctxt "widget_no_contracts"
@@ -8835,13 +8855,12 @@ msgctxt "you_get_free_data_every_day"
 msgid "You get free data every day."
 msgstr "Вы получаете бесплатные данные каждый день."
 
-msgctxt "you_have_1_other_device_online"
-msgid "You have 1 other device online"
-msgstr "У вас 1 другое устройство онлайн"
-
 msgctxt "you_have_n_other_devices_online"
-msgid "You have {} other devices online"
-msgstr "У вас {} других устройств онлайн"
+msgid "You have {} other device online"
+msgid_plural "You have {} other devices online"
+msgstr[0] "У вас {} другое устройство онлайн"
+msgstr[1] "У вас {} других устройства онлайн"
+msgstr[2] "У вас {} других устройств онлайн"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "you_ll_unlock_even_faster_speeds_and_first_dibs"

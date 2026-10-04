@@ -808,7 +808,7 @@ msgstr "Будуйте інтернет правильно з URnetwork"
 #. Used in Shared/Views/Introduction/IntroductionUsageBar.swift.
 msgctxt "by_default_you_get_10_gib_month_here_s_how_you"
 msgid "By default you get 10 GiB/month. Here's how you can earn extra bandwidth:"
-msgstr "За замовчуванням ви отримуєте 10 ГіБ/місяць. Ось як можна отримати додаткову пропускну здатність:"
+msgstr "За замовчуванням ви отримуєте 10 GiB/місяць. Ось як можна отримати додаткову пропускну здатність:"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "by_subscribing_you_agree_to_urnetwork_s_terms"
@@ -1919,7 +1919,7 @@ msgstr "Не бачите?"
 #. Call to action
 msgctxt "earn_more_bullet_stay_connected"
 msgid "Stay connected daily = Earn up to {} GiB/Day"
-msgstr "Залишайтеся на зв'язку щодня = Заробляйте до {} ГіБ/день"
+msgstr "Залишайтеся на зв'язку щодня = Заробляйте до {} GiB/день"
 
 #. Call to action
 msgctxt "earning_multipliers"
@@ -3285,8 +3285,11 @@ msgstr "Доступно до {}"
 
 #. Onboarding offer screen: the single primary button. The number is the months the discount equals.
 msgctxt "offer_cta_start_trial_months_free"
-msgid "Start free trial with {} months free"
-msgstr "Почати пробний період із {} безкоштовними місяцями"
+msgid "Start free trial with {} month free"
+msgid_plural "Start free trial with {} months free"
+msgstr[0] "Почати пробний період із {} безкоштовним місяцем"
+msgstr[1] "Почати пробний період із {} безкоштовними місяцями"
+msgstr[2] "Почати пробний період із {} безкоштовними місяцями"
 
 #. Plan card with the welcome offer: the billed first-year amount (most prominent line).
 msgctxt "offer_first_year_price"
@@ -3295,8 +3298,11 @@ msgstr "{} за перший рік"
 
 #. Onboarding offer screen headline. The number is the months the discount equals.
 msgctxt "offer_months_free_headline"
-msgid "{} months of Pro, free"
-msgstr "{} місяці Pro безкоштовно"
+msgid "{} month of Pro, free"
+msgid_plural "{} months of Pro, free"
+msgstr[0] "{} місяць Pro безкоштовно"
+msgstr[1] "{} місяці Pro безкоштовно"
+msgstr[2] "{} місяців Pro безкоштовно"
 
 #. Onboarding offer screen sub-line under the headline. The number is the percent off the first year.
 msgctxt "offer_percent_off_first_year"
@@ -3305,8 +3311,11 @@ msgstr "Знижка {}% на перший рік"
 
 #. Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).
 msgctxt "offer_terms_first_year"
-msgid "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
-msgstr "{0} днів безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли."
+msgid "{0} day free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgstr[0] "{0} день безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли."
+msgstr[1] "{0} дні безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли."
+msgstr[2] "{0} днів безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли."
 
 #. Plan card with the welcome offer: the renewal price line under the first-year amount.
 msgctxt "offer_then_regular_price"
@@ -3346,7 +3355,7 @@ msgstr "Увімк."
 #. Call to action
 msgctxt "one_gib_per_day"
 msgid "1 GiB/Day"
-msgstr "1 ГіБ/день"
+msgstr "1 GiB/день"
 
 #. Call to action
 msgctxt "open_nested_link"
@@ -3530,8 +3539,11 @@ msgstr "Економія {}%"
 
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
-msgid "{0} days free, then {1}/year. Cancel anytime."
-msgstr "{0} днів безкоштовно, далі {1}/рік. Скасування будь-коли."
+msgid "{0} day free, then {1}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1}/year. Cancel anytime."
+msgstr[0] "{0} день безкоштовно, далі {1}/рік. Скасування будь-коли."
+msgstr[1] "{0} дні безкоштовно, далі {1}/рік. Скасування будь-коли."
+msgstr[2] "{0} днів безкоштовно, далі {1}/рік. Скасування будь-коли."
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -3688,10 +3700,6 @@ msgstr[0] "{} провайдер"
 msgstr[1] "{} провайдери"
 msgstr[2] "{} провайдерів"
 
-msgctxt "provider_count_int"
-msgid "{} providers"
-msgstr "{} провайдерів"
-
 #. Post quantum identity: title of the connected provider identity key details view.
 msgctxt "provider_identities"
 msgid "Provider Identities"
@@ -3823,7 +3831,7 @@ msgstr "Порекомендувати друга"
 #. Used in Shared/Views/Introduction/IntroductionUsageBar.swift.
 msgctxt "refer_a_friend_30_gib_month"
 msgid "Refer a friend = +30 GiB/Month"
-msgstr "Порекомендувати друга = +30 ГіБ/місяць"
+msgstr "Порекомендувати друга = +30 GiB/місяць"
 
 #. A bullet point in the introduction view that describes how much extra bandwidth you can earn by referring a friend.
 msgctxt "refer_a_friend_3_gib_day"
@@ -3858,12 +3866,12 @@ msgstr "Запросіть друзів і спостерігайте, як зб
 #. Referral perk bullet on the introduction referral screen. The referral grant is per day (pro.yml referral.period: 24h).
 msgctxt "refer_friends_perks"
 msgid "You get +{} GiB/day for life"
-msgstr "Ви отримуєте +{} ГіБ/день назавжди"
+msgstr "Ви отримуєте +{} GiB/день назавжди"
 
 #. Referral perk bullet on the introduction referral screen (the referred side). The referral grant is per day (pro.yml referral.period: 24h).
 msgctxt "refer_friends_they_get_data"
 msgid "Your friend gets +{} GiB/day for life"
-msgstr "Ваш друг отримує +{} ГіБ/день назавжди"
+msgstr "Ваш друг отримує +{} GiB/день назавжди"
 
 #. Call to action
 msgctxt "referral"
@@ -3873,7 +3881,7 @@ msgstr "Реферал"
 #. Referral earn rate shown next to the referral count (usage bar). The referral grant is per day (pro.yml referral.period: 24h).
 msgctxt "referral_bonus"
 msgid "+{} GiB/Day"
-msgstr "+{} ГіБ/день"
+msgstr "+{} GiB/день"
 
 #. Call to action
 msgctxt "referral_bonus_applied"
@@ -3996,7 +4004,7 @@ msgstr "Надійність"
 #. Call to action
 msgctxt "reliability_bonus"
 msgid "+{} GiB/Day"
-msgstr "+{} ГіБ/день"
+msgstr "+{} GiB/день"
 
 #. Call to action
 msgctxt "reliability_settings"
@@ -4237,8 +4245,11 @@ msgstr "Запишіть її та зберігайте в надійному м
 
 #. Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.
 msgctxt "seedphrase_word_count_warning"
-msgid "That's {} words — a seedphrase is 12 or 24 words"
-msgstr "Це {} слів — сід-фраза складається з 12 або 24 слів"
+msgid "That's {} word — a seedphrase is 12 or 24 words"
+msgid_plural "That's {} words — a seedphrase is 12 or 24 words"
+msgstr[0] "Це {} слово — сід-фраза складається з 12 або 24 слів"
+msgstr[1] "Це {} слова — сід-фраза складається з 12 або 24 слів"
+msgstr[2] "Це {} слів — сід-фраза складається з 12 або 24 слів"
 
 #. Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.
 msgctxt "seeker_multiplier_benefit"
@@ -5566,20 +5577,19 @@ msgstr "Так"
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "you_get_30_gib_month_for_life"
 msgid "You get 30 GiB/month for life"
-msgstr "Ви отримуєте 30 ГіБ/місяць назавжди"
+msgstr "Ви отримуєте 30 GiB/місяць назавжди"
 
 #. Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.
 msgctxt "you_get_3_gib_day_for_life"
 msgid "You get 3 GiB/day for life"
 msgstr "Ви отримуєте 3 GiB/день назавжди"
 
-msgctxt "you_have_1_other_device_online"
-msgid "You have 1 other device online"
-msgstr "У вас 1 інший пристрій онлайн"
-
 msgctxt "you_have_n_other_devices_online"
-msgid "You have {} other devices online"
-msgstr "У вас {} інших пристроїв онлайн"
+msgid "You have {} other device online"
+msgid_plural "You have {} other devices online"
+msgstr[0] "У вас {} інший пристрій онлайн"
+msgstr[1] "У вас {} інші пристрої онлайн"
+msgstr[2] "У вас {} інших пристроїв онлайн"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "you_ll_unlock_even_faster_speeds_and_first_dibs"
@@ -5614,7 +5624,7 @@ msgstr "name@email.com"
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "your_friend_gets_30_gib_month_for_life"
 msgid "Your friend gets 30 GiB/month for life"
-msgstr "Ваш друг отримує 30 ГіБ/місяць назавжди"
+msgstr "Ваш друг отримує 30 GiB/місяць назавжди"
 
 #. Text displayed in a scrollable view within a VStack in the body of a view that is displayed in a modal.
 msgctxt "your_friend_gets_3_gib_day_for"

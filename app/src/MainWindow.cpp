@@ -1299,8 +1299,10 @@ void MainWindow::OnSeedphraseChanged() {
     // the count is the whole diagnostic — "invalid seedphrase" would not tell
     // anyone that they pasted 23 words
     seedphraseCount_->set_text(
-        Format(T_("seedphrase_word_count_warning",
-                  "That's {} words — a seedphrase is 12 or 24 words"),
+        Format(TN_("seedphrase_word_count_warning",
+                   "That's {} word — a seedphrase is 12 or 24 words",
+                   "That's {} words — a seedphrase is 12 or 24 words",
+                   static_cast<unsigned long>(words)),
                static_cast<uint64_t>(words)));
   }
 }

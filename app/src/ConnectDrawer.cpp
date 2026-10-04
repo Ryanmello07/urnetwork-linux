@@ -757,7 +757,9 @@ void ConnectDrawer::RefreshControls() {
     const int providerCount = location->provider_count.value_or(0);
     if (0 < providerCount) {
       locationCaption_->set_text(
-          Format(T_("provider_count_int", "{} providers"), providerCount));
+          Format(TN_("provider_count", "{} provider", "{} providers",
+                     static_cast<unsigned long>(providerCount)),
+                 providerCount));
       locationCaption_->set_visible(true);
     } else {
       locationCaption_->set_visible(false);
