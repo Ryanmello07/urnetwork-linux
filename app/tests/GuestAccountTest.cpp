@@ -90,4 +90,35 @@ UR_TEST(refreshedGuestIsStillAGuest) {
   UR_EXPECT_TRUE(!Has(store, "isGuest_ = byJwt->GuestMode;"));
 }
 
+// Account > Login methods adds an email or phone through the same add -> code
+// -> verify flow and reports it added (reloads the methods) only once the code
+// is accepted; before, it reported the sign-in added as soon as addAuth
+// answered. The flow itself is tested in GuestConversionTest.
+UR_TEST(accountAddedSignInIsVerifiedBeforeItCountsAsAdded) {
+  const std::string page = ReadSource("AccountPage.cpp");
+  const std::string sheet = FunctionBody(page, "class AccountAddAuthSheet : public Gtk::Window");
+  UR_EXPECT_TRUE(!sheet.empty());
+  UR_EXPECT_TRUE(Has(sheet, "GuestConversion conversion_;"));
+  UR_EXPECT_TRUE(Has(sheet, "sheet.host_.api().addAuth("));
+  UR_EXPECT_TRUE(Has(sheet, "host_.ResendVerifyCode("));
+  UR_EXPECT_TRUE(Has(sheet, "host_.api().authVerify("));
+  UR_EXPECT_TRUE(!Has(sheet, "host_.VerifyCode("));  // the variant that signs in
+  // on_changed (the page's reload) runs only on the Done step
+  size_t calls = 0;
+  for (size_t at = sheet.find("if (on_changed) on_changed();"); at != std::string::npos;
+       at = sheet.find("if (on_changed) on_changed();", at + 1)) {
+    ++calls;
+    const size_t done = sheet.rfind("case GuestConversionStep::", at);
+    UR_EXPECT_TRUE(done != std::string::npos &&
+                   sheet.compare(done, 31, "case GuestConversionStep::Done:") == 0);
+  }
+  UR_EXPECT_EQ(size_t{1}, calls);
+  // the code page waits out a rate limit
+  UR_EXPECT_TRUE(Has(sheet, "resend_->set_sensitive(conversion_.CanResend());"));
+  UR_EXPECT_TRUE(Has(sheet, "TickCooldown("));
+  const std::string guestSheet = ReadSource("GuestConversionSheet.cpp");
+  UR_EXPECT_TRUE(Has(guestSheet, "resend_->set_sensitive(conversion_->CanResend());"));
+  UR_EXPECT_TRUE(Has(guestSheet, "ShowVerifySendNotice(*notice_, conversion_->ShownNotice());"));
+}
+
 }  // namespace

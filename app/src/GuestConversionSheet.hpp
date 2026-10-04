@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include <gtkmm.h>
 
@@ -15,6 +16,16 @@
 #include "SubscriptionBalance.hpp"
 
 namespace urnw {
+
+// Shows the last code send's outcome under the code field ("" for none): a
+// sent code muted, a failure or a counting-down rate limit as an error. Shared
+// with Account > Login methods (AccountAddAuthSheet), which verifies the same way.
+void ShowVerifySendNotice(Gtk::Label& label, const std::optional<VerifySendNotice>& notice);
+
+// Re-renders once a second while `conversion` waits out a rate limit, so the
+// minutes count down and Resend comes back on time.
+void TickCooldown(sigc::connection& tick, const GuestConversion& conversion,
+                  std::function<void()> render);
 
 class GuestConversionSheet : public Gtk::Window {
  public:
@@ -29,7 +40,6 @@ class GuestConversionSheet : public Gtk::Window {
 
  private:
   void Render();
-  void ShowNotice(const VerifySendNotice& notice);
 
   std::unique_ptr<GuestConversionSession> session_;
   std::unique_ptr<GuestConversion> conversion_;
@@ -44,6 +54,7 @@ class GuestConversionSheet : public Gtk::Window {
   Gtk::Label* notice_ = nullptr;
   Gtk::Button* verify_ = nullptr;
   Gtk::Button* resend_ = nullptr;
+  sigc::connection cooldownTick_;
 };
 
 }  // namespace urnw

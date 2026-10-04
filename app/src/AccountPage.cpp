@@ -15,6 +15,7 @@
 #include "AuthViews.hpp"
 #include "DeleteAccountOutcome.hpp"
 #include "Formatters.hpp"
+#include "GuestConversionSheet.hpp"
 #include "I18n.hpp"
 #include "ManageSubscription.hpp"
 #include "PaneKit.hpp"
@@ -514,10 +515,108 @@ class AccountUsageBar : public Gtk::Box {
 // unlinks a real referral network or destroys a real network from a screen
 // that says "Please login to URnetwork". EarningsPage hands its sheet the same
 // gate for the same reason.
+//
+// An email or phone counts as added only once it is verified (GuestConversion,
+// the flow the guest conversion uses too): addAuth -> send a code ->
+// authVerify. The page reloads the methods only after the code is accepted;
+// closing on the code page leaves an unverified sign-in that the next password
+// sign-in verifies. The jwt authVerify returns is not installed (the session
+// already holds this network's). SSO and wallet sign-ins are not added here.
 class AccountAddAuthSheet : public Gtk::Window {
+  // The SDK side of the flow, gated by the page and guarded by the sheet's
+  // epoch; every answer is posted to the main loop.
+  class Session : public GuestConversionSession {
+   public:
+    explicit Session(AccountAddAuthSheet& sheet) : sheet_(sheet) {}
+
+    void AddSignIn(const std::string& userAuth, const std::string& password,
+                   std::function<void(std::string error)> done) override {
+      AccountAddAuthSheet& sheet = sheet_;
+      if (!sheet.CanAct()) {
+        done(T_("please_login_to_urnetwork", "Please login to URnetwork"));
+        return;
+      }
+      urnet::AddAuthArgs args{};
+      args.user_auth = userAuth;
+      args.password = password;
+
+      auto epoch = sheet.epoch_;
+      const uint64_t seen = *sheet.epoch_;
+      // 20 s: an answer that never comes must not leave Add greyed out forever
+      // with no line of explanation under it.
+      const uint32_t flow = sheet.flow_.Begin(kApiTimeoutMs, [done] {
+        done(T_("something_went_wrong", "Something went wrong."));
+      });
+      sheet.host_.api().addAuth(
+          std::optional<urnet::AddAuthArgs>(args),
+          [&sheet, epoch, seen, flow, done](std::optional<urnet::AddAuthResult> result,
+                                            std::optional<std::string> err) {
+            PostToMain([&sheet, epoch, seen, flow, done, result = std::move(result),
+                        err = std::move(err)] {
+              if (*epoch != seen) return;  // a newer Open() (or teardown) owns it
+              if (!sheet.flow_.Settle(flow, "add login method")) return;
+              const bool ok = result.has_value() && !err.has_value() && !result->error;
+              if (ok) {
+                done(std::string());
+                return;
+              }
+              std::string message = FirstMessage(
+                  result && result->error ? result->error->message : std::string(), err);
+              g_warning("account: addAuth failed: %s",
+                        message.empty() ? "(no error text)" : message.c_str());
+              if (message.empty()) message = T_("something_went_wrong", "Something went wrong.");
+              done(message);
+            });
+          });
+    }
+
+    // this network was never a guest: nothing to lift
+    void RefreshJwt() override {}
+    void RefreshBalance() override {}
+
+    void SendCode(const std::string& userAuth,
+                  std::function<void(VerifySendNotice notice)> done) override {
+      auto epoch = sheet_.epoch_;
+      const uint64_t seen = *epoch;
+      sheet_.host_.ResendVerifyCode(userAuth, [epoch, seen, done](VerifySendNotice notice) {
+        PostToMain([epoch, seen, done, notice] {
+          if (*epoch == seen) done(notice);
+        });
+      });
+    }
+
+    // authVerify without SdkHost::VerifyCode's sign-in: the returned jwt is
+    // for this same network, and the session already holds one.
+    void VerifyCode(const std::string& userAuth, const std::string& code,
+                    std::function<void(std::string error)> done) override {
+      urnet::AuthVerifyArgs args{};
+      args.user_auth = userAuth;
+      args.verify_code = code;
+      auto epoch = sheet_.epoch_;
+      const uint64_t seen = *epoch;
+      sheet_.host_.api().authVerify(
+          std::optional<urnet::AuthVerifyArgs>(args),
+          [epoch, seen, done](std::optional<urnet::AuthVerifyResult> result,
+                              std::optional<std::string> err) {
+            std::string error;
+            if (err || !result || result->error) {
+              error = FirstMessage(
+                  result && result->error ? result->error->message : std::string(), err);
+              if (error.empty()) error = T_("something_went_wrong", "Something went wrong.");
+            }
+            PostToMain([epoch, seen, done, error] {
+              if (*epoch == seen) done(error);
+            });
+          });
+    }
+
+   private:
+    AccountAddAuthSheet& sheet_;
+  };
+
  public:
   AccountAddAuthSheet(Gtk::Window& parent, SdkHost& host, std::function<bool()> canAct)
-      : host_(host), canAct_(std::move(canAct)) {
+      : host_(host), canAct_(std::move(canAct)), session_(*this), conversion_(session_) {
     set_transient_for(parent);
     set_modal(true);
     set_title(T_("site_app_login_methods", "Login methods"));
@@ -527,6 +626,7 @@ class AccountAddAuthSheet : public Gtk::Window {
     add_css_class("ur-sheet");  // sheets sit ABOVE the page: #151515
     AddEscapeToClose(*this);
 
+    // ---- page 1: the sign-in to add ----
     auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
     box->set_margin(24);
     box->set_size_request(kSheetWidthNarrow, -1);
@@ -544,7 +644,7 @@ class AccountAddAuthSheet : public Gtk::Window {
     auth_ = Gtk::make_managed<Gtk::Entry>();
     auth_->add_css_class("ur-input");
     kit::SetAccessibleLabel(*auth_, T_("your_email", "Your email"));
-    auth_->signal_changed().connect([this] { Validate(); });
+    auth_->signal_changed().connect([this] { Render(); });
     box->append(*auth_);
 
     auto* passwordLabel = Gtk::make_managed<Gtk::Label>(T_("password_label", "Password"));
@@ -555,7 +655,7 @@ class AccountAddAuthSheet : public Gtk::Window {
     password_->add_css_class("ur-input");
     password_->set_show_peek_icon(true);
     kit::SetAccessibleLabel(*password_, T_("password_label", "Password"));
-    password_->signal_changed().connect([this] { Validate(); });
+    password_->signal_changed().connect([this] { Render(); });
     box->append(*password_);
 
     auto* rule = Gtk::make_managed<Gtk::Label>(
@@ -578,115 +678,152 @@ class AccountAddAuthSheet : public Gtk::Window {
     add_ = Gtk::make_managed<Gtk::Button>(T_("add", "Add"));
     add_->add_css_class("suggested-action");  // the dialog-primary role
     add_->set_sensitive(false);
-    add_->signal_clicked().connect([this] { Submit(); });
+    add_->signal_clicked().connect([this] {
+      conversion_.SubmitSignIn(auth_->get_text().raw(), password_->get_text().raw());
+    });
     actions->append(*add_);
     box->append(*actions);
+    stack_.add(*box, "sign-in");
 
-    set_child(*box);
+    // ---- page 2: verify the added sign-in ----
+    auto* verifyPage = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+    verifyPage->set_margin(24);
+    verifyPage->set_size_request(kSheetWidthNarrow, -1);
+    auto* verifyHeading =
+        Gtk::make_managed<Gtk::Label>(T_("login_verify_header", "You've got mail"));
+    verifyHeading->add_css_class("ur-step-heading");
+    verifyHeading->set_xalign(0);
+    verifyPage->append(*verifyHeading);
+    auto* explanation = Gtk::make_managed<Gtk::Label>(
+        T_("verify_explanation",
+           "Tell us who you really are. Enter the code we sent you to verify your identity."));
+    explanation->add_css_class("dim-label");
+    explanation->set_xalign(0);
+    explanation->set_wrap(true);
+    verifyPage->append(*explanation);
+    code_ = Gtk::make_managed<Gtk::Entry>();
+    code_->add_css_class("ur-otp");
+    code_->set_placeholder_text(T_("verify_input_label", "Verification code"));
+    kit::SetAccessibleLabel(*code_, T_("verify_input_label", "Verification code"));
+    code_->signal_changed().connect([this] { Render(); });
+    code_->signal_activate().connect([this] { conversion_.SubmitCode(code_->get_text().raw()); });
+    verifyPage->append(*code_);
+    codeError_ = MakeSizedLabel({}, 12, "ur-caption");
+    codeError_->set_visible(false);
+    verifyPage->append(*codeError_);
+    notice_ = MakeSizedLabel({}, 12, "ur-caption");
+    notice_->set_wrap(true);
+    verifyPage->append(*notice_);
+    auto* verifyActions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    verifyActions->set_halign(Gtk::Align::END);
+    resend_ = Gtk::make_managed<Gtk::Button>(T_("resend_verify_code", "Resend code"));
+    resend_->add_css_class("flat");
+    resend_->signal_clicked().connect([this] { conversion_.Resend(); });
+    verifyActions->append(*resend_);
+    verify_ = Gtk::make_managed<Gtk::Button>(T_("verify", "Verify"));
+    verify_->add_css_class("suggested-action");
+    verify_->signal_clicked().connect([this] { conversion_.SubmitCode(code_->get_text().raw()); });
+    verifyActions->append(*verify_);
+    verifyPage->append(*verifyActions);
+    stack_.add(*verifyPage, "verify");
+
+    set_child(stack_);
     // DefaultButton = Primary here (spec): this sheet ADDS, it never destroys.
     add_->set_receives_default(true);
     set_default_widget(*add_);
+    conversion_.on_changed = [this] { Render(); };
   }
 
-  ~AccountAddAuthSheet() override { ++*epoch_; }  // orphan every in-flight submit
+  ~AccountAddAuthSheet() override {
+    ++*epoch_;  // orphan every in-flight call
+    cooldownTick_.disconnect();
+    conversion_.on_changed = nullptr;
+  }
 
-  // The page reloads the network user so the new method appears in the list.
+  // The page reloads the network user so the new, verified method appears.
   std::function<void()> on_changed;
 
   void Open() {
     ++*epoch_;
     flow_.Abandon();  // a previous submit's watchdog may still be armed
-    submitting_ = false;
+    cooldownTick_.disconnect();
+    conversion_.Reset();
     auth_->set_text("");
     password_->set_text("");
-    error_->set_visible(false);
-    const bool session = CanAct();
-    auth_->set_sensitive(session);
-    password_->set_sensitive(session);
-    if (!session) {
-      // never a disabled field with no explanation
-      ApplyFieldState(*error_, AccountFieldState::NoSession);
-      error_->set_visible(true);
-    }
-    Validate();
+    code_->set_text("");
+    Render();
     present();
   }
 
  private:
   bool CanAct() const { return canAct_ && canAct_(); }
 
-  void Validate() {
-    const bool session = CanAct();
-    const std::string auth = TrimSpace(auth_->get_text().raw());
-    const std::string password = password_->get_text().raw();
-    add_->set_sensitive(!submitting_ && session && !auth.empty() &&
-                        password.size() >= static_cast<size_t>(kMinPasswordLength));
-  }
-
-  void ShowError(const Glib::ustring& message) {
-    SetToned(*error_, kUrDanger, message);
-    error_->set_visible(true);
-  }
-
-  void Submit() {
-    if (submitting_ || !CanAct()) return;
-    const std::string auth = TrimSpace(auth_->get_text().raw());
-    const std::string password = password_->get_text().raw();
-    if (auth.empty() || password.size() < static_cast<size_t>(kMinPasswordLength)) return;
-
-    submitting_ = true;
-    add_->set_sensitive(false);
-    error_->set_visible(false);
-
-    urnet::AddAuthArgs args{};
-    args.user_auth = auth;
-    args.password = password;
-
-    auto epoch = epoch_;
-    const uint64_t seen = *epoch_;
-    // 20 s: an answer that never comes must not leave Add greyed out forever
-    // with no line of explanation under it.
-    const uint32_t flow = flow_.Begin(kApiTimeoutMs, [this] {
-      submitting_ = false;
-      ShowError(T_("something_went_wrong", "Something went wrong."));
-      Validate();
-    });
-    host_.api().addAuth(
-        std::optional<urnet::AddAuthArgs>(args),
-        [this, epoch, seen, flow](std::optional<urnet::AddAuthResult> result,
-                                  std::optional<std::string> err) {
-          PostToMain([this, epoch, seen, flow, result = std::move(result),
-                      err = std::move(err)] {
-            if (*epoch != seen) return;  // a newer Open() (or teardown) owns it
-            if (!flow_.Settle(flow, "add login method")) return;
-            submitting_ = false;
-            const std::string message = FirstMessage(
-                result && result->error ? result->error->message : std::string(), err);
-            const bool ok = result.has_value() && !err.has_value() && !result->error;
-            if (!ok) {
-              g_warning("account: addAuth failed: %s",
-                        message.empty() ? "(no error text)" : message.c_str());
-              ShowError(message.empty()
-                            ? Glib::ustring(T_("something_went_wrong", "Something went wrong."))
-                            : Glib::ustring(message));
-              Validate();  // re-enable per the gate, never blindly
-              return;
-            }
-            if (on_changed) on_changed();
-            set_visible(false);
-          });
-        });
+  void Render() {
+    const GuestConversionStep step = conversion_.Step();
+    const bool busy = conversion_.Busy();
+    switch (step) {
+      case GuestConversionStep::EnterSignIn:
+      case GuestConversionStep::AddingSignIn: {
+        stack_.set_visible_child("sign-in");
+        const bool session = CanAct();
+        auth_->set_sensitive(session && !busy);
+        password_->set_sensitive(session && !busy);
+        if (!session) {
+          // never a disabled field with no explanation
+          ApplyFieldState(*error_, AccountFieldState::NoSession);
+          error_->set_visible(true);
+        } else if (!conversion_.Error().empty()) {
+          SetToned(*error_, kUrDanger, conversion_.Error());
+          error_->set_visible(true);
+        } else {
+          error_->set_visible(false);
+        }
+        add_->set_sensitive(!busy && session &&
+                            GuestConversion::CanSubmitSignIn(auth_->get_text().raw(),
+                                                             password_->get_text().raw()));
+        return;
+      }
+      case GuestConversionStep::EnterCode:
+      case GuestConversionStep::Verifying:
+        stack_.set_visible_child("verify");
+        if (conversion_.Error().empty()) {
+          codeError_->set_visible(false);
+        } else {
+          SetToned(*codeError_, kUrDanger, conversion_.Error());
+          codeError_->set_visible(true);
+        }
+        ShowVerifySendNotice(*notice_, conversion_.ShownNotice());
+        TickCooldown(cooldownTick_, conversion_, [this] { Render(); });
+        code_->set_sensitive(!busy);
+        resend_->set_sensitive(conversion_.CanResend());
+        verify_->set_sensitive(!busy && !GuestConversion::Trim(code_->get_text().raw()).empty());
+        return;
+      case GuestConversionStep::Done:
+        // added only now that the code was accepted
+        cooldownTick_.disconnect();
+        set_visible(false);
+        if (on_changed) on_changed();
+        return;
+    }
   }
 
   SdkHost& host_;
   std::function<bool()> canAct_;  // the PAGE's gate: preview first, then session
   std::shared_ptr<uint64_t> epoch_ = std::make_shared<uint64_t>(0);
   AccountFlow flow_;
+  Session session_;
+  GuestConversion conversion_;
+  sigc::connection cooldownTick_;
+  Gtk::Stack stack_;
   Gtk::Entry* auth_ = nullptr;
   Gtk::PasswordEntry* password_ = nullptr;
   Gtk::Label* error_ = nullptr;
   Gtk::Button* add_ = nullptr;
-  bool submitting_ = false;
+  Gtk::Entry* code_ = nullptr;
+  Gtk::Label* codeError_ = nullptr;
+  Gtk::Label* notice_ = nullptr;
+  Gtk::Button* resend_ = nullptr;
+  Gtk::Button* verify_ = nullptr;
 };
 
 // =============================================================================
