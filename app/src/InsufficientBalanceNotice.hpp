@@ -14,6 +14,10 @@
 // or the connection is no longer requested; a disconnect does not re-arm it
 // within the episode.
 //
+// A new connect is a different matter: with no balance it is blocked and the
+// entry point shows the upgrade path instead (BlockConnect, below). That gate
+// only ever applies to starting a session, never to one that is already up.
+//
 // Pure and dependency-free so tests/InsufficientBalanceNoticeTest.cpp runs
 // without GTK. Not thread safe: driven from the GTK main loop only.
 //
@@ -92,6 +96,95 @@ class Tracker {
 
   bool posted_ = false;
   bool shown_ = false;
+};
+
+// ---- the start-connect gate ----------------------------------------------------
+// Connect with no balance is blocked; a connection that runs out of balance
+// stays up (urnetwork/android#483). Every connect entry point asks this before
+// it starts anything: the tray menu, the Connect page, a location pick, connect
+// on launch and the post-sign-in connect.
+
+// What a connect entry point is asking for.
+enum class ConnectAttempt {
+  // No session is up: this press would start one.
+  Start,
+  // A session is up (health::SessionUp): a location change or a re-assertion
+  // of the tunnel the user never left. Never blocked, never disconnected.
+  AlreadyConnected,
+};
+
+inline ConnectAttempt ClassifyConnect(bool sessionUp) {
+  return sessionUp ? ConnectAttempt::AlreadyConnected : ConnectAttempt::Start;
+}
+
+// Whether the entry point must not start the tunnel and should show the
+// upgrade path instead. Only a Start is ever blocked, by the same Gate as the
+// held alert.
+inline bool BlockConnect(ConnectAttempt attempt, const Signals& s) {
+  return attempt == ConnectAttempt::Start && Gate(s);
+}
+
+// Out of balance outlives the reading that reported it. The SDK clears the
+// contract status whenever the destination changes, the user's Disconnect
+// included, so after a Disconnect the live reading says nothing about the
+// balance, and a Connect press would start a tunnel that can only hold
+// traffic again. The latch keeps the last known out-of-balance state until
+// there is evidence the balance changed:
+//   - providers attached on a live session with no insufficient balance (the
+//     contracts went through), or
+//   - the subscription balance rose above its lowest value seen since the
+//     state was latched (a refill, a redeemed code or a purchase landed).
+// Pro and a purchase poll are handled by Gate. Reset on sign-in and sign-out.
+class OutOfBalanceLatch {
+ public:
+  struct Observation {
+    // ContractStatus.InsufficientBalance from the live connect reading.
+    bool insufficientBalance = false;
+    // A session is up and the controller reports providers attached.
+    bool providersConnected = false;
+    // The subscription balance has been fetched, and its available bytes.
+    bool balanceKnown = false;
+    long long availableBytes = 0;
+  };
+
+  void Observe(const Observation& o) {
+    if (o.insufficientBalance) {
+      latched_ = true;
+      NoteBalance(o);
+      return;
+    }
+    if (!latched_) return;
+    if (o.providersConnected) {
+      Reset();
+      return;
+    }
+    if (o.balanceKnown && lowKnown_ && o.availableBytes > lowBytes_) {
+      Reset();
+      return;
+    }
+    NoteBalance(o);
+  }
+
+  void Reset() {
+    latched_ = false;
+    lowKnown_ = false;
+    lowBytes_ = 0;
+  }
+
+  bool OutOfBalance() const { return latched_; }
+
+ private:
+  void NoteBalance(const Observation& o) {
+    if (!o.balanceKnown) return;
+    if (!lowKnown_ || o.availableBytes < lowBytes_) {
+      lowKnown_ = true;
+      lowBytes_ = o.availableBytes;
+    }
+  }
+
+  bool latched_ = false;
+  bool lowKnown_ = false;
+  long long lowBytes_ = 0;
 };
 
 }  // namespace balance_notice

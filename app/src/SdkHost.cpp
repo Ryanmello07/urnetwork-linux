@@ -3399,6 +3399,8 @@ std::vector<uint8_t> SdkHost::PublicIdentityKey() {
 }
 
 void SdkHost::ConnectBestAvailable() {
+  // a location pick or a press while out of balance starts nothing
+  if (connectGate_ && connectGate_()) return;
   std::scoped_lock lock(mutex_);
   // THE CALLER GOT HERE BELIEVING THERE IS A SESSION. Verify that with the
   // daemon before driving anything: if the service restarted (or another
@@ -3472,6 +3474,7 @@ void SdkHost::ConnectBestAvailable() {
 }
 
 void SdkHost::Connect(const std::optional<urnet::ConnectLocation>& location) {
+  if (connectGate_ && connectGate_()) return;
   std::scoped_lock lock(mutex_);
   if (connectVc_) {
     connectVc_->connect(location);
