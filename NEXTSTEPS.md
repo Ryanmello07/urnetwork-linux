@@ -114,13 +114,15 @@ Bring these to Linux (same cross-platform SDK the apple app uses):
 - [x] **Sign in with Bittensor** (`apple/BITTENSOR.md`, `apple/NEXTSTEPS2.md`) —
   **DONE**: the same bridge, but **one hop** (`provider=bittensor&method=signMessage`)
   and a **plain-query return** (`?address=<ss58>&signature=<0xhex>`, no NaCl
-  envelope — sr25519 signatures are public). `WalletConnect::SignInWithBittensor` →
-  `SdkHost::SignInWithBittensor` → `authLogin{wallet_auth, blockchain: urnet::TAO}`;
-  the server verifies sr25519. "Sign in with Bittensor" sits **above** the
-  Phantom/Solflare buttons on the login view. The optional WalletConnect Cloud
-  project id lives in `src/Config.hpp` (`kWalletConnectProjectId`, or
-  `meson setup -Dwalletconnect_project_id=<id>`) — **empty is valid**: the bridge
-  then drives injected (extension) wallets only. Same deploy dependency as Solana
+  envelope — sr25519 signatures are public). Since UPGRADE.md 4.6 it runs on the
+  SDK's `BittensorWalletSession` with a wallet chooser: **Talisman** signs on the
+  bridge (`&wallet=talisman`, extension only, no WalletConnect project id) and
+  **TAO.com** on the manual sheet (`BittensorManualSheet`: the challenge, the
+  address, a pasted signature), because TAO.com documents no programmatic
+  interface. `SdkHost::SignInWithBittensor(walletId)` →
+  `authLogin{wallet_auth, blockchain: urnet::TAO}`; the server verifies sr25519.
+  "Sign in with Bittensor" sits **above** the Phantom/Solflare buttons on the
+  login view. Same deploy dependency as Solana
   (the bridge page) + a real-wallet round trip.
   **Bittensor's two account-surface pieces are still missing with the account UI**:
   "Connect wallet" for Bittensor (paste an ss58 address →

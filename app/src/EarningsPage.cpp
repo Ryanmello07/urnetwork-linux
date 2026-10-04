@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <utility>
 
+#include "BittensorWalletFlow.hpp"
 #include "EmojiKeyboard.hpp"
 #include "EmojiTagSheet.hpp"
 #include "ExtenderProvideRowPaint.hpp"
@@ -31,7 +32,6 @@ constexpr int kPaneCWidth = 380;
 constexpr int kThreePaneDip = 1500;  // earnings | history | network
 constexpr int kTwoPaneDip = 900;     // earnings | history
 constexpr int kApiTimeoutMs = 20000;      // plain api calls
-constexpr int kBridgeTimeoutMs = 180000;  // browser-bridge flows: minutes are legitimate
 constexpr int kChainTimeoutMs = 180000;   // a claim waits for a receipt
 constexpr int kValidateDebounceMs = 300;
 constexpr int kSheetMinWidth = 480;
@@ -2660,7 +2660,47 @@ void EarningsPage::OnConnectWithBridge() {
     RefuseNoSession();
     return;
   }
-  StartWalletSignature(std::string());  // whichever wallet the bridge picks
+  ChooseBittensorWallet(std::string());  // whichever account the wallet picks
+}
+
+void EarningsPage::ChooseBittensorWallet(const std::string& expectedAddress) {
+  auto* window = dynamic_cast<Gtk::Window*>(get_root());
+  GtkWidget* dialog = adw_message_dialog_new(
+      window ? window->gobj() : nullptr,
+      T_("bittensor_choose_wallet", "Choose your Bittensor wallet"), nullptr);
+  // wallet names are product names: never translated (the SDK names them)
+  const std::string talisman =
+      urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTalisman));
+  const std::string taoCom =
+      urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTaoCom));
+  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
+                                   "talisman", talisman.c_str(), "taocom", taoCom.c_str(),
+                                   nullptr);
+  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "talisman",
+                                             ADW_RESPONSE_SUGGESTED);
+  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "talisman");
+  struct Ctx {
+    EarningsPage* self;
+    std::string expectedAddress;
+    std::shared_ptr<uint64_t> epoch;
+    uint64_t seen;
+  };
+  g_signal_connect_data(
+      dialog, "response",
+      G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
+        auto* ctx = static_cast<Ctx*>(data);
+        if (*ctx->epoch != ctx->seen) return;  // the page was reset meanwhile
+        if (g_strcmp0(response, "talisman") == 0) {
+          ctx->self->StartWalletSignature(std::string(bittensor::kWalletTalisman),
+                                          ctx->expectedAddress);
+        } else if (g_strcmp0(response, "taocom") == 0) {
+          ctx->self->StartWalletSignature(std::string(bittensor::kWalletTaoCom),
+                                          ctx->expectedAddress);
+        }
+      }),
+      new Ctx{this, expectedAddress, epoch_, *epoch_},
+      +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
+  gtk_window_present(GTK_WINDOW(dialog));
 }
 
 void EarningsPage::OnToggleManualEntry() {
@@ -2787,15 +2827,20 @@ void EarningsPage::OnConnectManual() {
     RefuseNoSession();
     return;
   }
-  StartWalletSignature(address);  // still signed: the bridge must sign with THIS wallet
+  ChooseBittensorWallet(address);  // still signed: the wallet must sign with THIS account
 }
 
-void EarningsPage::StartWalletSignature(const std::string& expectedAddress) {
+void EarningsPage::StartWalletSignature(const std::string& walletId,
+                                        const std::string& expectedAddress) {
+  if (connecting_) return;
   connecting_ = true;
   RebuildWalletBlock();
-  // 180s, not 20s: the bridge reports errors only when a deep link comes BACK,
-  // and a closed browser tab produces nothing, ever
-  const uint32_t generation = BeginFlow(connectFlow_, kBridgeTimeoutMs, [this] {
+  // minutes, not 20s: the bridge reports errors only when a deep link comes
+  // BACK, and a closed browser tab produces nothing, ever; the manual sheet
+  // lasts as long as its challenge
+  const uint32_t timeoutMs = bittensor::TimeoutMsFor(
+      urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform)));
+  const uint32_t generation = BeginFlow(connectFlow_, static_cast<int>(timeoutMs), [this] {
     FinishConnecting();
     Notify(T_("wallet_connect_failed", "Failed to connect the wallet."),
            kit::Snackbar::Severity::Error);
@@ -2803,7 +2848,7 @@ void EarningsPage::StartWalletSignature(const std::string& expectedAddress) {
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   host_.SignBittensorConnect(
-      expectedAddress,
+      walletId, expectedAddress,
       [this, epoch, seen, generation, expectedAddress](SdkHost::WalletSignature signature) {
         PostToMain([this, epoch, seen, generation, expectedAddress,
                     signature = std::move(signature)] {
@@ -2818,6 +2863,10 @@ void EarningsPage::OnWalletSigned(uint32_t generation, const SdkHost::WalletSign
   if (!SettleFlow(connectFlow_, generation, "wallet signature")) return;
   if (!signature.ok) {
     FinishConnecting();
+    if (bittensor::IsCancelled(signature.error)) {
+      // the user closed the manual sheet: the block is simply ready again
+      return;
+    }
     if (bridge::IsSuperseded(signature.error)) {
       // the user started another wallet flow (the Solana sheet): this attempt
       // ended by their choice, and the block is simply ready again

@@ -13,6 +13,7 @@
 #include <glibmm/datetime.h>
 
 #include "AppPrefs.hpp"
+#include "BittensorWalletFlow.hpp"
 #include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
 #include "DaemonUnreachableCopy.hpp"
@@ -309,6 +310,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   });
   host_.SetJwtRefreshedHandler([this] {
     PostToMain([this] { balance_.OnJwtRefreshed(); });
+  });
+  host_.SetBittensorManualHandler([this](SdkHost::BittensorManualRequest request) {
+    ShowBittensorManualSheet(request);
   });
   host_.SetOnboardingLinkHandler([this](const std::string& url) {
     PostToMain([this, url] { HandleOnboardingLink(url); });
@@ -2153,17 +2157,66 @@ void MainWindow::OnSso(const std::string& provider) {
   host_.SignInWithSso(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
+// The Bittensor tile asks which wallet first: Talisman signs on the ur.io
+// bridge in the browser (its extension), TAO.com on the manual sheet (it
+// documents no programmatic interface). BittensorWalletFlow.hpp.
 void MainWindow::OnBittensor() {
-  SetLoginNotice(T_("opening_bittensor_wallet_in_browser",
-                    "Opening your Bittensor wallet in the browser…"));
+  loginError_.set_text("");
+  GtkWidget* dialog = adw_message_dialog_new(
+      GTK_WINDOW(gobj()), T_("bittensor_choose_wallet", "Choose your Bittensor wallet"), nullptr);
+  // wallet names are product names: never translated (the SDK names them)
+  const std::string talisman = urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTalisman));
+  const std::string taoCom = urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTaoCom));
+  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
+                                   "talisman", talisman.c_str(), "taocom", taoCom.c_str(),
+                                   nullptr);
+  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "talisman",
+                                             ADW_RESPONSE_SUGGESTED);
+  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "talisman");
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
+                     auto* self = static_cast<MainWindow*>(data);
+                     if (g_strcmp0(response, "talisman") == 0) {
+                       self->OnBittensorWallet(std::string(bittensor::kWalletTalisman));
+                     } else if (g_strcmp0(response, "taocom") == 0) {
+                       self->OnBittensorWallet(std::string(bittensor::kWalletTaoCom));
+                     }
+                   }),
+                   this);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+void MainWindow::OnBittensorWallet(const std::string& walletId) {
+  const std::string transport =
+      urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
+  if (transport == bittensor::kTransportBrowserBridge) {
+    SetLoginNotice(Format(T_("bittensor_continue_in_browser",
+                             "Continue in your browser and approve the request in the {} "
+                             "extension."),
+                          urnet::bittensorWalletDisplayName(walletId)));
+  }
   SetLoginBusy(true);
-  host_.SignInWithBittensor([this](AuthResult r) { OnWalletAuth(r); });
+  host_.SignInWithBittensor(walletId, [this](AuthResult r) { OnWalletAuth(r); });
+}
+
+// The manual sheet (TAO.com) for any Bittensor flow: sign-in, the
+// create-network signature, or the Earnings coldkey. One at a time: a newer
+// request replaces the sheet (the older flow was superseded already).
+void MainWindow::ShowBittensorManualSheet(const SdkHost::BittensorManualRequest& request) {
+  if (bittensorManualSheet_) bittensorManualSheet_->set_visible(false);
+  bittensorManualSheet_ = std::make_unique<BittensorManualSheet>(*this, host_, request);
+  bittensorManualSheet_->present();
 }
 
 // Shared tail of both wallet sign-ins (the SDK callback thread lands here).
 void MainWindow::OnWalletAuth(const AuthResult& result) {
   PostToMain([this, result] {
     SetLoginBusy(false);
+    if (!result.ok && bittensor::IsCancelled(result.error)) {
+      // the user closed the Bittensor manual sheet: nothing failed
+      loginError_.set_text("");
+      return;
+    }
     if (result.wallet_needs_network) {
       // wallet authenticated but has no network: the host kept the signed
       // wallet_auth; finish sign-up on the create page (name + terms)

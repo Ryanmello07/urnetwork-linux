@@ -9,18 +9,20 @@
 // (generateWalletKeyPair / generateSharedSecret / encrypt/decryptData / base58)
 // so it's wire-compatible with Apple's CryptoKit path.
 //
-// Bittensor is ONE hop: the bridge connects an injected substrate wallet
-// (Bittensor Wallet / SubWallet / Talisman / polkadot-js — or a wallet app
-// paired over WalletConnect when a project id is configured, see Config.hpp)
-// and signs in the same page load. sr25519 signatures are public, so there is
-// no encryption envelope and no keypair: the return is PLAIN query params
-// (?address=<ss58>&signature=<0xhex>). The signature is verified server side
-// against blockchain "TAO". See apple/BITTENSOR.md + apple/NEXTSTEPS2.md.
+// Bittensor runs through the SDK's BittensorWalletSession (sdk
+// bittensor_wallet.go), one session per challenge: the session builds the
+// bridge url (Talisman: the page uses only window.injectedWeb3["talisman"])
+// and judges every result, a bridge return or a manually pasted signature,
+// against the challenge it issued (message, purpose, typed address, ss58,
+// signature shape, expiry). Only an accepted proof reaches on_signature; what
+// the outcomes mean for the flow is BittensorWalletFlow.hpp. sr25519
+// signatures are public, so there is no envelope and no keypair.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -40,13 +42,23 @@ class WalletConnect {
   // on_signature fires (base64) on the urnetwork://<provider>-sign-message callback.
   void SignMessage(const std::string& message);
 
-  // Bittensor: open the browser to sign `message` in one hop (no connect step,
-  // no envelope). on_signature fires (sr25519 hex) on the
-  // urnetwork://bittensor-sign-message callback, with publicKey() holding the
-  // ss58 address the bridge returned alongside it.
-  // `purpose` rides along to the bridge (and back in the callback) so the same
-  // page can sign a sign-in challenge or a wallet-attach proof ("connect").
-  void SignInWithBittensor(const std::string& message, const std::string& purpose = std::string());
+  // Bittensor: hand the wallet the session (its challenge already set). The
+  // browser_bridge transport opens session->bridgeUrl(); the manual transport
+  // opens nothing (the host shows the manual sheet and calls
+  // SubmitBittensorManual). Results arrive on on_signature with publicKey()
+  // and message() taken from the accepted proof.
+  void SignWithBittensor(std::shared_ptr<urnet::BittensorWalletSession> session);
+
+  // The manual sheet's Continue: the session judges the typed address and the
+  // pasted signature. An accepted proof goes on to on_signature; the result is
+  // returned either way so the sheet can show a correctable refusal.
+  urnet::BittensorWalletResult SubmitBittensorManual(const std::string& address,
+                                                     const std::string& signature);
+
+  // The session in flight, if any (the host cancels it when the sheet closes).
+  std::shared_ptr<urnet::BittensorWalletSession> bittensorSession() const {
+    return bittensorSession_;
+  }
 
   // Sign in with Apple straight against Apple (SsoBridge.hpp, "Sign in with
   // Apple"): the browser opens Apple's authorize page, the api's callback
@@ -91,7 +103,11 @@ class WalletConnect {
   void OpenUrl(const std::string& url);
   void HandleConnect(Provider p, const std::string& query);
   void HandleSignMessage(Provider p, const std::string& query);
-  void HandleBittensorSignMessage(const std::string& query);
+  // urnetwork://bittensor-sign-message?...: judged by the session
+  void HandleBittensorReturn(const std::string& url);
+  // an accepted proof -> on_signature; a refusal for this flow -> on_error;
+  // an answer that is not this flow's -> dropped. Returns the outcome.
+  void DeliverBittensorResult(const urnet::BittensorWalletResult& result, bool manual);
   // urnetwork://oauth/<apple|google>?state=…&id_token=… (or &error=…)
   void HandleOAuthReturn(const std::string& url);
 
@@ -101,6 +117,7 @@ class WalletConnect {
   std::optional<std::string> session_;
   Provider currentProvider_ = Provider::Phantom;
   std::string lastMessage_;
+  std::shared_ptr<urnet::BittensorWalletSession> bittensorSession_;
 };
 
 }  // namespace urnw
