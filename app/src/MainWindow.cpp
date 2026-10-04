@@ -379,6 +379,10 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   locationOverride_ = std::make_unique<GeoClueLocationOverride>(
       std::make_unique<DaemonGeoClueWriter>(host_.Control()));
 
+  // The location picks (Network page, location chooser) connect through the
+  // host directly; the host asks the same gate.
+  host_.SetConnectGate([this] { return ConnectBlockedByBalance(); });
+
   if (host_.IsLoggedIn()) {
     // AUTO-CONNECT IS OPT IN, DEFAULT OFF. Being signed in is not a request to
     // connect: this ran on every launch of a signed-in account and brought the
@@ -477,6 +481,10 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
 // control client (DaemonAuthOutcome). It is rendered from its own copy table
 // below and never through the DaemonUnreachable arm.
 TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
+  // Out of balance, a new connection is not started at all: no tunnel, no
+  // routes, the upgrade path instead. Every caller (the Connect press, connect
+  // on launch, the post-sign-in connect) passes through here.
+  if (ConnectBlockedByBalance()) return TunnelStartResult::Failed;
   // Snapshot the reply counter BEFORE the attempt. LastAuthOutcome() describes
   // the last reply this client processed, and StartTunnel() has failure paths
   // that never send anything (not signed in; unusable device-rpc key material).
@@ -1001,7 +1009,10 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 // Only the initial step shows the carousel, and only while the window is on
 // screen — a tray app spends most of its life hidden, and a slideshow nobody
 // can see is pure wakeups.
-MainWindow::~MainWindow() { UntrackAppFocus(); }
+MainWindow::~MainWindow() {
+  UntrackAppFocus();
+  host_.SetConnectGate(nullptr);  // the gate reads this window
+}
 
 void MainWindow::TrackAppFocus() {
   auto toplevels = Gtk::Window::get_toplevels();
@@ -1715,13 +1726,7 @@ void MainWindow::BuildHome() {
   connectPage_->on_connected_icon_tap = [this] { LaunchProCelebration(); };
   // the out-of-balance held alert: the same guest fork as Account's upgrade,
   // and the notification's disconnect-only path
-  connectPage_->on_open_upgrade = [this] {
-    if (balance_.IsGuest()) {
-      OpenGuestConversion();
-    } else if (drawer_) {
-      drawer_->OpenUpgrade();
-    }
-  };
+  connectPage_->on_open_upgrade = [this] { OpenUpgrade(); };
   connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
   shell_->SetPage("connect", *connectPage_);
   shell_->SetPage("connect-legacy", *scroller);
@@ -1756,13 +1761,7 @@ void MainWindow::BuildHome() {
     }
   };
   // Same guest fork as Earnings: a guest has no account to hang a plan on.
-  accountPage_->on_open_upgrade = [this] {
-    if (balance_.IsGuest()) {
-      OpenGuestConversion();
-    } else if (drawer_) {
-      drawer_->OpenUpgrade();
-    }
-  };
+  accountPage_->on_open_upgrade = [this] { OpenUpgrade(); };
   // a Pro network's plan label replays the Pro celebration
   accountPage_->on_plan_label_tap = [this] { LaunchProCelebration(); };
   // The redeem sheet needs the balance store (it starts confirmation polling),
@@ -2285,6 +2284,8 @@ void MainWindow::OpenOnboardingIfPending() {
 
 void MainWindow::ApplyAuthState(bool loggedIn) {
   stack_.set_visible_child(loggedIn ? "home" : "login");
+  // a known out-of-balance state belongs to the session that observed it
+  outOfBalance_.Reset();
   if (loggedIn) {
     SyncProvideControlMode();
     ApplyConnectReading(host_.CurrentConnectReading());
@@ -2374,6 +2375,8 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // not; the caller is not the right place to guess.
   // false: this path issues its own connect immediately below, deliberately
   // unconditional so a Connect press also self-heals a stale session.
+  // Out of balance, StartTunnelUi refuses before anything starts
+  // (ConnectBlockedByBalance) and this press opens the upgrade path instead.
   if (StartTunnelUi(/*connectDestination=*/false) != TunnelStartResult::Started) return;
   host_.ConnectBestAvailable();
   // the connect-reading feed reflects the real state as it changes
@@ -2468,11 +2471,46 @@ void MainWindow::UpdateBalanceNotice() {
   if (connectPage_) connectPage_->ApplyBalanceNotice(signals);
   Sink sink{*this};
   balanceNotice_.Observe(signals, sink);
+
+  balance_notice::OutOfBalanceLatch::Observation observation;
+  observation.insufficientBalance = reading_.insufficientBalance;
+  observation.providersConnected =
+      reading_.sdk == health::SdkStatus::Connected &&
+      health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
+  observation.balanceKnown = balance_.HasFetched();
+  observation.availableBytes = balance_.AvailableByteCount();
+  outOfBalance_.Observe(observation);
 }
 
 void MainWindow::DisconnectFromBalanceNotice() {
   // the user's own Disconnect path, disconnect only
   ToggleConnect(/*disconnect=*/true);
+}
+
+bool MainWindow::ConnectBlockedByBalance() {
+  balance_notice::Signals signals;
+  signals.insufficientBalance = reading_.insufficientBalance || outOfBalance_.OutOfBalance();
+  signals.pro = balance_.IsPro();
+  signals.polling = balance_.IsPolling();
+  signals.connectRequested = reading_.destinationSelected;
+  const bool sessionUp = health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
+  if (!balance_notice::BlockConnect(balance_notice::ClassifyConnect(sessionUp), signals)) {
+    return false;
+  }
+  // nothing is started; the press opens the way to add balance instead, in
+  // front of the user even when it came from the tray with the window hidden
+  g_message("connect: not started, the account is out of balance; opening the upgrade path");
+  present();
+  OpenUpgrade();
+  return true;
+}
+
+void MainWindow::OpenUpgrade() {
+  if (balance_.IsGuest()) {
+    OpenGuestConversion();
+  } else if (drawer_) {
+    drawer_->OpenUpgrade();
+  }
 }
 
 void MainWindow::OpenProviderLocations() {

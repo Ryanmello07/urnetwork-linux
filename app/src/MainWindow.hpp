@@ -313,6 +313,16 @@ class MainWindow : public Gtk::ApplicationWindow {
   // fed from the connect reading and the balance store.
   balance_notice::Tracker balanceNotice_;
   void UpdateBalanceNotice();
+  // The last known out-of-balance state, kept across the user's Disconnect
+  // (the SDK clears the contract status with the destination).
+  balance_notice::OutOfBalanceLatch outOfBalance_;
+  // The start-connect gate every connect entry point asks before starting
+  // anything (balance_notice::BlockConnect). True means the press was turned
+  // into the upgrade path and nothing was started. A session that is already
+  // up is never blocked.
+  bool ConnectBlockedByBalance();
+  // The upgrade path: guest conversion for a guest, else the upgrade sheet.
+  void OpenUpgrade();
   // tray app: skip window-widget updates while hidden (resynced on show) so a
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;
