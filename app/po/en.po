@@ -6239,6 +6239,11 @@ msgctxt "site_account_tools"
 msgid "Account tools"
 msgstr "Account tools"
 
+#. ur.io account: shown on a legacy guest network (one with no sign-in method) in place of checkout, and on the add sign-in method sheet. Adding a sign-in method converts the network in place: its plan and balance stay with it.
+msgctxt "site_add_sign_in_guest"
+msgid "Add a way to sign in to this network before buying. Its plan and balance stay with it."
+msgstr "Add a way to sign in to this network before buying. Its plan and balance stay with it."
+
 #. App wallets/blocked: add button
 msgctxt "site_app_add"
 msgid "Add"
@@ -6723,6 +6728,11 @@ msgstr "Your devices online"
 msgctxt "site_app_pending"
 msgid "Pending"
 msgstr "Pending"
+
+#. ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.
+msgctxt "site_app_phone"
+msgid "Phone"
+msgstr "Phone"
 
 #. Connect drawer: plan section label
 msgctxt "site_app_plan"
