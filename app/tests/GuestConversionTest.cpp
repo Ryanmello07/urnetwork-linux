@@ -189,4 +189,38 @@ UR_TEST(sendFailureAndResetDoNotHoldResend) {
   UR_EXPECT_FALSE(conversion.Notice().has_value());
 }
 
+// A purchase entry that sent a guest to the conversion continues to its
+// checkout once the conversion is done and the guest clears; it used to close
+// back to where the user started.
+UR_TEST(purchaseContinuesAfterTheConversion) {
+  urnw::GuestUpgradeContinuation continuation;
+  int checkouts = 0;
+  continuation.Divert([&checkouts] { ++checkouts; });
+  continuation.Poll(/*isGuest=*/false);
+  UR_EXPECT_EQ(0, checkouts);  // not before the conversion is done
+  continuation.ConversionDone();
+  continuation.ConversionClosed();
+  continuation.Poll(/*isGuest=*/true);  // the balance re-read is in flight
+  UR_EXPECT_EQ(0, checkouts);
+  continuation.Poll(/*isGuest=*/false);
+  UR_EXPECT_EQ(1, checkouts);
+  continuation.Poll(false);
+  UR_EXPECT_EQ(1, checkouts);  // once
+  UR_EXPECT_FALSE(continuation.Pending());
+}
+
+UR_TEST(cancelledConversionDoesNotContinue) {
+  urnw::GuestUpgradeContinuation continuation;
+  int checkouts = 0;
+  continuation.Divert([&checkouts] { ++checkouts; });
+  continuation.ConversionClosed();  // closed without adding a sign-in
+  continuation.Poll(false);
+  UR_EXPECT_EQ(0, checkouts);
+  UR_EXPECT_FALSE(continuation.Pending());
+  // a plain "Create an account" (no purchase) has nothing to continue
+  continuation.ConversionDone();
+  continuation.Poll(false);
+  UR_EXPECT_EQ(0, checkouts);
+}
+
 }  // namespace

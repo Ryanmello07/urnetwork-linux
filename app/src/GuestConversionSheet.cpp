@@ -281,8 +281,9 @@ void GuestConversionSheet::Render() {
       return;
     case GuestConversionStep::Done:
       cooldownTick_.disconnect();
-      set_visible(false);
+      // on_done before the hide: the window's hide handler reads it
       if (on_done) on_done();
+      set_visible(false);
       return;
   }
 }

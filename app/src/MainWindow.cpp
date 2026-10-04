@@ -234,6 +234,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // fan out to the drawer's plan card, banner, and the upgrade sheet states.
   balance_.SetChangedHandler([this] {
     if (drawer_) drawer_->OnBalanceChanged();
+    // a converted guest's purchase continues once the server stops reporting a guest
+    guestUpgrade_.Poll(balance_.IsGuest());
     UpdateBalanceNotice();  // a Pro upgrade or a settled poll moves the gate
     // Earnings gates its upgrade door and its plan-flavoured copy on the same
     // two bits the drawer's plan card reads.
@@ -1659,6 +1661,9 @@ void MainWindow::BuildHome() {
   // usage card (with the upgrade + redeem flows behind it)
   drawer_ = Gtk::make_managed<ConnectDrawer>(host_, *this, balance_);
   drawer_->on_create_account = [this] { OpenGuestConversion(); };
+  drawer_->on_guest_upgrade = [this](std::function<void()> checkout) {
+    DivertGuestToConversion(std::move(checkout));
+  };
   // "Total referrals" in the drawer's usage bar opens the same Referrals page
   // Account's row opens (one referral screen everywhere)
   drawer_->on_open_referrals = [this] {
@@ -1716,11 +1721,7 @@ void MainWindow::BuildHome() {
   // the out-of-balance held alert: the same guest fork as Account's upgrade,
   // and the notification's disconnect-only path
   connectPage_->on_open_upgrade = [this] {
-    if (balance_.IsGuest()) {
-      OpenGuestConversion();
-    } else if (drawer_) {
-      drawer_->OpenUpgrade();
-    }
+    if (drawer_) drawer_->OpenUpgrade();  // a guest converts first, then continues
   };
   connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
   shell_->SetPage("connect", *connectPage_);
@@ -2019,14 +2020,26 @@ void MainWindow::OpenGuestConversion() {
   if (!guestConversionSheet_) {
     guestConversionSheet_ = std::make_unique<GuestConversionSheet>(*this, host_, balance_);
     guestConversionSheet_->on_done = [this] {
+      guestUpgrade_.ConversionDone();
       if (shell_) {
         shell_->snackbar().Show(
             T_("sign_in_method_added_successfully", "Sign-in method added successfully"),
             kit::Snackbar::Severity::Success);
       }
     };
+    // closed, done or not (on_done runs first): a purchase that sent the guest
+    // here continues once the guest clears, here or on the balance change
+    guestConversionSheet_->signal_hide().connect([this] {
+      guestUpgrade_.ConversionClosed();
+      guestUpgrade_.Poll(balance_.IsGuest());
+    });
   }
   guestConversionSheet_->Open();
+}
+
+void MainWindow::DivertGuestToConversion(std::function<void()> checkout) {
+  guestUpgrade_.Divert(std::move(checkout));
+  OpenGuestConversion();
 }
 
 // android presents AuthCodeLoginSheet — a modal with its own field — instead
@@ -2305,7 +2318,9 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // bool poked into a copy of the last one.
     ApplyConnectReading(ConnectReading{});
     balance_.Stop();
-    // a conversion belongs to the session that started it
+    // a conversion, and the purchase waiting on it, belong to the session
+    // that started it
+    guestUpgrade_.Clear();
     if (guestConversionSheet_) guestConversionSheet_->set_visible(false);
     if (earningsPage_) earningsPage_->Load();  // settles every panel on empty
     if (settingsPage_) settingsPage_->Load();

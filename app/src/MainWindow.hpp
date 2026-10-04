@@ -147,6 +147,10 @@ class MainWindow : public Gtk::ApplicationWindow {
   // a sign-in is added to THIS network and verified, so its plan and balance
   // stay. Signing out would abandon the network for good (it has no login).
   void OpenGuestConversion();
+  // A guest's purchase entry: the in-place conversion first, then `checkout`
+  // once it is done and the network no longer reads as a guest
+  // (GuestUpgradeContinuation).
+  void DivertGuestToConversion(std::function<void()> checkout);
   void NavigateVerify(const std::string& userAuth);
   void ApplyAuthState(bool loggedIn);
   // ONE READING IN, EVERY WINDOW SURFACE OUT. There is no SetConnected(bool)
@@ -277,6 +281,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // drawer exposes no opener, so the window keeps its own (lazily built).
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;
   std::unique_ptr<GuestConversionSheet> guestConversionSheet_;  // lazily built
+  GuestUpgradeContinuation guestUpgrade_;
   std::unique_ptr<OnboardingWindow> onboarding_;
   void OpenOnboardingIfPending();
   // urnetwork://onboarding/<connect|widgets|offer|feedback> (the campaign
