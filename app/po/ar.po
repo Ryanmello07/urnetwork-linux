@@ -4782,8 +4782,14 @@ msgstr "متاح حتى {}"
 
 #. Onboarding offer screen: the single primary button. The number is the months the discount equals.
 msgctxt "offer_cta_start_trial_months_free"
-msgid "Start free trial with {} months free"
-msgstr "ابدأ التجربة المجانية مع {} أشهر مجانًا"
+msgid "Start free trial with {} month free"
+msgid_plural "Start free trial with {} months free"
+msgstr[0] "ابدأ التجربة المجانية مع {} شهر مجانًا"
+msgstr[1] "ابدأ التجربة المجانية مع شهر واحد مجانًا"
+msgstr[2] "ابدأ التجربة المجانية مع شهرين مجانًا"
+msgstr[3] "ابدأ التجربة المجانية مع {} أشهر مجانًا"
+msgstr[4] "ابدأ التجربة المجانية مع {} شهرًا مجانًا"
+msgstr[5] "ابدأ التجربة المجانية مع {} شهر مجانًا"
 
 #. Plan card with the welcome offer: the billed first-year amount (most prominent line).
 msgctxt "offer_first_year_price"
@@ -4792,8 +4798,14 @@ msgstr "{} لسنتك الأولى"
 
 #. Onboarding offer screen headline. The number is the months the discount equals.
 msgctxt "offer_months_free_headline"
-msgid "{} months of Pro, free"
-msgstr "{} أشهر من Pro مجانًا"
+msgid "{} month of Pro, free"
+msgid_plural "{} months of Pro, free"
+msgstr[0] "{} شهر من Pro مجانًا"
+msgstr[1] "شهر واحد من Pro مجانًا"
+msgstr[2] "شهران من Pro مجانًا"
+msgstr[3] "{} أشهر من Pro مجانًا"
+msgstr[4] "{} شهرًا من Pro مجانًا"
+msgstr[5] "{} شهر من Pro مجانًا"
 
 #. Onboarding offer screen sub-line under the headline. The number is the percent off the first year.
 msgctxt "offer_percent_off_first_year"
@@ -4802,8 +4814,14 @@ msgstr "خصم {}% على سنتك الأولى"
 
 #. Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).
 msgctxt "offer_terms_first_year"
-msgid "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
-msgstr "{0} يومًا مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت."
+msgid "{0} day free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgstr[0] "{0} يوم مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[1] "يوم واحد مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[2] "يومان مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[3] "{0} أيام مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[4] "{0} يومًا مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[5] "{0} يوم مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت."
 
 #. Plan card with the welcome offer: the renewal price line under the first-year amount.
 msgctxt "offer_then_regular_price"
@@ -5077,8 +5095,14 @@ msgstr "وفّر {}%"
 
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
-msgid "{0} days free, then {1}/year. Cancel anytime."
-msgstr "{0} يومًا مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت."
+msgid "{0} day free, then {1}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1}/year. Cancel anytime."
+msgstr[0] "{0} يوم مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[1] "يوم واحد مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[2] "يومان مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[3] "{0} أيام مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[4] "{0} يومًا مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت."
+msgstr[5] "{0} يوم مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت."
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -5300,10 +5324,6 @@ msgstr[2] "مزودان"
 msgstr[3] "{} مزودين"
 msgstr[4] "{} مزودًا"
 msgstr[5] "{} مزود"
-
-msgctxt "provider_count_int"
-msgid "{} providers"
-msgstr "{} مزود"
 
 #. Post quantum identity: title of the connected provider identity key details view.
 msgctxt "provider_identities"
@@ -5950,8 +5970,14 @@ msgstr "اكتبها واحفظها في مكان آمن. إذا فقدتها، 
 
 #. Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.
 msgctxt "seedphrase_word_count_warning"
-msgid "That's {} words — a seedphrase is 12 or 24 words"
-msgstr "هذه {} كلمة — عبارة الاسترداد تتكون من 12 أو 24 كلمة"
+msgid "That's {} word — a seedphrase is 12 or 24 words"
+msgid_plural "That's {} words — a seedphrase is 12 or 24 words"
+msgstr[0] "هذه {} كلمة — عبارة الاسترداد تتكون من 12 أو 24 كلمة"
+msgstr[1] "هذه كلمة واحدة — عبارة الاسترداد تتكون من 12 أو 24 كلمة"
+msgstr[2] "هاتان كلمتان — عبارة الاسترداد تتكون من 12 أو 24 كلمة"
+msgstr[3] "هذه {} كلمات — عبارة الاسترداد تتكون من 12 أو 24 كلمة"
+msgstr[4] "هذه {} كلمة — عبارة الاسترداد تتكون من 12 أو 24 كلمة"
+msgstr[5] "هذه {} كلمة — عبارة الاسترداد تتكون من 12 أو 24 كلمة"
 
 #. Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.
 msgctxt "seeker_multiplier_benefit"
@@ -7309,8 +7335,14 @@ msgstr "المتابعة بالخطة المجانية"
 
 #. Final offer screen: the one primary button. {months} is a whole number.
 msgctxt "site_offer_cta"
-msgid "Start free trial with {} months free"
-msgstr "ابدأ التجربة المجانية مع {} أشهر مجانًا"
+msgid "Start free trial with {} month free"
+msgid_plural "Start free trial with {} months free"
+msgstr[0] "ابدأ التجربة المجانية مع {} شهر مجانًا"
+msgstr[1] "ابدأ التجربة المجانية مع شهر واحد مجانًا"
+msgstr[2] "ابدأ التجربة المجانية مع شهرين مجانًا"
+msgstr[3] "ابدأ التجربة المجانية مع {} أشهر مجانًا"
+msgstr[4] "ابدأ التجربة المجانية مع {} شهرًا مجانًا"
+msgstr[5] "ابدأ التجربة المجانية مع {} شهر مجانًا"
 
 #. Trial timeline: a row label for day {day}.
 msgctxt "site_offer_day_n"
@@ -7329,8 +7361,14 @@ msgstr "{} لسنتك الأولى"
 
 #. Final offer screen: the headline. {months} is a whole number.
 msgctxt "site_offer_headline"
-msgid "{} months of Pro, free"
-msgstr "{} أشهر من Pro مجانًا"
+msgid "{} month of Pro, free"
+msgid_plural "{} months of Pro, free"
+msgstr[0] "{} شهر من Pro مجانًا"
+msgstr[1] "شهر واحد من Pro مجانًا"
+msgstr[2] "شهران من Pro مجانًا"
+msgstr[3] "{} أشهر من Pro مجانًا"
+msgstr[4] "{} شهرًا من Pro مجانًا"
+msgstr[5] "{} شهر من Pro مجانًا"
 
 #. Upgrade sheet: the welcome-offer line while the offer is active. {percent} whole number, {when} a local date and time.
 msgctxt "site_offer_sheet_line"
@@ -7474,8 +7512,14 @@ msgstr "وفّر {}%"
 
 #. Under the yearly CTA: the trial terms. {price} is the yearly amount.
 msgctxt "site_plan_trial_terms"
-msgid "{0} days free, then {1}/year. Cancel anytime."
-msgstr "{0} يومًا مجانًا، ثم {1}/سنة. إلغاء في أي وقت."
+msgid "{0} day free, then {1}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1}/year. Cancel anytime."
+msgstr[0] "{0} يوم مجانًا، ثم {1}/سنة. إلغاء في أي وقت."
+msgstr[1] "يوم واحد مجانًا، ثم {1}/سنة. إلغاء في أي وقت."
+msgstr[2] "يومان مجانًا، ثم {1}/سنة. إلغاء في أي وقت."
+msgstr[3] "{0} أيام مجانًا، ثم {1}/سنة. إلغاء في أي وقت."
+msgstr[4] "{0} يومًا مجانًا، ثم {1}/سنة. إلغاء في أي وقت."
+msgstr[5] "{0} يوم مجانًا، ثم {1}/سنة. إلغاء في أي وقت."
 
 #. Account panel: client info — principal label
 msgctxt "site_principal"
@@ -8919,13 +8963,15 @@ msgctxt "you_get_free_data_every_day"
 msgid "You get free data every day."
 msgstr "تحصل على بيانات مجانية كل يوم."
 
-msgctxt "you_have_1_other_device_online"
-msgid "You have 1 other device online"
-msgstr "لديك جهاز آخر متصل"
-
 msgctxt "you_have_n_other_devices_online"
-msgid "You have {} other devices online"
-msgstr "لديك {} من الأجهزة الأخرى المتصلة"
+msgid "You have {} other device online"
+msgid_plural "You have {} other devices online"
+msgstr[0] "ليس لديك أي أجهزة أخرى متصلة"
+msgstr[1] "لديك جهاز آخر متصل"
+msgstr[2] "لديك جهازان آخران متصلان"
+msgstr[3] "لديك {} أجهزة أخرى متصلة"
+msgstr[4] "لديك {} جهازًا آخر متصلًا"
+msgstr[5] "لديك {} من الأجهزة الأخرى المتصلة"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "you_ll_unlock_even_faster_speeds_and_first_dibs"

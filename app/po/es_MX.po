@@ -3277,8 +3277,10 @@ msgstr "Disponible hasta el {}"
 
 #. Onboarding offer screen: the single primary button. The number is the months the discount equals.
 msgctxt "offer_cta_start_trial_months_free"
-msgid "Start free trial with {} months free"
-msgstr "Empezar la prueba gratis con {} meses gratis"
+msgid "Start free trial with {} month free"
+msgid_plural "Start free trial with {} months free"
+msgstr[0] "Empezar la prueba gratis con {} mes gratis"
+msgstr[1] "Empezar la prueba gratis con {} meses gratis"
 
 #. Plan card with the welcome offer: the billed first-year amount (most prominent line).
 msgctxt "offer_first_year_price"
@@ -3287,8 +3289,10 @@ msgstr "{} tu primer año"
 
 #. Onboarding offer screen headline. The number is the months the discount equals.
 msgctxt "offer_months_free_headline"
-msgid "{} months of Pro, free"
-msgstr "{} meses de Pro, gratis"
+msgid "{} month of Pro, free"
+msgid_plural "{} months of Pro, free"
+msgstr[0] "{} mes de Pro, gratis"
+msgstr[1] "{} meses de Pro, gratis"
 
 #. Onboarding offer screen sub-line under the headline. The number is the percent off the first year.
 msgctxt "offer_percent_off_first_year"
@@ -3297,8 +3301,10 @@ msgstr "{}% de descuento en tu primer año"
 
 #. Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).
 msgctxt "offer_terms_first_year"
-msgid "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
-msgstr "{0} días gratis, después {1} tu primer año, después {2}/año. Cancela cuando quieras."
+msgid "{0} day free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1} for your first year, then {2}/year. Cancel anytime."
+msgstr[0] "{0} día gratis, después {1} tu primer año, después {2}/año. Cancela cuando quieras."
+msgstr[1] "{0} días gratis, después {1} tu primer año, después {2}/año. Cancela cuando quieras."
 
 #. Plan card with the welcome offer: the renewal price line under the first-year amount.
 msgctxt "offer_then_regular_price"
@@ -3522,8 +3528,10 @@ msgstr "Ahorra {}%"
 
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
-msgid "{0} days free, then {1}/year. Cancel anytime."
-msgstr "{0} días gratis, después {1}/año. Cancela cuando quieras."
+msgid "{0} day free, then {1}/year. Cancel anytime."
+msgid_plural "{0} days free, then {1}/year. Cancel anytime."
+msgstr[0] "{0} día gratis, después {1}/año. Cancela cuando quieras."
+msgstr[1] "{0} días gratis, después {1}/año. Cancela cuando quieras."
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -3677,10 +3685,6 @@ msgid "{} provider"
 msgid_plural "{} providers"
 msgstr[0] "{} proveedor"
 msgstr[1] "{} proveedores"
-
-msgctxt "provider_count_int"
-msgid "{} providers"
-msgstr "{} proveedores"
 
 #. Post quantum identity: title of the connected provider identity key details view.
 msgctxt "provider_identities"
@@ -4222,8 +4226,10 @@ msgstr "Anótala y guárdala en un lugar seguro. Si la pierdes, perderás el acc
 
 #. Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.
 msgctxt "seedphrase_word_count_warning"
-msgid "That's {} words — a seedphrase is 12 or 24 words"
-msgstr "Son {} palabras — una frase semilla tiene 12 o 24 palabras"
+msgid "That's {} word — a seedphrase is 12 or 24 words"
+msgid_plural "That's {} words — a seedphrase is 12 or 24 words"
+msgstr[0] "Es {} palabra — una frase semilla tiene 12 o 24 palabras"
+msgstr[1] "Son {} palabras — una frase semilla tiene 12 o 24 palabras"
 
 #. Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.
 msgctxt "seeker_multiplier_benefit"
@@ -5555,13 +5561,11 @@ msgctxt "you_get_3_gib_day_for_life"
 msgid "You get 3 GiB/day for life"
 msgstr "Recibes 3 GiB/día de por vida"
 
-msgctxt "you_have_1_other_device_online"
-msgid "You have 1 other device online"
-msgstr "Tienes 1 dispositivo más en línea"
-
 msgctxt "you_have_n_other_devices_online"
-msgid "You have {} other devices online"
-msgstr "Tienes {} dispositivos más en línea"
+msgid "You have {} other device online"
+msgid_plural "You have {} other devices online"
+msgstr[0] "Tienes {} dispositivo más en línea"
+msgstr[1] "Tienes {} dispositivos más en línea"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "you_ll_unlock_even_faster_speeds_and_first_dibs"

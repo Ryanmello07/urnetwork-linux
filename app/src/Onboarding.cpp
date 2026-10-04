@@ -449,7 +449,9 @@ void OnboardingWindow::ApplyPrices() {
   }
   if (offerHeadline_) {
     offerHeadline_->set_text(
-        Format(T_("offer_months_free_headline", "{} months of Pro, free"), offer.monthsFree));
+        Format(TN_("offer_months_free_headline", "{} month of Pro, free", "{} months of Pro, free",
+                   static_cast<unsigned long>(offer.monthsFree)),
+               offer.monthsFree));
   }
   if (offerPrice_) {
     offerPrice_->set_text(Format(T_("offer_first_year_price", "{} for your first year"),
@@ -466,7 +468,8 @@ void OnboardingWindow::ApplyPrices() {
   if (offerCard_) offerCard_->Update(offer, tier, kFreeTrialDays);
   if (offerCta_) {
     offerCta_->set_label(Format(
-        T_("offer_cta_start_trial_months_free", "Start free trial with {} months free"),
+        TN_("offer_cta_start_trial_months_free", "Start free trial with {} month free",
+            "Start free trial with {} months free", static_cast<unsigned long>(offer.monthsFree)),
         offer.monthsFree));
   }
   // the intro surface's shown event, once the offer is actually on the page

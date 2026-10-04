@@ -578,6 +578,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/FeedbackSendStateTest.cpp',
     'tests/FastDnsCopyTest.cpp',
     'tests/FastDnsWiringTest.cpp',
+    'tests/CountedCopyPluralTest.cpp',
     'tests/SafetyRulePresentationTest.cpp',
     'tests/NetworkNameCheckTest.cpp',
     'tests/ProUpgradeProvideModeTest.cpp',
@@ -601,6 +602,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # EarningsPageTeardownTest reads EarningsPage.cpp the same way:
               # its destructor must touch no widget (issue #13).
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
+              # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

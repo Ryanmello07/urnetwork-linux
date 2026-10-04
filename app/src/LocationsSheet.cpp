@@ -169,7 +169,9 @@ void LocationsSheet::AppendLocationSection(
 Gtk::Box* LocationsSheet::MakeLocationRow(const urnet::ConnectLocation& location, bool selected) {
   const int providerCount = location.provider_count.value_or(0);
   const std::string caption =
-      0 < providerCount ? Format(T_("provider_count_int", "{} providers"), providerCount)
+      0 < providerCount ? Format(TN_("provider_count", "{} provider", "{} providers",
+                                     static_cast<unsigned long>(providerCount)),
+                                 providerCount)
                         : std::string();
   auto* row = MakeRowShell(MakeColorDot(LocationColor(location)),
                            location.name.value_or(std::string()), caption);
