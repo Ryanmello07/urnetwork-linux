@@ -193,12 +193,14 @@ GuestConversionSheet::GuestConversionSheet(Gtk::Window& parent, SdkHost& host,
 }
 
 GuestConversionSheet::~GuestConversionSheet() {
+  cooldownTick_.disconnect();
   // the conversion goes first: it drops its answers before the session goes
   conversion_.reset();
   session_.reset();
 }
 
 void GuestConversionSheet::Open() {
+  cooldownTick_.disconnect();
   conversion_->Reset();  // first: clearing the fields re-renders
   auth_->set_text("");
   password_->set_text("");
@@ -208,29 +210,50 @@ void GuestConversionSheet::Open() {
   present();
 }
 
-void GuestConversionSheet::ShowNotice(const VerifySendNotice& notice) {
-  notice_->remove_css_class("ur-error-text");
-  switch (notice.kind) {
+void ShowVerifySendNotice(Gtk::Label& label, const std::optional<VerifySendNotice>& notice) {
+  label.remove_css_class("ur-error-text");
+  if (!notice) {
+    label.set_text("");
+    return;
+  }
+  switch (notice->kind) {
     case VerifySendNoticeKind::Sent:
-      notice_->set_text(T_("verification_code_sent",
-                           "Check your email/phone for a verification code."));
+      label.set_text(T_("verification_code_sent",
+                        "Check your email/phone for a verification code."));
       return;
     case VerifySendNoticeKind::RateLimited:
-      notice_->set_text(Format(TN_("verify_code_rate_limited",
-                                   "Too many attempts. You can request a new code in {} minute.",
-                                   "Too many attempts. You can request a new code in {} minutes.",
-                                   static_cast<unsigned long>(notice.minutes)),
-                               notice.minutes));
+      label.set_text(Format(TN_("verify_code_rate_limited",
+                                "Too many attempts. You can request a new code in {} minute.",
+                                "Too many attempts. You can request a new code in {} minutes.",
+                                static_cast<unsigned long>(notice->minutes)),
+                            notice->minutes));
       break;
     case VerifySendNoticeKind::SendFailed:
-      notice_->set_text(T_("error_sending_verification_code",
-                           "There was an error sending the verification code."));
+      label.set_text(T_("error_sending_verification_code",
+                        "There was an error sending the verification code."));
       break;
     case VerifySendNoticeKind::ServerMessage:
-      notice_->set_text(notice.message);
+      label.set_text(notice->message);
       break;
   }
-  notice_->add_css_class("ur-error-text");
+  label.add_css_class("ur-error-text");
+}
+
+void TickCooldown(sigc::connection& tick, const GuestConversion& conversion,
+                  std::function<void()> render) {
+  if (!conversion.CoolingDown()) {
+    tick.disconnect();
+    return;
+  }
+  if (tick.connected()) return;
+  tick = Glib::signal_timeout().connect_seconds(
+      [&conversion, render = std::move(render)]() -> bool {
+        // the last render (once the cooldown has passed) re-enables Resend
+        const bool cooling = conversion.CoolingDown();
+        render();
+        return cooling;
+      },
+      1);
 }
 
 void GuestConversionSheet::Render() {
@@ -252,12 +275,9 @@ void GuestConversionSheet::Render() {
       stack_.set_visible_child("verify");
       codeError_->set_text(conversion_->Error());
       codeError_->set_visible(!conversion_->Error().empty());
-      if (conversion_->Notice()) {
-        ShowNotice(*conversion_->Notice());
-      } else {
-        notice_->set_text("");
-      }
-      resend_->set_sensitive(!busy);
+      ShowVerifySendNotice(*notice_, conversion_->ShownNotice());
+      TickCooldown(cooldownTick_, *conversion_, [this] { Render(); });
+      resend_->set_sensitive(conversion_->CanResend());
       verify_->set_sensitive(!busy && !GuestConversion::Trim(code_->get_text().raw()).empty());
       return;
     case GuestConversionStep::Done:

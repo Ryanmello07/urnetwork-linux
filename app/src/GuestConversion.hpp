@@ -17,11 +17,22 @@
 // installed: the session never leaves the network, and there is no sign-out
 // anywhere in this flow.
 //
+// The same flow adds an email/phone sign-in from Account > Login methods
+// (AccountAddAuthSheet): an added email or phone counts as added only once its
+// code is verified. That session's RefreshJwt / RefreshBalance do nothing (the
+// network was never a guest). SSO sign-ins are verified by their provider and
+// wallets by their signature; neither is added through this flow.
+//
+// After a rate-limited send, Resend is refused until the server's retry time
+// passes on the injected monotonic clock, and the notice counts the minutes
+// down (the sheet re-renders each second while CoolingDown()).
+//
 // Header-only and free of GTK and the SDK so the unit tests build anywhere.
 // Not thread safe: the session delivers every answer on the main loop.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -82,7 +93,10 @@ class GuestConversion {
   }
 
  public:
-  explicit GuestConversion(GuestConversionSession& session) : session_(session) {}
+  // `now` is monotonic seconds; tests inject it.
+  explicit GuestConversion(GuestConversionSession& session,
+                           std::function<int64_t()> now = SteadySeconds)
+      : session_(session), now_(std::move(now)) {}
   ~GuestConversion() { ++*generation_; }  // drops every answer still in flight
   GuestConversion(const GuestConversion&) = delete;
   GuestConversion& operator=(const GuestConversion&) = delete;
@@ -96,6 +110,21 @@ class GuestConversion {
   const std::string& UserAuth() const { return userAuth_; }
   // the last code send's outcome, none before the first send answers
   const std::optional<VerifySendNotice>& Notice() const { return notice_; }
+  // the notice to show now: a rate limit counts its minutes down and clears
+  // once a new code can be requested
+  std::optional<VerifySendNotice> ShownNotice() const {
+    if (notice_ && notice_->kind == VerifySendNoticeKind::RateLimited) {
+      const int64_t now = now_();
+      if (cooldown_.CanResend(now)) return std::nullopt;
+      return cooldown_.NoticeAt(now);
+    }
+    return notice_;
+  }
+  // a rate limit is still running
+  bool CoolingDown() const { return !cooldown_.CanResend(now_()); }
+  bool CanResend() const {
+    return step_ == GuestConversionStep::EnterCode && !sending_ && !CoolingDown();
+  }
   bool Busy() const {
     return step_ == GuestConversionStep::AddingSignIn || step_ == GuestConversionStep::Verifying ||
            sending_;
@@ -119,6 +148,7 @@ class GuestConversion {
     error_.clear();
     userAuth_.clear();
     notice_.reset();
+    cooldown_.Clear();
     sending_ = false;
     Changed();
   }
@@ -147,7 +177,7 @@ class GuestConversion {
   }
 
   void Resend() {
-    if (step_ != GuestConversionStep::EnterCode || sending_) return;
+    if (!CanResend()) return;
     Send();
   }
 
@@ -171,11 +201,18 @@ class GuestConversion {
   }
 
  private:
+  static int64_t SteadySeconds() {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+  }
+
   void Send() {
     sending_ = true;
     Changed();
     session_.SendCode(userAuth_, Guard([this](VerifySendNotice notice) {
       sending_ = false;
+      cooldown_.Start(notice, now_());
       notice_ = std::move(notice);
       Changed();
     }));
@@ -186,10 +223,12 @@ class GuestConversion {
   }
 
   GuestConversionSession& session_;
+  std::function<int64_t()> now_;
   GuestConversionStep step_ = GuestConversionStep::EnterSignIn;
   std::string error_;
   std::string userAuth_;
   std::optional<VerifySendNotice> notice_;
+  ResendCooldown cooldown_;
   bool sending_ = false;
 };
 
