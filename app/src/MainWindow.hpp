@@ -14,6 +14,7 @@
 #include <gtkmm.h>
 
 #include "AuthViews.hpp"
+#include "BittensorManualSheet.hpp"
 #include "ConnectDrawer.hpp"
 #include "ConnectPage.hpp"
 #include "HomeShell.hpp"
@@ -96,6 +97,8 @@ class MainWindow : public Gtk::ApplicationWindow {
   void OnSolanaChooser();  // ONE Solana button -> a Phantom/Solflare chooser
   void OnSolana(WalletConnect::Provider provider);
   void OnBittensor();
+  void OnBittensorWallet(const std::string& walletId);
+  void ShowBittensorManualSheet(const SdkHost::BittensorManualRequest& request);
   void OnWalletAuth(const AuthResult& result);  // shared tail of both wallet sign-ins
   void OnSeedphraseChanged();
   void OnSeedphraseSubmit();
@@ -226,6 +229,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   bool instantReferralValid_ = false;
   bool validatingInstantReferral_ = false;
   std::unique_ptr<SeedphraseSheet> seedphraseSheet_;
+  std::unique_ptr<BittensorManualSheet> bittensorManualSheet_;
   std::unique_ptr<NetworkServerSheet> networkServerSheet_;
   // The user auth the discovery routed to the password step (normalized echo);
   // the password sign-in, forgot-password, and reset flows all key off it.
