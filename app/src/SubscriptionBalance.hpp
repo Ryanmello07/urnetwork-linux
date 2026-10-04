@@ -82,6 +82,10 @@ class SubscriptionBalanceStore {
   void SetAppFocused(bool focused);
 
   void FetchNow();
+  // Fetch the balance now and call done(true) when a fresh result landed, or
+  // done(false) when the read failed. A read already in flight is shared. Not
+  // called after Stop(), and never without a session (done(false) at once).
+  void FetchBalanceThen(std::function<void(bool ok)> done);
 
   // Re-derive Pro from the (freshly refreshed) jwt. Wired to the sdk's jwt-refresh
   // listener so a mid-session Pro change — notably a Pro->free lapse, which a Pro
@@ -111,6 +115,9 @@ class SubscriptionBalanceStore {
   int64_t PendingByteCount() const { return pendingByteCount_; }
   int64_t AvailableByteCount() const { return availableByteCount_; }
   int64_t StartBalanceByteCount() const { return startBalanceByteCount_; }
+  // When the balance above was fetched, on g_get_monotonic_time in ms (0
+  // before the first fetch).
+  int64_t FetchedAtMillis() const { return fetchedAtMillis_; }
   int64_t TotalReferrals() const { return totals_.Total(); }
   // what a "Total referrals" figure shows: the count, or an error until a read lands
   ReferralTotalsView TotalsView() const { return totals_.View(); }
@@ -189,6 +196,9 @@ class SubscriptionBalanceStore {
   int64_t pendingByteCount_ = 0;
   int64_t availableByteCount_ = 0;
   int64_t startBalanceByteCount_ = 0;
+  int64_t fetchedAtMillis_ = 0;
+  // FetchBalanceThen callers waiting on the read in flight
+  std::vector<std::function<void(bool)>> fetchWaiters_;
 
   bool isLoadingReferral_ = false;
   ReferralTotalsFetch totals_;
