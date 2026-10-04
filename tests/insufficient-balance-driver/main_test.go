@@ -171,13 +171,12 @@ func newTestDriver(t *testing.T, runner *fakeRunner) *driver {
 	t.Helper()
 	dir := t.TempDir()
 	return &driver{
-		linuxDir:    dir,
-		stateDir:    dir,
-		credentials: filepath.Join(dir, "credentials"),
-		outDir:      filepath.Join(dir, "out"),
-		version:     "0.0.0-0",
-		runner:      runner,
-		clock:       &fakeClock{now: time.Unix(0, 0)},
+		linuxDir: dir,
+		stateDir: dir,
+		outDir:   filepath.Join(dir, "out"),
+		version:  "0.0.0-0",
+		runner:   runner,
+		clock:    &fakeClock{now: time.Unix(0, 0)},
 	}
 }
 
@@ -444,14 +443,18 @@ func TestUnknownVerbsAndArguments(t *testing.T) {
 
 // ---- setup and teardown ----
 
-func writeCredentials(t *testing.T, d *driver, content string, mode os.FileMode) {
+// writeCredentials writes the runner's per-case credentials file, which the
+// test then passes as setup's argument, and returns its path.
+func writeCredentials(t *testing.T, d *driver, content string, mode os.FileMode) string {
 	t.Helper()
-	if err := os.WriteFile(d.credentials, []byte(content), mode); err != nil {
+	path := filepath.Join(d.stateDir, "credentials")
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(d.credentials, mode); err != nil {
+	if err := os.Chmod(path, mode); err != nil {
 		t.Fatal(err)
 	}
+	return path
 }
 
 func writeArtifacts(t *testing.T, d *driver) {
@@ -475,9 +478,9 @@ func TestSetupSignsInThroughTheGui(t *testing.T) {
 		notifyLog: notifyLine(alertTitleText, ""),
 	}
 	d := newTestDriver(t, r)
-	writeCredentials(t, d, "email: a@example.com\npassword: \"secret-value\"\n", 0600)
+	credentials := writeCredentials(t, d, "email: a@example.com\npassword: \"secret-value\"\n", 0600)
 	writeArtifacts(t, d)
-	out, stderr, code := runVerb(t, d, "setup")
+	out, stderr, code := runVerb(t, d, "setup", credentials)
 	if code != 0 {
 		t.Fatalf("setup failed: %s", stderr)
 	}
@@ -504,7 +507,7 @@ func TestSetupSignsInThroughTheGui(t *testing.T) {
 	var sawRun bool
 	for _, c := range r.calls {
 		if strings.HasPrefix(c, "docker run ") {
-			sawRun = strings.Contains(c, "--cgroupns=host") && strings.Contains(c, d.credentials+":/opt/ib-private/credentials:ro")
+			sawRun = strings.Contains(c, "--cgroupns=host") && strings.Contains(c, credentials+":/opt/ib-private/credentials:ro")
 		}
 	}
 	if !sawRun {
@@ -517,9 +520,9 @@ func TestSetupReportsGuiSignInError(t *testing.T) {
 		node("label", "Sign in failed", true))))
 	r := &fakeRunner{trees: []string{failed}}
 	d := newTestDriver(t, r)
-	writeCredentials(t, d, "email: a@example.com\npassword: p\n", 0600)
+	credentials := writeCredentials(t, d, "email: a@example.com\npassword: p\n", 0600)
 	writeArtifacts(t, d)
-	_, stderr, code := runVerb(t, d, "setup")
+	_, stderr, code := runVerb(t, d, "setup", credentials)
 	if code == 0 || !strings.Contains(stderr, "sign-in failed in the GUI: Sign in failed") {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
@@ -533,9 +536,9 @@ func TestSetupStuckScreenTimesOut(t *testing.T) {
 	r := &fakeRunner{trees: []string{treeJson(node("application", "urnetwork-gui", false, node("frame", "URnetwork", true,
 		node("push button", "Mystery", true))))}}
 	d := newTestDriver(t, r)
-	writeCredentials(t, d, "email: a@example.com\npassword: p\n", 0600)
+	credentials := writeCredentials(t, d, "email: a@example.com\npassword: p\n", 0600)
 	writeArtifacts(t, d)
-	_, stderr, code := runVerb(t, d, "setup")
+	_, stderr, code := runVerb(t, d, "setup", credentials)
 	if code == 0 || !strings.Contains(stderr, "did not reach the Connect page") || !strings.Contains(stderr, "Mystery") {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
@@ -543,17 +546,17 @@ func TestSetupStuckScreenTimesOut(t *testing.T) {
 
 func TestSetupPreconditions(t *testing.T) {
 	d := newTestDriver(t, &fakeRunner{})
-	writeCredentials(t, d, "email: a@example.com\npassword: hunter2-secret\n", 0644)
-	_, stderr, code := runVerb(t, d, "setup")
+	credentials := writeCredentials(t, d, "email: a@example.com\npassword: hunter2-secret\n", 0644)
+	_, stderr, code := runVerb(t, d, "setup", credentials)
 	if code == 0 || !strings.Contains(stderr, "private") || strings.Contains(stderr, "hunter2") {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
 	writeCredentials(t, d, "email: a@example.com\npassword: x\nextra: y\n", 0600)
-	if _, stderr, code := runVerb(t, d, "setup"); code == 0 || !strings.Contains(stderr, "exactly one email and one password") {
+	if _, stderr, code := runVerb(t, d, "setup", credentials); code == 0 || !strings.Contains(stderr, "exactly one email and one password") {
 		t.Fatalf("stderr=%q", stderr)
 	}
 	writeCredentials(t, d, "email: a@example.com\npassword: x\n", 0600)
-	if _, stderr, code := runVerb(t, d, "setup"); code == 0 || !strings.Contains(stderr, "run linux/test-main.sh") {
+	if _, stderr, code := runVerb(t, d, "setup", credentials); code == 0 || !strings.Contains(stderr, "run linux/test-main.sh") {
 		t.Fatalf("stderr=%q", stderr)
 	}
 }
@@ -729,5 +732,256 @@ func TestHiddenHeldAlertIsNoAlert(t *testing.T) {
 	}
 	if b := connectActionButton(root); b == nil || pathArg(b.Path) != roundButtonPath {
 		t.Fatalf("round button = %+v", b)
+	}
+}
+
+// ---- per-run account: credentials only as setup's argument ----
+
+const credentialsEnv = "URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS"
+
+// privateFile writes a credentials-shaped file and forces its mode.
+func privateFile(t *testing.T, dir, name, content string, mode os.FileMode) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// signInTrees walks login, password, home, then setup's disconnected and kill
+// switch checks.
+func signInTrees() []string {
+	return []string{
+		loginTree(),
+		passwordTree(),
+		homeTree(connectText, false, false),
+		homeTree(connectText, false, false),
+		homeTree(connectText, false, false),
+		homeTree(connectText, true, false),
+	}
+}
+
+// containerSim stands in for the container: it remembers the host file that
+// docker run mounts at /opt/ib-private/credentials and, as container.sh and
+// atspi.py do, types values read from that mount and nothing else.
+type containerSim struct {
+	*fakeRunner
+	mounted string
+	typed   map[string]string
+}
+
+func newContainerSim() *containerSim {
+	return &containerSim{fakeRunner: &fakeRunner{trees: signInTrees()}, typed: map[string]string{}}
+}
+
+func (self *containerSim) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "docker" && 0 < len(args) && args[0] == "run" {
+		for i, a := range args {
+			if a == "-v" && i+1 < len(args) && strings.HasSuffix(args[i+1], ":/opt/ib-private/credentials:ro") {
+				self.mounted = strings.TrimSuffix(args[i+1], ":/opt/ib-private/credentials:ro")
+			}
+		}
+	}
+	if name == "docker" && 5 < len(args) && args[0] == "exec" && args[3] == "atspi" && args[4] == "type-credential" {
+		self.typed[args[5]] = mountedCredential(self.mounted, args[5])
+	}
+	return self.fakeRunner.Run(ctx, name, args...)
+}
+
+// mountedCredential reads one value as atspi.py's read_credential does.
+func mountedCredential(path, key string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), ":")
+		if !ok || strings.TrimSpace(k) != key {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if 2 <= len(v) && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+			v = v[1 : len(v)-1]
+		}
+		return v
+	}
+	return ""
+}
+
+func dockerRuns(calls []string) int {
+	n := 0
+	for _, c := range calls {
+		if strings.HasPrefix(c, "docker run ") {
+			n++
+		}
+	}
+	return n
+}
+
+// The fake sign-in sees exactly the argument file's values; a different,
+// valid file named by the old environment variable is never used.
+func TestSetupReadsCredentialsOnlyFromItsArgument(t *testing.T) {
+	accounts := t.TempDir()
+	argument := privateFile(t, accounts, "account-a.yml", "email: \"a@example.com\"\npassword: 'secret-a'\n", 0600)
+	decoy := privateFile(t, accounts, "decoy.yml", "email: env@example.com\npassword: env-secret\n", 0600)
+	t.Setenv(credentialsEnv, decoy)
+	sim := newContainerSim()
+	d := newTestDriver(t, nil)
+	d.runner = sim
+	writeArtifacts(t, d)
+	out, stderr, code := runVerb(t, d, "setup", argument)
+	if code != 0 || out["kill_switch_supported"] != true {
+		t.Fatalf("setup: code=%d out=%v stderr=%q", code, out, stderr)
+	}
+	if sim.mounted != argument {
+		t.Fatalf("mounted %q, want the argument %q", sim.mounted, argument)
+	}
+	if sim.typed["email"] != "a@example.com" || sim.typed["password"] != "secret-a" {
+		t.Fatalf("the GUI was typed %v, want the argument file's values", sim.typed)
+	}
+	for _, c := range sim.calls {
+		if strings.Contains(c, decoy) || strings.Contains(c, "secret-a") || strings.Contains(c, "a@example.com") {
+			t.Fatalf("the decoy path or a credential value reached a command line: %q", c)
+		}
+	}
+	if b, _ := os.ReadFile(d.statePath()); strings.Contains(string(b), "secret-a") || strings.Contains(string(b), "a@example.com") {
+		t.Fatalf("credential values were written to the state file: %s", b)
+	}
+}
+
+// URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS is not part of the protocol any
+// more: the driver starts without it, ignores garbage in it, and a setup
+// without its argument fails even when the variable names a valid file.
+func TestCredentialsEnvironmentVariableIsIgnored(t *testing.T) {
+	linuxDir := t.TempDir()
+	t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_STATE", t.TempDir())
+	t.Setenv("UR_ACCEPT_LINUX_OUT", "")
+	t.Setenv("EXTERNAL_WARP_VERSION", "")
+	for _, value := range []string{"", "not a path", "/nonexistent/credentials.yml"} {
+		t.Setenv(credentialsEnv, value)
+		if _, _, err := newDriverFromEnv([]string{"--linux", linuxDir, "teardown"}); err != nil {
+			t.Fatalf("with %s=%q: %v", credentialsEnv, value, err)
+		}
+	}
+
+	valid := privateFile(t, t.TempDir(), "env.yml", "email: env@example.com\npassword: env-secret\n", 0600)
+	t.Setenv(credentialsEnv, valid)
+	d, rest, err := newDriverFromEnv([]string{"--linux", linuxDir, "setup"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sim := newContainerSim()
+	d.runner, d.clock = sim, &fakeClock{now: time.Unix(0, 0)}
+	writeArtifacts(t, d)
+	if _, stderr, code := runVerb(t, d, rest...); code == 0 || !strings.Contains(stderr, "credentials file") || len(sim.calls) != 0 {
+		t.Fatalf("setup without its argument: code=%d stderr=%q calls=%v", code, stderr, sim.calls)
+	}
+
+	t.Setenv(credentialsEnv, "garbage")
+	argument := privateFile(t, t.TempDir(), "account.yml", "email: b@example.com\npassword: secret-b\n", 0600)
+	if _, stderr, code := runVerb(t, d, "setup", argument); code != 0 {
+		t.Fatalf("setup with its argument: %s", stderr)
+	}
+	if sim.mounted != argument || sim.typed["email"] != "b@example.com" || sim.typed["password"] != "secret-b" {
+		t.Fatalf("mounted %q typed %v, want the argument file", sim.mounted, sim.typed)
+	}
+}
+
+func TestSetupRejectsBadCredentialArguments(t *testing.T) {
+	accounts := t.TempDir()
+	good := "email: a@example.com\npassword: hunter2-secret\n"
+	for _, c := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"no argument", []string{"setup"}, "exactly one argument"},
+		{"two arguments", []string{"setup", privateFile(t, accounts, "two.yml", good, 0600), "extra"}, "exactly one argument"},
+		{"relative path", []string{"setup", "account.yml"}, "must be absolute"},
+		{"group-readable", []string{"setup", privateFile(t, accounts, "group.yml", good, 0640)}, "private regular file"},
+		{"world-readable", []string{"setup", privateFile(t, accounts, "world.yml", good, 0604)}, "private regular file"},
+		{"directory", []string{"setup", accounts}, "private regular file"},
+		{"missing", []string{"setup", filepath.Join(accounts, "missing.yml")}, "missing"},
+		{"malformed", []string{"setup", privateFile(t, accounts, "bad.yml", "email: a@example.com\n", 0600)}, "exactly one email and one password"},
+	} {
+		r := &fakeRunner{trees: signInTrees()}
+		d := newTestDriver(t, r)
+		writeArtifacts(t, d)
+		_, stderr, code := runVerb(t, d, c.args...)
+		if code == 0 || !strings.Contains(stderr, c.want) || strings.Contains(stderr, "hunter2") {
+			t.Fatalf("%s: code=%d stderr=%q, want a failure naming %q", c.name, code, stderr, c.want)
+		}
+		if dockerRuns(r.calls) != 0 {
+			t.Fatalf("%s: a container was started: %v", c.name, r.calls)
+		}
+	}
+}
+
+// Every later verb works from the state directory alone: the credentials
+// file gone and the environment variable garbage change nothing.
+func TestLaterVerbsNeedNoCredentials(t *testing.T) {
+	argument := privateFile(t, t.TempDir(), "account.yml", "email: a@example.com\npassword: secret-a\n", 0600)
+	sim := newContainerSim()
+	d := newTestDriver(t, nil)
+	d.runner = sim
+	writeArtifacts(t, d)
+	if _, stderr, code := runVerb(t, d, "setup", argument); code != 0 {
+		t.Fatal(stderr)
+	}
+	if err := os.Remove(argument); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(credentialsEnv, "garbage")
+	sim.trees = []string{homeTree(connectText, true, false)}
+	sim.tunnel, sim.egress = "down", "ip 203.0.113.9"
+	for _, args := range [][]string{{"observe"}, {"connect"}, {"direct-egress"}, {"egress"}, {"traffic"}, {"kill-switch", "off"}, {"teardown"}} {
+		if _, stderr, code := runVerb(t, d, args...); code != 0 {
+			t.Fatalf("%v: %s", args, stderr)
+		}
+	}
+	if !strings.Contains(strings.Join(sim.calls, "\n"), "docker rm -f "+d.containerName()) {
+		t.Fatal("teardown did not remove the signed-in container")
+	}
+}
+
+// Case 1 and case 2 each get a fresh account and state directory: case 2
+// mounts and types its own account in its own container after case 1's
+// teardown removed case 1's.
+func TestEachCaseSignsInFreshWithItsOwnAccount(t *testing.T) {
+	accounts := t.TempDir()
+	linuxDir := t.TempDir()
+	cases := []struct{ file, email, password string }{
+		{privateFile(t, accounts, "a.yml", "email: a@example.com\npassword: secret-a\n", 0600), "a@example.com", "secret-a"},
+		{privateFile(t, accounts, "b.yml", "email: b@example.com\npassword: secret-b\n", 0600), "b@example.com", "secret-b"},
+	}
+	var containers []string
+	for i, c := range cases {
+		sim := newContainerSim()
+		d := newTestDriver(t, nil)
+		d.linuxDir, d.outDir, d.runner = linuxDir, filepath.Join(linuxDir, "out"), sim
+		writeArtifacts(t, d)
+		if _, stderr, code := runVerb(t, d, "setup", c.file); code != 0 {
+			t.Fatalf("case %d setup: %s", i+1, stderr)
+		}
+		if sim.mounted != c.file || sim.typed["email"] != c.email || sim.typed["password"] != c.password {
+			t.Fatalf("case %d mounted %q typed %v", i+1, sim.mounted, sim.typed)
+		}
+		if _, stderr, code := runVerb(t, d, "teardown"); code != 0 {
+			t.Fatalf("case %d teardown: %s", i+1, stderr)
+		}
+		if !strings.Contains(strings.Join(sim.calls, "\n"), "docker rm -f "+d.containerName()) {
+			t.Fatalf("case %d teardown left its container", i+1)
+		}
+		if _, err := os.Stat(d.statePath()); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("case %d teardown left its state", i+1)
+		}
+		containers = append(containers, d.containerName())
+	}
+	if containers[0] == containers[1] {
+		t.Fatal("both cases used one container")
 	}
 }

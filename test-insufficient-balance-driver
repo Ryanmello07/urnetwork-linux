@@ -5,6 +5,14 @@
 # one JSON object per call, environment) is tests/runner/RUN-MAIN.md
 # "Driver protocol"; tests/runner/balance/main.go is the only caller.
 #
+# The runner makes a fresh account per case and runs setup..teardown once per
+# case, each with a fresh URNETWORK_INSUFFICIENT_BALANCE_STATE directory. The
+# account arrives only as `setup <credentials-file>`: the absolute path of the
+# runner's private email/password file, which setup mounts read-only into the
+# case's container. URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS and the vault are
+# never read; later verbs need no credentials, and teardown removes the
+# container, the signed-in session and the credentials copy.
+#
 # The logic is the standard-library Go program in
 # tests/insufficient-balance-driver/. It is built once per source revision into
 # the private state directory and then executed directly, so a failing verb's
