@@ -365,9 +365,12 @@ class EarningsPage : public Gtk::Box {
   void ApplyWalletCheck(uint64_t generation, const std::string& address,
                         std::optional<SnWalletCheck> check, const std::string& err);
   void OnConnectManual();
-  // The bridge as a signer: `expectedAddress` is the typed address (the bridge
-  // must sign with that wallet) or empty (whichever wallet the bridge picks).
-  void StartWalletSignature(const std::string& expectedAddress);
+  // Which Bittensor wallet signs (Talisman on the browser bridge, TAO.com on
+  // the manual sheet), then StartWalletSignature with it.
+  void ChooseBittensorWallet(const std::string& expectedAddress);
+  // The wallet as a signer: `expectedAddress` is the typed address (the wallet
+  // must sign with that account) or empty (whichever account the wallet picks).
+  void StartWalletSignature(const std::string& walletId, const std::string& expectedAddress);
   void OnWalletSigned(uint32_t generation, const SdkHost::WalletSignature& signature,
                       const std::string& expectedAddress);
   void SetSnWallet(const std::string& address, const std::string& signature,

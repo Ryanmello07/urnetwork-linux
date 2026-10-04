@@ -137,8 +137,9 @@ UR_TEST(WalletBridge_TheHostChecksItsFlowBeforeALateChallengeOpensTheBridge) {
                        body.find("walletFlows_.Begin()") != std::string::npos);
   }
 
-  const std::string bittensor = FunctionBody(source, "void SdkHost::SignBittensorConnect(");
-  const size_t opens = bittensor.find("wallet_.SignInWithBittensor(message, \"connect\")");
+  // every Bittensor flow opens its wallet through StartBittensorSession
+  const std::string bittensor = FunctionBody(source, "void SdkHost::StartBittensorSession(");
+  const size_t opens = bittensor.find("wallet_.SignWithBittensor(session)");
   const size_t checks = bittensor.rfind("WalletFlowIsCurrent(flow)", opens);
   UR_EXPECT_TRUE_MSG("the Bittensor connect opens the bridge", opens != std::string::npos);
   UR_EXPECT_TRUE_MSG("the Bittensor connect checks its flow before it opens the bridge",

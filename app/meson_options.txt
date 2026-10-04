@@ -32,13 +32,10 @@ option('gui', type : 'feature', value : 'auto',
 option('glibc_floor', type : 'string', value : '2.35',
        description : 'Max glibc symbol version the daemon may reference (must match the packaging Depends)')
 
-# WalletConnect Cloud project id, passed to the ur.io/wallet-connect bridge as
-# `wc_project_id` for the Bittensor sign-in (src/Config.hpp; the same id lives in
-# android/app/local.properties and apple/app/URnetwork-Info.plist). Optional: with
-# no id the bridge uses injected wallets (browser extensions) only. Setting it here
-# keeps it out of the source tree, the way the other platforms do it.
+# WalletConnect Cloud project id. Unused: the Bittensor bridge drives only the
+# Talisman extension (src/Config.hpp). Kept so existing setups still configure.
 option('walletconnect_project_id', type : 'string', value : '',
-       description : 'WalletConnect Cloud project id for the wallet-connect bridge (optional)')
+       description : 'Unused (kept for compatibility): WalletConnect Cloud project id')
 
 # Host-integration files (the systemd unit, the autostart template, the
 # NetworkManager conf.d marker and the udev rules) install to ABSOLUTE paths

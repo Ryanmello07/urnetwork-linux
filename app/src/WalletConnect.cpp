@@ -10,7 +10,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "Config.hpp"
+#include "BittensorWalletFlow.hpp"
+#include "I18n.hpp"
 #include "SsoBridge.hpp"
 
 namespace urnw {
@@ -152,30 +153,45 @@ void WalletConnect::SignMessage(const std::string& message) {
   OpenUrl(url);
 }
 
-void WalletConnect::SignInWithBittensor(const std::string& message,
-                                        const std::string& purpose) {
-  // One hop: the bridge connects the substrate wallet AND signs in the same page
-  // load, and sr25519 signatures are public — so there is no ephemeral keypair,
-  // no session, and no shared secret on this path.
+void WalletConnect::SignWithBittensor(std::shared_ptr<urnet::BittensorWalletSession> session) {
+  // One hop: the bridge drives the extension AND signs in the same page load,
+  // and sr25519 signatures are public -- so there is no ephemeral keypair, no
+  // session, and no shared secret on this path.
   connectedPublicKey_.reset();
   walletEncryptionPublicKey_.reset();
   session_.reset();
   dappKeyPair_.reset();
   currentProvider_ = Provider::Bittensor;
-  lastMessage_ = message;
-
-  const std::string redirect =
-      std::string("urnetwork://") + Host(Provider::Bittensor) + "-sign-message";
-  std::string url = std::string(kWebBridge) + "?provider=" + Host(Provider::Bittensor) +
-                    "&method=signMessage&message=" + Esc(message) +
-                    "&redirect_link=" + Esc(redirect);
-  if (!purpose.empty()) url += "&purpose=" + Esc(purpose);
-  // The WalletConnect Cloud project id (Config.hpp) lets the bridge pair with a
-  // wallet app over a QR code. Without one the bridge falls back to injected
-  // wallets only (browser extension) — so an empty id is sent as no param at all.
-  const std::string projectId = kWalletConnectProjectId;
-  if (!projectId.empty()) url += "&wc_project_id=" + Esc(projectId);
+  bittensorSession_ = std::move(session);
+  if (!bittensorSession_) {
+    if (on_error) on_error("no wallet session");
+    return;
+  }
+  lastMessage_ = bittensorSession_->message();
+  if (bittensorSession_->transport() != bittensor::kTransportBrowserBridge) return;
+  std::string url;
+  try {
+    // https://ur.io/wallet-connect?provider=bittensor&method=signMessage
+    //   &wallet=talisman&message=…&purpose=…&redirect_link=urnetwork://bittensor-sign-message
+    url = bittensorSession_->bridgeUrl();
+  } catch (const std::exception& e) {
+    if (on_error) on_error(e.what());
+    return;
+  }
   OpenUrl(url);
+}
+
+urnet::BittensorWalletResult WalletConnect::SubmitBittensorManual(const std::string& address,
+                                                                  const std::string& signature) {
+  urnet::BittensorWalletResult result;
+  if (!bittensorSession_) {
+    result.ErrorCode = "not_awaiting_wallet";
+    return result;
+  }
+  result = bittensorSession_->handleSignature(address, signature, g_get_real_time() / 1000)
+               .value_or(urnet::BittensorWalletResult{});
+  DeliverBittensorResult(result, /*manual=*/true);
+  return result;
 }
 
 void WalletConnect::SignInWithApple(const std::string& apiUrl, const std::string& state,
@@ -250,7 +266,7 @@ bool WalletConnect::HandleDeepLink(const std::string& url) {
   auto provider = ProviderForHost(host);
   if (!provider) return false;  // not a wallet callback
   if (*provider == Provider::Bittensor) {
-    HandleBittensorSignMessage(query);
+    HandleBittensorReturn(url);
   } else if (host.find("-connect") != std::string::npos) {
     HandleConnect(*provider, query);
   } else {
@@ -331,28 +347,56 @@ void WalletConnect::HandleSignMessage(Provider p, const std::string& query) {
   }
 }
 
-// The bittensor bridge returns PLAIN query params — no NaCl envelope, nothing to
+// The bittensor bridge returns PLAIN query params -- no NaCl envelope, nothing to
 // decrypt (mmm/ur.io react/src/components/WalletConnect.jsx):
-//   urnetwork://bittensor-sign-message?address=<ss58>&signature=<0xhex>
-//   urnetwork://bittensor-sign-message?errorCode=-1&errorMessage=<text>
-void WalletConnect::HandleBittensorSignMessage(const std::string& query) {
-  auto params = ParseQuery(query);
-  if (params.count("errorCode")) {
-    if (on_error)
-      on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet signing error");
+//   urnetwork://bittensor-sign-message?address=<ss58>&signature=<0xhex>&message=…&purpose=…
+//   urnetwork://bittensor-sign-message?errorCode=-1&errorMessage=<text>&purpose=…
+// The session, not this class, decides whether it is a proof for the challenge
+// in flight.
+void WalletConnect::HandleBittensorReturn(const std::string& url) {
+  if (!bittensorSession_) {
+    std::fprintf(stderr, "[wallet] a Bittensor return arrived with no session, ignoring it\n");
     return;
   }
-  const std::string address = params.count("address") ? params["address"] : std::string();
-  const std::string signature = params.count("signature") ? params["signature"] : std::string();
-  if (address.empty() || signature.empty()) {
-    if (on_error) on_error("missing wallet signature parameters");
+  const urnet::BittensorWalletResult result =
+      bittensorSession_->handleBridgeReturn(url, g_get_real_time() / 1000)
+          .value_or(urnet::BittensorWalletResult{});
+  DeliverBittensorResult(result, /*manual=*/false);
+}
+
+void WalletConnect::DeliverBittensorResult(const urnet::BittensorWalletResult& result,
+                                           bool manual) {
+  switch (bittensor::Classify(result.ErrorCode, manual)) {
+    case bittensor::Outcome::Ignore:
+      std::fprintf(stderr, "[wallet] a Bittensor answer for another flow (%s), ignoring it\n",
+                   result.ErrorCode.c_str());
+      return;
+    case bittensor::Outcome::Retry:
+      return;  // the manual sheet shows it and stays open
+    case bittensor::Outcome::Fail: {
+      if (!on_error) return;
+      const bittensor::ErrorText text = bittensor::ErrorTextFor(result.ErrorCode);
+      if (!text.key.empty()) {
+        on_error(g_dpgettext2(GETTEXT_PACKAGE, std::string(text.key).c_str(),
+                              std::string(text.english).c_str()));
+      } else if (!result.ErrorMessage.empty()) {
+        on_error(result.ErrorMessage);  // the wallet's own words
+      } else {
+        on_error(T_("wallet_sign_in_failed", "Wallet sign-in failed"));
+      }
+      return;
+    }
+    case bittensor::Outcome::Accept:
+      break;
+  }
+  if (!result.Proof) {
+    if (on_error) on_error(T_("wallet_sign_in_failed", "Wallet sign-in failed"));
     return;
   }
-  connectedPublicKey_ = address;  // ss58, the wallet_address for authLogin
+  connectedPublicKey_ = result.Proof->Address;  // ss58, the wallet_address for authLogin
+  lastMessage_ = result.Proof->Message;          // the issued challenge, byte for byte
   currentProvider_ = Provider::Bittensor;
-  // the sr25519 signature passes through as the hex the wallet returned; the
-  // server accepts it with or without the 0x prefix
-  if (on_signature) on_signature(signature);
+  if (on_signature) on_signature(result.Proof->Signature);  // 0x + 128 hex
 }
 
 }  // namespace urnw

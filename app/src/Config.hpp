@@ -6,21 +6,13 @@
 
 namespace urnw {
 
-// WalletConnect Cloud project id, passed to the ur.io/wallet-connect bridge as
-// `wc_project_id` (see WalletConnect::SignInWithBittensor). One project id is
-// shared by all URnetwork clients — the same value that goes in
-// android/app/local.properties (WALLETCONNECT_PROJECT_ID) and
-// apple/app/URnetwork-Info.plist (URWalletConnectProjectId). See
-// apple/NEXTSTEPS2.md §1.
-//
-// FILL THIS IN with the project id from the WalletConnect / Reown Cloud
-// dashboard, or set it at build time without editing this file:
-//     meson setup build -Dwalletconnect_project_id=<project id>
-//
-// EMPTY IS VALID: the bridge then uses injected wallets only (a Bittensor
-// Wallet / SubWallet / Talisman / polkadot-js browser extension) — which is the
-// common desktop case. The project id only buys pairing with a wallet app over
-// a QR code. It is never sent when empty, and nothing crashes.
+// WalletConnect Cloud project id. UNUSED since the Bittensor wallet-connect
+// session (sdk bittensor_wallet.go, UPGRADE.md 4.6): the supported wallets are
+// Talisman, through its browser extension on the ur.io bridge, and TAO.com,
+// by manual entry -- neither documents a WalletConnect interface, so the
+// bridge is never sent a project id. The define and the meson option
+// (-Dwalletconnect_project_id) stay so existing build invocations still
+// configure.
 #ifndef UR_WALLETCONNECT_PROJECT_ID
 #define UR_WALLETCONNECT_PROJECT_ID ""
 #endif
