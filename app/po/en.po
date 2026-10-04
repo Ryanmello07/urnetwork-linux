@@ -838,6 +838,16 @@ msgctxt "bittensor_wallet"
 msgid "Bittensor wallet"
 msgstr "Bittensor wallet"
 
+#. Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.
+msgctxt "bittensor_walletconnect_continue"
+msgid "Continue in your browser: scan the code with your wallet app, or open the wallet on this device."
+msgstr "Continue in your browser: scan the code with your wallet app, or open the wallet on this device."
+
+#. Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.
+msgctxt "bittensor_walletconnect_hint"
+msgid "Nova, Nightly and other WalletConnect wallets"
+msgstr "Nova, Nightly and other WalletConnect wallets"
+
 #. dns settings
 msgctxt "block_ads_and_trackers"
 msgid "Block ads and trackers"
@@ -1247,6 +1257,11 @@ msgstr "Connect and open link"
 msgctxt "connect_bittensor_wallet"
 msgid "Connect Bittensor wallet"
 msgstr "Connect Bittensor wallet"
+
+#. Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).
+msgctxt "connect_bittensor_wallet_to_add_sign_in_method"
+msgid "Connect a Bittensor wallet to add it as a sign-in method."
+msgstr "Connect a Bittensor wallet to add it as a sign-in method."
 
 #. A label displayed above the options for connecting to a tunnel.
 msgctxt "connect_options"

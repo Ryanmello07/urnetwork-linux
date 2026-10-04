@@ -9,12 +9,23 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
 
 #include <gtkmm.h>
 
 #include "SdkHost.hpp"
 
 namespace urnw {
+
+// The Bittensor wallet chooser's buttons, one per wallet the SDK supports on
+// linux (urnet::bittensorWalletIdList, in its order, named by
+// bittensorWalletDisplayName), appended to `row`; `choose` gets the wallet id.
+// A wallet the SDK adds later appears without an app change. Returns the
+// buttons so the caller can grey them out while a flow runs.
+std::vector<Gtk::Button*> AppendBittensorWalletChoices(
+    Gtk::Box& row, std::function<void(const std::string& walletId)> choose);
 
 class BittensorManualSheet : public Gtk::Window {
  public:

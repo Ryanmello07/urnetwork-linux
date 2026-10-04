@@ -23,23 +23,31 @@ constexpr bool IsSuperseded(std::string_view error) noexcept {
 }
 
 // A connect return (urnetwork://<phantom|solflare>-connect) carries the
-// wallet's public key.
-enum class PublicKeyRoute { Drop, AnswerConnect, SignIn };
+// wallet's public key. A wallet being added as a sign-in method (Account >
+// Login methods, AddSignInFlow.hpp) chains its challenge like a sign-in, but
+// its signature is answered to the sheet and never signs in.
+enum class PublicKeyRoute { Drop, AnswerConnect, SignIn, AddSignIn };
 
 constexpr PublicKeyRoute RoutePublicKey(bool bittensor, bool connectWaiting,
-                                        bool walletSignInWaiting) noexcept {
+                                        bool walletSignInWaiting,
+                                        bool walletAddWaiting = false) noexcept {
   if (bittensor) return PublicKeyRoute::Drop;  // no connect hop to chain
   if (connectWaiting) return PublicKeyRoute::AnswerConnect;
+  if (walletAddWaiting) return PublicKeyRoute::AddSignIn;
   return walletSignInWaiting ? PublicKeyRoute::SignIn : PublicKeyRoute::Drop;
 }
 
 // A signature return carries the wallet's signature over the last message the
 // app sent it.
-enum class SignatureRoute { Drop, AnswerRequest, FinishCreate, SignIn };
+// An add waiting comes before a sign-in: its signature goes to add-auth on the
+// signed-in network, never to authLogin.
+enum class SignatureRoute { Drop, AnswerRequest, AnswerAdd, FinishCreate, SignIn };
 
 constexpr SignatureRoute RouteSignature(bool signWaiting, bool createWaiting,
-                                        bool walletSignInWaiting) noexcept {
+                                        bool walletSignInWaiting,
+                                        bool walletAddWaiting = false) noexcept {
   if (signWaiting) return SignatureRoute::AnswerRequest;
+  if (walletAddWaiting) return SignatureRoute::AnswerAdd;
   if (createWaiting) return SignatureRoute::FinishCreate;
   return walletSignInWaiting ? SignatureRoute::SignIn : SignatureRoute::Drop;
 }

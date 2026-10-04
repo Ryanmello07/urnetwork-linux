@@ -12,7 +12,11 @@
 #include <utility>
 #include <vector>
 
+#include "AddSignInFlow.hpp"
 #include "AuthViews.hpp"
+#include "BittensorManualSheet.hpp"
+#include "BittensorWalletFlow.hpp"
+#include "WalletBridgeRoute.hpp"
 #include "DeleteAccountOutcome.hpp"
 #include "Formatters.hpp"
 #include "GuestConversionSheet.hpp"
@@ -521,7 +525,11 @@ class AccountUsageBar : public Gtk::Box {
 // authVerify. The page reloads the methods only after the code is accepted;
 // closing on the code page leaves an unverified sign-in that the next password
 // sign-in verifies. The jwt authVerify returns is not installed (the session
-// already holds this network's). SSO and wallet sign-ins are not added here.
+// already holds this network's).
+//
+// Apple, Google and wallets (AddSignInFlow.hpp) run the login's own browser
+// and wallet flows through SdkHost::AddSignIn*, which end in add-auth on this
+// session: never a sign-in, never a new jwt. They have no code step.
 class AccountAddAuthSheet : public Gtk::Window {
   // The SDK side of the flow, gated by the page and guarded by the sheet's
   // epoch; every answer is posted to the main loop.
@@ -627,36 +635,124 @@ class AccountAddAuthSheet : public Gtk::Window {
     AddEscapeToClose(*this);
 
     // ---- page 1: the sign-in to add ----
+    // The same options as every app (AddSignInFlow.hpp): Apple, Google, a
+    // Solana or Bittensor wallet, and an email or phone.
     auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
     box->set_margin(24);
     box->set_size_request(kSheetWidthNarrow, -1);
 
     auto* heading =
-        Gtk::make_managed<Gtk::Label>(T_("site_app_login_methods", "Login methods"));
+        Gtk::make_managed<Gtk::Label>(T_("add_a_sign_in_method", "Add a sign-in method"));
     heading->add_css_class("ur-step-heading");
     heading->set_xalign(0);
     box->append(*heading);
 
+    auto* methods = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 0);
+    methods->add_css_class("linked");
+    kit::SetAccessibleLabel(*methods, T_("method", "Method"));
+    Gtk::ToggleButton* group = nullptr;
+    for (const addsignin::Method method : addsignin::Methods()) {
+      auto* toggle = Gtk::make_managed<Gtk::ToggleButton>(Tr(addsignin::MethodLabel(method)));
+      toggle->set_hexpand(true);
+      if (group) toggle->set_group(*group);
+      else group = toggle;
+      toggle->signal_toggled().connect([this, toggle, method] {
+        if (!toggle->get_active()) return;
+        method_ = method;
+        providerError_.clear();
+        Render();
+      });
+      methods->append(*toggle);
+      methodButtons_.emplace_back(method, toggle);
+    }
+    box->append(*methods);
+
+    // apple and google: the provider's web flow in the browser
+    auto providerPage = [this](addsignin::Method method, Glib::ustring hint,
+                               Glib::ustring button) {
+      auto* page = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+      auto* note = Gtk::make_managed<Gtk::Label>(hint);
+      note->add_css_class("ur-caption");
+      note->set_xalign(0);
+      note->set_wrap(true);
+      page->append(*note);
+      auto* start = Gtk::make_managed<Gtk::Button>(button);
+      start->add_css_class("ur-btn");
+      start->add_css_class("ur-btn-primary");
+      start->signal_clicked().connect([this, method] { StartProvider(method); });
+      page->append(*start);
+      providerButtons_.push_back(start);
+      return page;
+    };
+    methodStack_.add(*providerPage(addsignin::Method::Apple,
+                                   T_("sign_in_with_your_apple_id_to",
+                                      "Sign in with your Apple ID to add it as a sign-in method."),
+                                   T_("sign_in_with_apple", "Sign in with Apple")),
+                     "apple");
+    methodStack_.add(*providerPage(addsignin::Method::Google,
+                                   T_("sign_in_with_google_to_add_it",
+                                      "Sign in with Google to add it as a sign-in method."),
+                                   T_("sign_in_with_google", "Sign in with Google")),
+                     "google");
+
+    // wallet: a Solana wallet (Phantom / Solflare on the ur.io bridge) or a
+    // Bittensor wallet (the shared chooser: the SDK's wallets for linux)
+    auto* walletPage = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+    for (const addsignin::WalletChain chain : addsignin::WalletChains()) {
+      auto* note = Gtk::make_managed<Gtk::Label>(Tr(addsignin::ChainHint(chain)));
+      note->add_css_class("ur-caption");
+      note->set_xalign(0);
+      note->set_wrap(true);
+      walletPage->append(*note);
+      auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+      auto* label = Gtk::make_managed<Gtk::Label>(Tr(addsignin::ChainLabel(chain)));
+      label->add_css_class("ur-input-label");
+      label->set_xalign(0);
+      walletPage->append(*label);
+      if (chain == addsignin::WalletChain::Solana) {
+        // wallet names are product names: never translated
+        for (const auto& [name, provider] :
+             {std::pair<const char*, WalletConnect::Provider>{"Phantom",
+                                                              WalletConnect::Provider::Phantom},
+              std::pair<const char*, WalletConnect::Provider>{"Solflare",
+                                                              WalletConnect::Provider::Solflare}}) {
+          auto* wallet = Gtk::make_managed<Gtk::Button>(name);
+          wallet->signal_clicked().connect([this, provider = provider] { StartSolana(provider); });
+          row->append(*wallet);
+          providerButtons_.push_back(wallet);
+        }
+      } else {
+        for (Gtk::Button* wallet : AppendBittensorWalletChoices(
+                 *row, [this](const std::string& walletId) { StartBittensor(walletId); })) {
+          providerButtons_.push_back(wallet);
+        }
+      }
+      walletPage->append(*row);
+    }
+    methodStack_.add(*walletPage, "wallet");
+
+    // email or phone + password, then a code
+    auto* emailPage = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
     auto* authLabel = Gtk::make_managed<Gtk::Label>(T_("your_email", "Your email"));
     authLabel->add_css_class("ur-input-label");
     authLabel->set_xalign(0);
-    box->append(*authLabel);
+    emailPage->append(*authLabel);
     auth_ = Gtk::make_managed<Gtk::Entry>();
     auth_->add_css_class("ur-input");
     kit::SetAccessibleLabel(*auth_, T_("your_email", "Your email"));
     auth_->signal_changed().connect([this] { Render(); });
-    box->append(*auth_);
+    emailPage->append(*auth_);
 
     auto* passwordLabel = Gtk::make_managed<Gtk::Label>(T_("password_label", "Password"));
     passwordLabel->add_css_class("ur-input-label");
     passwordLabel->set_xalign(0);
-    box->append(*passwordLabel);
+    emailPage->append(*passwordLabel);
     password_ = Gtk::make_managed<Gtk::PasswordEntry>();
     password_->add_css_class("ur-input");
     password_->set_show_peek_icon(true);
     kit::SetAccessibleLabel(*password_, T_("password_label", "Password"));
     password_->signal_changed().connect([this] { Render(); });
-    box->append(*password_);
+    emailPage->append(*password_);
 
     auto* rule = Gtk::make_managed<Gtk::Label>(
         T_("password_must_be_at_least_12_characters_long",
@@ -664,10 +760,14 @@ class AccountAddAuthSheet : public Gtk::Window {
     rule->add_css_class("ur-caption");
     rule->set_xalign(0);
     rule->set_wrap(true);
-    box->append(*rule);
+    emailPage->append(*rule);
+    methodStack_.add(*emailPage, "email");
+    methodStack_.set_vhomogeneous(false);
+    box->append(methodStack_);
 
     error_ = MakeSizedLabel({}, 12, "ur-caption");
     error_->set_visible(false);
+    error_->set_wrap(true);
     box->append(*error_);
 
     auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
@@ -727,15 +827,40 @@ class AccountAddAuthSheet : public Gtk::Window {
     verifyPage->append(*verifyActions);
     stack_.add(*verifyPage, "verify");
 
+    // ---- page 3: an Apple, Google or wallet sign-in was added ----
+    auto* addedPage = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+    addedPage->set_margin(24);
+    addedPage->set_size_request(kSheetWidthNarrow, -1);
+    added_ = Gtk::make_managed<Gtk::Label>();
+    added_->add_css_class("ur-step-heading");
+    added_->set_xalign(0);
+    added_->set_wrap(true);
+    addedPage->append(*added_);
+    auto* done = Gtk::make_managed<Gtk::Button>(T_("done", "Done"));
+    done->add_css_class("suggested-action");
+    done->set_halign(Gtk::Align::END);
+    done->signal_clicked().connect([this] { set_visible(false); });
+    addedPage->append(*done);
+    stack_.add(*addedPage, "added");
+
     set_child(stack_);
     // DefaultButton = Primary here (spec): this sheet ADDS, it never destroys.
     add_->set_receives_default(true);
     set_default_widget(*add_);
     conversion_.on_changed = [this] { Render(); };
+    // closing drops a browser or wallet add still waiting: its late return is
+    // ignored (SdkHost::CancelAddSignIn)
+    signal_hide().connect([this] {
+      if (!providerBusy_) return;
+      providerBusy_ = false;
+      ++*epoch_;
+      host_.CancelAddSignIn();
+    });
   }
 
   ~AccountAddAuthSheet() override {
     ++*epoch_;  // orphan every in-flight call
+    if (providerBusy_) host_.CancelAddSignIn();
     cooldownTick_.disconnect();
     conversion_.on_changed = nullptr;
   }
@@ -748,6 +873,11 @@ class AccountAddAuthSheet : public Gtk::Window {
     flow_.Abandon();  // a previous submit's watchdog may still be armed
     cooldownTick_.disconnect();
     conversion_.Reset();
+    if (providerBusy_) host_.CancelAddSignIn();
+    providerBusy_ = false;
+    providerError_.clear();
+    addedMethod_.reset();
+    SelectMethod(addsignin::kDefaultMethod);
     auth_->set_text("");
     password_->set_text("");
     code_->set_text("");
@@ -758,20 +888,116 @@ class AccountAddAuthSheet : public Gtk::Window {
  private:
   bool CanAct() const { return canAct_ && canAct_(); }
 
+  static Glib::ustring Tr(addsignin::Text text) {
+    return g_dpgettext2(GETTEXT_PACKAGE, std::string(text.key).c_str(),
+                        std::string(text.english).c_str());
+  }
+
+  static const char* MethodPage(addsignin::Method method) {
+    switch (method) {
+      case addsignin::Method::Apple: return "apple";
+      case addsignin::Method::Google: return "google";
+      case addsignin::Method::Wallet: return "wallet";
+      case addsignin::Method::Email: return "email";
+    }
+    return "email";
+  }
+
+  void SelectMethod(addsignin::Method method) {
+    method_ = method;
+    for (auto& [m, toggle] : methodButtons_) {
+      if (m == method && !toggle->get_active()) toggle->set_active(true);
+    }
+  }
+
+  // The answer of an Apple, Google or wallet add, on whatever thread it
+  // arrives: posted to the main loop and dropped once the sheet moved on.
+  std::function<void(SdkHost::AddSignInResult)> Answer(addsignin::Method method) {
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    return [this, epoch, seen, method](SdkHost::AddSignInResult result) {
+      PostToMain([this, epoch, seen, method, result] {
+        if (*epoch != seen) return;
+        providerBusy_ = false;
+        if (result.ok) {
+          addedMethod_ = method;
+          Render();
+          if (on_changed) on_changed();  // the new method appears
+          return;
+        }
+        // the user closed the manual sheet, or started another method
+        if (bittensor::IsCancelled(result.error) || bridge::IsSuperseded(result.error)) {
+          providerError_.clear();
+        } else {
+          g_warning("account: add sign-in failed: %s",
+                    result.error.empty() ? "(no error text)" : result.error.c_str());
+          providerError_ = result.error.empty()
+                               ? std::string(T_("something_went_wrong", "Something went wrong."))
+                               : result.error;
+        }
+        Render();
+      });
+    };
+  }
+
+  bool BeginProvider() {
+    if (providerBusy_) return false;
+    if (!CanAct()) {
+      Render();
+      return false;
+    }
+    providerBusy_ = true;
+    providerError_.clear();
+    Render();
+    return true;
+  }
+
+  void StartProvider(addsignin::Method method) {
+    if (!BeginProvider()) return;
+    host_.AddSignInWithSso(std::string(addsignin::SsoProvider(method)), Answer(method));
+  }
+
+  void StartSolana(WalletConnect::Provider provider) {
+    if (!BeginProvider()) return;
+    host_.AddSignInWithSolana(provider, Answer(addsignin::Method::Wallet));
+  }
+
+  void StartBittensor(const std::string& walletId) {
+    if (!BeginProvider()) return;
+    host_.AddSignInWithBittensor(walletId, Answer(addsignin::Method::Wallet));
+  }
+
   void Render() {
+    if (addedMethod_) {
+      added_->set_text(Tr(addsignin::AddedMessage(*addedMethod_)));
+      stack_.set_visible_child("added");
+      return;
+    }
     const GuestConversionStep step = conversion_.Step();
-    const bool busy = conversion_.Busy();
+    const bool busy = conversion_.Busy() || providerBusy_;
     switch (step) {
       case GuestConversionStep::EnterSignIn:
       case GuestConversionStep::AddingSignIn: {
         stack_.set_visible_child("sign-in");
+        methodStack_.set_visible_child(MethodPage(method_));
+        const bool email = method_ == addsignin::Method::Email;
+        add_->set_visible(email);
         const bool session = CanAct();
+        for (auto& [m, toggle] : methodButtons_) toggle->set_sensitive(!busy);
+        for (Gtk::Button* button : providerButtons_) button->set_sensitive(session && !busy);
         auth_->set_sensitive(session && !busy);
         password_->set_sensitive(session && !busy);
         if (!session) {
           // never a disabled field with no explanation
           ApplyFieldState(*error_, AccountFieldState::NoSession);
           error_->set_visible(true);
+        } else if (!email) {
+          if (providerError_.empty()) {
+            error_->set_visible(false);
+          } else {
+            SetToned(*error_, kUrDanger, providerError_);
+            error_->set_visible(true);
+          }
         } else if (!conversion_.Error().empty()) {
           SetToned(*error_, kUrDanger, conversion_.Error());
           error_->set_visible(true);
@@ -815,6 +1041,17 @@ class AccountAddAuthSheet : public Gtk::Window {
   GuestConversion conversion_;
   sigc::connection cooldownTick_;
   Gtk::Stack stack_;
+  // the sign-in page's method (AddSignInFlow.hpp) and its pages
+  addsignin::Method method_ = addsignin::kDefaultMethod;
+  std::vector<std::pair<addsignin::Method, Gtk::ToggleButton*>> methodButtons_;
+  Gtk::Stack methodStack_;
+  std::vector<Gtk::Button*> providerButtons_;
+  // an Apple, Google or wallet add in flight (the browser or the wallet has it)
+  bool providerBusy_ = false;
+  std::string providerError_;
+  // set once an Apple, Google or wallet sign-in was added
+  std::optional<addsignin::Method> addedMethod_;
+  Gtk::Label* added_ = nullptr;
   Gtk::Entry* auth_ = nullptr;
   Gtk::PasswordEntry* password_ = nullptr;
   Gtk::Label* error_ = nullptr;

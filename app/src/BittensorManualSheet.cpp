@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "BittensorManualSheet.hpp"
 
+#include <optional>
 #include <string>
+#include <vector>
 
 #include <urnetwork_sdk.hpp>
 
@@ -26,6 +28,25 @@ Gtk::Label* MakeWrappedNote(const Glib::ustring& text, const char* cssClass) {
 }
 
 }  // namespace
+
+std::vector<Gtk::Button*> AppendBittensorWalletChoices(
+    Gtk::Box& row, std::function<void(const std::string& walletId)> choose) {
+  std::vector<Gtk::Button*> buttons;
+  const std::optional<urnet::StringList> walletIds = urnet::bittensorWalletIdList();
+  if (!walletIds) return buttons;
+  for (const std::string& walletId : *walletIds) {
+    // only the wallets this platform has a transport for
+    if (urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform)).empty()) {
+      continue;
+    }
+    // wallet names are product names: never translated
+    auto* button = Gtk::make_managed<Gtk::Button>(urnet::bittensorWalletDisplayName(walletId));
+    button->signal_clicked().connect([choose, walletId] { choose(walletId); });
+    row.append(*button);
+    buttons.push_back(button);
+  }
+  return buttons;
+}
 
 BittensorManualSheet::BittensorManualSheet(Gtk::Window& parent, SdkHost& host,
                                            const SdkHost::BittensorManualRequest& request)

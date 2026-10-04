@@ -985,7 +985,8 @@ void SdkHost::SetupWalletCallbacks() {
       flow = walletFlows_.Latest();
       route = bridge::RoutePublicKey(provider == WalletConnect::Provider::Bittensor,
                                      static_cast<bool>(walletConnectDone_),
-                                     static_cast<bool>(walletAuthDone_));
+                                     static_cast<bool>(walletAuthDone_),
+                                     static_cast<bool>(walletAddDone_));
       if (route == bridge::PublicKeyRoute::AnswerConnect) {
         connectDone = std::move(walletConnectDone_);
         walletConnectDone_ = nullptr;
@@ -1006,6 +1007,8 @@ void SdkHost::SetupWalletCallbacks() {
         return;
       }
       case bridge::PublicKeyRoute::SignIn:
+      case bridge::PublicKeyRoute::AddSignIn:
+        // both sign a fresh challenge; the signature route decides where it goes
         break;
     }
     RequestWalletChallenge(kSolanaBlockchain, publicKey,
@@ -1029,16 +1032,25 @@ void SdkHost::SetupWalletCallbacks() {
     // signature goes back to the caller with the address and the message. A
     // signature nobody waits for (a superseded or abandoned tab) is dropped: it
     // must not reach AuthLoginWithWallet, which would move the session.
+    // A wallet being added (AddSignInWithSolana / AddSignInWithBittensor) goes
+    // to add-auth on this session, ahead of any sign-in.
     std::function<void(WalletSignature)> signDone;
+    std::function<void(AddSignInResult)> addDone;
+    addsignin::WalletChain addChain = addsignin::WalletChain::Solana;
     bridge::SignatureRoute route = bridge::SignatureRoute::Drop;
     {
       std::scoped_lock lock(mutex_);
       route = bridge::RouteSignature(static_cast<bool>(walletSignDone_),
                                      static_cast<bool>(walletCreateDone_),
-                                     static_cast<bool>(walletAuthDone_));
+                                     static_cast<bool>(walletAuthDone_),
+                                     static_cast<bool>(walletAddDone_));
       if (route == bridge::SignatureRoute::AnswerRequest) {
         signDone = std::move(walletSignDone_);
         walletSignDone_ = nullptr;
+      } else if (route == bridge::SignatureRoute::AnswerAdd) {
+        addDone = std::move(walletAddDone_);
+        walletAddDone_ = nullptr;
+        addChain = walletAddChain_;
       }
     }
     switch (route) {
@@ -1055,6 +1067,11 @@ void SdkHost::SetupWalletCallbacks() {
         signDone(std::move(out));
         return;
       }
+      case bridge::SignatureRoute::AnswerAdd:
+        AddAuthMethod(addsignin::WalletArgs(addChain, wallet_.publicKey(), signature,
+                                            wallet_.message()),
+                      std::move(addDone));
+        return;
       case bridge::SignatureRoute::FinishCreate:
         FinishCreateNetworkWithWallet(signature);
         return;
@@ -1076,6 +1093,8 @@ void SdkHost::SetupWalletCallbacks() {
     r.error = error;
     sso::Verdict verdict;
     std::string expectedProvider;
+    addsignin::Owner owner = addsignin::Owner::None;
+    std::function<void(AddSignInResult)> addDone;
     {
       std::scoped_lock lock(mutex_);
       verdict = sso::CheckReturn(r, ssoProvider_, ssoState_, ssoNonce_);
@@ -1083,6 +1102,12 @@ void SdkHost::SetupWalletCallbacks() {
       // a return that echoes the state ends the attempt either way; a stray
       // one (no attempt, another state) leaves a live attempt untouched
       if (r.state == ssoState_ && !ssoState_.empty()) {
+        owner = ssoOwner_;
+        if (owner == addsignin::Owner::AddSignIn) {
+          addDone = std::move(ssoAddDone_);
+          ssoAddDone_ = nullptr;
+        }
+        ssoOwner_ = addsignin::Owner::None;
         ssoProvider_.clear();
         ssoState_.clear();
         ssoNonce_.clear();
@@ -1096,16 +1121,36 @@ void SdkHost::SetupWalletCallbacks() {
           r.state != state) {
         return;
       }
+      if (owner == addsignin::Owner::AddSignIn) {
+        if (addDone) addDone({false, verdict.error});
+        return;
+      }
       FailWalletOperation(verdict.error);
       return;
     }
-    AuthLoginWithSso(provider, jwt);
+    switch (addsignin::RouteSso(owner)) {
+      case addsignin::SsoRoute::AddSignIn: {
+        // the identity token is added to this network; it never signs in
+        const addsignin::Method method = provider == sso::kProviderApple
+                                             ? addsignin::Method::Apple
+                                             : addsignin::Method::Google;
+        AddAuthMethod(addsignin::ProviderArgs(method, jwt), std::move(addDone));
+        return;
+      }
+      case addsignin::SsoRoute::SignIn:
+        AuthLoginWithSso(provider, jwt);
+        return;
+      case addsignin::SsoRoute::Drop:
+        std::fprintf(stderr, "[sso] a return with no owner, ignoring it\n");
+        return;
+    }
   };
   wallet_.on_error = [this](std::string err) {
     // walletAuthDone_ is set on the UI thread and consumed on wallet/SDK
     // callback threads: take it under the lock, invoke it outside
     std::function<void(SolanaConnectResult)> connectDone;
     std::function<void(WalletSignature)> signDone;
+    std::function<void(AddSignInResult)> addDone;
     std::function<void(AuthResult)> done;
     {
       std::scoped_lock lock(mutex_);
@@ -1117,6 +1162,10 @@ void SdkHost::SetupWalletCallbacks() {
       if (!connectDone) {
         signDone = std::move(walletSignDone_);
         walletSignDone_ = nullptr;
+        if (!signDone) {
+          addDone = std::move(walletAddDone_);
+          walletAddDone_ = nullptr;
+        }
         if (walletCreateDone_) {
           done = std::move(walletCreateDone_);
           pendingWalletNetworkName_.clear();
@@ -1138,6 +1187,10 @@ void SdkHost::SetupWalletCallbacks() {
       WalletSignature out;
       out.error = err;
       signDone(std::move(out));
+      return;
+    }
+    if (addDone) {
+      addDone({false, err});
       return;
     }
     if (done) done({false, false, err});
@@ -1177,6 +1230,7 @@ void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
     return;
   }
   CancelPendingSolanaConnect("superseded by a wallet connect request");
+  CancelPendingAddSignIn("superseded by a wallet connect request");
   // The bridge is this request's now. A Bittensor connect still waiting for its
   // signature is answered (the page settles it quietly), and its challenge, if
   // it is still being fetched, will not open the bridge over this one: the flow
@@ -1206,6 +1260,7 @@ void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
                                std::function<void(AuthResult)> done) {
   CancelPendingSolanaConnect("superseded by a wallet sign-in");
+  CancelPendingAddSignIn("superseded by a wallet sign-in");
   {
     std::scoped_lock lock(mutex_);
     walletFlows_.Begin();
@@ -1218,6 +1273,7 @@ void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
 void SdkHost::SignInWithBittensor(const std::string& walletId,
                                   std::function<void(AuthResult)> done) {
   CancelPendingSolanaConnect("superseded by a wallet sign-in");
+  CancelPendingAddSignIn("superseded by a wallet sign-in");
   uint64_t flow = 0;
   {
     std::scoped_lock lock(mutex_);
@@ -1345,6 +1401,7 @@ void SdkHost::StartBittensorSession(const std::string& walletId, const std::stri
 
 void SdkHost::SignInWithSso(const std::string& provider, std::function<void(AuthResult)> done) {
   CancelPendingSolanaConnect("superseded by a wallet sign-in");
+  CancelPendingAddSignIn("superseded by a wallet sign-in");
   // a fresh state + nonce per attempt, never reused: the return is accepted
   // exactly once and only for this attempt
   std::string state;
@@ -1374,6 +1431,7 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
     ssoProvider_ = provider;
     ssoState_ = state;
     ssoNonce_ = nonce;
+    ssoOwner_ = addsignin::Owner::SignIn;
     walletAuthDone_ = std::move(done);
     if (networkSpace_) apiUrl = networkSpace_->getApiUrl();
   }
@@ -1383,6 +1441,187 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   } else if (google) {
     wallet_.SignInWithGoogle(apiUrl, state, nonce);
   }
+}
+
+// ---- add a sign-in method (AddSignInFlow.hpp) -------------------------------
+// The login's own flows, ending in add-auth on this session instead of
+// authLogin: the jwt is never replaced and the app never becomes the added
+// identity.
+
+void SdkHost::CancelPendingAddSignIn(const std::string& reason) {
+  std::function<void(AddSignInResult)> walletDone;
+  std::function<void(AddSignInResult)> ssoDone;
+  {
+    std::scoped_lock lock(mutex_);
+    walletDone = std::move(walletAddDone_);
+    walletAddDone_ = nullptr;
+    ssoDone = std::move(ssoAddDone_);
+    ssoAddDone_ = nullptr;
+    if (ssoOwner_ == addsignin::Owner::AddSignIn) {
+      // its return, if it still comes, matches no attempt and is dropped
+      ssoOwner_ = addsignin::Owner::None;
+      ssoProvider_.clear();
+      ssoState_.clear();
+      ssoNonce_.clear();
+    }
+  }
+  if (walletDone) walletDone({false, reason});
+  if (ssoDone) ssoDone({false, reason});
+}
+
+void SdkHost::CancelAddSignIn() {
+  bool cancelSession = false;
+  {
+    std::scoped_lock lock(mutex_);
+    cancelSession = static_cast<bool>(walletAddDone_);
+    walletAddDone_ = nullptr;
+    ssoAddDone_ = nullptr;
+    if (ssoOwner_ == addsignin::Owner::AddSignIn) {
+      ssoOwner_ = addsignin::Owner::None;
+      ssoProvider_.clear();
+      ssoState_.clear();
+      ssoNonce_.clear();
+    }
+    // a challenge still being fetched for the add opens no tab
+    if (cancelSession) walletFlows_.Begin();
+  }
+  if (!cancelSession) return;
+  if (auto session = wallet_.bittensorSession()) {
+    if (session->purpose() == bittensor::kPurposeAdd && session->state() != "signed") {
+      session->cancel();
+    }
+  }
+}
+
+void SdkHost::AddSignInWithSso(const std::string& provider,
+                               std::function<void(AddSignInResult)> done) {
+  CancelPendingSolanaConnect("superseded by another sign-in method");
+  CancelPendingAddSignIn("superseded by another sign-in method");
+  const bool apple = provider == sso::kProviderApple;
+  const bool google = provider == sso::kProviderGoogle;
+  if (!apple && !google) {
+    if (done) done({false, "unknown sign-in provider"});
+    return;
+  }
+  // a fresh state + nonce per attempt, as for a sign-in
+  std::string state;
+  std::string nonce;
+  if (char* s = g_uuid_string_random()) { state = s; g_free(s); }
+  if (char* n = g_uuid_string_random()) { nonce = n; g_free(n); }
+  state = sso::OAuthState(state);
+  std::string apiUrl;
+  {
+    std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
+    ssoProvider_ = provider;
+    ssoState_ = state;
+    ssoNonce_ = nonce;
+    // the verified return goes to add-auth and never signs in (on_sso)
+    ssoOwner_ = addsignin::Owner::AddSignIn;
+    ssoAddDone_ = std::move(done);
+    if (networkSpace_) apiUrl = networkSpace_->getApiUrl();
+  }
+  if (apple) {
+    wallet_.SignInWithApple(apiUrl, state, nonce);
+  } else {
+    wallet_.SignInWithGoogle(apiUrl, state, nonce);
+  }
+}
+
+void SdkHost::AddSignInWithSolana(WalletConnect::Provider provider,
+                                  std::function<void(AddSignInResult)> done) {
+  if (provider == WalletConnect::Provider::Bittensor) {
+    if (done) done({false, "not a solana wallet provider"});
+    return;
+  }
+  CancelPendingSolanaConnect("superseded by another sign-in method");
+  CancelPendingAddSignIn("superseded by another sign-in method");
+  std::function<void(WalletSignature)> signDone;
+  {
+    std::scoped_lock lock(mutex_);
+    walletFlows_.Begin();
+    // a waiting signature request would take this wallet's signature first
+    signDone = std::move(walletSignDone_);
+    walletSignDone_ = nullptr;
+    walletAddChain_ = addsignin::WalletChain::Solana;
+    walletAddDone_ = std::move(done);
+  }
+  if (signDone) {
+    WalletSignature out;
+    out.error = "superseded by another sign-in method";
+    signDone(std::move(out));
+  }
+  // connect, then the challenge is signed (on_public_key, AddSignIn) and the
+  // signature goes to add-auth (on_signature, AnswerAdd)
+  wallet_.Connect(provider);
+}
+
+void SdkHost::AddSignInWithBittensor(const std::string& walletId,
+                                     std::function<void(AddSignInResult)> done) {
+  CancelPendingSolanaConnect("superseded by another sign-in method");
+  CancelPendingAddSignIn("superseded by another sign-in method");
+  std::function<void(WalletSignature)> signDone;
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();
+    signDone = std::move(walletSignDone_);
+    walletSignDone_ = nullptr;
+    walletAddChain_ = addsignin::WalletChain::Bittensor;
+    walletAddDone_ = std::move(done);
+  }
+  if (signDone) {
+    WalletSignature out;
+    out.error = "superseded by another sign-in method";
+    signDone(std::move(out));
+  }
+  // purpose "add": a login or create session refuses this return, and the
+  // proof (on_signature, AnswerAdd) goes to add-auth
+  StartBittensorSession(walletId, std::string(bittensor::kPurposeAdd), std::string(), flow,
+                        nullptr);
+}
+
+void SdkHost::AddAuthMethod(const addsignin::Args& in, std::function<void(AddSignInResult)> done) {
+  if (!done) done = [](AddSignInResult) {};
+  if (!addsignin::SuppliesMethod(in)) {
+    done({false, "no auth method supplied"});
+    return;
+  }
+  if (!api_) {
+    done({false, "no api"});
+    return;
+  }
+  urnet::AddAuthArgs args{};
+  if (!in.userAuth.empty()) args.user_auth = in.userAuth;
+  if (!in.password.empty()) args.password = in.password;
+  if (!in.authJwt.empty()) args.auth_jwt = in.authJwt;
+  if (!in.authJwtType.empty()) args.auth_jwt_type = in.authJwtType;
+  if (!in.walletAddress.empty()) {
+    urnet::WalletAuthArgs wallet{};
+    wallet.wallet_address = in.walletAddress;  // base58 (solana) | ss58 (TAO)
+    wallet.wallet_signature = in.walletSignature;
+    wallet.wallet_message = in.walletMessage;
+    wallet.blockchain = in.blockchain;
+    args.wallet_auth = wallet;
+  }
+  // add-auth answers no jwt: the session's own stays installed
+  api_->addAuth(std::optional<urnet::AddAuthArgs>(args),
+                [done](std::optional<urnet::AddAuthResult> result,
+                       std::optional<std::string> err) {
+                  if (err) {
+                    done({false, *err});
+                    return;
+                  }
+                  if (!result) {
+                    done({false, std::string()});
+                    return;
+                  }
+                  if (result->error) {
+                    done({false, result->error->message});
+                    return;
+                  }
+                  done({true, std::string()});
+                });
 }
 
 void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& jwt) {
@@ -1510,11 +1749,16 @@ void SdkHost::RequestWalletChallenge(
 
 void SdkHost::FailWalletOperation(const std::string& error) {
   std::function<void(WalletSignature)> signDone;
+  std::function<void(AddSignInResult)> addDone;
   std::function<void(AuthResult)> done;
   {
     std::scoped_lock lock(mutex_);
     signDone = std::move(walletSignDone_);
     walletSignDone_ = nullptr;
+    if (!signDone) {
+      addDone = std::move(walletAddDone_);
+      walletAddDone_ = nullptr;
+    }
     if (walletCreateDone_) {
       done = std::move(walletCreateDone_);
       pendingWalletNetworkName_.clear();
@@ -1531,6 +1775,10 @@ void SdkHost::FailWalletOperation(const std::string& error) {
     signDone(std::move(out));
     return;
   }
+  if (addDone) {
+    addDone({false, error});
+    return;
+  }
   if (done) done({false, false, error});
 }
 
@@ -1538,6 +1786,7 @@ void SdkHost::SignBittensorConnect(const std::string& walletId,
                                    const std::string& walletAddress,
                                    std::function<void(WalletSignature)> done) {
   CancelPendingSolanaConnect("superseded by a wallet signature request");
+  CancelPendingAddSignIn("superseded by a wallet signature request");
   uint64_t flow = 0;
   {
     std::scoped_lock lock(mutex_);
