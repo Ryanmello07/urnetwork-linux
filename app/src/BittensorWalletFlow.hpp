@@ -6,13 +6,18 @@
 //
 // Wallets and transports on linux (the SDK's BittensorWalletTransportFor):
 //   - Talisman: browser_bridge. The system browser opens
-//     https://ur.io/wallet-connect?...&wallet=talisman, the page drives the
+//     https://ur.io/bittensor-connect?...&wallet=talisman, the page drives the
 //     Talisman extension, and the result comes back on the app's existing
 //     urnetwork://bittensor-sign-message scheme handler (the .desktop file's
 //     x-scheme-handler/urnetwork).
-//   - TAO.com: manual. TAO.com documents no programmatic interface, so the
-//     manual sheet shows the challenge and takes the address and a pasted
-//     signature.
+//   - TAO.com (and any other wallet): manual. TAO.com documents no
+//     programmatic interface, so the manual sheet shows the challenge and takes
+//     the address and a pasted signature.
+//   - WalletConnect (Nova, Nightly and other WalletConnect v2 substrate
+//     wallets): browser_bridge with wallet=walletconnect. The page pairs (a QR
+//     to scan with the wallet app) with the build's WalletConnect project id
+//     (Config.hpp, -Dwalletconnect_project_id; empty = the page's own) and
+//     returns on the same scheme handler.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -27,6 +32,56 @@ inline constexpr std::string_view kPlatform = "linux";
 
 inline constexpr std::string_view kWalletTalisman = "talisman";
 inline constexpr std::string_view kWalletTaoCom = "taocom";
+inline constexpr std::string_view kWalletWalletConnect = "walletconnect";
+
+// A row of the wallet chooser, in display order. The label is the SDK's
+// product name (never translated); `hint` is the translated subtitle, empty
+// when the name says it all.
+struct ChooserWallet {
+  std::string_view walletId;
+  std::string_view hintKey;
+  std::string_view hintEnglish;
+};
+
+inline constexpr ChooserWallet kChooserWallets[] = {
+    {kWalletTalisman, "", ""},
+    {kWalletTaoCom, "enter_address_manually", "Enter address manually"},
+    {kWalletWalletConnect, "bittensor_walletconnect_hint",
+     "Nova, Nightly and other WalletConnect wallets"},
+};
+
+// The chooser's response id for a wallet is the wallet id itself; anything
+// else (cancel, a closed dialog) chooses nothing.
+constexpr std::string_view ChosenWallet(std::string_view response) noexcept {
+  for (const auto& wallet : kChooserWallets) {
+    if (wallet.walletId == response) return wallet.walletId;
+  }
+  return {};
+}
+
+// Only the WalletConnect page is given the build's project id.
+constexpr bool SendsWalletConnectProjectId(std::string_view walletId) noexcept {
+  return walletId == kWalletWalletConnect;
+}
+
+// What to tell the user while the browser bridge is open. `takesWalletName`:
+// the text has one {} for the wallet's product name.
+struct ContinueText {
+  std::string_view key;
+  std::string_view english;
+  bool takesWalletName;
+};
+
+constexpr ContinueText ContinueTextFor(std::string_view walletId) noexcept {
+  if (walletId == kWalletWalletConnect) {
+    return {"bittensor_walletconnect_continue",
+            "Continue in your browser: scan the code with your wallet app, or open the wallet "
+            "on this device.",
+            false};
+  }
+  return {"bittensor_continue_in_browser",
+          "Continue in your browser and approve the request in the {} extension.", true};
+}
 
 inline constexpr std::string_view kPurposeLogin = "login";
 inline constexpr std::string_view kPurposeCreate = "create";
@@ -56,8 +111,10 @@ enum class Outcome {
 
 constexpr Outcome Classify(std::string_view errorCode, bool manual) noexcept {
   if (errorCode.empty()) return Outcome::Accept;
+  // unsupported_wallet on a return: it names another wallet's page (a stale
+  // tab from an earlier choice), so it is not this flow's answer either
   if (errorCode == "purpose_mismatch" || errorCode == "not_bittensor_return" ||
-      errorCode == "not_awaiting_wallet") {
+      errorCode == "not_awaiting_wallet" || errorCode == "unsupported_wallet") {
     return Outcome::Ignore;
   }
   if (manual && (errorCode == "invalid_signature" || errorCode == "address_mismatch" ||
@@ -100,11 +157,15 @@ constexpr ErrorText ErrorTextFor(std::string_view errorCode) noexcept {
 // How long a flow waits for its answer. A bridge round trip reports nothing
 // when the tab is closed, so it times out; the manual sheet is bounded by the
 // challenge itself (5 minutes) plus the time to submit.
+// WalletConnect pairing (scan, approve the session, approve the signature)
+// gets the challenge's full lifetime too.
 inline constexpr uint32_t kBridgeTimeoutMs = 180'000;
 inline constexpr uint32_t kManualTimeoutMs = 330'000;
 
-constexpr uint32_t TimeoutMsFor(std::string_view transport) noexcept {
-  return transport == kTransportManual ? kManualTimeoutMs : kBridgeTimeoutMs;
+constexpr uint32_t TimeoutMsFor(std::string_view transport,
+                                std::string_view walletId = {}) noexcept {
+  if (transport == kTransportManual || walletId == kWalletWalletConnect) return kManualTimeoutMs;
+  return kBridgeTimeoutMs;
 }
 
 }  // namespace urnw::bittensor

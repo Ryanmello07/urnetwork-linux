@@ -2163,29 +2163,19 @@ void MainWindow::OnSso(const std::string& provider) {
 }
 
 // The Bittensor tile asks which wallet first: Talisman signs on the ur.io
-// bridge in the browser (its extension), TAO.com on the manual sheet (it
-// documents no programmatic interface). BittensorWalletFlow.hpp.
+// bridge in the browser (its extension), TAO.com (or any wallet) on the manual
+// sheet (it documents no programmatic interface), WalletConnect on the bridge
+// page with a QR for Nova, Nightly and other WalletConnect wallets.
+// BittensorWalletFlow.hpp.
 void MainWindow::OnBittensor() {
   loginError_.set_text("");
-  GtkWidget* dialog = adw_message_dialog_new(
-      GTK_WINDOW(gobj()), T_("bittensor_choose_wallet", "Choose your Bittensor wallet"), nullptr);
-  // wallet names are product names: never translated (the SDK names them)
-  const std::string talisman = urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTalisman));
-  const std::string taoCom = urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTaoCom));
-  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
-                                   "talisman", talisman.c_str(), "taocom", taoCom.c_str(),
-                                   nullptr);
-  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "talisman",
-                                             ADW_RESPONSE_SUGGESTED);
-  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "talisman");
+  GtkWidget* dialog = NewBittensorWalletChooser(GTK_WINDOW(gobj()));
   g_signal_connect(dialog, "response",
                    G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
                      auto* self = static_cast<MainWindow*>(data);
-                     if (g_strcmp0(response, "talisman") == 0) {
-                       self->OnBittensorWallet(std::string(bittensor::kWalletTalisman));
-                     } else if (g_strcmp0(response, "taocom") == 0) {
-                       self->OnBittensorWallet(std::string(bittensor::kWalletTaoCom));
-                     }
+                     const std::string_view walletId =
+                         bittensor::ChosenWallet(response ? response : "");
+                     if (!walletId.empty()) self->OnBittensorWallet(std::string(walletId));
                    }),
                    this);
   gtk_window_present(GTK_WINDOW(dialog));
@@ -2195,10 +2185,13 @@ void MainWindow::OnBittensorWallet(const std::string& walletId) {
   const std::string transport =
       urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
   if (transport == bittensor::kTransportBrowserBridge) {
-    SetLoginNotice(Format(T_("bittensor_continue_in_browser",
-                             "Continue in your browser and approve the request in the {} "
-                             "extension."),
-                          urnet::bittensorWalletDisplayName(walletId)));
+    const bittensor::ContinueText text = bittensor::ContinueTextFor(walletId);
+    const std::string key(text.key);
+    const std::string english(text.english);
+    const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
+    SetLoginNotice(text.takesWalletName
+                       ? Format(localized, urnet::bittensorWalletDisplayName(walletId))
+                       : std::string(localized));
   }
   SetLoginBusy(true);
   host_.SignInWithBittensor(walletId, [this](AuthResult r) { OnWalletAuth(r); });

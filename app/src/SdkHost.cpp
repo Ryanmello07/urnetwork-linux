@@ -24,6 +24,7 @@
 #include <glib/gstdio.h>
 
 #include "AppPrefs.hpp"
+#include "Config.hpp"
 #include "NetworkSpaceConfig.hpp"
 // The Secret Service backend for the remembered rpc session. GUI-ONLY: this is
 // the one translation unit that links libsecret, and urnetworkd (which builds
@@ -1271,6 +1272,11 @@ void SdkHost::StartBittensorSession(const std::string& walletId, const std::stri
     session = std::make_shared<urnet::BittensorWalletSession>(urnet::newBittensorWalletSession(
         walletId, std::string(bittensor::kPlatform), purpose,
         std::string(bittensor::kRedirectLink)));
+    // the WalletConnect page pairs with this build's project id (empty: the
+    // page's own); the other wallets' pages never see it
+    if (bittensor::SendsWalletConnectProjectId(walletId)) {
+      session->setWalletConnectProjectId(kWalletConnectProjectId);
+    }
     // blockchain TAO, the purpose, and the typed address when there is one
     args = session->challengeArgs(expectedAddress);
   } catch (const std::exception& e) {
