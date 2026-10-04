@@ -17,6 +17,7 @@
 #include <nlohmann/json.hpp>
 
 #include "CheckoutCrashRoute.hpp"
+#include "CheckoutSessionMode.hpp"
 #include "ClientEvents.hpp"
 #include "I18n.hpp"
 #include "PricePresentation.hpp"
@@ -31,8 +32,6 @@ constexpr const char* kStoreStripe = "stripe";
 // controller.go StripeItemPro*).
 constexpr const char* kItemProMonthly = "pro_monthly";
 constexpr const char* kItemProYearly = "pro_yearly";
-constexpr const char* kUiModeHosted = "hosted";
-constexpr const char* kUiModeEmbedded = "embedded";
 
 #ifdef UR_HAVE_WEBKIT
 // The ur.io bridge page (mmm/ur.io react EmbeddedCheckout.jsx): mounts
@@ -41,8 +40,11 @@ constexpr const char* kUiModeEmbedded = "embedded";
 // control back by navigating to the redirect_link:
 //   done:  urnetwork://checkout?status=complete&session_id=cs_...
 //   error: urnetwork://checkout?errorCode=-1&errorMessage=...
-// The url and the hand-back are the SDK's envelope (urnet::buildCheckoutBridgeUrl,
-// urnet::parseCheckoutRedirect; windows UpgradeSheet parity). There is no
+// The session is redirect_on_completion "never" (CheckoutSessionMode.hpp), so
+// the done hand-back comes from Stripe's onComplete on the bridge page, in
+// place. The url and the hand-back are the SDK's envelope
+// (urnet::buildInlineCheckoutBridgeUrl, urnet::parseCheckoutRedirect; windows
+// UpgradeSheet parity). There is no
 // cancel url: Stripe's embedded flow never leaves the page, so the sheet's
 // own close (X) is the only way out.
 // The ur.io embedded pay page (mmm/ur.io /app/pay-sheet): mounts Stripe's
@@ -447,11 +449,11 @@ void UpgradeSheet::RequestPaymentSheet() {
 void UpgradeSheet::RequestSession(bool embedded) {
   urnet::StripeCreateCheckoutSessionArgs args;
   args.item_id = plans_->Yearly() ? kItemProYearly : kItemProMonthly;
-  args.ui_mode = embedded ? kUiModeEmbedded : kUiModeHosted;
-  // redirect_on_completion stays unset: the bridge page hands control back
-  // only when Stripe returns the customer to the server's return_url.
-  // "never" would complete through Stripe's onComplete callback, which
-  // EmbeddedCheckout.jsx does not handle, so no hand-back would ever arrive.
+  const CheckoutSessionMode mode = CheckoutSessionModeFor(embedded);
+  args.ui_mode = mode.uiMode;
+  if (!mode.redirectOnCompletion.empty()) {
+    args.redirect_on_completion = mode.redirectOnCompletion;
+  }
   auto epoch = epoch_;
   const uint64_t issued = *epoch;
   host_.api().createStripeCheckoutSession(
@@ -665,7 +667,9 @@ void UpgradeSheet::OpenEmbedded(const std::string& clientSecret) {
   pageLoaded_ = false;
   webFallbackTried_ = false;
   paySheetActive_ = false;
-  const std::string url = urnet::buildCheckoutBridgeUrl(clientSecret);
+  // the session is "never" (CheckoutSessionModeFor(true)): the bridge hands
+  // back from Stripe's onComplete
+  const std::string url = urnet::buildInlineCheckoutBridgeUrl(clientSecret);
   SetState(State::Checkout);
   webkit_web_view_load_uri(WEBKIT_WEB_VIEW(webView_), url.c_str());
 }
