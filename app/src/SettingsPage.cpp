@@ -1111,7 +1111,7 @@ void SettingsPage::ApplyUpdate(const UpdateChecker::Snapshot& snap) {
                     "again.");
           break;
       }
-      action = T_("upd_try_again", "Try again");
+      action = T_("try_again", "Try again");
       break;
   }
   updateTitle_->set_text(title);

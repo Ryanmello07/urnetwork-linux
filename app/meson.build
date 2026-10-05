@@ -593,6 +593,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/GuestPurchaseRefusalWiringTest.cpp',
     'tests/ReleaseSelectionTest.cpp',
     'tests/UpdateWiringTest.cpp',
+    'tests/CatalogLookupTest.cpp',
     'tests/ReferralCodeStateTest.cpp',
     'tests/ReferralShareTest.cpp',
     'tests/ReferralTotalsStateTest.cpp',
@@ -634,6 +635,8 @@ urnetwork_tests = executable('urnetwork-tests',
   include_directories : include_directories('src', 'tests'),
   dependencies : [json],
   cpp_args : ['-DUR_ASSETS_DIR="' + meson.project_source_root() / 'assets' + '"',
+              # CatalogLookupTest reads every GUI source and po/urnetwork.pot: each
+              # string looked up must be an entry of the generated catalog.
               # TunnelPolicyTest reads Tunnel.cpp to prove the dual-stack guard
               # still has a caller. A predicate with no call site is this
               # project's most-repeated defect, and it is invisible to a test
