@@ -299,8 +299,14 @@ inline constexpr const char* kErrorFingerprintUnsupported = "vless_error_fingerp
 inline constexpr const char* kErrorPublicKeyInvalid = "vless_error_public_key_invalid";
 inline constexpr const char* kErrorShortIdInvalid = "vless_error_short_id_invalid";
 
-// The message of an SDK error id. An id this build does not know is still a
-// refusal, and "this is not a valid VLESS link" says so better than a raw key.
+// What the C ABI answers when the call could not run (URNET_ERROR_ID_INTERNAL:
+// an unknown handle, json that did not decode, a recovered panic). It says
+// nothing about the settings, so it is never shown as a refusal of them.
+inline constexpr const char* kErrorInternal = "internal_error";
+
+// The message of an SDK error id. An id this build does not know --
+// kErrorInternal, or an id of a newer SDK -- is no refusal the user caused, so
+// it reads as the generic message: never a raw key, never an invalid link.
 inline Text ErrorText(std::string_view errorId) {
   static constexpr Text kErrors[] = {
       {kErrorLinkInvalid, "This is not a valid VLESS link."},
@@ -321,7 +327,7 @@ inline Text ErrorText(std::string_view errorId) {
   for (const Text& error : kErrors) {
     if (error.key == errorId) return error;
   }
-  return kErrors[0];
+  return {"something_went_wrong", "Something went wrong."};
 }
 
 // What the line under Save says for the SDK's answer to setVlessSettings.
