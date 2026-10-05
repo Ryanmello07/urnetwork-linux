@@ -128,8 +128,7 @@ constexpr Outcome Classify(std::string_view errorCode, bool manual) noexcept {
 }
 
 // The store key (and its English, the gettext msgid) explaining a refusal.
-// An empty key means: show the wallet's own words (wallet_error), or the
-// generic failure when there are none.
+// An empty key means another text explains it (FailureTextFor).
 struct ErrorText {
   std::string_view key;
   std::string_view english;
@@ -155,6 +154,72 @@ constexpr ErrorText ErrorTextFor(std::string_view errorCode) noexcept {
     return {"invalid_ss58_address", "That is not a valid Bittensor address."};
   }
   return {"", ""};
+}
+
+// What this app says for the bridge page's own code for a wallet_error (the
+// sdk's BittensorWalletResult::BridgeErrorCode, one of
+// urnet::BittensorWalletBridgeError*): the store key and its English (the
+// msgid), with one {} for the wallet's product name when `takesWalletName`.
+// An empty key for a code this app does not know (or none, from a page before
+// the codes): the page's own text is shown then.
+struct BridgeErrorText {
+  std::string_view key;
+  std::string_view english;
+  bool takesWalletName;
+};
+
+constexpr BridgeErrorText BridgeErrorTextFor(std::string_view bridgeCode) noexcept {
+  if (bridgeCode == "address_not_in_wallet") {
+    return {"bittensor_error_address_not_in_wallet",
+            "Your {} wallet doesn't have the address you entered. Add or connect that account in "
+            "the wallet, or enter an address it has.",
+            true};
+  }
+  if (bridgeCode == "address_mismatch") {
+    return {"earnings_wallet_mismatch", "The wallet that signed is not the address you entered.",
+            false};
+  }
+  if (bridgeCode == "extension_not_found") {
+    return {"bittensor_error_extension_not_found",
+            "The {} extension was not found in this browser. Install it, then try again.", true};
+  }
+  if (bridgeCode == "no_account") {
+    return {"bittensor_error_no_account",
+            "Your {} wallet has no account to sign with. Add or connect an account in the wallet, "
+            "then try again.",
+            true};
+  }
+  if (bridgeCode == "user_rejected") {
+    return {"bittensor_error_user_rejected",
+            "The request was declined in your wallet. Start again and approve it to continue.",
+            false};
+  }
+  if (bridgeCode == "walletconnect_expired") {
+    return {"bittensor_error_walletconnect_expired",
+            "The WalletConnect request expired before the wallet answered. Start again.", false};
+  }
+  if (bridgeCode == "walletconnect_unavailable") {
+    return {"bittensor_error_walletconnect_unavailable",
+            "WalletConnect is not available right now. Try again later, or enter your address "
+            "manually.",
+            false};
+  }
+  return {"", "", false};
+}
+
+// Which text a failed answer shows: its refusal's string (ErrorTextFor), the
+// bridge page's code in this app's words (BridgeErrorTextFor), the page's own
+// words (a wallet_error with a code this app does not know, or none), or the
+// generic failure. Only a wallet_error's message is words for the user;
+// another refusal's detail is not (the refused address, the transport).
+enum class FailureText { Refusal, BridgeCode, PageText, Generic };
+
+constexpr FailureText FailureTextFor(std::string_view errorCode, std::string_view bridgeCode,
+                                     bool hasErrorMessage) noexcept {
+  if (!ErrorTextFor(errorCode).key.empty()) return FailureText::Refusal;
+  if (errorCode != "wallet_error") return FailureText::Generic;
+  if (!BridgeErrorTextFor(bridgeCode).key.empty()) return FailureText::BridgeCode;
+  return hasErrorMessage ? FailureText::PageText : FailureText::Generic;
 }
 
 // How long a flow waits for its answer. A bridge round trip reports nothing
