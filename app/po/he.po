@@ -4584,6 +4584,11 @@ msgctxt "site_app_throughput"
 msgid "Transfer"
 msgstr "העברה"
 
+#. Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.
+msgctxt "site_connect_code_hint"
+msgid "Enter this code when you sign up in the app."
+msgstr "הזן את הקוד הזה בהרשמה באפליקציה."
+
 #. Connect: extension fix alert title
 msgctxt "site_connect_ext_fix_title"
 msgid "Set up the extension to connect"

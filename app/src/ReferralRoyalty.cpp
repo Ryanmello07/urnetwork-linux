@@ -9,6 +9,8 @@
 #include <gtkmm/label.h>
 
 #include "I18n.hpp"
+#include "NetworkSpaceBootstrap.hpp"  // kUrLinkHostName
+#include "ReferralShare.hpp"
 #include "RuntimePaths.hpp"
 #include "Ui.hpp"
 
@@ -122,10 +124,11 @@ void AppendCodeActions(Gtk::Box& box, Gtk::Window& owner, const std::string& ref
   share->add_css_class("suggested-action");
   share->set_halign(Gtk::Align::CENTER);
   share->signal_clicked().connect([&owner, share, referralCode] {
-    owner.get_clipboard()->set_text(Format(
-        T_("referral_share_message",
-           "Join me on URnetwork! Get the app and enter referral code {} when you sign up."),
-        referralCode));
+    owner.get_clipboard()->set_text(ReferralShareText(
+        Format(T_("referral_share_message",
+                  "Join me on URnetwork! Get the app and enter referral code {} when you sign up."),
+               referralCode),
+        ReferralLinkUrl(kUrLinkHostName, referralCode)));
     share->set_label(T_("copied", "Copied!"));
   });
   box.append(*share);

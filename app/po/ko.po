@@ -4524,6 +4524,11 @@ msgctxt "site_app_throughput"
 msgid "Transfer"
 msgstr "전송량"
 
+#. Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.
+msgctxt "site_connect_code_hint"
+msgid "Enter this code when you sign up in the app."
+msgstr "앱에서 가입할 때 이 코드를 입력하세요."
+
 #. Connect: extension fix alert title
 msgctxt "site_connect_ext_fix_title"
 msgid "Set up the extension to connect"

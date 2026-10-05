@@ -7034,6 +7034,11 @@ msgctxt "site_client_limit_upgrade"
 msgid "Your plan is at its concurrent client limit — Pro raises it to 1,000."
 msgstr "Dein Tarif hat sein Limit für gleichzeitige Clients erreicht — Pro erhöht es auf 1.000."
 
+#. Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.
+msgctxt "site_connect_code_hint"
+msgid "Enter this code when you sign up in the app."
+msgstr "Gib diesen Code bei der Anmeldung in der App ein."
+
 #. Connect: extension fix alert title
 msgctxt "site_connect_ext_fix_title"
 msgid "Set up the extension to connect"

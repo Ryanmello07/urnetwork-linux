@@ -7,7 +7,9 @@
 #include <graphene.h>
 
 #include "I18n.hpp"
+#include "NetworkSpaceBootstrap.hpp"  // kUrLinkHostName
 #include "PaneKit.hpp"
+#include "ReferralShare.hpp"
 #include "RuntimePaths.hpp"
 #include "Ui.hpp"
 #include "UrMotion.hpp"
@@ -155,10 +157,11 @@ ReferralPanel::ReferralPanel() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   share_->add_css_class("ur-onb-gold-btn");
   share_->set_margin_top(6);  // 12 under the pill, with the column's 6
   share_->signal_clicked().connect([this] {
-    get_clipboard()->set_text(Format(
-        T_("referral_share_message",
-           "Join me on URnetwork! Get the app and enter referral code {} when you sign up."),
-        referralCode_));
+    get_clipboard()->set_text(ReferralShareText(
+        Format(T_("referral_share_message",
+                  "Join me on URnetwork! Get the app and enter referral code {} when you sign up."),
+               referralCode_),
+        ReferralLinkUrl(kUrLinkHostName, referralCode_)));
     share_->set_label(T_("copied", "Copied!"));
     Glib::signal_timeout().connect_once([this] { share_->set_label(T_("share", "Share")); }, 1800);
   });
