@@ -167,11 +167,11 @@ class TunnelHost {
   // A provider-only device is running. Never blocks behind a bring-up.
   bool ProviderRunning() const;
   // What the provider-only device's own view controllers say (provider_stats):
-  // its provider series, transport share and packet-stats bit, and its
-  // provider status. `pollStatus` renews the status controller's polling lease
-  // (provide::ProviderStatusLease). Empty without that device, and while a
-  // bring-up owns the session (which retires it first). MAIN LOOP ONLY; never
-  // blocks, and never throws across the wire.
+  // its provider series, transport share and packet-stats bit, its provider
+  // status, and its extender role's status and series. `pollStatus` renews the
+  // status controller's polling lease (provide::ProviderStatusLease). Empty
+  // without that device, and while a bring-up owns the session (which retires
+  // it first). MAIN LOOP ONLY; never blocks, and never throws across the wire.
   ctl::ProviderStatsReply ProviderStats(bool pollStatus);
 
   // upload_logs (ControlProtocol.hpp; LogUpload.hpp carries the lifecycle):
@@ -413,9 +413,10 @@ class TunnelHost {
   ctl::StartProviderRequest providerConfig_;
   // Its view controllers, which the GUI reads through provider_stats because
   // it has no DeviceRemote for this device: the provider series behind the
-  // Earnings plots and the "no traffic yet" line, and the provider status
-  // behind the reason line, the demand histogram and "Why?". The status
-  // controller polls only while the lease is held. Guarded by opMutex_.
+  // Earnings plots and the "no traffic yet" line, the extender series behind
+  // the extender plot, and the provider status behind the reason line, the
+  // demand histogram and "Why?". The status controller polls only while the
+  // lease is held. Guarded by opMutex_.
   std::optional<urnet::ContractViewController> providerContractVc_;
   std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
   provide::ProviderStatusLease providerStatusLease_;

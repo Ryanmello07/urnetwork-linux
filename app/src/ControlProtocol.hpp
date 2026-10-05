@@ -1295,13 +1295,13 @@ inline StatusReply RedactStatusForForeignUid(const StatusReply& full) {
 // ---- provider_stats --------------------------------------------------------
 // What the GUI's provider statistics read while no tunnel session runs: the
 // provider-only device's (start_provider) provider series, transport share and
-// provider status, as the SDK's own view controllers in the daemon publish them
-// (support inbox 1521, P008). With a tunnel session the GUI reads the same
-// facts off its DeviceRemote, whose controllers run in the GUI; the
-// provider-only device has no DeviceRemote, so the daemon reads them for it.
-// They are the Earnings page's provider plots and their gate, its "no traffic
-// yet" line, and the provider status behind the reason line, the demand
-// histogram and "Why?".
+// provider status, and its extender role, as the SDK's own view controllers in
+// the daemon publish them (support inbox 1521, P008). With a tunnel session the
+// GUI reads the same facts off its DeviceRemote, whose controllers run in the
+// GUI; the provider-only device has no DeviceRemote, so the daemon reads them
+// for it. They are the Earnings page's provider plots and their gate, its "no
+// traffic yet" line, the provider status behind the reason line, the demand
+// histogram and "Why?", and its read-only extender row and extender plot.
 //
 // Polled, about once a second while the Earnings destination is on screen, so
 // it is answered like `status`: no polkit check, and an empty reply for a
@@ -1345,6 +1345,15 @@ struct ProviderStatsReply {
   bool status_loaded = false;
   std::string status_last_fetch_error;
   std::string provider_status_json;
+  // The device's own extender role (urnet::ExtenderProvideStatus, its
+  // getExtenderProvideStatus: the read-only extender row, and in Enabled the
+  // running state behind the extender statistics) and the contract view
+  // controller's extender series (urnet::ThroughputPointList, the traffic the
+  // role relayed, in the Remote route). "" while the device or the controller
+  // has none. A daemon that predates them sends neither, which reads the same:
+  // the extender row and plot stay hidden while disconnected, as before.
+  std::string extender_provide_status_json;
+  std::string extender_throughput_points_json;
 };
 inline void to_json(nlohmann::json& j, const ProviderStatsReply& v) {
   j["running"] = v.running;
@@ -1355,6 +1364,8 @@ inline void to_json(nlohmann::json& j, const ProviderStatsReply& v) {
   j["status_loaded"] = v.status_loaded;
   j["status_last_fetch_error"] = v.status_last_fetch_error;
   j["provider_status_json"] = v.provider_status_json;
+  j["extender_provide_status_json"] = v.extender_provide_status_json;
+  j["extender_throughput_points_json"] = v.extender_throughput_points_json;
 }
 inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
   detail::Get(j, "running", v.running);  // absent = nothing runs
@@ -1365,6 +1376,8 @@ inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
   detail::Get(j, "status_loaded", v.status_loaded);
   detail::Get(j, "status_last_fetch_error", v.status_last_fetch_error);
   detail::Get(j, "provider_status_json", v.provider_status_json);
+  detail::Get(j, "extender_provide_status_json", v.extender_provide_status_json);
+  detail::Get(j, "extender_throughput_points_json", v.extender_throughput_points_json);
 }
 
 // ---- upload_logs -----------------------------------------------------------

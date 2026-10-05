@@ -5621,10 +5621,12 @@ void EarningsPage::PullProviderThroughput(bool forced) {
 }
 
 // The read-only row's reading (N7) and the running state of the role (O4),
-// both from the pushed status. This row draws no switch, so the setting is not
-// read here.
+// both from the pushed status of the device that provides: the session's, or
+// while disconnected the daemon's provider-only device's. This row draws no
+// switch, so the setting is not read here.
 void EarningsPage::ApplyExtenderProvideState() {
-  const std::optional<urnet::ExtenderProvideStatus> status = host_.GetExtenderProvideStatus();
+  const std::optional<urnet::ExtenderProvideStatus> status =
+      host_.ProviderExtenderProvideStatus();
   DrawExtenderRow(extender::ProvideRowOf(status, [] { return false; }));
   const bool running = status && status->Enabled;
   if (running != extenderRunning_) {

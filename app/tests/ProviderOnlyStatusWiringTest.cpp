@@ -11,6 +11,10 @@
 //     its provider statistics accessors and ProviderStatusNow fall back to that
 //     snapshot only while no DeviceRemote is bound; the local idle reason is
 //     derived while either device runs;
+//   * the device's extender role travels with them, read where the connected
+//     path reads it (the device's status, the contract controller's extender
+//     series), so the Earnings extender row and plot show while disconnected,
+//     while the connect page's row, whose switch needs a device, stays hidden;
 //   * a saved network space value (DoH servers, VLESS, the private extender,
 //     the server) sends start_provider again, and the daemon replaces a device
 //     whose request changed.
@@ -241,4 +245,80 @@ UR_TEST(ProviderOnlyStatus_ASavedSpaceValueReachesTheProvider) {
   // and settingsChanged is what makes the step start a running provider again
   const std::string reconcile = ProviderOnlyBody(host, "void SdkHost::ReconcileProviderLocked(");
   UR_EXPECT_TRUE(Contains(reconcile, "ctl::ProviderFactsFrom(*status), settingsChanged)"));
+}
+
+// The provider-only device's extender role: the daemon reports what the
+// connected path reads, the device's own extender status and the contract view
+// controller's extender series, each read guarded on its own so a failure
+// costs only its own field.
+UR_TEST(ProviderOnlyStatus_TheDaemonReportsTheExtenderRole) {
+  const std::string stats = ProviderOnlyBody(ReadProviderOnlySource("daemon/TunnelHost.cpp"),
+                                             "ctl::ProviderStatsReply TunnelHost::ProviderStats(");
+  UR_EXPECT_TRUE(Precedes(stats, "reply.running = true;",
+                          "providerDevice_->getExtenderProvideStatus()"));
+  UR_EXPECT_TRUE(
+      Contains(stats, "reply.extender_provide_status_json = nlohmann::json(*status).dump();"));
+  UR_EXPECT_TRUE(Precedes(stats, "if (providerContractVc_) {",
+                          "providerContractVc_->getExtenderThroughputPoints()"));
+  UR_EXPECT_TRUE(
+      Contains(stats, "reply.extender_throughput_points_json = nlohmann::json(*points).dump();"));
+  UR_EXPECT_TRUE(Contains(stats, "noteReadFailure(\"extender status\", e);"));
+  UR_EXPECT_TRUE(Contains(stats, "noteReadFailure(\"extender series\", e);"));
+  // the extender series' failure is its own: it never clears the provider series
+  UR_EXPECT_TRUE(Precedes(stats, "noteReadFailure(\"series\", e);",
+                          "providerContractVc_->getExtenderThroughputPoints()"));
+}
+
+// The GUI keeps both in its snapshot, and raises the event the DeviceRemote's
+// listener raises when the role changes, and when the snapshot goes.
+UR_TEST(ProviderOnlyStatus_TheGuiKeepsTheExtenderRole) {
+  const std::string host = ReadProviderOnlySource("SdkHost.cpp");
+  const std::string poll = ProviderOnlyBody(host, "void SdkHost::PollDaemonProviderStatsLocked()");
+  UR_EXPECT_TRUE(
+      Contains(poll, "stats.extenderProvideStatus = ProviderStatsPart<urnet::ExtenderProvideStatus>("));
+  UR_EXPECT_TRUE(Contains(poll, "reply->extender_provide_status_json, \"extender status\")"));
+  UR_EXPECT_TRUE(Contains(poll, "stats.extenderPoints = ProviderStatsPart<urnet::ThroughputPointList>("));
+  UR_EXPECT_TRUE(Contains(poll, "reply->extender_throughput_points_json, \"extender series\")"));
+  UR_EXPECT_TRUE(
+      Contains(poll, "daemonProviderStats_->extenderProvideStatusJson != stats.extenderProvideStatusJson"));
+  UR_EXPECT_TRUE(Precedes(poll, "daemonProviderStats_ = std::move(stats);",
+                          "if (extenderChanged) EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);"));
+  UR_EXPECT_TRUE(Contains(ProviderOnlyBody(host, "void SdkHost::DropDaemonProviderStatsLocked()"),
+                          "EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);"));
+}
+
+// The Earnings extender row, the running state behind its extender statistics
+// and its extender plot read the snapshot while no DeviceRemote is bound, and
+// the session device first. The connect page's row keeps the device alone: its
+// switch writes the setting through the device, so it hides without one (N1).
+UR_TEST(ProviderOnlyStatus_TheEarningsExtenderReadsTheDaemonWithoutADevice) {
+  const std::string host = ReadProviderOnlySource("SdkHost.cpp");
+  const std::string points =
+      ProviderOnlyBody(host, "std::optional<urnet::ThroughputPointList> SdkHost::ExtenderThroughputPoints()");
+  UR_EXPECT_TRUE(Precedes(points, "if (contractVc_) return contractVc_->getExtenderThroughputPoints();",
+                          "if (!device_ && daemonProviderStats_) return daemonProviderStats_->extenderPoints;"));
+  const std::string role = ProviderOnlyBody(
+      host, "std::optional<urnet::ExtenderProvideStatus> SdkHost::ProviderExtenderProvideStatus()");
+  UR_EXPECT_TRUE(Precedes(role, "if (device_) return DeviceExtenderProvideStatusLocked();",
+                          "if (daemonProviderStats_) return daemonProviderStats_->extenderProvideStatus;"));
+  const std::string deviceOnly = ProviderOnlyBody(
+      host, "std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus()");
+  UR_EXPECT_TRUE(Precedes(deviceOnly, "if (!device_) return std::nullopt;",
+                          "return DeviceExtenderProvideStatusLocked();"));
+  UR_EXPECT_TRUE(!Contains(deviceOnly, "daemonProviderStats_"));
+
+  const std::string page = ReadProviderOnlySource("EarningsPage.cpp");
+  const std::string apply = ProviderOnlyBody(page, "void EarningsPage::ApplyExtenderProvideState()");
+  UR_EXPECT_TRUE(Contains(apply, "host_.ProviderExtenderProvideStatus()"));
+  UR_EXPECT_TRUE(!Contains(apply, "GetExtenderProvideStatus"));
+  UR_EXPECT_TRUE(Contains(apply, "const bool running = status && status->Enabled;"));
+  UR_EXPECT_TRUE(Contains(ProviderOnlyBody(page, "void EarningsPage::PullProviderThroughput(bool forced)"),
+                          "host_.ExtenderThroughputPoints()"));
+  UR_EXPECT_TRUE(Contains(ProviderOnlyBody(page, "void EarningsPage::OnHostEvent(DrawerEvent event)"),
+                          "case DrawerEvent::ExtenderProvideStatus:\n      ApplyExtenderProvideState();"));
+
+  const std::string connect = ProviderOnlyBody(ReadProviderOnlySource("ConnectPage.cpp"),
+                                               "void ConnectPage::ApplyExtenderProvideState()");
+  UR_EXPECT_TRUE(Contains(connect, "host_.GetExtenderProvideStatus()"));
+  UR_EXPECT_TRUE(!Contains(connect, "ProviderExtenderProvideStatus"));
 }
