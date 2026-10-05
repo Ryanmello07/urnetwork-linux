@@ -2357,6 +2357,11 @@ msgctxt "fixed_ip"
 msgid "Fixed IP"
 msgstr "고정 IP"
 
+#. Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.
+msgctxt "fixed_ip_subtitle"
+msgid "Keeps one exit for the session; changes only if that provider goes offline."
+msgstr "세션 동안 하나의 출구를 유지하며, 해당 제공자가 오프라인이 될 때만 바뀝니다."
+
 #. Login password
 msgctxt "forget_password"
 msgid "Forget your password?"

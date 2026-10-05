@@ -218,12 +218,24 @@ void ConnectDrawer::BuildControlsCard() {
   modeRow->append(*segmented);
   card->append(*modeRow);
 
-  // fixed ip: window size pinned to [1,1]; only meaningful with a profile
+  // fixed ip: window size pinned to [1,1]; only meaningful with a profile. A
+  // Fixed IP window keeps its one exit for the session (connect stickyExit),
+  // which the note under the label says.
   auto* fixedRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  auto* fixedText = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 1);
+  fixedText->set_hexpand(true);
   auto* fixedLabel = Gtk::make_managed<Gtk::Label>(T_("fixed_ip", "Fixed IP"));
   fixedLabel->set_xalign(0);
-  fixedLabel->set_hexpand(true);
-  fixedRow->append(*fixedLabel);
+  fixedText->append(*fixedLabel);
+  auto* fixedNote = Gtk::make_managed<Gtk::Label>(
+      T_("fixed_ip_subtitle",
+         "Keeps one exit for the session; changes only if that provider goes offline."));
+  fixedNote->set_xalign(0);
+  fixedNote->set_wrap(true);
+  fixedNote->add_css_class("dim-label");
+  fixedNote->add_css_class("caption");
+  fixedText->append(*fixedNote);
+  fixedRow->append(*fixedText);
   fixedIpSwitch_ = Gtk::make_managed<Gtk::Switch>();
   fixedIpSwitch_->set_valign(Gtk::Align::CENTER);
   fixedIpSwitch_->set_sensitive(false);  // Auto disables it

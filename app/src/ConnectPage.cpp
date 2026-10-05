@@ -741,8 +741,9 @@ void ConnectPage::BuildPaneA() {
   }
 
   auto addToggleRow = [this](const Glib::ustring& title, bool initial,
-                             std::function<void(bool)> apply) {
-    auto row = kit::MakePaneTwoLineRow(title, {}, 40);
+                             std::function<void(bool)> apply,
+                             const Glib::ustring& note = {}) {
+    auto row = kit::MakePaneTwoLineRow(title, note, 40);
     auto* toggle = Gtk::make_managed<Gtk::Switch>();
     toggle->set_valign(Gtk::Align::CENTER);
     toggle->set_active(initial);
@@ -760,8 +761,11 @@ void ConnectPage::BuildPaneA() {
   // (PushPerformanceProfile) exactly as ConnectDrawer::ApplyControls does:
   // SdkHost::GetPerformanceProfile/SetPerformanceProfile are the accessors and
   // have been since the drawer shipped.
+  // a Fixed IP window keeps its one exit for the session (connect stickyExit)
   fixedIpToggle_ = addToggleRow(T_("fixed_ip", "Fixed IP"), false,
-                                [this](bool) { PushPerformanceProfile(); });
+                                [this](bool) { PushPerformanceProfile(); },
+                                T_("fixed_ip_subtitle",
+                                   "Keeps one exit for the session; changes only if that provider goes offline."));
   fixedIpToggle_->set_sensitive(false);  // Auto pins the window size: no fixed ip
   // Strong Anonymization is the INVERSE of allow_direct
   anonToggle_ = addToggleRow(T_("strong_anonymization", "Strong Anonymization"), true,
