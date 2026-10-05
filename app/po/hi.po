@@ -4906,6 +4906,16 @@ msgctxt "stay_in_touch"
 msgid "Stay in touch"
 msgstr "संपर्क में रहें"
 
+#. Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.
+msgctxt "stay_on_this_exit"
+msgid "Stay on this exit"
+msgstr "इसी एग्ज़िट पर रहें"
+
+#. Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.
+msgctxt "stay_on_this_exit_note"
+msgid "Keeps this provider's IP address until it goes offline."
+msgstr "इस प्रदाता का IP पता तब तक बना रहता है जब तक वह ऑफ़लाइन न हो जाए।"
+
 #. Onboarding Carousel
 msgctxt "stay_private"
 msgid "Stay\ncompletely\nprivate and\nanonymous"
@@ -4915,6 +4925,11 @@ msgstr "पूरी तरह से\nनिजी और\nगुमनाम �
 msgctxt "stay_private_description"
 msgid "Stay completely private and anonymous with URnetwork"
 msgstr "URnetwork के साथ पूरी तरह से निजी और गुमनाम रहें"
+
+#. Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.
+msgctxt "staying_on_this_exit"
+msgid "Staying on this exit. If it goes offline, choose another location."
+msgstr "आप इसी एग्ज़िट पर बने हुए हैं। अगर यह ऑफ़लाइन हो जाए, तो कोई दूसरी लोकेशन चुनें।"
 
 #. Login initial
 msgctxt "step_in"
@@ -5361,6 +5376,16 @@ msgstr "सबसे स्थिर प्रदाता का उपयो�
 msgctxt "use_recommended_settings"
 msgid "Use recommended settings"
 msgstr "अनुशंसित सेटिंग्स का उपयोग करें"
+
+#. Settings row that opens the cloud proxies page on ur.io (https://ur.io/app/proxies), where the user can create a WireGuard, SOCKS or HTTPS proxy. The app itself has no protocol switch.
+msgctxt "use_wireguard_socks_https_proxy"
+msgid "Use WireGuard / SOCKS / HTTPS proxy"
+msgstr "WireGuard / SOCKS / HTTPS प्रॉक्सी का उपयोग करें"
+
+#. Muted note under the Use WireGuard / SOCKS / HTTPS proxy settings row: the row leaves the app for ur.io, and SOCKS and WireGuard proxies are part of the Pro plan (HTTPS is not).
+msgctxt "use_wireguard_socks_https_proxy_note"
+msgid "Opens ur.io in your browser. SOCKS and WireGuard need Pro."
+msgstr "आपके ब्राउज़र में ur.io खोलता है। SOCKS और WireGuard के लिए Pro ज़रूरी है।"
 
 #. Call to action
 msgctxt "used_data_key"

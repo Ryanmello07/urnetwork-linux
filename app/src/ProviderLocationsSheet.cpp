@@ -89,6 +89,13 @@ std::string FormatConnectedDuration(int64_t connectedSinceMillis, int64_t nowMil
 
 int64_t NowMillis() { return g_get_real_time() / 1000; }
 
+// The client id of the current location when it is a client id location (a
+// stayed exit or a network peer), else empty.
+std::string StayingClientId(const std::optional<urnet::ConnectLocation>& selected) {
+  if (!selected || !selected->connect_location_id) return std::string();
+  return selected->connect_location_id->client_id.value_or(std::string());
+}
+
 }  // namespace
 
 std::vector<ProviderLocationRow> MapConnectedProviderLocations(
@@ -332,6 +339,11 @@ std::vector<ProviderLocationRow> ProviderLocationsSheet::ReadRows() {
 
 void ProviderLocationsSheet::Refresh() {
   std::vector<ProviderLocationRow> rows = ReadRows();
+  // read before the list is rebuilt, which applies it; a change on its own (the
+  // same rows) is applied after the selection below
+  const std::string stayingClientId = StayingClientId(host_.SelectedLocation());
+  const bool stayingChanged = stayingClientId != stayingClientId_;
+  stayingClientId_ = stayingClientId;
   // Snapshot the verified-e2e identity set alongside the locations. The badge
   // depends on it, but it changes independently of the location rows (a
   // session verifying does not change a row's value), so it must be compared
@@ -359,6 +371,7 @@ void ProviderLocationsSheet::Refresh() {
   // left the window, so this mirrors it rather than deciding it. Refresh runs
   // on the ProviderSelection event too, which is how a wheel step lands.
   RefreshSelection();
+  if (stayingChanged && !changed) UpdateSelection();
 
   // The empty list means two very different things, and saying "no providers"
   // for both would be a lie: with the tunnel down there is no window to report
@@ -468,6 +481,39 @@ Gtk::Widget* ProviderLocationsSheet::BuildRow(size_t index, RowWidgets& out) {
   out.duration->add_css_class("ur-caption-11");
   column->append(*out.duration);
 
+  // "Stay on this exit": the offer under the selected row, and the line on the
+  // provider the connection already stays on. Built hidden; UpdateSelection
+  // shows the one StayOnExitStateFor picks.
+  out.stayOffer = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+  out.stayOffer->set_margin_top(4);
+  auto* stayNote = Gtk::make_managed<Gtk::Label>(
+      T_("stay_on_this_exit_note", "Keeps this provider's IP address until it goes offline."));
+  stayNote->set_xalign(0);
+  stayNote->set_wrap(true);
+  stayNote->add_css_class("dim-label");
+  stayNote->add_css_class("ur-caption-11");
+  out.stayOffer->append(*stayNote);
+  auto* stay = Gtk::make_managed<Gtk::Button>(T_("stay_on_this_exit", "Stay on this exit"));
+  stay->add_css_class("flat");
+  stay->set_halign(Gtk::Align::START);
+  {
+    const ProviderLocationRow stayRow = row;
+    stay->signal_clicked().connect([this, stayRow] { StayOnExit(stayRow); });
+  }
+  out.stayOffer->append(*stay);
+  out.stayOffer->set_visible(false);
+  column->append(*out.stayOffer);
+
+  out.staying = Gtk::make_managed<Gtk::Label>(T_(
+      "staying_on_this_exit", "Staying on this exit. If it goes offline, choose another location."));
+  out.staying->set_xalign(0);
+  out.staying->set_wrap(true);
+  out.staying->add_css_class("dim-label");
+  out.staying->add_css_class("ur-caption-11");
+  out.staying->set_margin_top(4);
+  out.staying->set_visible(false);
+  column->append(*out.staying);
+
   rowBox->append(*column);
 
   // Removal is an inline destructive button: there is no swipe convention on
@@ -510,6 +556,14 @@ void ProviderLocationsSheet::UpdateSelection() {
     if (rowWidgets_[i].clientId != nullptr) {
       rowWidgets_[i].clientId->remove_css_class("ur-label-faint");
       if (!selected) rowWidgets_[i].clientId->add_css_class("ur-label-faint");
+    }
+    const StayOnExitState stay =
+        StayOnExitStateFor(rows_[i], selectedClientId_, stayingClientId_);
+    if (rowWidgets_[i].stayOffer != nullptr) {
+      rowWidgets_[i].stayOffer->set_visible(stay == StayOnExitState::Offer);
+    }
+    if (rowWidgets_[i].staying != nullptr) {
+      rowWidgets_[i].staying->set_visible(stay == StayOnExitState::Staying);
     }
   }
 }
@@ -581,6 +635,26 @@ void ProviderLocationsSheet::CopyClientId(const std::string& clientId) {
   get_clipboard()->set_text(clientId);
   adw_toast_overlay_add_toast(toastOverlay_,
                               adw_toast_new(T_("client_id_copied", "Client ID copied")));
+}
+
+void ProviderLocationsSheet::StayOnExit(const ProviderLocationRow& row) {
+  const std::optional<StayOnExitTarget> target = MakeStayOnExitTarget(row);
+  if (!target) return;
+  // the one provider, by its client id, as a public exit: network_peer false,
+  // so it keeps the public provide mode it carries the traffic under now
+  urnet::ConnectLocation location;
+  urnet::ConnectLocationId id;
+  id.client_id = target->clientId;
+  location.connect_location_id = id;
+  location.name = target->name;
+  location.city = target->city;
+  location.region = target->region;
+  location.country = target->country;
+  location.country_code = target->countryCode;
+  location.network_peer = false;
+  // the same gated connect as a location pick, then back to the home screen
+  host_.Connect(location);
+  set_visible(false);
 }
 
 void ProviderLocationsSheet::RemoveProvider(const std::string& clientId) {

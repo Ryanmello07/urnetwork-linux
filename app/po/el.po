@@ -4906,6 +4906,16 @@ msgctxt "stay_in_touch"
 msgid "Stay in touch"
 msgstr "Μείνετε σε επαφή"
 
+#. Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.
+msgctxt "stay_on_this_exit"
+msgid "Stay on this exit"
+msgstr "Παραμονή σε αυτή την έξοδο"
+
+#. Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.
+msgctxt "stay_on_this_exit_note"
+msgid "Keeps this provider's IP address until it goes offline."
+msgstr "Διατηρεί τη διεύθυνση IP αυτού του παρόχου μέχρι να αποσυνδεθεί."
+
 #. Onboarding Carousel
 msgctxt "stay_private"
 msgid "Stay\ncompletely\nprivate and\nanonymous"
@@ -4915,6 +4925,11 @@ msgstr "Παραμείνετε\nεντελώς\nιδιωτικοί και\nαν�
 msgctxt "stay_private_description"
 msgid "Stay completely private and anonymous with URnetwork"
 msgstr "Παραμείνετε εντελώς ιδιωτικοί και ανώνυμοι με το URnetwork"
+
+#. Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.
+msgctxt "staying_on_this_exit"
+msgid "Staying on this exit. If it goes offline, choose another location."
+msgstr "Παραμένετε σε αυτή την έξοδο. Αν αποσυνδεθεί, επιλέξτε άλλη τοποθεσία."
 
 #. Login initial
 msgctxt "step_in"
@@ -5361,6 +5376,16 @@ msgstr "Χρησιμοποιεί τον πιο σταθερό πάροχο"
 msgctxt "use_recommended_settings"
 msgid "Use recommended settings"
 msgstr "Χρήση προτεινόμενων ρυθμίσεων"
+
+#. Settings row that opens the cloud proxies page on ur.io (https://ur.io/app/proxies), where the user can create a WireGuard, SOCKS or HTTPS proxy. The app itself has no protocol switch.
+msgctxt "use_wireguard_socks_https_proxy"
+msgid "Use WireGuard / SOCKS / HTTPS proxy"
+msgstr "Χρήση διακομιστή μεσολάβησης WireGuard / SOCKS / HTTPS"
+
+#. Muted note under the Use WireGuard / SOCKS / HTTPS proxy settings row: the row leaves the app for ur.io, and SOCKS and WireGuard proxies are part of the Pro plan (HTTPS is not).
+msgctxt "use_wireguard_socks_https_proxy_note"
+msgid "Opens ur.io in your browser. SOCKS and WireGuard need Pro."
+msgstr "Ανοίγει το ur.io στο πρόγραμμα περιήγησης. Τα SOCKS και WireGuard απαιτούν Pro."
 
 #. Call to action
 msgctxt "used_data_key"
