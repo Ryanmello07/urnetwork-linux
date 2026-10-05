@@ -977,6 +977,11 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "כבוי כברירת מחדל. כשמופעל, URnetwork מתחבר לספק שבחרתם ברגע שתפתחו את האפליקציה. זה משנה את ההפעלה הבאה - לא מתחבר עכשיו."
 
+#. Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.
+msgctxt "conn_failed"
+msgid "Couldn't connect"
+msgstr "לא ניתן להתחבר"
+
 #. Connect page: warning that the internet traffic is not protected.
 msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
@@ -3840,6 +3845,31 @@ msgctxt "provide_mode"
 msgid "Provide mode"
 msgstr "מצב אספקה"
 
+#. Settings, under the cellular provide toggle: the label of the choice of what providing does while the device runs on battery.
+msgctxt "provide_power_mode"
+msgid "When on battery"
+msgstr "כשהמכשיר פועל על סוללה"
+
+#. Settings, provide power choice under "When on battery": keep providing on battery, also in Battery Saver.
+msgctxt "provide_power_mode_always"
+msgid "Keep providing"
+msgstr "להמשיך לספק"
+
+#. Settings, provide power choice under "When on battery": provide only while the device is charging, and pause on battery.
+msgctxt "provide_power_mode_charging_only"
+msgid "Pause until charging"
+msgstr "השהיה עד לטעינה"
+
+#. Settings, provide power choice under "When on battery" (the default): pause providing while Battery Saver is on.
+msgctxt "provide_power_mode_pause_in_battery_saver"
+msgid "Pause in Battery Saver"
+msgstr "השהיה במצב חיסכון בסוללה"
+
+#. Settings, provide power choice under "When on battery" on iOS and macOS (the default): pause providing while Low Power Mode is on. Use the system's own name for Low Power Mode.
+msgctxt "provide_power_mode_pause_in_low_power"
+msgid "Pause in Low Power Mode"
+msgstr "השהיה במצב צריכת חשמל נמוכה"
+
 #. Compact duration a provider has been connected, as hours and minutes (e.g. 3h 24m). {hours} is the whole hours, {minutes} the remaining minutes.
 msgctxt "provider_connected_duration_hours"
 msgid "{0}h {1}m"
@@ -3889,10 +3919,25 @@ msgctxt "provider_idle_no_traffic_yet"
 msgid "New providers need several hours of steady uptime and a speed test before clients are sent to them. Traffic also depends on demand in your region."
 msgstr "ספקים חדשים צריכים כמה שעות של זמינות יציבה ובדיקת מהירות לפני שלקוחות נשלחים אליהם. התעבורה תלויה גם בביקוש באזור שלך."
 
+#. Provider card, under the provide mode row: providing is paused because Battery Saver is on and the provide power setting pauses in Battery Saver (the default).
+msgctxt "provider_idle_paused_battery_saver"
+msgid "Paused: Battery Saver is on."
+msgstr "מושהה: מצב חיסכון בסוללה מופעל."
+
+#. Provider card on iOS and macOS, under the provide mode row: providing is paused because Low Power Mode is on and the provide power setting pauses in Low Power Mode (the default). Use the system's own name for Low Power Mode.
+msgctxt "provider_idle_paused_low_power"
+msgid "Paused: Low Power Mode is on."
+msgstr "מושהה: מצב צריכת חשמל נמוכה מופעל."
+
 #. Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).
 msgctxt "provider_idle_paused_no_network"
 msgid "Paused: this device can't provide on its current network."
 msgstr "מושהה: המכשיר הזה לא יכול לספק ברשת הנוכחית שלו."
+
+#. Provider card, under the provide mode row: providing is paused because the provide power setting provides only while charging and the device is on battery.
+msgctxt "provider_idle_paused_not_charging"
+msgid "Paused: this device isn't charging."
+msgstr "מושהה: המכשיר הזה אינו בטעינה."
 
 #. Provider card, under the provide mode row: providing is paused because it is limited to Wi-Fi and the device is on another network.
 msgctxt "provider_idle_paused_wifi_only"
