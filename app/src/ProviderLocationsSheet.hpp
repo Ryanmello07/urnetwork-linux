@@ -15,6 +15,10 @@
 //
 // Above the globe sits the device-location override toggle (see
 // LocationOverride.hpp), which is a real, supported feature on linux.
+//
+// The selected row offers "Stay on this exit" (ProviderLocationRow.hpp), which
+// reconnects to that one provider by its client id; the provider the connection
+// already stays on says so instead.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -72,6 +76,10 @@ class ProviderLocationsSheet : public Gtk::Window {
     Gtk::Label* coordinates = nullptr;
     Gtk::Label* duration = nullptr;
     Gtk::Button* remove = nullptr;
+    // "Stay on this exit": the offer (note + button) and the staying line, both
+    // built for every row and shown by UpdateSelection
+    Gtk::Box* stayOffer = nullptr;
+    Gtk::Label* staying = nullptr;
   };
 
   std::vector<ProviderLocationRow> ReadRows();
@@ -89,6 +97,8 @@ class ProviderLocationsSheet : public Gtk::Window {
   void ScrollSelectedIntoView();
   void CopyClientId(const std::string& clientId);
   void RemoveProvider(const std::string& clientId);
+  // connect to the row's provider alone (SdkHost::Connect) and close the sheet
+  void StayOnExit(const ProviderLocationRow& row);
   void RefreshOverrideSection();
   bool OnDurationTick();
 
@@ -118,6 +128,9 @@ class ProviderLocationsSheet : public Gtk::Window {
   std::map<std::string, const IdentityRow*> identityByClientId_;
   IdenticonCache cache_;
   std::string selectedClientId_;
+  // the client id of the current location when it is a client id location (a
+  // stayed exit or a network peer), else empty; re-read on every Refresh
+  std::string stayingClientId_;
   // Providers the user removed, filtered out of every read until the SDK stops
   // reporting them -- otherwise the row would flicker back for the round trip.
   std::set<std::string> pendingRemovals_;

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "AppPrefs.hpp"
+#include "CloudProxyLink.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
 #include "LicensesSheet.hpp"
@@ -1257,6 +1258,17 @@ void SettingsPage::BuildConnectionsSection(Gtk::Box& host) {
                    T_("apps_listed_bypass_vpn", "Apps listed here bypass the VPN."),
                    T_("manage_apps", "Manage apps"));
   manage->signal_clicked().connect([this] { ShowAppSplitRulesSheet(); });
+
+  // Row 5b — cloud proxies. The app has no protocol switch, so WireGuard, SOCKS
+  // and HTTPS proxies are created on ur.io, and this row opens that page in the
+  // browser (CloudProxyLink.hpp).
+  auto proxiesRow = kit::MakePaneTwoLineRowButton(
+      T_("use_wireguard_socks_https_proxy", "Use WireGuard / SOCKS / HTTPS proxy"),
+      T_("use_wireguard_socks_https_proxy_note",
+         "Opens ur.io in your browser. SOCKS and WireGuard need Pro."),
+      kRowTall);
+  proxiesRow.root->signal_clicked().connect([this] { OpenLink(cloudproxy::kProxiesUrl); });
+  host.append(*proxiesRow.root);
 
   // Row 6 — the VPN service row, wrapped in its own host so VISIBILITY moves
   // the WHOLE row: ButtonRow hands back only the button, and hiding the button

@@ -2,13 +2,14 @@
 // list, plus the pure label/selection helpers over it.
 //
 // Toolkit- and SDK-independent (plain C++17) so the ordering, the label
-// composition and the override-target selection are unit testable standalone --
-// see tests/ProviderLocationRowTest.cpp. The sheet maps
+// composition, the override-target selection and "Stay on this exit" are unit
+// testable standalone -- see tests/ProviderLocationRowTest.cpp. The sheet maps
 // urnet::ConnectedProviderLocation onto this; nothing here knows about the SDK.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -69,6 +70,62 @@ std::string IpFamilyTag(const ProviderLocationRow& row);
 // unknown stamp (0) only wins when nothing else is plottable. Returns -1 when
 // there is none.
 int OldestPlottableIndex(const std::vector<ProviderLocationRow>& rows);
+
+// ---- "Stay on this exit" ----------------------------------------------------
+// Reconnect to one provider of the current connection, by its client id, so new
+// connections keep that provider's IP address. The SDK dials a client id
+// location directly (connect's fixed destination: nothing is discovered and
+// nothing replaces it), and the location is not marked as a network peer, so
+// the provider keeps carrying the traffic as the public exit it already is. The
+// rows are the user's own current exits, so this pins one of them; it is not a
+// way to browse or pick from all providers.
+
+// What a provider row shows for "Stay on this exit".
+enum class StayOnExitState {
+  None,
+  Offer,    // the selected row offers the action
+  Staying,  // the connection already stays on this provider
+};
+
+// The selected row offers to stay on its provider; the provider the connection
+// already stays on says so instead, selected or not. `stayingClientId` is the
+// client id of the current location when it is a client id location (a stayed
+// exit or a network peer), else empty. Ids compare ignoring ASCII case.
+StayOnExitState StayOnExitStateFor(const ProviderLocationRow& row,
+                                   const std::string& selectedClientId,
+                                   const std::string& stayingClientId);
+
+// "018f…5c6d": the first and last four characters of a client id (the form the
+// android connect drawer shows a client id location in). A short id is
+// returned as it is.
+std::string ShortClientId(const std::string& clientId);
+
+// "018f…5c6d · Berlin, Germany": the short client id, which is what makes the
+// location one provider, then the city (or the region) and the country. The id
+// comes first so a narrow drawer trims the place rather than the id. Just the
+// short id when the server does not know where the provider is.
+std::string StayOnExitName(const ProviderLocationRow& row);
+
+// What "Stay on this exit" connects to, field for field what the sheet copies
+// into the SDK's ConnectLocation (this header stays SDK-free): the provider's
+// client id as the location id, the name above, and the place. The sheet sets
+// network_peer false.
+struct StayOnExitTarget {
+  std::string clientId;
+  std::string name;
+  std::string city;
+  std::string region;
+  std::string country;
+  std::string countryCode;
+
+  bool operator==(const StayOnExitTarget& other) const {
+    return clientId == other.clientId && name == other.name && city == other.city &&
+           region == other.region && country == other.country &&
+           countryCode == other.countryCode;
+  }
+};
+// nullopt when the row has no client id
+std::optional<StayOnExitTarget> MakeStayOnExitTarget(const ProviderLocationRow& row);
 
 // The list's order (the plottable providers west to east about their centroid,
 // then the ones with no coordinates) and the globe's clamped stepping over it

@@ -7842,6 +7842,16 @@ msgctxt "stay_in_touch"
 msgid "Stay in touch"
 msgstr "保持联系"
 
+#. Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.
+msgctxt "stay_on_this_exit"
+msgid "Stay on this exit"
+msgstr "固定使用此出口"
+
+#. Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.
+msgctxt "stay_on_this_exit_note"
+msgid "Keeps this provider's IP address until it goes offline."
+msgstr "保持使用此提供商的 IP 地址，直到它离线。"
+
 #. Onboarding Carousel
 msgctxt "stay_private"
 msgid "Stay\ncompletely\nprivate and\nanonymous"
@@ -7851,6 +7861,11 @@ msgstr "保持\n完全\n私密和\n匿名"
 msgctxt "stay_private_description"
 msgid "Stay completely private and anonymous with URnetwork"
 msgstr "使用 URnetwork 保持完全私密和匿名"
+
+#. Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.
+msgctxt "staying_on_this_exit"
+msgid "Staying on this exit. If it goes offline, choose another location."
+msgstr "正在固定使用此出口。如果它离线，请选择其他位置。"
 
 #. Login initial
 msgctxt "step_in"
@@ -8441,6 +8456,16 @@ msgstr "使用最稳定的提供商"
 msgctxt "use_recommended_settings"
 msgid "Use recommended settings"
 msgstr "使用推荐设置"
+
+#. Settings row that opens the cloud proxies page on ur.io (https://ur.io/app/proxies), where the user can create a WireGuard, SOCKS or HTTPS proxy. The app itself has no protocol switch.
+msgctxt "use_wireguard_socks_https_proxy"
+msgid "Use WireGuard / SOCKS / HTTPS proxy"
+msgstr "使用 WireGuard / SOCKS / HTTPS 代理"
+
+#. Muted note under the Use WireGuard / SOCKS / HTTPS proxy settings row: the row leaves the app for ur.io, and SOCKS and WireGuard proxies are part of the Pro plan (HTTPS is not).
+msgctxt "use_wireguard_socks_https_proxy_note"
+msgid "Opens ur.io in your browser. SOCKS and WireGuard need Pro."
+msgstr "在浏览器中打开 ur.io。SOCKS 和 WireGuard 需要 Pro。"
 
 #. Call to action
 msgctxt "used_data_key"
