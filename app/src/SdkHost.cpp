@@ -339,9 +339,15 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     urnet::setMemoryLimit(kMemoryLimit);
     spaceManager_ = urnet::newNetworkSpaceManager(storageDir);
     // moves a space stored under the retired ur.network key first, then
-    // builds the bundled space (NetworkSpaceBootstrap.hpp) -- nothing below
-    // may take a NetworkSpace from the manager before this
-    networkSpace_ = BuildUrNetworkSpace(*spaceManager_);
+    // builds the bundled space, then binds the space the user last chose in
+    // the network sheet -- the manager persisted it as active -- so a custom
+    // server survives a relaunch, its jwt with it (NetworkSpaceBootstrap.hpp).
+    // Nothing below may take a NetworkSpace from the manager before this.
+    networkSpace_ = LaunchUrNetworkSpace(*spaceManager_);
+    if (const std::string hostName = networkSpace_->getHostName(); hostName != kUrHostName) {
+      g_message("sdkhost: restored the network space this client was last pointed at: '%s'",
+                hostName.c_str());
+    }
     api_ = networkSpace_->getApi();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
