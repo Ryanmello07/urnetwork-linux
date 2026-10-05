@@ -150,11 +150,12 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | Verb | Payload | Reply |
 |---|---|---|
 | `hello` | `protocol_version`, `sdk_version` | `protocol_version`, `sdk_version`, `daemon_version` |
-| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error` |
+| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode` |
 | `start_tunnel` | `by_jwt`, `instance_id`, `app_version` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `attach_tunnel` | `instance_id`, `rpc_session_id` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `stop_tunnel` | — | `ok` |
 | `set_provide` | `mode` | `ok` |
+| `start_provider` | `by_jwt`, `instance_id`, `app_version`, `network_space_json`, `provide_mode`, `provider_transport_settings_json` | `ok` + the status |
 | `location_override_available` | — | `available`, `reason` |
 | `location_override_write` | `lat`, `lon`, `accuracy_m` | `ok` |
 | `location_override_clear` | — | `ok` |
@@ -171,6 +172,19 @@ the device-RPC mTLS material every session instead of persisting it, so
 "your saved credentials are stale". Reattachment meanwhile happens inside
 `start_tunnel`, which adopts a live session whose pinning material matches byte for
 byte.
+
+`start_provider` keeps providing while the user is disconnected (support inbox 1521):
+the daemon builds a provider-only `DeviceLocal` from the persisted identity and the
+request's credentials, network space and provide mode, with no tun, no capture routes,
+no DNS change, no nftables change, no egress marker and no device-RPC listener, so the
+machine's own traffic is routed as if URnetwork were not running. It is refused while a
+tunnel session exists (`tunnel_session_active`) or is being built (`start_in_progress`),
+while the kill-switch floor is armed (`kill_switch_armed`), and for a mode that does
+not provide while disconnected (`provide_mode_off`; `app/src/ProvideLifecycle.hpp` is
+the rule both halves apply). Every teardown, and so every `start_tunnel`, retires it
+first; `set_provide` with a mode that does not provide retires it; `stop_tunnel` stops
+it with everything else. It is authorized like `set_provide`, without a prompt, because
+the GUI's health poll sends it as well as Disconnect.
 
 **`sdk_version` must match EXACTLY, and this is a second, independent check.**
 `protocol_version` guards *our* JSON control socket; the **device RPC has no version

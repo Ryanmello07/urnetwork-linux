@@ -801,6 +801,29 @@ bool ControlClient::SetProvide(const std::string& mode, std::string* error) {
   return true;
 }
 
+bool ControlClient::StartProvider(const ctl::StartProviderRequest& request,
+                                  ctl::StatusReply* out, std::string* error, std::string* code) {
+  std::scoped_lock lock(mutex_);
+  if (const auto invalid = ctl::ValidateStartProviderRequest(request)) {
+    ResetAuthLocked();
+    if (error) *error = invalid->message;
+    if (code) *code = invalid->code == nullptr ? std::string() : std::string(invalid->code);
+    return false;
+  }
+  // Re-sent once on a dead socket like set_provide: the daemon keeps a device
+  // built from an identical request, so a duplicate only re-applies the mode.
+  const auto reply = CallLocked(ctl::Verb::StartProvider, nlohmann::json(request), error,
+                                /*allowRetry=*/true);
+  if (!reply) return false;
+  if (out && reply->is_object()) *out = reply->get<ctl::StatusReply>();
+  if (!ctl::ReplyOk(*reply)) {
+    if (error) *error = ctl::ReplyError(*reply);
+    if (code) *code = ctl::ReplyCode(*reply);
+    return false;
+  }
+  return true;
+}
+
 std::optional<ctl::StatusReply> ControlClient::Status(std::string* error) {
   std::scoped_lock lock(mutex_);
   const auto reply = CallLocked(ctl::Verb::Status, nlohmann::json::object(), error);

@@ -224,6 +224,9 @@ class ControlServer {
   // action, and CheckTunnelOwner must never re-derive it.
   nlohmann::json HandleAttachTunnel(Connection* conn, int64_t id,
                                     const nlohmann::json& request, bool authorizedCrossUid);
+  // start_provider: the provider-only device, behind the same owner gate.
+  nlohmann::json HandleStartProvider(Connection* conn, int64_t id,
+                                     const nlohmann::json& request, bool authorizedCrossUid);
   // Frame-rate bucket; false => the peer is flooding and is dropped.
   bool AllowFrame(Connection* conn);
   // Only under polkit, and only for a peer that is neither root nor the uid

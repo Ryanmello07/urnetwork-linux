@@ -32,6 +32,7 @@
 #include "ClientEvents.hpp"
 #include "ControlClient.hpp"
 #include "Health.hpp"
+#include "ProvideLifecycle.hpp"
 #include "RpcSession.hpp"
 #include "VerifySendNotice.hpp"
 #include "AddSignInFlow.hpp"
@@ -678,6 +679,18 @@ class SdkHost {
   std::string GetProvideControlMode();
   bool ProvideEnabled();
 
+  // KEEP PROVIDING WHILE DISCONNECTED (ProvideLifecycle.hpp). With no tunnel
+  // session the daemon's provider-only device is the provider; this keeps it in
+  // step with the stored provide mode — started, re-moded, or stopped
+  // (provide::DisconnectedProviderStep) — and drops a device bound to a
+  // session the daemon no longer runs, the rule StartTunnelLocked applies. A
+  // live tunnel session is left alone: its device provides. Runs after
+  // Disconnect, on a provide mode or provider policy change, and from the
+  // window's health poll while disconnected; `userInitiated` restarts the
+  // retry pacing. Asks the daemon nothing for a mode that does not provide once
+  // nothing is known to run. Main loop.
+  void ReconcileProvider(const char* reason, bool userInitiated = false);
+
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
   // atomic (surfaces may build ~25s later), authority readable any time,
@@ -1243,6 +1256,27 @@ class SdkHost {
   // so like the Windows GUI the listener feeds this atomic and ReadStats
   // reads it.
   std::atomic<bool> provideHasNetworkKey_{false};
+  // ---- the provider-only device (ReconcileProvider) -------------------------
+  // Requires mutex_. settingsChanged: the provider policy was just edited,
+  // which only a new device picks up.
+  void ReconcileProviderLocked(const char* reason, bool userInitiated, bool settingsChanged);
+  // Caches what the daemon's status says about the provider-only device and
+  // republishes the stats when it changed. Requires mutex_.
+  void NoteDaemonProviderLocked(const ctl::StatusReply& status);
+  provide::ProviderStepBackoff providerBackoff_;  // guarded by mutex_
+  // A status has been read since launch, so "nothing runs" is known rather
+  // than assumed (guarded by mutex_).
+  bool providerStateKnown_ = false;
+  // Set by Shutdown: a reconcile already queued (a posted Disconnect follow-up,
+  // a poll in the same dispatch) must not start a provider the quit just
+  // stopped (guarded by mutex_).
+  bool providerReconcileClosed_ = false;
+  // What ReadStats shows with no DeviceRemote: the provider-only device's
+  // running bit, live tier and network-key bit as `status` last said. Atomic
+  // for the same reason provideHasNetworkKey_ is.
+  std::atomic<bool> daemonProviderRunning_{false};
+  std::atomic<int64_t> daemonProviderMode_{0};
+  std::atomic<bool> daemonProviderNetworkKey_{false};
   // RequestReliability's worker. Two guards, deliberately separate:
   //   * reliabilityBusy_ is the single-flight gate and is cleared BY THE WORKER
   //     as soon as the read returns — lock-free, and never under the mutex

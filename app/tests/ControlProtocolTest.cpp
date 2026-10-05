@@ -66,6 +66,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
       ctl::Verb::Hello,          ctl::Verb::Status,
       ctl::Verb::StartTunnel,    ctl::Verb::AttachTunnel,
       ctl::Verb::StopTunnel,     ctl::Verb::SetProvide,
+      ctl::Verb::StartProvider,
       ctl::Verb::LocationOverrideAvailable,
       ctl::Verb::LocationOverrideWrite, ctl::Verb::LocationOverrideClear,
   };
@@ -79,6 +80,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
   UR_EXPECT_TRUE(ctl::VerbFromString("attach_tunnel") == ctl::Verb::AttachTunnel);
   UR_EXPECT_TRUE(ctl::VerbFromString("stop_tunnel") == ctl::Verb::StopTunnel);
   UR_EXPECT_TRUE(ctl::VerbFromString("set_provide") == ctl::Verb::SetProvide);
+  UR_EXPECT_TRUE(ctl::VerbFromString("start_provider") == ctl::Verb::StartProvider);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_available") ==
                  ctl::Verb::LocationOverrideAvailable);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_write") ==
@@ -454,6 +456,131 @@ UR_TEST(controlSetProvideRoundTrip) {
   const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
       ctl::MakeRequest(ctl::Verb::SetProvide, 5, nlohmann::json(req))));
   UR_EXPECT_TRUE(back->get<ctl::SetProvideRequest>().mode == "network");
+}
+
+// ---- start_provider: providing while disconnected (support inbox 1521) ------
+
+namespace {
+
+ctl::StartProviderRequest ProviderRequest(const char* mode) {
+  ctl::StartProviderRequest req;
+  req.by_jwt = "jwt";
+  req.instance_id = "instance";
+  req.app_version = "2026.10.5";
+  req.provide_mode = mode;
+  return req;
+}
+
+}  // namespace
+
+UR_TEST(controlStartProviderRoundTrip) {
+  ctl::StartProviderRequest req = ProviderRequest("always");
+  req.network_space_json = "{\"host_name\":\"example.com\"}";
+  req.provider_transport_settings_json = "{\"mode\":1}";
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeRequest(ctl::Verb::StartProvider, 9, nlohmann::json(req))));
+  UR_EXPECT_TRUE(ctl::RequestVerb(*back) == ctl::Verb::StartProvider);
+  const auto parsed = back->get<ctl::StartProviderRequest>();
+  UR_EXPECT_TRUE(parsed.by_jwt == "jwt");
+  UR_EXPECT_TRUE(parsed.instance_id == "instance");
+  UR_EXPECT_TRUE(parsed.app_version == "2026.10.5");
+  UR_EXPECT_TRUE(parsed.network_space_json == req.network_space_json);
+  UR_EXPECT_TRUE(parsed.provide_mode == "always");
+  UR_EXPECT_TRUE(parsed.provider_transport_settings_json == req.provider_transport_settings_json);
+}
+
+// Both halves refuse the same requests: a missing credential, a mode that does
+// not provide while disconnected, and a provider policy that is not an object.
+UR_TEST(controlStartProviderValidationIsTheLifecycleRule) {
+  for (const char* mode : {"always", "network", "auto"}) {
+    UR_EXPECT_TRUE_MSG(mode, !ctl::ValidateStartProviderRequest(ProviderRequest(mode)));
+  }
+  for (const char* mode : {"never", "manual", "", "Always"}) {
+    const auto invalid = ctl::ValidateStartProviderRequest(ProviderRequest(mode));
+    UR_EXPECT_TRUE_MSG(mode, invalid.has_value());
+    UR_EXPECT_TRUE_MSG(mode, invalid && invalid->code != nullptr &&
+                                 std::string(invalid->code) == ctl::kCodeProvideModeOff);
+  }
+  ctl::StartProviderRequest noJwt = ProviderRequest("always");
+  noJwt.by_jwt.clear();
+  UR_EXPECT_TRUE(ctl::ValidateStartProviderRequest(noJwt).has_value());
+  ctl::StartProviderRequest noInstance = ProviderRequest("always");
+  noInstance.instance_id.clear();
+  UR_EXPECT_TRUE(ctl::ValidateStartProviderRequest(noInstance).has_value());
+  ctl::StartProviderRequest badSettings = ProviderRequest("always");
+  badSettings.provider_transport_settings_json = "[1,2]";
+  UR_EXPECT_TRUE(ctl::ValidateStartProviderRequest(badSettings).has_value());
+  badSettings.provider_transport_settings_json = "not json";
+  UR_EXPECT_TRUE(ctl::ValidateStartProviderRequest(badSettings).has_value());
+  badSettings.provider_transport_settings_json = "{}";
+  UR_EXPECT_FALSE(ctl::ValidateStartProviderRequest(badSettings).has_value());
+}
+
+// Priced like set_provide (control-tunnel, take-over across uids), and never
+// interactive: the GUI's health poll sends it, so it must not raise a dialog.
+UR_TEST(controlStartProviderIsControlTunnelAndNeverPrompts) {
+  UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::StartProvider, false, false)) ==
+                 ctl::kActionControlTunnel);
+  UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::StartProvider, false, true)) ==
+                 ctl::kActionTakeOverTunnel);
+  UR_EXPECT_FALSE(ctl::VerbWantsInteraction(ctl::Verb::StartProvider, /*is_log_tail=*/false));
+}
+
+UR_TEST(controlStatusCarriesTheProviderOnlyDevice) {
+  ctl::StatusReply status;
+  status.provider_running = true;
+  status.provider_control_mode = "auto";
+  status.provider_mode = 1;
+  status.provider_network_key = true;
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(6, true, nlohmann::json(status))))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(back.provider_running);
+  UR_EXPECT_TRUE(back.provider_control_mode == "auto");
+  UR_EXPECT_EQ(1, back.provider_mode);
+  UR_EXPECT_TRUE(back.provider_network_key);
+
+  // A daemon predating start_provider says nothing: nothing runs.
+  nlohmann::json older = nlohmann::json(status);
+  for (const char* key : {"provider_running", "provider_control_mode", "provider_mode",
+                          "provider_network_key"}) {
+    older.erase(key);
+  }
+  const auto fromOlder = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(7, true, older)))->get<ctl::StatusReply>();
+  UR_EXPECT_FALSE(fromOlder.provider_running);
+  UR_EXPECT_EQ(0, fromOlder.provider_mode);
+
+  // Another user's view names none of it.
+  const ctl::StatusReply redacted = ctl::RedactStatusForForeignUid(status);
+  UR_EXPECT_FALSE(redacted.provider_running);
+  UR_EXPECT_TRUE(redacted.provider_control_mode.empty());
+  UR_EXPECT_EQ(0, redacted.provider_mode);
+  UR_EXPECT_FALSE(redacted.provider_network_key);
+}
+
+// A stopped or failed tunnel is no session; starting, up and stopping are.
+UR_TEST(controlProviderFactsReadOneStatus) {
+  ctl::StatusReply status;
+  status.provider_running = true;
+  status.provider_control_mode = "always";
+  status.owner_connected = true;
+  status.kill_switch = ctl::KillSwitchState::Armed;
+  for (const ctl::TunnelState state : {ctl::TunnelState::Stopped, ctl::TunnelState::Error}) {
+    status.tunnel_state = state;
+    const urnw::provide::DaemonProviderFacts facts = ctl::ProviderFactsFrom(status);
+    UR_EXPECT_TRUE_MSG(ctl::ToString(state), facts.answered && !facts.tunnelSession);
+    UR_EXPECT_TRUE(facts.providerRunning && facts.ownerConnected && facts.killSwitchArmed);
+    UR_EXPECT_TRUE(facts.providerControlMode == "always");
+    UR_EXPECT_FALSE(facts.redacted);
+  }
+  for (const ctl::TunnelState state :
+       {ctl::TunnelState::Starting, ctl::TunnelState::Up, ctl::TunnelState::Stopping}) {
+    status.tunnel_state = state;
+    UR_EXPECT_TRUE_MSG(ctl::ToString(state), ctl::ProviderFactsFrom(status).tunnelSession);
+  }
+  status.kill_switch = ctl::KillSwitchState::Failed;
+  UR_EXPECT_FALSE(ctl::ProviderFactsFrom(status).killSwitchArmed);
+  UR_EXPECT_TRUE(ctl::ProviderFactsFrom(ctl::RedactStatusForForeignUid(status)).redacted);
 }
 
 UR_TEST(controlLocationOverrideRoundTrips) {

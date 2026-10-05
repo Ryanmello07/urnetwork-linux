@@ -611,6 +611,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProviderIdleReasonTest.cpp',
     'tests/ProviderStatusPresentationTest.cpp',
     'tests/ProviderStatusWiringTest.cpp',
+    'tests/ProvideLifecycleTest.cpp',
+    'tests/ProvideWhileDisconnectedWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -632,6 +634,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
               # ProviderStatusWiringTest reads SdkHost.cpp, EarningsPage.cpp and
               # po/en.po the same way.
+              # ProvideWhileDisconnectedWiringTest reads the provider-only device's
+              # daemon and GUI call sites the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

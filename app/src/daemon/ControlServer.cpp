@@ -1332,10 +1332,12 @@ bool ControlServer::TunnelOwnedByOtherUid(const Connection* conn) const {
   if (tunnelOwnerUid_ == conn->peer.uid) return false;   // their own tunnel
   // Ownership only bites while there is something to own. A tunnel that has
   // stopped on its own leaves tunnelOwnerUid_ set, and this is what makes that
-  // harmless without polling for the transition.
-  const ctl::TunnelState state = tunnel_.Status().tunnel_state;
-  return state == ctl::TunnelState::Up || state == ctl::TunnelState::Starting ||
-         state == ctl::TunnelState::Stopping;
+  // harmless without polling for the transition. A provider-only device is
+  // something to own too: it provides on that user's account.
+  const ctl::StatusReply status = tunnel_.Status();
+  return status.tunnel_state == ctl::TunnelState::Up ||
+         status.tunnel_state == ctl::TunnelState::Starting ||
+         status.tunnel_state == ctl::TunnelState::Stopping || status.provider_running;
 }
 
 bool ControlServer::StatusMustBeRedactedFor(const Connection* conn) const {
@@ -1686,6 +1688,10 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         return;
       }
 
+      case ctl::Verb::StartProvider:
+        reply(HandleStartProvider(conn, id, request, authorizedCrossUid));
+        return;
+
       case ctl::Verb::SetKillSwitch: {
         nlohmann::json denied;
         bool crossUid = false;
@@ -1958,6 +1964,31 @@ nlohmann::json ControlServer::HandleStartTunnel(Connection* conn, int64_t id,
   payload.instance_id = status.instance_id;
   payload.rpc_session_id = status.rpc_session_id;
   return ctl::MakeReply(id, true, nlohmann::json(payload));
+}
+
+// start_provider — keep providing while disconnected (ControlProtocol.hpp,
+// TunnelHost::StartProvider). The owner gate and the claim are start_tunnel's:
+// a provider-only device provides on one user's account, so another live
+// client cannot replace it and another uid needs the take-over action.
+nlohmann::json ControlServer::HandleStartProvider(Connection* conn, int64_t id,
+                                                  const nlohmann::json& request,
+                                                  bool authorizedCrossUid) {
+  nlohmann::json denied;
+  bool crossUid = false;
+  if (!CheckTunnelOwner(conn, id, &denied, &crossUid, authorizedCrossUid)) return denied;
+
+  const auto req = request.get<ctl::StartProviderRequest>();
+  const TunnelHost::ProviderStartResult result = tunnel_.StartProvider(req);
+  if (!result.ok) {
+    // The status rides on the refusal too, so the client sees what IS running
+    // (a tunnel session, an armed floor) beside the reason.
+    nlohmann::json failed = ctl::MakeReply(id, false, nlohmann::json(tunnel_.Status()));
+    failed["error"] = result.error.empty() ? "the provider could not be started" : result.error;
+    if (result.code != nullptr) failed["code"] = result.code;
+    return failed;
+  }
+  ClaimTunnelOwnership(conn);
+  return ctl::MakeReply(id, true, nlohmann::json(tunnel_.Status()));
 }
 
 // attach_tunnel — re-adopt the running session by NAMING it.
