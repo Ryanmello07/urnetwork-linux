@@ -663,8 +663,63 @@ UR_TEST(controlProviderStatsAbsentFieldsMeanNothingRuns) {
   UR_EXPECT_FALSE(empty.status_open);
   UR_EXPECT_FALSE(empty.status_loaded);
   UR_EXPECT_TRUE(empty.provider_status_json.empty());
+  UR_EXPECT_TRUE(empty.extender_provide_status_json.empty());
+  UR_EXPECT_TRUE(empty.extender_throughput_points_json.empty());
   const nlohmann::json defaults = nlohmann::json(ctl::ProviderStatsReply());
   UR_EXPECT_FALSE(defaults.at("running").get<bool>());
+}
+
+// The provider-only device's extender role travels beside its provider
+// statistics, so the Earnings extender row and plot can show while
+// disconnected: the status the connected path reads off the device and the
+// series it reads off the contract view controller, in the SDK's own JSON.
+UR_TEST(controlProviderStatsCarriesTheExtenderRole) {
+  ctl::ProviderStatsReply stats;
+  stats.running = true;
+  stats.has_provider_stats = true;
+  stats.extender_provide_status_json =
+      R"({"Supported":true,"State":"active","Enabled":true,"ActivatedV4":true})";
+  stats.extender_throughput_points_json = R"([{"Time":1,"Remote":{"EgressByteCount":512}}])";
+  const nlohmann::json encoded = nlohmann::json(stats);
+  UR_EXPECT_TRUE(encoded.value("extender_provide_status_json", std::string()) ==
+                 stats.extender_provide_status_json);
+  UR_EXPECT_TRUE(encoded.value("extender_throughput_points_json", std::string()) ==
+                 stats.extender_throughput_points_json);
+  const std::string frame = ctl::EncodeFrame(ctl::MakeReply(15, true, encoded));
+  UR_EXPECT_TRUE(frame.find('\n') == frame.size() - 1);
+  const auto back = ctl::DecodeFrame(frame)->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_TRUE(back.extender_provide_status_json == stats.extender_provide_status_json);
+  UR_EXPECT_TRUE(back.extender_throughput_points_json == stats.extender_throughput_points_json);
+  // the payload is the SDK's object, carried whole
+  const nlohmann::json role =
+      nlohmann::json::parse(back.extender_provide_status_json, nullptr, /*allow_exceptions=*/false);
+  UR_EXPECT_TRUE(role.is_object() && role.value("Enabled", false));
+}
+
+// A daemon from before the extender fields answers the provider statistics
+// alone. They still read in full, and the role reads as absent: the GUI keeps
+// the extender row and plot hidden, exactly as before.
+UR_TEST(controlProviderStatsFromAnOlderDaemonHasNoExtenderRole) {
+  const nlohmann::json older = {
+      {"running", true},
+      {"has_provider_stats", true},
+      {"provider_throughput_points_json", R"([{"Time":1}])"},
+      {"provider_transport_distribution_json", R"({"ByteCount":1})"},
+      {"status_open", true},
+      {"status_loaded", true},
+      {"status_last_fetch_error", ""},
+      {"provider_status_json", R"({"reason":""})"},
+  };
+  const auto back =
+      ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeReply(16, true, older)))->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_TRUE(back.running && back.has_provider_stats);
+  UR_EXPECT_TRUE(back.provider_throughput_points_json == R"([{"Time":1}])");
+  UR_EXPECT_TRUE(back.extender_provide_status_json.empty());
+  UR_EXPECT_TRUE(back.extender_throughput_points_json.empty());
+  // and a null field (a peer that wrote one) reads as absent too
+  nlohmann::json withNull = older;
+  withNull["extender_provide_status_json"] = nullptr;
+  UR_EXPECT_TRUE(withNull.get<ctl::ProviderStatsReply>().extender_provide_status_json.empty());
 }
 
 // Answered like status: polled, so no polkit check and no prompt. A daemon

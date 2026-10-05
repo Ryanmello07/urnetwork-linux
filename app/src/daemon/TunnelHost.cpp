@@ -1510,6 +1510,16 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
   } catch (const std::exception& e) {
     noteReadFailure("packet stats", e);
   }
+  // The device's own extender role, which runs on this device as on a tunnel
+  // session's while it provides and the setting is on: what the GUI reads off
+  // its DeviceRemote with a tunnel (getExtenderProvideStatus).
+  try {
+    if (auto status = providerDevice_->getExtenderProvideStatus()) {
+      reply.extender_provide_status_json = nlohmann::json(*status).dump();
+    }
+  } catch (const std::exception& e) {
+    noteReadFailure("extender status", e);
+  }
   if (providerContractVc_) {
     try {
       if (auto points = providerContractVc_->getProviderThroughputPoints()) {
@@ -1522,6 +1532,13 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
       reply.provider_throughput_points_json.clear();
       reply.provider_transport_distribution_json.clear();
       noteReadFailure("series", e);
+    }
+    try {
+      if (auto points = providerContractVc_->getExtenderThroughputPoints()) {
+        reply.extender_throughput_points_json = nlohmann::json(*points).dump();
+      }
+    } catch (const std::exception& e) {
+      noteReadFailure("extender series", e);
     }
   }
   if (providerStatusVc_) {

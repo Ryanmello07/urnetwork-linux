@@ -3227,16 +3227,27 @@ void SdkHost::PollDaemonProviderStatsLocked() {
   stats.status.status =
       ProviderStatsPart<urnet::ProviderStatus>(reply->provider_status_json, "status");
   stats.statusJson = reply->provider_status_json;
+  // the extender role and its series; a daemon that predates them sends
+  // neither, and the extender row and plot stay hidden
+  stats.extenderProvideStatus = ProviderStatsPart<urnet::ExtenderProvideStatus>(
+      reply->extender_provide_status_json, "extender status");
+  stats.extenderPoints = ProviderStatsPart<urnet::ThroughputPointList>(
+      reply->extender_throughput_points_json, "extender series");
+  stats.extenderProvideStatusJson = reply->extender_provide_status_json;
   const bool statusChanged = !daemonProviderStats_ ||
                              daemonProviderStats_->status.open != stats.status.open ||
                              daemonProviderStats_->status.loaded != stats.status.loaded ||
                              daemonProviderStats_->status.lastFetchError !=
                                  stats.status.lastFetchError ||
                              daemonProviderStats_->statusJson != stats.statusJson;
+  const bool extenderChanged =
+      !daemonProviderStats_ ||
+      daemonProviderStats_->extenderProvideStatusJson != stats.extenderProvideStatusJson;
   daemonProviderStats_ = std::move(stats);
-  // the two events the DeviceRemote's controllers raise for the same facts
+  // the events the DeviceRemote and its controllers raise for the same facts
   EmitDrawerEvent(DrawerEvent::Throughput);
   if (statusChanged) EmitDrawerEvent(DrawerEvent::ProviderStatus);
+  if (extenderChanged) EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
 }
 
 void SdkHost::DropDaemonProviderStatsLocked() {
@@ -3244,6 +3255,7 @@ void SdkHost::DropDaemonProviderStatsLocked() {
   daemonProviderStats_.reset();
   EmitDrawerEvent(DrawerEvent::Throughput);
   EmitDrawerEvent(DrawerEvent::ProviderStatus);
+  EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
 }
 
 void SdkHost::SetProviderStatusPolling(bool polling) {
@@ -3568,8 +3580,10 @@ std::optional<urnet::ThroughputPointList> SdkHost::ProviderThroughputPoints() {
 
 std::optional<urnet::ThroughputPointList> SdkHost::ExtenderThroughputPoints() {
   std::scoped_lock lock(mutex_);
-  if (!contractVc_) return std::nullopt;
-  return contractVc_->getExtenderThroughputPoints();
+  if (contractVc_) return contractVc_->getExtenderThroughputPoints();
+  // no session: what the provider-only device's extender role relayed
+  if (!device_ && daemonProviderStats_) return daemonProviderStats_->extenderPoints;
+  return std::nullopt;
 }
 
 bool SdkHost::HasProviderStats() {
@@ -3846,15 +3860,27 @@ std::optional<urnet::ExtenderStatus> SdkHost::GetExtenderStatus() {
   }
 }
 
-std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
-  std::scoped_lock lock(mutex_);
-  if (!device_) return std::nullopt;  // no session: the extender rows hide
+std::optional<urnet::ExtenderProvideStatus> SdkHost::DeviceExtenderProvideStatusLocked() {
   try {
     return device_->getExtenderProvideStatus();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] getExtenderProvideStatus failed: %s\n", e.what());
     return std::nullopt;
   }
+}
+
+std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return std::nullopt;  // no session: the connect page's row hides
+  return DeviceExtenderProvideStatusLocked();
+}
+
+std::optional<urnet::ExtenderProvideStatus> SdkHost::ProviderExtenderProvideStatus() {
+  std::scoped_lock lock(mutex_);
+  if (device_) return DeviceExtenderProvideStatusLocked();
+  // no session: the provider-only device's role, as the daemon last read it
+  if (daemonProviderStats_) return daemonProviderStats_->extenderProvideStatus;
+  return std::nullopt;
 }
 
 bool SdkHost::GetProvideExtender() {

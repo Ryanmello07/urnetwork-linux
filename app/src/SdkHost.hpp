@@ -822,7 +822,7 @@ class SdkHost {
   // same Throughput tick as ThroughputPoints (EXTENDER.md O3, O5): the provider
   // points carry the provider's Local and Block routes, the extender points
   // the traffic this device's extender role relayed, in the Remote route only.
-  // nullopt with no session, except that the provider series (and the provider
+  // nullopt with no session, except that both series (and the provider
   // distribution above) of the daemon's provider-only device stand in while no
   // DeviceRemote is bound (provider_stats; see DaemonProviderStats).
   std::optional<urnet::ThroughputPointList> ProviderThroughputPoints();
@@ -831,7 +831,7 @@ class SdkHost {
   // statistics gate (O8) the provide control mode does not decide. With no
   // session, the provider-only device's answer as the daemon last gave it, and
   // false without one. The extender role's running state is not read here: it
-  // is the Enabled of the pushed GetExtenderProvideStatus.
+  // is the Enabled of the pushed ProviderExtenderProvideStatus.
   bool HasProviderStats();
   // The same fact asked of the DEVICE, one device rpc, for the forced re-reads
   // right after a contract view controller opens (a device arriving, the
@@ -933,6 +933,15 @@ class SdkHost {
   // the setting, the provide state or the role, and fires none on
   // registration, so the pages re-read the status on DeviceLifecycle.
   std::optional<urnet::ExtenderProvideStatus> GetExtenderProvideStatus();
+  // The extender role of the device that provides, for the earnings page's
+  // read-only row and the running state behind its extender statistics:
+  // GetExtenderProvideStatus with a session, and while no DeviceRemote is
+  // bound the daemon's provider-only device's, as provider_stats last read it
+  // (a change there raises the same DrawerEvent::ExtenderProvideStatus).
+  // nullopt with neither, and from a daemon that predates the field. The
+  // connect page's row keeps GetExtenderProvideStatus: its switch writes the
+  // setting through the device, so it must stay hidden without one (N1).
+  std::optional<urnet::ExtenderProvideStatus> ProviderExtenderProvideStatus();
   // The provider extender setting of the daemon's space, through the device:
   // the queued or last-known value while the daemon is out of contact, so the
   // toggle never snaps back during a daemon restart (N2). With no device, the
@@ -1154,6 +1163,9 @@ class SdkHost {
   // hands it back with the typed close. Both require mutex_.
   void OpenProviderStatusLocked(const std::string& provideControlMode);
   void CloseProviderStatusLocked();
+  // The bound device's extender role, nullopt when the read throws. Requires
+  // mutex_ and a device.
+  std::optional<urnet::ExtenderProvideStatus> DeviceExtenderProvideStatusLocked();
   void EmitDrawerEvent(DrawerEvent event);
   LiveStats ReadStats();  // read the current snapshot from the SDK getters
   void PublishStats();    // ReadStats() -> onStats_
@@ -1299,9 +1311,10 @@ class SdkHost {
   std::atomic<bool> daemonProviderNetworkKey_{false};
   // ---- the provider-only device's statistics (provider_stats) ---------------
   // What the daemon's view controllers on the provider-only device last said,
-  // in the SDK's types. The provider statistics accessors and ProviderStatusNow
-  // read it while no DeviceRemote is bound, so the Earnings page's plots, its
-  // "no traffic yet" line and the provider status describe the device that is
+  // in the SDK's types. The provider statistics accessors, ProviderStatusNow,
+  // ExtenderThroughputPoints and ProviderExtenderProvideStatus read it while no
+  // DeviceRemote is bound, so the Earnings page's plots, its "no traffic yet"
+  // line, the provider status and the extender row describe the device that is
   // providing. Fetched at once and then about once a second while the Earnings
   // destination is on screen and the daemon's status says that device runs.
   struct DaemonProviderStats {
@@ -1311,6 +1324,12 @@ class SdkHost {
     ProviderStatusSnapshot status;
     // the status part as it arrived, so an unchanged poll emits nothing
     std::string statusJson;
+    // the device's extender role and the series of what it relayed; nullopt
+    // from a daemon that predates them
+    std::optional<urnet::ExtenderProvideStatus> extenderProvideStatus;
+    std::optional<urnet::ThroughputPointList> extenderPoints;
+    // the role's part as it arrived, for the same reason as statusJson
+    std::string extenderProvideStatusJson;
   };
   // Requires mutex_. One tick of the poll (provide::DaemonProviderStatsStep).
   void PollDaemonProviderStatsLocked();
