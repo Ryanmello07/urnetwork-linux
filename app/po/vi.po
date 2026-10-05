@@ -2272,6 +2272,31 @@ msgctxt "exclude_app_description"
 msgid "This app bypasses the tunnel."
 msgstr "Ứng dụng này bỏ qua đường hầm."
 
+#. Exclude apps from the VPN sheet: error when a launcher copy could not be written or removed in the user's applications folder.
+msgctxt "exclude_app_launcher_failed"
+msgid "Couldn't change the launcher. Check that your applications folder can be written."
+msgstr "Không thể thay đổi trình khởi chạy. Hãy kiểm tra rằng thư mục ứng dụng của bạn có thể ghi được."
+
+#. Exclude apps from the VPN: the name of an app's launcher copy in the user's app menu. {app} is the app's own name.
+msgctxt "exclude_app_launcher_name"
+msgid "{} (outside VPN)"
+msgstr "{} (ngoài VPN)"
+
+#. Settings, Connections: row and sheet title for the apps that get a launcher copy that starts them outside the VPN tunnel (urnetwork-exclude).
+msgctxt "exclude_apps_from_vpn"
+msgid "Exclude apps from the VPN"
+msgstr "Loại trừ ứng dụng khỏi VPN"
+
+#. Settings, Connections: note under the Exclude apps from the VPN row.
+msgctxt "exclude_apps_from_vpn_note"
+msgid "Adds a launcher to your app menu that opens the app outside the VPN."
+msgstr "Thêm vào menu ứng dụng một trình khởi chạy mở ứng dụng bên ngoài VPN."
+
+#. Exclude apps from the VPN sheet: how the launcher copies work and what stays in the VPN. The suffix in parentheses must match exclude_app_launcher_name.
+msgctxt "exclude_apps_launcher_note"
+msgid "Each app you turn on gets a second launcher in your app menu, with (outside VPN) after its name. An app opened from that launcher bypasses the VPN and the kill switch. An app that is already running stays in the VPN until you quit it, and Flatpak and Snap apps are not listed."
+msgstr "Mỗi ứng dụng bạn bật sẽ có thêm một trình khởi chạy thứ hai trong menu ứng dụng, với (ngoài VPN) sau tên. Ứng dụng mở từ trình khởi chạy đó sẽ bỏ qua VPN và kill switch. Ứng dụng đang chạy sẽ vẫn ở trong VPN cho đến khi bạn thoát nó, và các ứng dụng Flatpak và Snap không được liệt kê."
+
 #. transfer stats and split rules
 msgctxt "excluded"
 msgid "Excluded"

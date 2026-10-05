@@ -58,6 +58,16 @@ running stays in the tunnel with that instance. On a systemd-resolved host the
 command's name lookups still go through the tunnel's DNS, so while the kill
 switch blocks the machine after a drop it can connect but not resolve names.
 
+In the app, Settings > Connections > Exclude apps from the VPN lists the
+installed apps. Turning one on writes a copy of its launcher, "<App> (outside
+VPN)", to `~/.local/share/applications`, which starts the app through
+`urnetwork-exclude`; the app's own launcher is unchanged and stays in the
+tunnel. The copy handles no file or link types, so opening a link never starts
+it. Flatpak and Snap apps are not listed: `flatpak run` and `snap run` move the
+app into a systemd scope of their own, out of the slice. The row is hidden
+where `urnetwork-exclude` is not installed or the host is not on the cgroup v2
+unified hierarchy.
+
 ## Stack
 
 **C++17 + GTK4 (gtkmm-4.0) + libadwaita**, on top of the shared **cgo SDK**

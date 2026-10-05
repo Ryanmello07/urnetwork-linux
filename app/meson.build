@@ -40,6 +40,9 @@ libsoup = dependency('libsoup-3.0', required : get_option('gui'))
 build_gui = gtkmm.found() and adwaita.found()
 
 gio     = dependency('gio-2.0')         # raw GDBus C API for the SNI tray (also brings glib/gobject)
+# GDesktopAppInfo, behind the app list of Settings > Exclude apps from the VPN
+# (src/ExcludeAppsSheet.cpp). GUI only, like gtkmm.
+gio_unix = dependency('gio-unix-2.0', required : get_option('gui'))
 json    = dependency('nlohmann_json')
 threads = dependency('threads')
 # Runtime registration of the four licensed brand faces (UrTheme.cpp):
@@ -122,7 +125,7 @@ pkgdata_args = ['-DUR_PKGDATADIR="' + pkgdatadir + '"']
 # Ubuntu 24.04 ships it as libwebkitgtk-6.0-dev.
 webkit = dependency('webkitgtk-6.0', required : false)
 webkit_args = []
-gui_deps = [gtkmm, adwaita, libsecret, libsoup, gio, json, threads, sdk_lib]
+gui_deps = [gtkmm, adwaita, libsecret, libsoup, gio, gio_unix, json, threads, sdk_lib]
 if webkit.found() and build_gui
   gui_deps += webkit
   webkit_args = ['-DUR_HAVE_WEBKIT']
@@ -244,6 +247,8 @@ executable('urnetwork-gui',
     'src/ContractsSheet.cpp',
     'src/LocationsSheet.cpp',
     'src/SplitRulesSheet.cpp',
+    'src/ExcludeAppsSheet.cpp',
+    'src/ExcludeLauncher.cpp',
     'src/DnsSheet.cpp',
     'src/SubscriptionBalance.cpp',
     'src/ClientEvents.cpp',
@@ -528,7 +533,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # settings mapping and messages and the stored network space values every
 # space write starts from, the per-app exclusion's slice, rules and call
 # sites, what a network peer row connects to, the provider card's idle
-# reason, status line, demand histogram and ranking rows, and the daemon
+# reason, status line, demand histogram and ranking rows, the exclusion
+# sheet's .desktop parsing, Exec wrapping and launcher copies, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -615,11 +621,13 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProviderStatusWiringTest.cpp',
     'tests/ProvideLifecycleTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
+    'tests/ExcludeLauncherTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
     'src/LocationOverrideState.cpp',
     'src/RpcSessionStore.cpp',
+    'src/ExcludeLauncher.cpp',
   ],
   include_directories : include_directories('src', 'tests'),
   dependencies : [json],
@@ -638,6 +646,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # po/en.po the same way.
               # ProvideWhileDisconnectedWiringTest reads the provider-only device's
               # daemon and GUI call sites the same way.
+              # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
