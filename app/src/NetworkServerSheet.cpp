@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "NetworkServerSheet.hpp"
 
+#include "ControlDohSection.hpp"
 #include "I18n.hpp"
 #include "NetworkServerUtils.hpp"
 #include "NetworkSpaceConfig.hpp"
@@ -113,6 +114,15 @@ NetworkServerSheet::NetworkServerSheet(Gtk::Window& parent, SdkHost& sdk) : sdk_
   vlessRow.root->set_sensitive(current_.managerAvailable);
   vlessRow.root->signal_clicked().connect([this] { OpenVless(); });
   box->append(*vlessRow.root);
+  // The ACTIVE space's bootstrap DNS-over-HTTPS servers, the section Account >
+  // Extenders shows, saved on their own like VLESS. On a network that blocks
+  // the built-in DoH servers a fresh install cannot resolve the api to sign in,
+  // so this is the door it needs.
+  auto controlDohRow =
+      kit::MakePaneTwoLineRowButton(T_("control_doh_urls", "Bootstrap DNS-over-HTTPS servers"));
+  controlDohRow.root->set_sensitive(current_.managerAvailable);
+  controlDohRow.root->signal_clicked().connect([this] { OpenControlDoh(); });
+  box->append(*controlDohRow.root);
 
   statusText_ = Gtk::make_managed<Gtk::Label>();
   statusText_->add_css_class("ur-caption");
@@ -160,6 +170,12 @@ void NetworkServerSheet::OpenVless() {
   // transient for THIS sheet, so it stacks above it rather than beside it
   if (!vlessSheet_) vlessSheet_ = std::make_unique<VlessSheet>(*this, sdk_);
   vlessSheet_->Open();
+}
+
+void NetworkServerSheet::OpenControlDoh() {
+  // transient for THIS sheet, as the VLESS sheet is
+  if (!controlDohSheet_) controlDohSheet_ = std::make_unique<ControlDohSheet>(*this, sdk_);
+  controlDohSheet_->Open();
 }
 
 void NetworkServerSheet::ApplyDerivedPlaceholders() {

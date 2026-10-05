@@ -796,6 +796,46 @@ std::string SdkHost::ValidateVlessSettings(const urnet::VlessSettings& settings)
   }
 }
 
+// ---- bootstrap DNS-over-HTTPS servers (sdk control_doh_ui.go) ---------------
+// Nothing here logs the servers: which resolver a user can reach says where
+// they are.
+
+std::optional<std::vector<std::string>> SdkHost::GetControlDohUrls() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getControlDohUrls().value_or(urnet::StringList());
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getControlDohUrls failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::string>& urls) {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    // Through the space's own setter, not the values write SetPrivateExtender
+    // makes: the setter validates every line (an https url on an ip literal),
+    // drops repeats, normalizes and answers the error id, and it applies IN
+    // PLACE (sdk updateInPlaceValues) -- the strategy's DoH cache is swapped
+    // and networkSpace_, with everything derived from it, stays valid.
+    return networkSpace_->setControlDohUrls(urnet::StringList(urls));
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] setControlDohUrls failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& countryCode) {
+  try {
+    return urnet::regionalControlDohUrls(countryCode).value_or(urnet::StringList());
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] regionalControlDohUrls failed: %s\n", e.what());
+    return {};
+  }
+}
+
 // ---- sign-up / verify / password reset (Phase 3) ----------------------------
 
 // NetworkCreateResult routing shared by the password and wallet sign-ups:

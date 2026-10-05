@@ -58,6 +58,9 @@ class ExtenderImportSheet : public Gtk::Window {
   Gtk::Label* message_ = nullptr;
   Gtk::Widget* useSettingsRow_ = nullptr;
   Gtk::Switch* useSettings_ = nullptr;
+  // the bootstrap DNS-over-HTTPS servers the code's settings would set, named
+  // under the switch that takes them
+  Gtk::Label* controlDohLine_ = nullptr;
   Gtk::Button* import_ = nullptr;
   std::unique_ptr<Gtk::Window> confirm_;
 
@@ -67,6 +70,8 @@ class ExtenderImportSheet : public Gtk::Window {
   std::optional<urnet::ExtenderShareDecodeResult> decoded_;
   std::string decodedFor_;
   extender::ImportPresentation view_;
+  // extender::ControlDohImportArg for decoded_: "" when it sets no servers
+  std::string controlDohServers_;
   bool settingText_ = false;  // re-entry guard on the text buffer
   bool refreshing_ = false;   // re-entry guard on the settings switch
 };
