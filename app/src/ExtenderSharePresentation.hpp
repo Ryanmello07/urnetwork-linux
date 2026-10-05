@@ -114,12 +114,6 @@ inline constexpr const char* kControlDohErrorHttpsRequired = "control_doh_error_
 inline constexpr const char* kControlDohErrorIpRequired = "control_doh_error_ip_required";
 inline constexpr const char* kControlDohErrorTooMany = "control_doh_error_too_many";
 
-// The id an SDK error-id function answers when the call could not run at all
-// (urnet::ErrorIdInternal, URNET_ERROR_ID_INTERNAL: a handle that did not
-// resolve, json that did not decode). Not a store key: it reads as "Something
-// went wrong.", like any id this build does not know.
-inline constexpr const char* kSdkErrorIdInternal = "internal_error";
-
 // The country whose preset "Use China resolvers" asks the SDK for
 // (urnet::regionalControlDohUrls), the one source of the preset's servers.
 inline constexpr const char* kControlDohChinaCountryCode = "cn";
@@ -149,8 +143,11 @@ inline std::vector<std::string> SplitControlDohLines(const std::string& text) {
 
 // The message of an SDK error id: its own for the four the SDK names, and
 // "Something went wrong." for anything else -- an id this build does not know
-// (a newer SDK) and kSdkErrorIdInternal alike, neither of which is about the
-// url the user typed -- never a raw key on screen.
+// (a newer SDK) and the C ABI's URNET_ERROR_ID_INTERNAL alike (what an
+// error-id function answers when the call could not run at all: a handle that
+// did not resolve, json that did not decode), neither of which is about the
+// url the user typed -- never a raw key on screen. No copy of the internal id
+// is kept here: the SDK header is its one source (tests/ErrorIdInternalTest.cpp).
 inline Text ControlDohErrorText(std::string_view errorId) {
   static constexpr Text kErrors[] = {
       {kControlDohErrorUrlInvalid, "Enter a full URL, such as https://223.5.5.5/dns-query."},
@@ -168,8 +165,8 @@ inline Text ControlDohErrorText(std::string_view errorId) {
 // What the lines under Save say for the SDK's answer to set_control_doh_urls.
 // Only an empty answer is saved, and on this platform the VPN runs in
 // urnetworkd, which imports the network space at its next tunnel start, so the
-// next-connect note goes with it. Any id, kSdkErrorIdInternal included, is that
-// error's message, and nothing was saved.
+// next-connect note goes with it. Any id, URNET_ERROR_ID_INTERNAL included, is
+// that error's message, and nothing was saved.
 struct ControlDohSaveOutcome {
   bool saved = false;
   Text message;

@@ -616,6 +616,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/AddSignInFlowTest.cpp',
     'tests/AddSignInWiringTest.cpp',
     'tests/VlessPresentationTest.cpp',
+    'tests/ErrorIdInternalTest.cpp',
     'tests/PeerLocationTest.cpp',
     'tests/ProviderIdleReasonTest.cpp',
     'tests/ProviderStatusPresentationTest.cpp',
@@ -644,6 +645,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # its destructor must touch no widget (issue #13).
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
               # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
+              # ErrorIdInternalTest reads every source the same way: the C ABI's
+              # internal error id has one source, the SDK header.
               # ProviderStatusWiringTest reads SdkHost.cpp, EarningsPage.cpp and
               # po/en.po the same way.
               # ProvideWhileDisconnectedWiringTest reads the provider-only device's
