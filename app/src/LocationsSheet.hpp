@@ -16,13 +16,10 @@
 
 #include <gtkmm.h>
 
+#include "PeerLocation.hpp"  // PeerDisplayName, PeerConnectLocation
 #include "SdkHost.hpp"
 
 namespace urnw {
-
-// A network peer's display name: DeviceName, else DeviceSpec, else the client id.
-// Shared with the connect drawer's selected-location label.
-std::string PeerDisplayName(const urnet::NetworkPeer& peer);
 
 class LocationsSheet : public Gtk::Window {
  public:
