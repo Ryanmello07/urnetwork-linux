@@ -72,6 +72,11 @@ class ConnectPage : public Gtk::Box {
   // The out-of-balance held alert under the connect action (urnetwork/android#483):
   // shown when balance_notice::HeldAlert holds, with Upgrade and Disconnect.
   void ApplyBalanceNotice(const balance_notice::Signals& signals);
+  // The balance recovery (balance_notice::BalanceRecovery): in the held alert
+  // whether the data is reserved (with the reserved amount) or used up, and
+  // under it "You'll be reconnected when data is available again." with, for
+  // a refused start, Cancel.
+  void ApplyBalanceRecovery(const balance_notice::RecoveryLines& lines, int64_t reservedByteCount);
   // The drawer's change feed (SdkHost::DrawerEvent), dispatched per group
   // exactly as ConnectDrawer::OnHostEvent does: every case re-reads through the
   // SdkHost accessors on the GTK thread and re-applies ONE surface.
@@ -132,6 +137,8 @@ class ConnectPage : public Gtk::Box {
   std::function<void()> on_balance_disconnect;
   // the held alert's Why?: the "About your data" sheet the window owns
   std::function<void()> on_open_data_info;
+  // the recovery row's Cancel: a refused start is not run by itself any more
+  std::function<void()> on_cancel_balance_recovery;
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off
@@ -390,6 +397,10 @@ class ConnectPage : public Gtk::Box {
   Gtk::Box* heldAlert_ = nullptr;
   Gtk::Label* freeRefreshLabel_ = nullptr;  // the alert's first line
   FreeRefreshTicker freeRefreshTicker_;     // keeps it current while it shows
+  Gtk::Label* balanceKindLabel_ = nullptr;  // reserved or used up (ApplyBalanceRecovery)
+  // "You'll be reconnected when data is available again." and its Cancel
+  Gtk::Box* balanceRecoveryRow_ = nullptr;
+  Gtk::Button* balanceRecoveryCancel_ = nullptr;
   Gtk::Button* hero_ = nullptr;
   ConnectCanvas* canvas_ = nullptr;
   Gtk::Label* locationText_ = nullptr;

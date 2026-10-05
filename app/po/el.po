@@ -2545,6 +2545,11 @@ msgctxt "insufficient_balance_add_balance_or_plan"
 msgid "Insufficient balance — add balance or a plan"
 msgstr "Ανεπαρκές υπόλοιπο — προσθέστε υπόλοιπο ή πρόγραμμα"
 
+#. Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when the data is used up and almost nothing is held by open connections, so nothing meaningful will come back on its own. It follows the "Free data refreshes in {time}." line, which says when the free refresh is.
+msgctxt "insufficient_balance_exhausted"
+msgid "You're out of data until the free refresh or an upgrade."
+msgstr "Τα δεδομένα σας έχουν τελειώσει μέχρι τη δωρεάν ανανέωση ή μια αναβάθμιση."
+
 #. Alert body shown in the app and in a local notification when the account enters the insufficient balance state. Connect stays requested and the VPN keeps holding traffic (nothing leaves outside the tunnel); the user can upgrade or disconnect.
 msgctxt "insufficient_balance_held_notice"
 msgid "Your traffic is held in the tunnel until you upgrade or disconnect."
@@ -2555,10 +2560,25 @@ msgctxt "insufficient_balance_message"
 msgid "Add balance or a plan to keep connecting."
 msgstr "Προσθέστε υπόλοιπο ή ένα πρόγραμμα για να συνεχίσετε να συνδέεστε."
 
+#. Short note shown when the balance comes back (reserved data returned, the free refresh or an upgrade) and the app retries, by itself, the connect that insufficient balance had blocked.
+msgctxt "insufficient_balance_reconnecting"
+msgid "Data is available again. Reconnecting…"
+msgstr "Τα δεδομένα είναι ξανά διαθέσιμα. Επανασύνδεση…"
+
 #. Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).
 msgctxt "insufficient_balance_refreshes_in"
 msgid "Free data refreshes in {}."
 msgstr "Τα δωρεάν δεδομένα ανανεώνονται σε {}."
+
+#. Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when most of what is missing is held by open connections rather than used up. {amount} is the reserved (Pending) data as a size, e.g. 1.4 GB. The unused part is returned as those connections close. Do not add a time promise.
+msgctxt "insufficient_balance_reserved"
+msgid "{} is reserved for your open connections. What they don't use is returned as they close."
+msgstr "{} είναι δεσμευμένα για τις ανοιχτές συνδέσεις σας. Ό,τι δεν χρησιμοποιήσουν επιστρέφεται καθώς κλείνουν."
+
+#. Out-of-balance notice, while a connect the user asked for is waiting on the balance: the app retries that connect by itself once data is available again (reserved data returned, the free refresh or an upgrade). Shown with a Cancel action when the connect has not started yet.
+msgctxt "insufficient_balance_will_reconnect"
+msgid "You'll be reconnected when data is available again."
+msgstr "Θα επανασυνδεθείτε όταν υπάρξουν ξανά διαθέσιμα δεδομένα."
 
 #. Circle Wallet Transfer Screen
 msgctxt "insufficient_funds"

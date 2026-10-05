@@ -114,6 +114,7 @@ class UpgradeSheet : public Gtk::Window {
   bool paySheetActive_ = false;     // the web view shows the pay page (not Checkout)
   Gtk::Box* freeRefreshBox_ = nullptr;  // shown when a blocked connect opened the sheet
   Gtk::Label* freeRefreshLabel_ = nullptr;
+  Gtk::Label* freeRefreshKindLabel_ = nullptr;  // reserved or used up, under it
   FreeRefreshTicker freeRefreshTicker_;
   // waiting-state headline: "complete in the browser" (hosted) vs
   // "processing payment" (embedded, already paid in the webview)

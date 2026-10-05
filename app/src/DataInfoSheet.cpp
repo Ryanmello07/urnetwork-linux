@@ -61,6 +61,22 @@ std::string FreeRefreshCountdownText() {
       });
 }
 
+std::string OutOfBalanceKindText(balance_notice::OutOfBalanceKind kind, int64_t reservedByteCount) {
+  switch (kind) {
+    case balance_notice::OutOfBalanceKind::Reserved:
+      return Format(
+          T_("insufficient_balance_reserved",
+             "{} is reserved for your open connections. What they don't use is returned as they close."),
+          FormatByteCountCompact(reservedByteCount));
+    case balance_notice::OutOfBalanceKind::Exhausted:
+      return T_("insufficient_balance_exhausted",
+                "You're out of data until the free refresh or an upgrade.");
+    case balance_notice::OutOfBalanceKind::Unknown:
+      break;
+  }
+  return {};
+}
+
 void FreeRefreshTicker::Start(std::function<void()> apply) {
   apply_ = std::move(apply);
   apply_();
