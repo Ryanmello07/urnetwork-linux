@@ -855,6 +855,11 @@ msgctxt "blocked"
 msgid "Blocked"
 msgstr "Заблокировано"
 
+#. Blocked locations: blocking a location failed. The argument is the location name.
+msgctxt "blocked_location_block_failed"
+msgid "Couldn't block {}. Please try again."
+msgstr "Не удалось заблокировать локацию {}. Попробуйте ещё раз."
+
 #. Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.
 msgctxt "blocked_location_could_not_be_added_please_try"
 msgid "Blocked location could not be added. Please try again later."
@@ -864,6 +869,11 @@ msgstr "Не удалось добавить заблокированную ло
 msgctxt "blocked_location_could_not_be_removed_please_try"
 msgid "Blocked location could not be removed. Please try again later."
 msgstr "Не удалось удалить заблокированную локацию. Попробуйте позже."
+
+#. Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.
+msgctxt "blocked_location_unblock_failed"
+msgid "Couldn't unblock {}. Please try again."
+msgstr "Не удалось разблокировать локацию {}. Попробуйте ещё раз."
 
 #. Call to action
 msgctxt "blocked_locations"
@@ -879,6 +889,11 @@ msgstr "Заблокированные локации"
 msgctxt "blocked_locations_could_not_be_loaded"
 msgid "Blocked locations could not be loaded."
 msgstr "Не удалось загрузить заблокированные местоположения."
+
+#. Blocked locations: the list could not be loaded.
+msgctxt "blocked_locations_load_failed"
+msgid "Couldn't load your blocked locations. Pull down to try again."
+msgstr "Не удалось загрузить заблокированные локации. Потяните вниз, чтобы попробовать ещё раз."
 
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
@@ -3184,6 +3199,11 @@ msgctxt "email_e4_reason_trust"
 msgid "I'm not sure I trust a VPN"
 msgstr "Не уверен, что доверяю VPN"
 
+#. Settings: label before the support email address link.
+msgctxt "email_support_at"
+msgid "Email support at"
+msgstr "Пишите в поддержку:"
+
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
 msgid "Activities"
@@ -3657,6 +3677,11 @@ msgstr "Поле для отзыва"
 msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "Расскажите нам, что вы думаете на самом деле"
+
+#. Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.
+msgctxt "feedback_send_failed"
+msgid "Your feedback wasn't sent. Check your connection and try again."
+msgstr "Ваш отзыв не отправлен. Проверьте подключение и попробуйте ещё раз."
 
 #. Feedback screen: label of the Send button while the feedback is being sent.
 msgctxt "feedback_sending"
@@ -6476,6 +6501,11 @@ msgstr "Выбранный провайдер"
 msgctxt "send"
 msgid "Send"
 msgstr "Отправить"
+
+#. Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.
+msgctxt "send_feedback_contact"
+msgid "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
+msgstr "Отправьте нам отзыв напрямую, напишите на {0} или присоединяйтесь к нашему {1}, чтобы получить поддержку напрямую."
 
 #. Settings
 msgctxt "send_product_updates"

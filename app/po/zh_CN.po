@@ -851,6 +851,11 @@ msgctxt "blocked"
 msgid "Blocked"
 msgstr "已拦截"
 
+#. Blocked locations: blocking a location failed. The argument is the location name.
+msgctxt "blocked_location_block_failed"
+msgid "Couldn't block {}. Please try again."
+msgstr "无法屏蔽 {}。请重试。"
+
 #. Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.
 msgctxt "blocked_location_could_not_be_added_please_try"
 msgid "Blocked location could not be added. Please try again later."
@@ -860,6 +865,11 @@ msgstr "无法添加屏蔽位置。请稍后再试。"
 msgctxt "blocked_location_could_not_be_removed_please_try"
 msgid "Blocked location could not be removed. Please try again later."
 msgstr "无法移除屏蔽位置。请稍后再试。"
+
+#. Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.
+msgctxt "blocked_location_unblock_failed"
+msgid "Couldn't unblock {}. Please try again."
+msgstr "无法取消屏蔽 {}。请重试。"
 
 #. Call to action
 msgctxt "blocked_locations"
@@ -875,6 +885,11 @@ msgstr "被屏蔽的位置"
 msgctxt "blocked_locations_could_not_be_loaded"
 msgid "Blocked locations could not be loaded."
 msgstr "无法加载已屏蔽的位置。"
+
+#. Blocked locations: the list could not be loaded.
+msgctxt "blocked_locations_load_failed"
+msgid "Couldn't load your blocked locations. Pull down to try again."
+msgstr "无法加载您已屏蔽的位置。下拉即可重试。"
 
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
@@ -3174,6 +3189,11 @@ msgctxt "email_e4_reason_trust"
 msgid "I'm not sure I trust a VPN"
 msgstr "不确定能不能信任 VPN"
 
+#. Settings: label before the support email address link.
+msgctxt "email_support_at"
+msgid "Email support at"
+msgstr "发送电子邮件给支持团队："
+
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
 msgid "Activities"
@@ -3647,6 +3667,11 @@ msgstr "反馈框"
 msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "告诉我们您的真实感受"
+
+#. Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.
+msgctxt "feedback_send_failed"
+msgid "Your feedback wasn't sent. Check your connection and try again."
+msgstr "您的反馈未发送。请检查网络连接后重试。"
 
 #. Feedback screen: label of the Send button while the feedback is being sent.
 msgctxt "feedback_sending"
@@ -6424,6 +6449,11 @@ msgstr "已选提供商"
 msgctxt "send"
 msgid "Send"
 msgstr "发送"
+
+#. Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.
+msgctxt "send_feedback_contact"
+msgid "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
+msgstr "直接向我们发送反馈，发送电子邮件至 {0}，或加入我们的 {1} 获取直接支持。"
 
 #. Settings
 msgctxt "send_product_updates"

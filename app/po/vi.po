@@ -49,10 +49,20 @@ msgctxt "account_auth_verified"
 msgid "{} (verified)"
 msgstr "{} (đã xác minh)"
 
+#. Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.
+msgctxt "account_isn_t_ready_for_purchases"
+msgid "Your account isn't ready for purchases. Please restart the app and try again."
+msgstr "Tài khoản của bạn chưa sẵn sàng để mua hàng. Hãy khởi động lại ứng dụng và thử lại."
+
 #. Sign-in error shown when the account exists but has not been verified yet.
 msgctxt "account_needs_verification"
 msgid "This account needs verification. Check your email."
 msgstr "Tài khoản này cần được xác minh. Hãy kiểm tra email của bạn."
+
+#. Accessibility label of the row of rings, one per extender carrying a live connection.
+msgctxt "active_extenders"
+msgid "Active extenders"
+msgstr "Bộ mở rộng đang hoạt động"
 
 #. A heading for the list of current block actions.
 msgctxt "activity"
@@ -84,6 +94,11 @@ msgctxt "add_emoji"
 msgid "Add emoji"
 msgstr "Thêm emoji"
 
+#. Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.
+msgctxt "add_local_split_rule"
+msgid "Route locally"
+msgstr "Định tuyến cục bộ"
+
 #. Call to action
 msgctxt "add_referral_code"
 msgid "Add referral code"
@@ -97,6 +112,11 @@ msgstr "Thêm phương thức đăng nhập"
 msgctxt "add_sign_in_method_2"
 msgid "Add Sign-In Method"
 msgstr "Thêm phương thức đăng nhập"
+
+#. State when the gas key has no TAO.
+msgctxt "add_tao_for_gas"
+msgid "Add TAO for gas"
+msgstr "Thêm TAO để trả gas"
 
 #. A description of the user's ability to provide bandwidth.
 msgctxt "adjust_setting_always_fill_data_faster"
@@ -515,6 +535,11 @@ msgctxt "app_version"
 msgid "App version"
 msgstr "Phiên bản ứng dụng"
 
+#. A method of adding a sign-in method.
+msgctxt "apple"
+msgid "Apple"
+msgstr "Apple"
+
 #. Snackbar message displayed when an Apple sign-in method is added.
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
@@ -671,10 +696,30 @@ msgctxt "balance_code"
 msgid "Balance code"
 msgstr "Mã số dư"
 
+#. Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.
+msgctxt "balance_code_already_redeemed_message"
+msgid "This balance code has already been redeemed. If you redeemed it earlier, the data is already on your balance."
+msgstr "Mã số dư này đã được đổi. Nếu bạn đã đổi trước đó, dữ liệu đã có trong số dư của bạn."
+
+#. Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.
+msgctxt "balance_code_data_added"
+msgid "{} of data added to your balance."
+msgstr "Đã thêm {} dữ liệu vào số dư của bạn."
+
+#. Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.
+msgctxt "balance_code_invalid_message"
+msgid "That balance code isn't valid. Check the code and try again."
+msgstr "Mã số dư đó không hợp lệ. Hãy kiểm tra mã và thử lại."
+
 #. Confirmation shown after a balance code is redeemed.
 msgctxt "balance_code_redeemed"
 msgid "Balance code redeemed."
 msgstr "Đã sử dụng mã số dư."
+
+#. Redeem balance code: the request never got a server answer (network failure). Must NOT be worded as 'bad code' -- the redeem may have committed server-side, so tell the user to check their balance before retrying.
+msgctxt "balance_code_transport_error"
+msgid "We couldn't reach the server — check your connection. If you were charged, the code may already be applied; check your balance before trying again."
+msgstr "Không thể kết nối tới máy chủ — hãy kiểm tra kết nối của bạn. Nếu bạn đã bị tính phí, mã có thể đã được áp dụng; hãy kiểm tra số dư trước khi thử lại."
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "balance_code_where_to_buy"
@@ -685,6 +730,11 @@ msgstr "Chưa có mã? Bạn có thể mua mã dữ liệu tại ur.io và nhậ
 msgctxt "balance_codes_link"
 msgid "Balance codes"
 msgstr "Mã số dư"
+
+#. Linux redeem-code sheet: shown in place of the redeemed-codes history when getNetworkRedeemedBalanceCodes FAILS (transport error, no response, or a server-side error) — distinct from the empty state's "No balance codes found", which is only for a successful fetch with no codes.
+msgctxt "balance_codes_load_error"
+msgid "Couldn't load your balance codes. Check your connection and try again."
+msgstr "Không thể tải các mã số dư của bạn. Hãy kiểm tra kết nối và thử lại."
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "balance_codes_title"
@@ -706,20 +756,90 @@ msgctxt "best_matches"
 msgid "Best matches"
 msgstr "Kết quả phù hợp nhất"
 
+#. Gold pill on the recommended (annual) plan card.
+msgctxt "best_value"
+msgid "Best value"
+msgstr "Giá trị nhất"
+
 #. Used in Main/Account/Wallet/WalletView.swift.
 msgctxt "bittensor"
 msgid "Bittensor"
 msgstr "Bittensor"
+
+#. Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.
+msgctxt "bittensor_choose_wallet"
+msgid "Choose your Bittensor wallet"
+msgstr "Chọn ví Bittensor của bạn"
+
+#. Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).
+msgctxt "bittensor_continue_in_browser"
+msgid "Continue in your browser and approve the request in the {} extension."
+msgstr "Tiếp tục trong trình duyệt và phê duyệt yêu cầu trong tiện ích {}."
 
 #. ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
 msgctxt "bittensor_error_address_not_in_wallet"
 msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
 msgstr "Ví {} của bạn không có địa chỉ bạn đã nhập. Hãy thêm hoặc kết nối tài khoản đó trong ví, hoặc nhập một địa chỉ có trong ví."
 
+#. Error: the single-use wallet challenge expired (5 minutes) before it was signed.
+msgctxt "bittensor_error_challenge_expired"
+msgid "This request expired. Start again to get a new message to sign."
+msgstr "Yêu cầu này đã hết hạn. Hãy bắt đầu lại để nhận tin nhắn mới cần ký."
+
+#. Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).
+msgctxt "bittensor_error_extension_not_found"
+msgid "The {} extension was not found in this browser. Install it, then try again."
+msgstr "Không tìm thấy tiện ích {} trong trình duyệt này. Hãy cài đặt rồi thử lại."
+
+#. Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.
+msgctxt "bittensor_error_invalid_signature"
+msgid "That is not a valid signature. Paste the full 0x signature from your wallet."
+msgstr "Đó không phải là chữ ký hợp lệ. Hãy dán đầy đủ chữ ký 0x từ ví của bạn."
+
+#. Error: the wallet returned a signature over a different challenge than the one issued.
+msgctxt "bittensor_error_message_mismatch"
+msgid "The wallet signed a different request. Start again."
+msgstr "Ví đã ký một yêu cầu khác. Hãy bắt đầu lại."
+
+#. Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).
+msgctxt "bittensor_manual_sign_instructions"
+msgid "Sign this message with the {} wallet that holds your coldkey, then paste the address and the signature below."
+msgstr "Hãy ký tin nhắn này bằng ví {} đang giữ coldkey của bạn, rồi dán địa chỉ và chữ ký vào bên dưới."
+
+#. Label above the challenge message the user signs in their Bittensor wallet.
+msgctxt "bittensor_message_to_sign"
+msgid "Message to sign"
+msgstr "Tin nhắn cần ký"
+
 #. Call to action
 msgctxt "bittensor_sign_in"
 msgid "Sign in with Bittensor"
 msgstr "Đăng nhập bằng Bittensor"
+
+#. Label of the field where the user pastes the Bittensor wallet signature.
+msgctxt "bittensor_signature_label"
+msgid "Signature"
+msgstr "Chữ ký"
+
+#. Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).
+msgctxt "bittensor_signature_placeholder"
+msgid "Paste the 0x… signature"
+msgstr "Dán chữ ký 0x…"
+
+#. Label of the connected wallet block.
+msgctxt "bittensor_wallet"
+msgid "Bittensor wallet"
+msgstr "Ví Bittensor"
+
+#. Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.
+msgctxt "bittensor_walletconnect_continue"
+msgid "Continue in your browser: scan the code with your wallet app, or open the wallet on this device."
+msgstr "Tiếp tục trong trình duyệt: quét mã bằng ứng dụng ví của bạn, hoặc mở ví trên thiết bị này."
+
+#. Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.
+msgctxt "bittensor_walletconnect_hint"
+msgid "Nova, Nightly and other WalletConnect wallets"
+msgstr "Nova, Nightly và các ví WalletConnect khác"
 
 #. dns settings
 msgctxt "block_ads_and_trackers"
@@ -731,6 +851,11 @@ msgctxt "blocked"
 msgid "Blocked"
 msgstr "Bị chặn"
 
+#. Blocked locations: blocking a location failed. The argument is the location name.
+msgctxt "blocked_location_block_failed"
+msgid "Couldn't block {}. Please try again."
+msgstr "Không thể chặn {}. Vui lòng thử lại."
+
 #. Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.
 msgctxt "blocked_location_could_not_be_added_please_try"
 msgid "Blocked location could not be added. Please try again later."
@@ -740,6 +865,11 @@ msgstr "Không thể thêm vị trí bị chặn. Vui lòng thử lại sau."
 msgctxt "blocked_location_could_not_be_removed_please_try"
 msgid "Blocked location could not be removed. Please try again later."
 msgstr "Không thể xóa vị trí bị chặn. Vui lòng thử lại sau."
+
+#. Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.
+msgctxt "blocked_location_unblock_failed"
+msgid "Couldn't unblock {}. Please try again."
+msgstr "Không thể bỏ chặn {}. Vui lòng thử lại."
 
 #. Call to action
 msgctxt "blocked_locations"
@@ -755,6 +885,11 @@ msgstr "Vị trí bị chặn"
 msgctxt "blocked_locations_could_not_be_loaded"
 msgid "Blocked locations could not be loaded."
 msgstr "Không thể tải các vị trí bị chặn."
+
+#. Blocked locations: the list could not be loaded.
+msgctxt "blocked_locations_load_failed"
+msgid "Couldn't load your blocked locations. Pull down to try again."
+msgstr "Không thể tải các vị trí bạn đã chặn. Kéo xuống để thử lại."
 
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
@@ -811,10 +946,20 @@ msgctxt "bypass_vpn"
 msgid "Bypass VPN"
 msgstr "Bỏ qua VPN"
 
+#. Shown when the camera permission was denied on the scan screen.
+msgctxt "camera_permission_needed"
+msgid "Camera access is needed to scan a code."
+msgstr "Cần quyền truy cập camera để quét mã."
+
 #. Call to action
 msgctxt "cancel"
 msgid "Cancel"
 msgstr "Hủy"
+
+#. Error when the subnet RPC cannot be reached.
+msgctxt "chain_rpc_unreachable"
+msgid "The chain RPC is unreachable. Try again."
+msgstr "Không thể kết nối tới RPC của chuỗi. Hãy thử lại."
 
 #. Call to action
 msgctxt "change"
@@ -866,10 +1011,40 @@ msgctxt "checking_solana_transactions"
 msgid "Checking for Solana Transactions"
 msgstr "Đang kiểm tra giao dịch Solana"
 
+#. Progress text while the address is validated.
+msgctxt "checking_wallet_address"
+msgid "Checking address…"
+msgstr "Đang kiểm tra địa chỉ…"
+
+#. Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.
+msgctxt "checkout_browser_launch_failed"
+msgid "We couldn't open your browser. Copy this link into a browser to finish checkout:"
+msgstr "Không thể mở trình duyệt của bạn. Hãy sao chép liên kết này vào trình duyệt để hoàn tất thanh toán:"
+
+#. Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.
+msgctxt "checkout_interrupted_confirming"
+msgid "The checkout view closed unexpectedly. If your payment went through, your plan updates here automatically — there's no need to buy again."
+msgstr "Cửa sổ thanh toán đã đóng bất ngờ. Nếu bạn đã thanh toán thành công, gói của bạn sẽ tự động cập nhật tại đây — không cần mua lại."
+
 #. Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.
 msgctxt "checkout_opened_in_browser"
 msgid "Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed."
 msgstr "Hoàn tất giao dịch mua trong trình duyệt. Kế hoạch của bạn sẽ tự động cập nhật tại đây sau khi thanh toán được xác nhận."
+
+#. Button on desktop: pick a file that contains a QR code image.
+msgctxt "choose_file"
+msgid "Choose file"
+msgstr "Chọn tệp"
+
+#. Button on desktop: pick an image file that contains a QR code.
+msgctxt "choose_image_file"
+msgid "Choose image file"
+msgstr "Chọn tệp hình ảnh"
+
+#. Button: pick a photo that contains a QR code.
+msgctxt "choose_photo"
+msgid "Choose photo"
+msgstr "Chọn ảnh"
 
 #. Provider list group title for cities
 msgctxt "cities"
@@ -881,6 +1056,36 @@ msgctxt "claim"
 msgid "Claim"
 msgstr "Nhận"
 
+#. Subtitle of the claim dialog.
+msgctxt "claim_across_epochs"
+msgid "Across {} finalized epochs"
+msgstr "Trên {} epoch đã hoàn tất"
+
+#. Title of the claim dialog.
+msgctxt "claim_alpha_title"
+msgid "Claim SN25α"
+msgstr "Nhận SN25α"
+
+#. Claim button with the amount.
+msgctxt "claim_amount_button"
+msgid "Claim {}"
+msgstr "Nhận {}"
+
+#. Claim state: confirmed on chain.
+msgctxt "claim_confirmed"
+msgid "Claimed"
+msgstr "Đã nhận"
+
+#. Claim state: past the vault's expiry block.
+msgctxt "claim_expired"
+msgid "Expired"
+msgstr "Đã hết hạn"
+
+#. Claim state: failed.
+msgctxt "claim_failed"
+msgid "Failed"
+msgstr "Thất bại"
+
 #. Call to action
 msgctxt "claim_multiplier"
 msgid "Claim Multiplier"
@@ -890,6 +1095,41 @@ msgstr "Hệ số nhân yêu cầu"
 msgctxt "claim_network_name_hint"
 msgid "Claim a custom network name to replace your auto-generated one"
 msgstr "Nhận tên mạng tùy chỉnh để thay thế tên được tạo tự động"
+
+#. Per-epoch status while the claim transaction is being sent.
+msgctxt "claim_sending_linux"
+msgid "Sending…"
+msgstr "Đang gửi…"
+
+#. Explainer under the claim button.
+msgctxt "claim_sends_from_device"
+msgid "Your device sends the claim to the vault contract. Gas is paid in TAO from your gas key. Alpha lands on your coldkey."
+msgstr "Thiết bị của bạn gửi yêu cầu nhận tới hợp đồng kho. Gas được trả bằng TAO từ khóa gas của bạn. Alpha sẽ về coldkey của bạn."
+
+#. Claim state: transaction sent.
+msgctxt "claim_sent"
+msgid "Sent"
+msgstr "Đã gửi"
+
+#. Destination line on the claim dialog: the coldkey the alpha lands on.
+msgctxt "claim_to_address_linux"
+msgid "To {}"
+msgstr "Tới {}"
+
+#. Shown when the device cannot send claims (no gas key on this host).
+msgctxt "claim_unavailable_linux"
+msgid "Claiming is not available on this device yet."
+msgstr "Thiết bị này chưa thể nhận."
+
+#. Button on the Top 200 tile.
+msgctxt "claim_your_spot"
+msgid "Claim your spot"
+msgstr "Giành chỗ của bạn"
+
+#. Error when an epoch can no longer be claimed.
+msgctxt "claims_for_epoch_expired"
+msgid "Claims for epoch {} have expired."
+msgstr "Lượt nhận cho epoch {} đã hết hạn."
 
 #. Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.
 msgctxt "claims_open_after_finalization"
@@ -1006,6 +1246,11 @@ msgctxt "connect_and_open"
 msgid "Connect and open link"
 msgstr "Kết nối và mở liên kết"
 
+#. Button to connect a Bittensor coldkey.
+msgctxt "connect_bittensor_wallet"
+msgid "Connect Bittensor wallet"
+msgstr "Kết nối ví Bittensor"
+
 #. Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).
 msgctxt "connect_bittensor_wallet_to_add_sign_in_method"
 msgid "Connect a Bittensor wallet to add it as a sign-in method."
@@ -1020,6 +1265,16 @@ msgstr "Tùy chọn kết nối"
 msgctxt "connect_seeker_wallet"
 msgid "Connect a wallet with the Saga Genesis or Seeker Pre-Order Token"
 msgstr "Kết nối ví có token Saga Genesis hoặc token đặt trước Seeker"
+
+#. Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.
+msgctxt "connect_solana_wallet"
+msgid "Connect Solana wallet"
+msgstr "Kết nối ví Solana"
+
+#. Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.
+msgctxt "connect_solana_wallet_note"
+msgid "Connect a Solana wallet app, or enter a Solana USDC address manually."
+msgstr "Kết nối ứng dụng ví Solana, hoặc nhập thủ công địa chỉ USDC trên Solana."
 
 #. Add sign-in method sheet (android): the wallet option's explanation.
 msgctxt "connect_solana_wallet_to_add_sign_in_method"
@@ -1040,6 +1295,11 @@ msgstr "Kết nối URnetwork VPN"
 msgctxt "connect_wallet"
 msgid "Connect Wallet"
 msgstr "Kết nối ví"
+
+#. Error when claiming without a wallet.
+msgctxt "connect_wallet_first"
+msgid "Connect a Bittensor wallet first."
+msgstr "Hãy kết nối ví Bittensor trước."
 
 #. Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.
 msgctxt "connected"
@@ -1208,6 +1468,11 @@ msgctxt "copy_client_id"
 msgid "Copy client ID"
 msgstr "Sao chép ID máy khách"
 
+#. Button on the share screen: copy the text form of the code.
+msgctxt "copy_share_text"
+msgid "Copy share text"
+msgstr "Sao chép văn bản chia sẻ"
+
 #. Button text to copy the seedphrase to the clipboard.
 msgctxt "copy_to_clipboard"
 msgid "Copy to Clipboard"
@@ -1217,6 +1482,16 @@ msgstr "Sao chép vào bộ nhớ tạm"
 msgctxt "could_not_get_google_id_token"
 msgid "Could not get Google ID token"
 msgstr "Không thể lấy mã thông báo ID Google"
+
+#. Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).
+msgctxt "couldn_t_load_subscription_options"
+msgid "Couldn't load subscription options. Check your connection and retry."
+msgstr "Không thể tải các tùy chọn gói đăng ký. Hãy kiểm tra kết nối và thử lại."
+
+#. Restore-purchases outcome: the App Store sync failed (e.g. the user cancelled the credentials prompt or the store was unreachable) and no entitlement was found locally (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "couldn_t_restore_purchases"
+msgid "Couldn't restore purchases. Please try again."
+msgstr "Không thể khôi phục giao dịch mua. Hãy thử lại."
 
 #. Snackbar shown when the external wallet app could not be opened. Used in Shared/Views/SolanaSignMessageSheet.swift and Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "couldnt_open_wallet"
@@ -1423,6 +1698,11 @@ msgctxt "date_payout"
 msgid "{} Payout"
 msgstr "Thanh toán {}"
 
+#. Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).
+msgctxt "default_daily_data"
+msgid "By default, you get {} every day."
+msgstr "Theo mặc định, bạn nhận được {} mỗi ngày."
+
 #. Generic default choice label, e.g. the app split rule combo state meaning no rule.
 msgctxt "default_option"
 msgid "Default"
@@ -1463,15 +1743,125 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 
+#. Developer tools screen (reliability surface): performance-aware affinity control label.
+msgctxt "dev_affinity_performance"
+msgid "Performance-aware affinity"
+msgstr "Ưu tiên theo hiệu năng"
+
+#. Developer tools screen: explanatory subtext under the performance-aware affinity control.
+msgctxt "dev_affinity_performance_detail"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "Cân nhắc các cuộc đua TLS mới theo tốc độ byte được xác nhận cao nhất của từng nhà cung cấp so với băng thông họ công bố. Khi bật ưu tiên cứng, các nhà cung cấp có kết quả đo thấp sẽ nhường trong cuộc đua. Các kết nối hiện có và các ghim rõ ràng giữ nguyên"
+
+#. Developer tools screen (reliability surface): affinity sticky control label.
+msgctxt "dev_affinity_sticky"
+msgid "Sticky site affinity"
+msgstr "Gắn kết trang web"
+
+#. Developer tools screen: explanatory subtext under the 'affinity sticky' control.
+msgctxt "dev_affinity_sticky_detail"
+msgid "A site's new connections stay on the exit its earlier ones already use, even past the flow cap, so a busy site keeps one egress IP. The cap still limits which exits collect new sites. Off restores the strict cap"
+msgstr "Các kết nối mới của một trang web ở lại điểm thoát mà các kết nối trước đó đã dùng, kể cả khi vượt giới hạn luồng, để một trang bận giữ một IP ra ngoài. Giới hạn vẫn quyết định điểm thoát nào nhận trang mới. Tắt sẽ khôi phục giới hạn nghiêm ngặt"
+
 #. Developer page: label of the app version row.
 msgctxt "dev_app_version"
 msgid "App version"
 msgstr "App version"
 
+#. Developer tools screen (reliability surface): behaviour control label.
+msgctxt "dev_behaviour"
+msgid "Behaviour"
+msgstr "Hành vi"
+
+#. Developer tools screen (reliability surface): blackhole receive control label.
+msgctxt "dev_blackhole_receive"
+msgid "Keep quiet providers longer"
+msgstr "Giữ nhà cung cấp im lặng lâu hơn"
+
+#. Developer tools screen: explanatory subtext under the 'blackhole receive' control.
+msgctxt "dev_blackhole_receive_detail"
+msgid "How long a provider still acknowledging traffic may return nothing before it is dropped. Off keeps them until they stop acknowledging"
+msgstr "Một nhà cung cấp vẫn còn xác nhận lưu lượng có thể không trả về gì trong bao lâu trước khi bị loại. Tắt sẽ giữ họ cho tới khi ngừng xác nhận"
+
+#. Developer tools screen (reliability surface): blast radius control label.
+msgctxt "dev_blast_radius"
+msgid "Blast radius"
+msgstr "Phạm vi ảnh hưởng"
+
+#. Developer tools screen: explanatory subtext under the 'blast radius' control.
+msgctxt "dev_blast_radius_detail"
+msgid "Connections lost per provider failure. Lower is better"
+msgstr "Số kết nối bị mất mỗi lần nhà cung cấp gặp sự cố. Càng thấp càng tốt"
+
+#. Developer tools screen: formatted value readout for 'blast radius'.
+msgctxt "dev_blast_radius_value"
+msgid "{} per failure"
+msgstr "{} mỗi sự cố"
+
+#. Developer tools screen (reliability surface): busy probe control label.
+msgctxt "dev_busy_probe"
+msgid "Probe stalled exits before dropping"
+msgstr "Thăm dò điểm thoát bị kẹt trước khi loại"
+
+#. Developer tools screen (reliability surface): busy probe budget control label.
+msgctxt "dev_busy_probe_budget"
+msgid "Busy probe wait"
+msgstr "Thời gian chờ thăm dò bận"
+
+#. Developer tools screen: explanatory subtext under the 'busy probe budget' control.
+msgctxt "dev_busy_probe_budget_detail"
+msgid "How long the stall probe waits for an answer before convicting. Off derives half the stall bar"
+msgstr "Thăm dò kẹt chờ phản hồi bao lâu trước khi kết luận lỗi. Tắt sẽ dùng một nửa ngưỡng kẹt"
+
+#. Developer tools screen: explanatory subtext under the 'busy probe' control.
+msgctxt "dev_busy_probe_detail"
+msgid "When an exit stalls, ping it once before convicting. A congested but alive exit answers and keeps its flows; a dead one is still dropped. Off convicts on the stall bar"
+msgstr "Khi một điểm thoát bị kẹt, nó được ping một lần trước khi bị kết luận lỗi. Điểm thoát nghẽn nhưng còn sống sẽ trả lời và giữ các luồng của nó; điểm thoát đã chết vẫn bị loại. Tắt sẽ kết luận lỗi theo ngưỡng kẹt"
+
+#. Developer tools screen (reliability surface): busy probes control label.
+msgctxt "dev_busy_probes"
+msgid "Busy probes"
+msgstr "Thăm dò bận"
+
+#. Developer tools screen: explanatory subtext under the 'busy probes' control.
+msgctxt "dev_busy_probes_detail"
+msgid "Liveness pings fired at stalled exits; acquitted ones answered and were kept, the removals the probe prevented"
+msgstr "Các ping kiểm tra sống gửi tới điểm thoát bị kẹt; những điểm được minh oan đã trả lời và được giữ lại — đó là các lần loại bỏ mà thăm dò đã ngăn chặn"
+
+#. Developer tools screen: formatted value readout for 'busy probes'.
+msgctxt "dev_busy_probes_value"
+msgid "{0} sent / {1} acquitted"
+msgstr "{0} đã gửi / {1} được minh oan"
+
 #. Developer page: button that checks for a new release now.
 msgctxt "dev_check_updates"
 msgid "Check for updates"
 msgstr "Check for updates"
+
+#. Developer tools screen: action for choosing individual log files to export.
+msgctxt "dev_choose_logs"
+msgid "Choose logs…"
+msgstr "Chọn nhật ký…"
+
+#. Developer tools screen: action that deletes the diagnostics log files without touching local state, preferences or rules.
+msgctxt "dev_clear_logs"
+msgid "Clear logs"
+msgstr "Xóa nhật ký"
+
+#. Developer tools screen: the clear-logs action's label while it runs.
+msgctxt "dev_clearing_logs"
+msgid "Clearing logs…"
+msgstr "Đang xóa nhật ký…"
+
+#. Developer tools screen (reliability surface): cluster affinity control label.
+msgctxt "dev_cluster_affinity"
+msgid "Group IPs by site"
+msgstr "Nhóm IP theo trang web"
+
+#. Developer tools screen: explanatory subtext under the 'cluster affinity' control.
+msgctxt "dev_cluster_affinity_detail"
+msgid "Keeps a site on one exit when its hostname is not visible"
+msgstr "Giữ một trang web trên một điểm thoát khi không thấy được tên máy chủ của nó"
 
 #. Developer page: table column header for the per-row action buttons.
 msgctxt "dev_col_actions"
@@ -1548,6 +1938,16 @@ msgctxt "dev_col_window"
 msgid "Window"
 msgstr "Window"
 
+#. Developer tools screen (reliability surface): comparative connect control label.
+msgctxt "dev_comparative_connect"
+msgid "Cut dead connects early"
+msgstr "Cắt sớm kết nối chết"
+
+#. Developer tools screen: explanatory subtext under the 'comparative connect' control.
+msgctxt "dev_comparative_connect_detail"
+msgid "Drop an exit that has established nothing sooner when two sibling exits are receiving. Off waits the full 30s connect bar"
+msgstr "Loại sớm hơn điểm thoát chưa thiết lập được gì khi hai điểm thoát cùng nhóm đang nhận dữ liệu. Tắt sẽ chờ hết ngưỡng kết nối 30 giây"
+
 #. Developer page: suffix after a count of affected flows.
 msgctxt "dev_count_affected"
 msgid "affected"
@@ -1573,15 +1973,206 @@ msgctxt "dev_developer"
 msgid "Developer"
 msgstr "Developer"
 
+#. Developer tools screen (reliability surface): dial failure rerace control label.
+msgctxt "dev_dial_failure_rerace"
+msgid "Retry refused connects elsewhere"
+msgstr "Thử lại kết nối bị từ chối ở nơi khác"
+
+#. Developer tools screen: explanatory subtext under the 'dial failure rerace' control.
+msgctxt "dev_dial_failure_rerace_detail"
+msgid "When a provider can't reach a site, move the connection to another exit instead of letting it hang"
+msgstr "Khi nhà cung cấp không thể kết nối tới một trang web, chuyển kết nối sang điểm thoát khác thay vì để treo"
+
+#. Developer tools screen (reliability surface): dial failures control label.
+msgctxt "dev_dial_failures"
+msgid "Provider connect failures"
+msgstr "Lỗi kết nối của nhà cung cấp"
+
+#. Developer tools screen: explanatory subtext under the 'dial failures' control.
+msgctxt "dev_dial_failures_detail"
+msgid "Times a provider reported it could not open the upstream connection"
+msgstr "Số lần nhà cung cấp báo không thể mở kết nối tới đích"
+
+#. Developer tools screen (reliability surface): drop exit control label.
+msgctxt "dev_drop_exit"
+msgid "Drop"
+msgstr "Loại"
+
 #. Developer page: report line after an exit was dropped.
 msgctxt "dev_dropped_exit"
 msgid "Dropped exit"
 msgstr "Dropped exit"
 
+#. Developer tools screen (reliability surface): effective tier control label.
+msgctxt "dev_effective_tier"
+msgid "Live tier demotion"
+msgstr "Hạ cấp trực tiếp"
+
+#. Developer tools screen: explanatory subtext under the 'effective tier' control.
+msgctxt "dev_effective_tier_detail"
+msgid "Failing dials and survived verdicts push a provider down the ranking within a second; promotion back needs clean minutes and a proven connect"
+msgstr "Các lần kết nối thất bại và các phán quyết vượt qua được sẽ đẩy nhà cung cấp xuống bảng xếp hạng trong vòng một giây; để lên lại cần vài phút không lỗi và một kết nối đã được chứng minh"
+
+#. Developer tools screen (reliability surface): evaluation pool control label.
+msgctxt "dev_evaluation_pool"
+msgid "Candidates evaluated per slot"
+msgstr "Ứng viên được đánh giá cho mỗi vị trí"
+
+#. Developer tools screen: explanatory subtext under the 'evaluation pool' control.
+msgctxt "dev_evaluation_pool_detail"
+msgid "How many providers a window expansion pings and ranks per slot it needs, keeping the best. 1 evaluates exactly what it needs"
+msgstr "Khi mở rộng cửa sổ, số nhà cung cấp được ping và xếp hạng cho mỗi vị trí cần thiết, giữ lại những nhà tốt nhất. 1 đánh giá đúng số lượng cần"
+
+#. Developer tools screen (reliability surface): exit dial failures control label.
+msgctxt "dev_exit_dial_failures"
+msgid "{} failed dials"
+msgstr "{} lần kết nối thất bại"
+
+#. Developer tools screen (reliability surface): exit flows control label.
+msgctxt "dev_exit_flows"
+msgid "{} flows"
+msgstr "{} luồng"
+
+#. Developer tools screen (reliability surface): exits control label.
+msgctxt "dev_exits"
+msgid "Exits"
+msgstr "Điểm thoát"
+
 #. Developer page: explanation of the drop, stall and shuffle actions.
 msgctxt "dev_exits_actions_detail"
 msgid "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
 msgstr "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
+
+#. Developer tools screen: action for exporting all diagnostic logs without redaction.
+msgctxt "dev_export_all_logs"
+msgid "Export all logs (raw)"
+msgstr "Xuất toàn bộ nhật ký (bản thô)"
+
+#. Developer tools screen: error shown when diagnostic log export fails.
+msgctxt "dev_export_failed"
+msgid "Export failed: {}"
+msgstr "Xuất thất bại: {}"
+
+#. Developer tools screen: explanation that a requested diagnostic item was omitted from an export.
+msgctxt "dev_export_not_included"
+msgid "Not included: {}"
+msgstr "Không bao gồm: {}"
+
+#. Developer tools screen: action for exporting diagnostic logs with sensitive traffic details redacted.
+msgctxt "dev_export_redacted_logs"
+msgid "Export redacted logs"
+msgstr "Xuất nhật ký đã ẩn thông tin"
+
+#. Developer tools screen: action for exporting the selected diagnostic log files.
+msgctxt "dev_export_selected"
+msgid "Export selected"
+msgstr "Xuất mục đã chọn"
+
+#. Developer tools screen: action for sharing a diagnostic bundle.
+msgctxt "dev_export_share"
+msgid "Share diagnostic bundle"
+msgstr "Chia sẻ gói chẩn đoán"
+
+#. Developer tools screen: summary of the number and total size of diagnostic log files exported.
+msgctxt "dev_export_summary"
+msgid "Exported {0} log file ({1})"
+msgid_plural "Exported {0} log files ({1})"
+msgstr[0] "Đã xuất {0} tệp nhật ký ({1})"
+
+#. Developer tools screen: explanation that a diagnostic export option is unavailable.
+msgctxt "dev_export_unavailable"
+msgid "Not available: {}"
+msgstr "Không khả dụng: {}"
+
+#. Developer tools screen: progress label shown while a diagnostic bundle is being exported.
+msgctxt "dev_exporting"
+msgid "Exporting…"
+msgstr "Đang xuất…"
+
+#. Developer tools screen (reliability surface): flows opened control label.
+msgctxt "dev_flows_opened"
+msgid "Flows opened"
+msgstr "Luồng đã mở"
+
+#. Developer tools screen: explanatory subtext under the 'flows opened' control.
+msgctxt "dev_flows_opened_detail"
+msgid "Total since reset, so runs of different lengths compare"
+msgstr "Tổng số kể từ lần đặt lại, để có thể so sánh các lần chạy có độ dài khác nhau"
+
+#. Developer tools screen (reliability surface): flows rebound control label.
+msgctxt "dev_flows_rebound"
+msgid "QUIC flows rebound"
+msgstr "Luồng QUIC được gắn lại"
+
+#. Developer tools screen: explanatory subtext under the 'flows rebound' control.
+msgctxt "dev_flows_rebound_detail"
+msgid "Flows moved to a warm exit inside a removal; accepted means the server took the path change without a re-dial"
+msgstr "Các luồng được chuyển sang một điểm thoát đang sẵn sàng trong lúc loại bỏ; được chấp nhận nghĩa là máy chủ đã chấp nhận thay đổi đường đi mà không cần quay số lại"
+
+#. Developer tools screen: formatted value readout for 'flows rebound'.
+msgctxt "dev_flows_rebound_value"
+msgid "{0} ({1} accepted / {2} re-dialed)"
+msgstr "{0} ({1} được chấp nhận / {2} quay số lại)"
+
+#. Developer tools screen (reliability surface): flows reraced control label.
+msgctxt "dev_flows_reraced"
+msgid "Moved to another exit"
+msgstr "Đã chuyển sang điểm thoát khác"
+
+#. Developer tools screen: explanatory subtext under the 'flows reraced' control.
+msgctxt "dev_flows_reraced_detail"
+msgid "How many of those failures were quietly moved instead of hanging"
+msgstr "Bao nhiêu sự cố trong số đó được lặng lẽ chuyển đi thay vì bị treo"
+
+#. Developer tools screen (reliability surface): formation poll control label.
+msgctxt "dev_formation_poll"
+msgid "Fast first-exit poll"
+msgstr "Kiểm tra nhanh điểm thoát đầu tiên"
+
+#. Developer tools screen: explanatory subtext under the 'formation poll' control.
+msgctxt "dev_formation_poll_detail"
+msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
+msgstr "Tần suất một luồng đang kết nối kiểm tra lại cửa sổ trống, để yêu cầu đầu tiên đi ngay khi điểm thoát đầu tiên xuất hiện. Tắt sẽ chờ theo nhịp thử lại 2 giây"
+
+#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
+msgctxt "dev_fresh_flow_affinity"
+msgid "Hard fresh-flow affinity"
+msgstr "Ưu tiên cứng cho luồng mới"
+
+#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
+msgctxt "dev_fresh_flow_affinity_detail"
+msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
+msgstr "Gán mỗi kết nối mới vào điểm thoát mà IP hoặc tên miền của nó đang dùng. Mặc định là tắt: mỗi kết nối mới thông thường đều vào cuộc đua nhà cung cấp. Các kết nối hiện có và các ghim rõ ràng luôn giữ nguyên"
+
+#. Developer tools screen (reliability surface): group follow control label.
+msgctxt "dev_group_follow"
+msgid "Follow benched exits"
+msgstr "Theo các điểm thoát đang dự bị"
+
+#. Developer tools screen: explanatory subtext under the 'group follow' control.
+msgctxt "dev_group_follow_detail"
+msgid "A quarantined exit keeps its own sites' new connections through the early bench, when the verdict is least proven, so a bench does not split the site's egress IP. New sites still avoid it. Off scatters them"
+msgstr "Một điểm thoát bị cách ly vẫn giữ các kết nối mới của chính các trang web của nó trong giai đoạn đầu dự bị, khi phán quyết còn ít bằng chứng nhất, để việc dự bị không chia tách IP ra ngoài của trang. Các trang mới vẫn tránh nó. Tắt sẽ phân tán chúng"
+
+#. Developer tools screen (reliability surface): group follow window control label.
+msgctxt "dev_group_follow_window"
+msgid "Follow window"
+msgstr "Cửa sổ theo dõi"
+
+#. Developer tools screen: explanatory subtext under the 'group follow window' control.
+msgctxt "dev_group_follow_window_detail"
+msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
+msgstr "Trong bao lâu kể từ khi bắt đầu dự bị, các kết nối mới của một trang tiếp tục theo điểm thoát của chúng — dự bị sớm thường là báo động giả; dự bị kéo dài sẽ dẫn tới loại bỏ và ngừng nhận luồng. Tắt sẽ phân tán ngay"
+
+#. Developer tools screen (reliability surface): heartbeat control label.
+msgctxt "dev_heartbeat"
+msgid "State heartbeat"
+msgstr "Nhịp trạng thái"
+
+#. Developer tools screen: explanatory subtext under the 'heartbeat' control.
+msgctxt "dev_heartbeat_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics. Off silences it; shorter spots a transition, longer keeps more buffer"
+msgstr "Tần suất ghi vào nhật ký một dòng tóm tắt trạng thái hiện tại để phân tích sau này. Tắt sẽ ngừng ghi; ngắn hơn bắt được chuyển đổi, dài hơn giữ được nhiều bộ đệm hơn"
 
 #. Developer page: intro line under the title.
 msgctxt "dev_intro"
@@ -1628,10 +2219,115 @@ msgctxt "dev_ip_family_force6_detail"
 msgid "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
 msgstr "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
 
+#. Developer tools screen (reliability surface): load corroboration control label.
+msgctxt "dev_load_corroboration"
+msgid "Load corroboration"
+msgstr "Xác nhận theo tải"
+
+#. Developer tools screen: explanatory subtext under the 'load corroboration' control.
+msgctxt "dev_load_corroboration_detail"
+msgid "Extra silent destinations required per this many flows before a busy exit can be benched on soft evidence: a 24-flow exit at 8 needs 3 silent sites, not 2. Off keeps the flat minimum"
+msgstr "Số đích im lặng bổ sung cần có cho mỗi chừng ấy luồng trước khi một điểm thoát bận có thể bị cho dự bị dựa trên bằng chứng yếu: một điểm thoát 24 luồng ở mức 8 cần 3 trang im lặng, không phải 2. Tắt sẽ giữ mức tối thiểu cố định"
+
+#. Developer tools screen: control label for diagnostic log detail.
+msgctxt "dev_log_verbosity"
+msgid "Log detail"
+msgstr "Mức chi tiết nhật ký"
+
+#. Developer tools screen: default diagnostic log detail level.
+msgctxt "dev_log_verbosity_default"
+msgid "Default"
+msgstr "Mặc định"
+
+#. Developer tools screen: explanation of the default diagnostic log detail level.
+msgctxt "dev_log_verbosity_default_detail"
+msgid "Connection errors and contract pings"
+msgstr "Lỗi kết nối và ping hợp đồng"
+
+#. Developer tools screen: trace diagnostic log detail level.
+msgctxt "dev_log_verbosity_trace"
+msgid "Trace"
+msgstr "Truy vết"
+
+#. Developer tools screen: explanation of the trace diagnostic log detail level.
+msgctxt "dev_log_verbosity_trace_detail"
+msgid "Transport and window internals. Very large logs"
+msgstr "Chi tiết nội bộ của truyền tải và cửa sổ. Nhật ký rất lớn"
+
+#. Developer tools screen: label used when the diagnostic log detail level cannot be read.
+msgctxt "dev_log_verbosity_unavailable"
+msgid "Unavailable"
+msgstr "Không khả dụng"
+
+#. Developer tools screen: explanation shown when the diagnostic log detail level cannot be read.
+msgctxt "dev_log_verbosity_unavailable_detail"
+msgid "There is no device to read the log level from yet. Sign in first"
+msgstr "Chưa có thiết bị nào để đọc mức nhật ký. Hãy đăng nhập trước"
+
+#. Developer tools screen: verbose diagnostic log detail level.
+msgctxt "dev_log_verbosity_verbose"
+msgid "Verbose"
+msgstr "Chi tiết"
+
+#. Developer tools screen: explanation of the verbose diagnostic log detail level.
+msgctxt "dev_log_verbosity_verbose_detail"
+msgid "Contract accounting and per-packet block decisions. Includes destination IP addresses"
+msgstr "Hạch toán hợp đồng và quyết định chặn theo từng gói tin. Có cả địa chỉ IP đích"
+
+#. Developer tools screen: privacy warning shown when detailed traffic logging is enabled.
+msgctxt "dev_log_verbosity_warning"
+msgid "At Verbose and above the logs contain the destination IP addresses and ports of the traffic you send. Use “Export redacted logs” to share them; the raw bundle should not leave this device."
+msgstr "Từ mức Chi tiết trở lên, nhật ký chứa địa chỉ IP và cổng đích của lưu lượng bạn gửi đi. Hãy dùng “Xuất nhật ký đã ẩn thông tin” để chia sẻ; gói thô không nên rời khỏi thiết bị này."
+
+#. Developer tools screen: title for the detailed traffic logging privacy warning.
+msgctxt "dev_log_verbosity_warning_title"
+msgid "Logs are recording your real traffic"
+msgstr "Nhật ký đang ghi lại lưu lượng thực của bạn"
+
+#. Developer tools screen (reliability surface): max flows per exit control label.
+msgctxt "dev_max_flows_per_exit"
+msgid "Max connections per exit"
+msgstr "Số kết nối tối đa mỗi điểm thoát"
+
+#. Developer tools screen: explanatory subtext under the 'max flows per exit' control.
+msgctxt "dev_max_flows_per_exit_detail"
+msgid "Losing an exit kills every connection on it. Lower spreads the damage; a site may then use more than one exit IP"
+msgstr "Mất một điểm thoát sẽ cắt mọi kết nối trên đó. Giá trị thấp hơn sẽ dàn trải thiệt hại; khi đó một trang có thể dùng nhiều hơn một IP thoát"
+
+#. Developer tools screen (reliability surface): measure none control label.
+msgctxt "dev_measure_none"
+msgid "No provider failures yet. Stall an exit below to cause one."
+msgstr "Chưa có sự cố nhà cung cấp nào. Làm kẹt một điểm thoát bên dưới để gây ra một sự cố."
+
+#. Developer tools screen (reliability surface): measurements control label.
+msgctxt "dev_measurements"
+msgid "Measurements"
+msgstr "Đo lường"
+
+#. Developer tools screen: explanatory subtext under the 'measurements' control.
+msgctxt "dev_measurements_detail"
+msgid "What a provider failure costs. Reset, run a test, read back."
+msgstr "Một sự cố nhà cung cấp gây ra tổn thất gì. Đặt lại, chạy thử, đọc kết quả."
+
 #. Developer page: button that migrates the live connection.
 msgctxt "dev_migrate"
 msgid "Migrate"
 msgstr "Migrate"
+
+#. Developer tools screen (reliability surface): migrate exit control label.
+msgctxt "dev_migrate_exit"
+msgid "Migrate"
+msgstr "Di chuyển"
+
+#. Developer tools screen (reliability surface): min blackhole destinations control label.
+msgctxt "dev_min_blackhole_destinations"
+msgid "Corroborate silent exits"
+msgstr "Xác nhận điểm thoát im lặng"
+
+#. Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.
+msgctxt "dev_min_blackhole_destinations_detail"
+msgid "How many distinct destinations must be silent before an exit is convicted on no-receive, so one dead site cannot remove a working exit. Off lets a single destination convict"
+msgstr "Cần bao nhiêu đích khác nhau im lặng trước khi một điểm thoát bị kết luận là không nhận, để một trang chết duy nhất không thể loại bỏ một điểm thoát đang hoạt động. Tắt cho phép một đích duy nhất kết luận"
 
 #. Developer page: value of the flows that never came back, {done} of {total}.
 msgctxt "dev_never_came_back_value"
@@ -1647,6 +2343,11 @@ msgstr "No destinations yet."
 msgctxt "dev_no_device"
 msgid "No session. Sign in and connect to use these tools."
 msgstr "No session. Sign in and connect to use these tools."
+
+#. Developer tools screen (reliability surface): no exits control label.
+msgctxt "dev_no_exits"
+msgid "No exits. Connect first."
+msgstr "Không có điểm thoát. Hãy kết nối trước."
 
 #. Developer page: empty state of the probe results table.
 msgctxt "dev_no_probe_results"
@@ -1673,6 +2374,16 @@ msgctxt "dev_nothing_in_force"
 msgid "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
 msgstr "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
 
+#. Developer tools screen (reliability surface): open tools control label.
+msgctxt "dev_open_tools"
+msgid "Open developer tools"
+msgstr "Mở công cụ nhà phát triển"
+
+#. Developer tools screen (reliability surface): probe all control label.
+msgctxt "dev_probe_all"
+msgid "Probe all exits now"
+msgstr "Thăm dò tất cả điểm thoát ngay"
+
 #. Developer page: button that probes every exit now.
 msgctxt "dev_probe_all_exits_now"
 msgid "Probe all exits now"
@@ -1687,6 +2398,26 @@ msgstr "failed"
 msgctxt "dev_probe_ok"
 msgid "ok"
 msgstr "ok"
+
+#. Developer tools screen (reliability surface): probe providers control label.
+msgctxt "dev_probe_providers"
+msgid "Probe providers"
+msgstr "Thăm dò nhà cung cấp"
+
+#. Developer tools screen: explanatory subtext under the 'probe providers' control.
+msgctxt "dev_probe_providers_detail"
+msgid "Qualify exits by dialing real sites through them. An answer proves the exit; silence never counts against it"
+msgstr "Kiểm định điểm thoát bằng cách kết nối tới các trang thật thông qua chúng. Một phản hồi chứng minh điểm thoát; im lặng không bao giờ bị tính là bất lợi"
+
+#. Developer tools screen (reliability surface): probe sample hosts control label.
+msgctxt "dev_probe_sample_hosts"
+msgid "Probe hosts per pass"
+msgstr "Số máy chủ thăm dò mỗi lượt"
+
+#. Developer tools screen: explanatory subtext under the 'probe sample hosts' control.
+msgctxt "dev_probe_sample_hosts_detail"
+msgid "How many health sites one qualification pass dials through an exit. 0 probes the entire embedded list; a smaller number rotates through it in blocks"
+msgstr "Một lượt kiểm định kết nối tới bao nhiêu trang kiểm tra qua một điểm thoát. 0 thăm dò toàn bộ danh sách tích hợp; số nhỏ hơn sẽ duyệt danh sách theo từng khối"
 
 #. Developer page: heading of the probe suite section.
 msgctxt "dev_probe_suite"
@@ -1733,30 +2464,220 @@ msgctxt "dev_probe_suite_stopped"
 msgid "Probe suite stopped"
 msgstr "Probe suite stopped"
 
+#. Developer tools screen (reliability surface): probe timeout control label.
+msgctxt "dev_probe_timeout"
+msgid "Probe wait"
+msgstr "Thời gian chờ thăm dò"
+
+#. Developer tools screen: explanatory subtext under the 'probe timeout' control.
+msgctxt "dev_probe_timeout_detail"
+msgid "How long a qualification probe waits for an answer. Off uses the built-in 4s. It only bounds waiting for proof, it never convicts"
+msgstr "Một lần thăm dò kiểm định chờ phản hồi bao lâu. Tắt sẽ dùng 4 giây tích hợp. Nó chỉ giới hạn thời gian chờ bằng chứng, không bao giờ kết luận lỗi"
+
 #. Developer page: heading of the probed exits table.
 msgctxt "dev_probed_exits"
 msgid "Probed exits"
 msgstr "Probed exits"
+
+#. Developer tools screen (reliability surface): probes control label.
+msgctxt "dev_probes"
+msgid "Probes"
+msgstr "Thăm dò"
+
+#. Developer tools screen: explanatory subtext under the 'probes' control.
+msgctxt "dev_probes_detail"
+msgid "Qualification probes this session"
+msgstr "Các lần thăm dò kiểm định trong phiên này"
+
+#. Developer tools screen: formatted value readout for 'probes'.
+msgctxt "dev_probes_value"
+msgid "{0} sent / {1} answered"
+msgstr "{0} đã gửi / {1} đã trả lời"
 
 #. Developer page: value of the QUIC flows that rebound: {count} total, {accepted} accepted, {redialed} re-dialed.
 msgctxt "dev_quic_flows_rebound_value"
 msgid "{0} ({1} accepted / {2} re-dialed)"
 msgstr "{0} ({1} accepted / {2} re-dialed)"
 
+#. Developer tools screen (reliability surface): quic rebind control label.
+msgctxt "dev_quic_rebind"
+msgid "Rebind QUIC on exit loss"
+msgstr "Gắn lại QUIC khi mất điểm thoát"
+
+#. Developer tools screen: explanatory subtext under the 'quic rebind' control.
+msgctxt "dev_quic_rebind_detail"
+msgid "Re-pin established QUIC flows to a live exit inside the removal instead of tearing them down"
+msgstr "Ghim lại các luồng QUIC đã thiết lập vào một điểm thoát còn sống trong lúc loại bỏ thay vì cắt chúng"
+
+#. Developer tools screen (reliability surface): recovery control label.
+msgctxt "dev_recovery"
+msgid "Recovery time"
+msgstr "Thời gian phục hồi"
+
+#. Developer tools screen: explanatory subtext under the 'recovery' control.
+msgctxt "dev_recovery_detail"
+msgid "From an exit dying to that site answering again"
+msgstr "Từ lúc một điểm thoát chết tới khi trang đó trả lời lại"
+
+#. Developer tools screen (reliability surface): recovery missed control label.
+msgctxt "dev_recovery_missed"
+msgid "Never came back"
+msgstr "Không bao giờ trở lại"
+
+#. Developer tools screen: explanatory subtext under the 'recovery missed' control.
+msgctxt "dev_recovery_missed_detail"
+msgid "Sites abandoned rather than recovered"
+msgstr "Các trang bị bỏ thay vì được phục hồi"
+
+#. Developer tools screen: formatted value readout for 'recovery missed'.
+msgctxt "dev_recovery_missed_value"
+msgid "{0} of {1}"
+msgstr "{0}/{1}"
+
 #. Developer page: value of the recovery time, {average} and {worst} are durations.
 msgctxt "dev_recovery_time_value"
 msgid "avg {0}, worst {1}"
 msgstr "avg {0}, worst {1}"
+
+#. Developer tools screen: formatted value readout for 'recovery'.
+msgctxt "dev_recovery_value"
+msgid "avg {0}, worst {1}"
+msgstr "tb {0}, tệ nhất {1}"
+
+#. Developer tools screen (reliability surface): refresh control label.
+msgctxt "dev_refresh"
+msgid "Refresh"
+msgstr "Làm mới"
+
+#. Developer tools screen (reliability surface): removal budget count control label.
+msgctxt "dev_removal_budget_count"
+msgid "Removal storm limit"
+msgstr "Giới hạn loại bỏ dồn dập"
+
+#. Developer tools screen: explanatory subtext under the 'removal budget count' control.
+msgctxt "dev_removal_budget_count_detail"
+msgid "How many verdict removals are allowed per window before the rest are deferred; a burst is more likely one local cause than many failures. Off removes without limit"
+msgstr "Bao nhiêu lần loại bỏ theo phán quyết được phép trong mỗi cửa sổ trước khi phần còn lại bị hoãn; một đợt dồn dập thường do một nguyên nhân cục bộ hơn là nhiều sự cố. Tắt sẽ loại bỏ không giới hạn"
+
+#. Developer tools screen (reliability surface): removal budget window control label.
+msgctxt "dev_removal_budget_window"
+msgid "Removal storm window"
+msgstr "Cửa sổ loại bỏ dồn dập"
+
+#. Developer tools screen: explanatory subtext under the 'removal budget window' control.
+msgctxt "dev_removal_budget_window_detail"
+msgid "The window the removal limit is counted over. Off (like a limit of 0) turns the breaker off"
+msgstr "Cửa sổ dùng để đếm giới hạn loại bỏ. Tắt (giống giới hạn 0) sẽ vô hiệu hóa bộ ngắt"
+
+#. Developer tools screen (reliability surface): removals deferred control label.
+msgctxt "dev_removals_deferred"
+msgid "Removals deferred"
+msgstr "Lần loại bỏ bị hoãn"
+
+#. Developer tools screen: explanatory subtext under the 'removals deferred' control.
+msgctxt "dev_removals_deferred_detail"
+msgid "Removals the storm breaker held back after a correlated burst"
+msgstr "Các lần loại bỏ mà bộ ngắt dồn dập đã giữ lại sau một đợt có liên quan"
 
 #. Developer page: label before the requested value of an override.
 msgctxt "dev_requested"
 msgid "Requested:"
 msgstr "Requested:"
 
+#. Developer tools screen (reliability surface): reset defaults control label.
+msgctxt "dev_reset_defaults"
+msgid "Reset to shipped defaults"
+msgstr "Đặt lại về mặc định ban đầu"
+
+#. Developer tools screen (reliability surface): reset measurements control label.
+msgctxt "dev_reset_measurements"
+msgid "Reset measurements"
+msgstr "Đặt lại số đo"
+
 #. Developer page: button that resets the reliability settings.
 msgctxt "dev_reset_to_shipped_defaults"
 msgid "Reset to shipped defaults"
 msgstr "Reset to shipped defaults"
+
+#. Developer tools screen (reliability surface): scheduler pause recovery control label.
+msgctxt "dev_scheduler_pause_recovery"
+msgid "Suspend recovery window"
+msgstr "Cửa sổ phục hồi sau tạm ngưng"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pause recovery' control.
+msgctxt "dev_scheduler_pause_recovery_detail"
+msgid "How long verdicts stay held after a detected suspend, giving transports time to re-register. Off uses the built-in 5s"
+msgstr "Các phán quyết được giữ lại bao lâu sau khi phát hiện tạm ngưng, để các kiểu truyền tải có thời gian đăng ký lại. Tắt sẽ dùng 5 giây tích hợp"
+
+#. Developer tools screen (reliability surface): scheduler pause tolerance control label.
+msgctxt "dev_scheduler_pause_tolerance"
+msgid "Suspend detector"
+msgstr "Bộ phát hiện tạm ngưng"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.
+msgctxt "dev_scheduler_pause_tolerance_detail"
+msgid "How much timer overshoot reads as the phone being suspended rather than an exit stalling, so a resumed phone does not convict every exit at once. Off disables it"
+msgstr "Mức trễ của bộ hẹn giờ được hiểu là điện thoại tạm ngưng thay vì điểm thoát bị kẹt, để điện thoại vừa hoạt động lại không kết luận lỗi mọi điểm thoát cùng lúc. Tắt sẽ vô hiệu hóa nó"
+
+#. Developer tools screen (reliability surface): scheduler pauses control label.
+msgctxt "dev_scheduler_pauses"
+msgid "Suspends caught"
+msgstr "Lần tạm ngưng bị phát hiện"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pauses' control.
+msgctxt "dev_scheduler_pauses_detail"
+msgid "Host suspends the detector caught, each one a batch of verdicts held instead of executed on a just-resumed phone"
+msgstr "Các lần máy chủ tạm ngưng mà bộ phát hiện bắt được, mỗi lần là một loạt phán quyết được giữ lại thay vì thực thi trên điện thoại vừa hoạt động lại"
+
+#. Developer tools screen: section heading for the detection controls.
+msgctxt "dev_section_detection"
+msgid "Detection"
+msgstr "Phát hiện"
+
+#. Developer tools screen: section heading for diagnostic log controls.
+msgctxt "dev_section_diagnostics"
+msgid "Diagnostics"
+msgstr "Chẩn đoán"
+
+#. Developer tools screen: section heading for the observability controls.
+msgctxt "dev_section_observability"
+msgid "Observability"
+msgstr "Khả năng quan sát"
+
+#. Developer tools screen: section heading for the placement controls.
+msgctxt "dev_section_placement"
+msgid "Placement"
+msgstr "Bố trí"
+
+#. Developer tools screen: section heading for the probing controls.
+msgctxt "dev_section_probing"
+msgid "Probing"
+msgstr "Thăm dò"
+
+#. Developer tools screen: section heading for the recovery controls.
+msgctxt "dev_section_recovery"
+msgid "Recovery"
+msgstr "Phục hồi"
+
+#. Developer tools screen (reliability surface): send stall control label.
+msgctxt "dev_send_stall"
+msgid "Drop stalled exits fast"
+msgstr "Loại nhanh điểm thoát bị kẹt"
+
+#. Developer tools screen: explanatory subtext under the 'send stall' control.
+msgctxt "dev_send_stall_detail"
+msgid "How long an exit may stop delivering before it is dropped. Off waits 30s"
+msgstr "Một điểm thoát có thể ngừng chuyển dữ liệu trong bao lâu trước khi bị loại. Tắt sẽ chờ 30 giây"
+
+#. Developer tools screen (reliability surface): server name bridge control label.
+msgctxt "dev_server_name_bridge"
+msgid "Converge late-named flows"
+msgstr "Gộp các luồng có tên muộn"
+
+#. Developer tools screen: explanatory subtext under the 'server name bridge' control.
+msgctxt "dev_server_name_bridge_detail"
+msgid "Moves later connections onto the exit the first one already uses"
+msgstr "Chuyển các kết nối sau sang điểm thoát mà kết nối đầu tiên đã dùng"
 
 #. Developer page: shown when the system service is not attached.
 msgctxt "dev_service_detached"
@@ -1798,10 +2719,45 @@ msgctxt "dev_session_log_restarted"
 msgid "The daemon restarted. This is a new log; the previous run's lines are gone."
 msgstr "The daemon restarted. This is a new log; the previous run's lines are gone."
 
+#. Developer tools screen (reliability surface): shuffle exits control label.
+msgctxt "dev_shuffle_exits"
+msgid "Shuffle all exits"
+msgstr "Xáo trộn mọi điểm thoát"
+
+#. Developer tools screen (reliability surface): simulate network change control label.
+msgctxt "dev_simulate_network_change"
+msgid "Simulate network change"
+msgstr "Mô phỏng thay đổi mạng"
+
+#. Developer tools screen (reliability surface): soft verdict control label.
+msgctxt "dev_soft_verdict"
+msgid "Demote before removing"
+msgstr "Hạ cấp trước khi loại bỏ"
+
+#. Developer tools screen: explanatory subtext under the 'soft verdict' control.
+msgctxt "dev_soft_verdict_detail"
+msgid "Ambiguous verdicts bench an exit instead of tearing down its flows; removal needs sustained evidence or an empty exit"
+msgstr "Các phán quyết không rõ ràng sẽ cho một điểm thoát dự bị thay vì cắt các luồng của nó; loại bỏ cần bằng chứng kéo dài hoặc một điểm thoát trống"
+
+#. Developer tools screen (reliability surface): stall exit control label.
+msgctxt "dev_stall_exit"
+msgid "Stall"
+msgstr "Làm kẹt"
+
 #. Developer page: report line after an exit was stalled.
 msgctxt "dev_stalled_exit"
 msgid "Stalled exit"
 msgstr "Stalled exit"
+
+#. Developer tools screen (reliability surface): standing reserve control label.
+msgctxt "dev_standing_reserve"
+msgid "Keep a spare exit warm"
+msgstr "Giữ sẵn một điểm thoát dự phòng"
+
+#. Developer tools screen: explanatory subtext under the 'standing reserve' control.
+msgctxt "dev_standing_reserve_detail"
+msgid "Size each window one exit beyond its target so a replacement is already connected. Off waits until a loss to backfill"
+msgstr "Mỗi cửa sổ có thêm một điểm thoát so với mục tiêu để luôn có sẵn một điểm thay thế đã kết nối. Tắt sẽ chờ tới khi mất mới bổ sung"
 
 #. Developer page: exit state, benched.
 msgctxt "dev_state_benched"
@@ -1833,6 +2789,51 @@ msgctxt "dev_sync"
 msgid "Sync"
 msgstr "Sync"
 
+#. Developer tools screen (reliability surface): tcp collapse hold control label.
+msgctxt "dev_tcp_collapse_hold"
+msgid "Release stuck retransmits"
+msgstr "Giải phóng gói truyền lại bị kẹt"
+
+#. Developer tools screen: explanatory subtext under the 'tcp collapse hold' control.
+msgctxt "dev_tcp_collapse_hold_detail"
+msgid "How long retransmits are held before one is released. Off waits 30s"
+msgstr "Các gói truyền lại bị giữ bao lâu trước khi một gói được giải phóng. Tắt sẽ chờ 30 giây"
+
+#. Developer tools screen (reliability surface): tcp idle timeout control label.
+msgctxt "dev_tcp_idle_timeout"
+msgid "Longer TCP idle timeout"
+msgstr "Thời gian chờ nhàn rỗi TCP dài hơn"
+
+#. Developer tools screen: explanatory subtext under the 'tcp idle timeout' control.
+msgctxt "dev_tcp_idle_timeout_detail"
+msgid "How long a TCP connection may sit idle. Off uses the UDP bound"
+msgstr "Một kết nối TCP có thể nhàn rỗi bao lâu. Tắt sẽ dùng giới hạn của UDP"
+
+#. Developer tools screen (reliability surface): timing control label.
+msgctxt "dev_timing"
+msgid "Timing"
+msgstr "Thời gian"
+
+#. Developer tools screen (reliability surface): udp idle timeout control label.
+msgctxt "dev_udp_idle_timeout"
+msgid "UDP idle timeout"
+msgstr "Thời gian chờ nhàn rỗi UDP"
+
+#. Developer tools screen: explanatory subtext under the 'udp idle timeout' control.
+msgctxt "dev_udp_idle_timeout_detail"
+msgid "How long a non-TCP flow may sit idle before it is reaped"
+msgstr "Một luồng không phải TCP có thể nhàn rỗi bao lâu trước khi bị dọn"
+
+#. Developer tools screen (reliability surface): udp teardown control label.
+msgctxt "dev_udp_teardown"
+msgid "Signal UDP teardown"
+msgstr "Báo hiệu đóng UDP"
+
+#. Developer tools screen: explanatory subtext under the 'udp teardown' control.
+msgctxt "dev_udp_teardown_detail"
+msgid "Tells DNS and QUIC the path is gone instead of going silent"
+msgstr "Báo cho DNS và QUIC rằng đường đi đã mất thay vì im lặng"
+
 #. Developer page: report line after a stall was cleared on an exit.
 msgctxt "dev_unstalled_exit"
 msgid "Cleared stall on exit"
@@ -1843,10 +2844,65 @@ msgctxt "dev_update_check_failed"
 msgid "The update check failed — see the app log."
 msgstr "The update check failed — see the app log."
 
+#. Developer tools screen (reliability surface): uplink gate control label.
+msgctxt "dev_uplink_gate"
+msgid "Uplink silence gate"
+msgstr "Cổng im lặng đường lên"
+
+#. Developer tools screen: explanatory subtext under the 'uplink gate' control.
+msgctxt "dev_uplink_gate_detail"
+msgid "How long the whole tunnel may be silent before provider verdicts are held as inadmissible. 0 convicts as before"
+msgstr "Toàn bộ đường hầm có thể im lặng bao lâu trước khi các phán quyết về nhà cung cấp bị giữ lại vì không đủ căn cứ. 0 kết luận lỗi như trước"
+
+#. Developer tools screen (reliability surface): verdicts held control label.
+msgctxt "dev_verdicts_held"
+msgid "Verdicts held"
+msgstr "Phán quyết bị giữ"
+
+#. Developer tools screen: explanatory subtext under the 'verdicts held' control.
+msgctxt "dev_verdicts_held_detail"
+msgid "Convictions withheld because the phone's own uplink, not the provider, was silent (uplink / transport)"
+msgstr "Các kết luận lỗi bị giữ lại vì đường lên của chính điện thoại im lặng, không phải nhà cung cấp (đường lên / truyền tải)"
+
+#. Developer tools screen: formatted value readout for 'verdicts held'.
+msgctxt "dev_verdicts_held_value"
+msgid "{0} / {1}"
+msgstr "{0} / {1}"
+
+#. Developer tools screen (reliability surface): worst loss control label.
+msgctxt "dev_worst_loss"
+msgid "Worst single failure"
+msgstr "Sự cố đơn lẻ tệ nhất"
+
+#. Developer tools screen: explanatory subtext under the 'worst loss' control.
+msgctxt "dev_worst_loss_detail"
+msgid "The one the user actually feels"
+msgstr "Sự cố mà người dùng thật sự cảm nhận được"
+
+#. Developer tools screen: formatted value readout for 'worst loss'.
+msgctxt "dev_worst_loss_value"
+msgid "{} connections"
+msgstr "{} kết nối"
+
 #. Developer page: value of the worst single failure, {count} connections.
 msgctxt "dev_worst_single_failure_value"
 msgid "{} connections"
 msgstr "{} connections"
+
+#. Developer tools screen: developer.
+msgctxt "developer"
+msgid "Developer"
+msgstr "Nhà phát triển"
+
+#. Developer tools screen: developer description.
+msgctxt "developer_description"
+msgid "Tools for diagnosing connection freezes. These act on the live connection."
+msgstr "Công cụ chẩn đoán kết nối bị treo. Chúng tác động lên kết nối đang hoạt động."
+
+#. Developer tools screen: developer disconnected.
+msgctxt "developer_disconnected"
+msgid "Connect to use these tools."
+msgstr "Hãy kết nối để dùng các công cụ này."
 
 #. device
 msgctxt "device"
@@ -2018,6 +3074,76 @@ msgctxt "earnings"
 msgid "Earnings"
 msgstr "Thu nhập"
 
+#. Placeholder of the manual Bittensor address field on the Earnings page.
+msgctxt "earnings_address_placeholder"
+msgid "Enter a Bittensor address"
+msgstr "Nhập địa chỉ Bittensor"
+
+#. Button on the Earnings page that starts connecting a different Bittensor wallet.
+msgctxt "earnings_change_wallet"
+msgid "Change wallet"
+msgstr "Đổi ví"
+
+#. Progress text while a claim transaction is being sent.
+msgctxt "earnings_claim_sending"
+msgid "Sending…"
+msgstr "Đang gửi…"
+
+#. Shown in place of the unclaimed figure when the app has no device session to read the chain with.
+msgctxt "earnings_claims_need_session"
+msgid "Claims load from the chain once the app has a session. Press Connect first."
+msgstr "Thông tin nhận được tải từ chuỗi khi ứng dụng có phiên. Hãy nhấn Kết nối trước."
+
+#. Button that copies an address to the clipboard.
+msgctxt "earnings_copy_address"
+msgid "Copy address"
+msgstr "Sao chép địa chỉ"
+
+#. Column header of the per-epoch history table: the date the epoch ended.
+msgctxt "earnings_date_column"
+msgid "Date"
+msgstr "Ngày"
+
+#. Column header of the per-epoch history table.
+msgctxt "earnings_epoch_column"
+msgid "Epoch"
+msgstr "Epoch"
+
+#. Label of the gas key's TAO balance in the claim dialog.
+msgctxt "earnings_gas_balance"
+msgid "Gas balance"
+msgstr "Số dư gas"
+
+#. Title of the Earnings destination's third pane: own rank, multipliers and reliability.
+msgctxt "earnings_network_pane_title"
+msgid "Your network"
+msgstr "Mạng của bạn"
+
+#. Column header of the per-epoch history table: points earned in the epoch.
+msgctxt "earnings_points_column"
+msgid "Points"
+msgstr "Điểm"
+
+#. Column header of the per-epoch history table: the network's share of the block.
+msgctxt "earnings_share_column"
+msgid "Share"
+msgstr "Phần chia"
+
+#. Column header of the per-epoch history table: the claim status of the epoch's alpha.
+msgctxt "earnings_status_column"
+msgid "Status"
+msgstr "Trạng thái"
+
+#. Link that opens a claim transaction in the block explorer.
+msgctxt "earnings_view_transaction"
+msgid "View transaction"
+msgstr "Xem giao dịch"
+
+#. Error when the wallet that signed the connect challenge is not the address the user entered.
+msgctxt "earnings_wallet_mismatch"
+msgid "The wallet that signed is not the address you entered."
+msgstr "Ví đã ký không phải là địa chỉ bạn đã nhập."
+
 #. device
 msgctxt "edit_device_name"
 msgid "Edit device name"
@@ -2062,6 +3188,11 @@ msgstr "Lý do khác"
 msgctxt "email_e4_reason_trust"
 msgid "I'm not sure I trust a VPN"
 msgstr "Tôi không chắc mình tin VPN"
+
+#. Settings: label before the support email address link.
+msgctxt "email_support_at"
+msgid "Email support at"
+msgstr "Gửi email cho bộ phận hỗ trợ tại"
 
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
@@ -2138,6 +3269,16 @@ msgctxt "emoji_tag_shuffle"
 msgid "Suggest another"
 msgstr "Gợi ý khác"
 
+#. Section header of the per-transport enable toggles shown when the transport mode is Auto.
+msgctxt "enabled_under_auto"
+msgid "Enabled under Auto"
+msgstr "Bật trong chế độ Tự động"
+
+#. Footer of the Auto transports section explaining the fixed preference order.
+msgctxt "enabled_under_auto_footer"
+msgid "Listed in preference order: H3 and H1 first, then whodis, then whodis pump. The order is fixed. At least one transport stays enabled."
+msgstr "Liệt kê theo thứ tự ưu tiên: H3 và H1 trước, rồi whodis, rồi whodis pump. Thứ tự là cố định. Luôn có ít nhất một phương thức truyền tải được bật."
+
 #. Call to action
 msgctxt "enjoying_urnetwork"
 msgid "Enjoying URnetwork?"
@@ -2167,6 +3308,11 @@ msgctxt "enter_a_solana_usdc_wallet_address"
 msgid "Enter a Solana USDC wallet address"
 msgstr "Nhập địa chỉ ví USDC trên Solana"
 
+#. Fallback link to paste an ss58 address.
+msgctxt "enter_address_manually"
+msgid "Enter address manually"
+msgstr "Nhập địa chỉ thủ công"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "enter_balance_code"
 msgid "Enter balance code"
@@ -2186,6 +3332,41 @@ msgstr "Nhập mã giới thiệu mạng"
 msgctxt "enter_urnetwork"
 msgid "Enter URnetwork"
 msgstr "Vào URnetwork"
+
+#. History table column: the epoch number.
+msgctxt "epoch_column_epoch_linux"
+msgid "Epoch"
+msgstr "Epoch"
+
+#. History table column: points earned.
+msgctxt "epoch_column_points_linux"
+msgid "Points"
+msgstr "Điểm"
+
+#. History table column: the network's share of the block.
+msgctxt "epoch_column_share_linux"
+msgid "Share of block"
+msgstr "Phần của khối"
+
+#. History table column: the claim status of the epoch's alpha.
+msgctxt "epoch_column_status_linux"
+msgid "Status"
+msgstr "Trạng thái"
+
+#. Label of the per-epoch history list.
+msgctxt "epoch_history"
+msgid "History"
+msgstr "Lịch sử"
+
+#. History row title.
+msgctxt "epoch_row_title"
+msgid "Epoch {}"
+msgstr "Epoch {}"
+
+#. History row: the network's share of the block.
+msgctxt "epoch_share_of_block"
+msgid "{} of block"
+msgstr "{} của khối"
 
 #. Error message displayed in a snackbar when there was an error changing the network name.
 msgctxt "error_changing_network_name"
@@ -2327,6 +3508,111 @@ msgctxt "export_logs"
 msgid "Export Logs"
 msgstr "Xuất nhật ký"
 
+#. Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.
+msgctxt "extender"
+msgid "Extender"
+msgstr "Bộ mở rộng"
+
+#. Extender status when the last activation failed and no family is active. The argument is the error.
+msgctxt "extender_activation_failed"
+msgid "Activation failed: {}"
+msgstr "Kích hoạt thất bại: {}"
+
+#. Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.
+msgctxt "extender_activation_refused"
+msgid "Activation refused: {}"
+msgstr "Kích hoạt bị từ chối: {}"
+
+#. Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.
+msgctxt "extender_active"
+msgid "Active · {}"
+msgstr "Đang hoạt động · {}"
+
+#. Placeholder shown in an empty extender settings field, naming the default value that applies.
+msgctxt "extender_default_value"
+msgid "Default: {}"
+msgstr "Mặc định: {}"
+
+#. Label of the extender DNS name field. Empty means the network space default.
+msgctxt "extender_dns_name"
+msgid "Extender DNS name"
+msgstr "Tên DNS của bộ mở rộng"
+
+#. Label of the manual extender list field: hostnames or IP addresses, one per line.
+msgctxt "extender_hosts"
+msgid "Extender hosts"
+msgstr "Máy chủ bộ mở rộng"
+
+#. Help text under the manual extender list field.
+msgctxt "extender_hosts_hint"
+msgid "One hostname or IP address per line. These are added to the discovered extenders."
+msgstr "Mỗi dòng một tên máy chủ hoặc địa chỉ IP. Chúng sẽ được thêm vào các bộ mở rộng đã phát hiện."
+
+#. Extender status when no carrier could bind. The argument is the carrier errors.
+msgctxt "extender_listen_failed"
+msgid "Could not listen: {}"
+msgstr "Không thể lắng nghe: {}"
+
+#. Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.
+msgctxt "extender_not_providing"
+msgid "Not providing"
+msgstr "Không cung cấp"
+
+#. Extender status when the operator revoked this device's extender key.
+msgctxt "extender_revoked"
+msgid "Revoked by the operator"
+msgstr "Đã bị nhà vận hành thu hồi"
+
+#. Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.
+msgctxt "extender_setting_description"
+msgid "While you are providing, this device also relays for people whose access to the network is blocked, on TCP and UDP 443 and UDP 4053."
+msgstr "Khi bạn đang cung cấp, thiết bị này cũng chuyển tiếp cho những người bị chặn truy cập vào mạng, trên TCP và UDP 443 và UDP 4053."
+
+#. Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.
+msgctxt "extender_setting_up"
+msgid "Setting up"
+msgstr "Đang thiết lập"
+
+#. Title of the extender settings form under account > Extenders.
+msgctxt "extender_settings"
+msgid "Extender settings"
+msgstr "Cài đặt bộ mở rộng"
+
+#. Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.
+msgctxt "extender_settings_next_connect"
+msgid "The tunnel uses new extender settings the next time it connects."
+msgstr "Đường hầm sẽ dùng cài đặt bộ mở rộng mới vào lần kết nối tiếp theo."
+
+#. Confirmation after the extender settings are saved.
+msgctxt "extender_settings_saved"
+msgid "Extender settings saved"
+msgstr "Đã lưu cài đặt bộ mở rộng"
+
+#. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
+msgctxt "extender_start_failed"
+msgid "Could not start: {}"
+msgstr "Không thể khởi động: {}"
+
+#. Title of the section that shows statistics about the extender, directly above the provider statistics section.
+msgctxt "extender_statistics"
+msgid "Extender statistics"
+msgstr "Thống kê bộ mở rộng"
+
+#. Title of the extenders panel in the connect drawer and of the Extenders section under account.
+msgctxt "extenders"
+msgid "Extenders"
+msgstr "Bộ mở rộng"
+
+#. The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.
+msgctxt "extenders_active_of_reserve"
+msgid "{0} of {1}"
+msgstr "{0}/{1}"
+
+#. Shown in the account Extenders section when there is no signed-in device to manage extenders with.
+msgctxt "extenders_no_session"
+msgid "Sign in and connect to manage extenders."
+msgstr "Đăng nhập và kết nối để quản lý bộ mở rộng."
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -2382,6 +3668,11 @@ msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "Hãy cho chúng tôi biết cảm nhận thật của bạn"
 
+#. Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.
+msgctxt "feedback_send_failed"
+msgid "Your feedback wasn't sent. Check your connection and try again."
+msgstr "Phản hồi của bạn chưa được gửi. Hãy kiểm tra kết nối và thử lại."
+
 #. Feedback screen: label of the Send button while the feedback is being sent.
 msgctxt "feedback_sending"
 msgid "Sending…"
@@ -2416,6 +3707,11 @@ msgstr "Miễn phí"
 msgctxt "friends_save_too"
 msgid "Your friends save too -- everyone wins."
 msgstr "Bạn bè của bạn cũng tiết kiệm -- ai cũng có lợi."
+
+#. Label of the gas key row.
+msgctxt "gas_key"
+msgid "Gas key"
+msgstr "Khóa gas"
 
 #. Call to action
 msgctxt "general"
@@ -2459,6 +3755,11 @@ msgctxt "go_back"
 msgid "Go Back"
 msgstr "Quay lại"
 
+#. A label for Google sign-in.
+msgctxt "google"
+msgid "Google"
+msgstr "Google"
+
 #. Login initial
 msgctxt "google_auth_btn_text"
 msgid "Log in with Google"
@@ -2469,6 +3770,27 @@ msgctxt "google_sign_in_method_added"
 msgid "Google sign-in method added"
 msgstr "Đã thêm phương thức đăng nhập Google"
 
+#. Gossip network status: a dial or reconnect is in progress (yellow).
+msgctxt "gossip_connecting"
+msgid "Connecting"
+msgstr "Đang kết nối"
+
+#. The count of extender records and revocations applied from the gossip network or the feed in the last minute.
+msgctxt "gossip_events_per_minute"
+msgid "{} event/min"
+msgid_plural "{} events/min"
+msgstr[0] "{} sự kiện/phút"
+
+#. Label of the gossip network status dot in the extender panel.
+msgctxt "gossip_network"
+msgid "Gossip network"
+msgstr "Mạng gossip"
+
+#. Label of the gossip URL field. Empty means the network space default.
+msgctxt "gossip_url"
+msgid "Gossip URL"
+msgstr "URL gossip"
+
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "got_it"
 msgid "Got it"
@@ -2478,6 +3800,19 @@ msgstr "Đã hiểu"
 msgctxt "guest"
 msgid "Guest"
 msgstr "Khách"
+
+#. Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).
+msgctxt "guest_convert_explanation"
+msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
+msgstr "Thêm email và mật khẩu để đăng nhập vào mạng này. Gói và số dư của mạng vẫn được giữ nguyên."
+
+msgctxt "hash_count"
+msgid "#{}"
+msgstr "#{}"
+
+msgctxt "hash_value"
+msgid "#{}"
+msgstr "#{}"
 
 #. Used in Main/Connect/ConnectView-macOS.swift.
 msgctxt "hide_provider_list"
@@ -2525,10 +3860,36 @@ msgctxt "ignore_battery_optimizations"
 msgid "Ignore battery optimizations"
 msgstr "Bỏ qua tối ưu hóa pin"
 
+#. Button and screen title: import extenders from a QR code, a photo, or pasted text.
+msgctxt "import_extenders"
+msgid "Import extenders"
+msgstr "Nhập bộ mở rộng"
+
+#. Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.
+msgctxt "import_extenders_confirm_settings"
+msgid "Use the extender settings from this code? Extender lookups will use {}."
+msgstr "Dùng cài đặt bộ mở rộng từ mã này? Việc tìm bộ mở rộng sẽ dùng {}."
+
 #. Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.
 msgctxt "import_extenders_control_doh_urls"
 msgid "This code also sets bootstrap DNS-over-HTTPS servers. They will see URnetwork's server lookups: {}"
 msgstr "Mã này cũng đặt các máy chủ DNS-over-HTTPS khởi động. Các máy chủ đó sẽ thấy các lượt tra cứu máy chủ của URnetwork: {}"
+
+#. Error when a share code belongs to another network. The argument is that network's host.
+msgctxt "import_extenders_foreign_host"
+msgid "This code is for {}, not this network. Use extender settings to switch networks."
+msgstr "Mã này dành cho {}, không phải mạng này. Hãy dùng cài đặt bộ mở rộng để chuyển mạng."
+
+#. Confirmation after an import, with the number of extenders added.
+msgctxt "import_extenders_imported"
+msgid "Imported {} extender"
+msgid_plural "Imported {} extenders"
+msgstr[0] "Đã nhập {} bộ mở rộng"
+
+#. Error when the scanned or pasted text is not an extender share code.
+msgctxt "import_extenders_invalid"
+msgid "This code is not an extender share."
+msgstr "Mã này không phải là mã chia sẻ bộ mở rộng."
 
 #. Guest mode overlay
 msgctxt "in_guest_mode"
@@ -2545,6 +3906,11 @@ msgctxt "include_app_description"
 msgid "Only included apps use the tunnel."
 msgstr "Chỉ các ứng dụng được bao gồm mới dùng đường hầm."
 
+#. Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.
+msgctxt "include_extender_settings"
+msgid "Include extender settings"
+msgstr "Kèm cài đặt bộ mở rộng"
+
 #. App split rules: rule choice routing the app through the VPN.
 msgctxt "include_in_vpn"
 msgid "Include in VPN"
@@ -2554,6 +3920,11 @@ msgstr "Đưa vào VPN"
 msgctxt "included"
 msgid "Included"
 msgstr "Đã bao gồm"
+
+#. Line under the annual plan card. The number of days is the free trial length.
+msgctxt "includes_free_trial_days"
+msgid "Includes {} day free trial"
+msgstr "Bao gồm {} ngày dùng thử miễn phí"
 
 #. Instant account: explains that no email, phone or password is needed.
 msgctxt "instant_account_explainer"
@@ -2620,6 +3991,66 @@ msgctxt "insufficient_funds"
 msgid "Insufficient funds"
 msgstr "Không đủ tiền"
 
+#. How to add the quick connect control on iOS (no add-control API).
+msgctxt "intro_control_manual_ios"
+msgid "Open Control Center, tap +, then Add a Control, and pick URnetwork."
+msgstr "Mở Trung tâm điều khiển, chạm +, rồi Thêm điều khiển, và chọn URnetwork."
+
+#. How to add the quick connect control on macOS.
+msgctxt "intro_control_manual_macos"
+msgid "Open Control Center, choose Edit Controls, and add URnetwork."
+msgstr "Mở Trung tâm điều khiển, chọn Sửa điều khiển và thêm URnetwork."
+
+#. Detail line of the last onboarding page.
+msgctxt "intro_quick_connect_details"
+msgid "Turn URnetwork on and off from Quick Settings, and keep an eye on it from your home screen."
+msgstr "Bật và tắt URnetwork từ Cài đặt nhanh, và theo dõi nó từ màn hình chính."
+
+#. Detail line of the last onboarding page on iOS/macOS (Control Center instead of Quick Settings).
+msgctxt "intro_quick_connect_details_apple"
+msgid "Turn URnetwork on and off from Control Center, and keep an eye on it from your Home Screen."
+msgstr "Bật và tắt URnetwork từ Trung tâm điều khiển, và theo dõi nó từ Màn hình chính."
+
+#. Title of the last onboarding page: the quick connect tile and the home screen widgets.
+msgctxt "intro_quick_connect_title"
+msgid "Connect in one tap"
+msgstr "Kết nối chỉ với một chạm"
+
+#. Label shown on the last onboarding page once the quick connect tile is in Quick Settings.
+msgctxt "intro_quick_tile_added"
+msgid "Added to Quick Settings"
+msgstr "Đã thêm vào Cài đặt nhanh"
+
+#. Manual steps for adding the quick connect tile on Android versions without the system add-tile request (before Android 13).
+msgctxt "intro_quick_tile_manual"
+msgid "Open Quick Settings, tap the pencil, and drag URnetwork into place."
+msgstr "Mở Cài đặt nhanh, chạm vào biểu tượng bút chì và kéo URnetwork vào vị trí."
+
+#. Tagline under 'Welcome to URnetwork' on the first onboarding page. Replaces 'URnetwork is the most local and most private network on the planet.'
+msgctxt "intro_verifiable_encryption"
+msgid "Encryption for everyday use."
+msgstr "Mã hóa cho mọi ngày."
+
+#. Manual steps for adding widgets on launchers without the pin dialog.
+msgctxt "intro_widgets_manual"
+msgid "Long-press your home screen, choose Widgets, and pick URnetwork."
+msgstr "Nhấn giữ màn hình chính, chọn Tiện ích và chọn URnetwork."
+
+#. How to add a Home Screen widget on iOS (no pin-widget API).
+msgctxt "intro_widgets_manual_ios"
+msgid "Long-press the Home Screen, tap +, search URnetwork, and add a widget."
+msgstr "Nhấn giữ Màn hình chính, chạm +, tìm URnetwork và thêm một tiện ích."
+
+#. How to add a desktop widget on macOS.
+msgctxt "intro_widgets_manual_macos"
+msgid "Open the widget gallery from Notification Center, search URnetwork, and drag a widget to the desktop."
+msgstr "Mở thư viện tiện ích từ Trung tâm thông báo, tìm URnetwork và kéo một tiện ích ra màn hình nền."
+
+#. Hint under the widget previews on the last onboarding page: tapping a preview asks the launcher to add that widget.
+msgctxt "intro_widgets_tap_to_add"
+msgid "Tap a widget to add it to your home screen."
+msgstr "Chạm vào một tiện ích để thêm nó vào màn hình chính."
+
 #. Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
@@ -2635,6 +4066,16 @@ msgctxt "invalid_referral_code_please_try_again"
 msgid "Invalid referral code. Please try again."
 msgstr "Mã giới thiệu không hợp lệ. Vui lòng thử lại."
 
+#. Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).
+msgctxt "invalid_solana_address"
+msgid "That is not a valid Solana address."
+msgstr "Đó không phải là địa chỉ Solana hợp lệ."
+
+#. Validation error for a coldkey address.
+msgctxt "invalid_ss58_address"
+msgid "That is not a valid Bittensor address."
+msgstr "Đó không phải là địa chỉ Bittensor hợp lệ."
+
 #. dns settings
 msgctxt "ip_address"
 msgid "IP address"
@@ -2646,10 +4087,57 @@ msgid "{} IP"
 msgid_plural "{} IPs"
 msgstr[0] "{} IP"
 
+#. IP versions: the tooltip of the address-family tag column in the provider locations sheet (windows, linux). It also titled the connect drawer's IP version histogram before that became the Dualstack / IPv4 / IPv6 status row.
+msgctxt "ip_families"
+msgid "IP versions"
+msgstr "Phiên bản IP"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.
+msgctxt "ip_family_both"
+msgid "Both"
+msgstr "Cả hai"
+
+#. Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.
+msgctxt "ip_family_connected_count"
+msgid "{} connected"
+msgid_plural "{} connected"
+msgstr[0] "{} đã kết nối"
+
+#. Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.
+msgctxt "ip_family_connecting_count"
+msgid "{} connecting"
+msgid_plural "{} connecting"
+msgstr[0] "{} đang kết nối"
+
+#. Status line of one column of the IP version status row in the connect drawer, when no provider of that family (dualstack, IPv4 or IPv6) is connected or connecting. Lowercase, under the family label.
+msgctxt "ip_family_disconnected"
+msgid "disconnected"
+msgstr "đã ngắt kết nối"
+
+#. Column label of the IP version status row in the connect drawer, for providers that carry both IPv4 and IPv6. Set in the pixel display face beside the IPv4 and IPv6 labels, so keep it short.
+msgctxt "ip_family_dualstack"
+msgid "Dualstack"
+msgstr "Ngăn xếp kép"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.
+msgctxt "ip_family_v4"
+msgid "v4"
+msgstr "v4"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.
+msgctxt "ip_family_v6"
+msgid "v6"
+msgstr "v6"
+
 #. Label for a list of IPv4 addresses.
 msgctxt "ipv4"
 msgid "IPv4"
 msgstr "IPv4"
+
+#. Accessibility label for a provider that carries both IPv4 and IPv6 traffic.
+msgctxt "ipv4_and_ipv6"
+msgid "IPv4 and IPv6"
+msgstr "IPv4 và IPv6"
 
 #. Label for the IPv6 list of DNS servers.
 msgctxt "ipv6"
@@ -2700,6 +4188,21 @@ msgstr "chú giải"
 msgctxt "kill_switch"
 msgid "Kill switch"
 msgstr "Kill switch"
+
+#. Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.
+msgctxt "kill_switch_exception"
+msgid "Kill switch exception"
+msgstr "Ngoại lệ của Kill switch"
+
+#. Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.
+msgctxt "kill_switch_exception_smtp_detail"
+msgid "While the VPN is connected, IPv6 is routed through URnetwork like IPv4. Outbound SMTP on TCP port 25 bypasses the VPN, even when the kill switch is on, which may expose your local public IP to those mail servers. SMTP on ports 465 and 587 stays in the VPN and must establish TLS."
+msgstr "Khi VPN đã kết nối, IPv6 được định tuyến qua URnetwork giống như IPv4. SMTP gửi đi qua cổng TCP 25 sẽ đi vòng qua VPN, ngay cả khi Kill switch đang bật, điều này có thể làm lộ IP công khai cục bộ của bạn với các máy chủ thư đó. SMTP trên cổng 465 và 587 vẫn ở trong VPN và phải thiết lập TLS."
+
+#. Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.
+msgctxt "kill_switch_exception_unrecognized_encrypted"
+msgid "When the kill switch is off, traffic that URnetwork safety rules keep off the network, such as unrecognized encrypted protocols, bypasses the VPN and uses your local public IP. With the kill switch on, that traffic is blocked."
+msgstr "Khi Kill switch tắt, lưu lượng bị các quy tắc an toàn của URnetwork giữ ngoài mạng, chẳng hạn các giao thức mã hóa không nhận diện được, sẽ đi vòng qua VPN và dùng IP công khai cục bộ của bạn. Khi Kill switch bật, lưu lượng đó bị chặn."
 
 #. Button text for entering the one-time authentication code and entering the app
 msgctxt "launch"
@@ -2780,6 +4283,11 @@ msgstr "Phần mềm nguồn mở"
 msgctxt "link_another_way_to_sign_in_to"
 msgid "Link another way to sign in to your account."
 msgstr "Liên kết một cách khác để đăng nhập vào tài khoản của bạn."
+
+#. A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.
+msgctxt "load_failed"
+msgid "Couldn't load. Check your connection and try again."
+msgstr "Không thể tải. Hãy kiểm tra kết nối và thử lại."
 
 #. Used in ContentView.swift.
 msgctxt "loading"
@@ -3090,6 +4598,11 @@ msgctxt "multiplier"
 msgid "Multiplier"
 msgstr "Hệ số nhân"
 
+#. A progress bar that shows how many friends you've invited. The first argument is the number of friends you've invited. The second argument is the maximum number of friends you can invite.
+msgctxt "n_20"
+msgid "{}/20"
+msgstr "{}/20"
+
 #. A label that shows the daily data usage from referrals. The argument is the number of referrals.
 msgctxt "n_gib_day"
 msgid "+{} GiB/Day"
@@ -3322,6 +4835,11 @@ msgctxt "no_blocked_locations"
 msgid "No blocked locations"
 msgstr "Không có vị trí bị chặn"
 
+#. Empty state of the unclaimed tile once a wallet is connected.
+msgctxt "no_claims_yet_linux"
+msgid "Nothing to claim yet. Alpha accrues from the next finalized epoch."
+msgstr "Chưa có gì để nhận. Alpha được tích lũy từ epoch hoàn tất tiếp theo."
+
 #. Add sign-in method sheet (android): no installed wallet app can sign the challenge.
 msgctxt "no_compatible_wallet_app_found"
 msgid "No compatible wallet app found on this device."
@@ -3361,6 +4879,16 @@ msgstr "Không tìm thấy tệp nhật ký"
 msgctxt "no_open_contracts"
 msgid "No open contracts"
 msgstr "Không có hợp đồng đang mở"
+
+#. Empty state of the points history.
+msgctxt "no_points_yet"
+msgid "No epochs yet. Points appear after your first finalized epoch."
+msgstr "Chưa có epoch nào. Điểm sẽ xuất hiện sau epoch hoàn tất đầu tiên của bạn."
+
+#. Restore-purchases outcome: the sync succeeded and there is genuinely nothing to restore (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "no_previous_purchases_were_found"
+msgid "No previous purchases were found."
+msgstr "Không tìm thấy giao dịch mua trước đây."
 
 #. Locations List
 msgctxt "no_providers_found"
@@ -3480,6 +5008,11 @@ msgctxt "on"
 msgid "On"
 msgstr "Bật"
 
+#. Accessibility description of the onboarding step bubbles: the current step and the total.
+msgctxt "onboarding_step_of"
+msgid "Step {0} of {1}"
+msgstr "Bước {0}/{1}"
+
 #. Call to action
 msgctxt "one_gib_per_day"
 msgid "1 GiB/Day"
@@ -3520,6 +5053,11 @@ msgctxt "other"
 msgid "Other"
 msgstr "Khác"
 
+#. The one USDC mention: the Solana subscription payment note.
+msgctxt "paid_in_usdc_on_solana"
+msgid "Paid in USDC on Solana."
+msgstr "Thanh toán bằng USDC trên Solana."
+
 #. Call to action
 msgctxt "participate"
 msgid "Participate"
@@ -3555,6 +5093,11 @@ msgctxt "password_support_txt"
 msgid "Password must be at least 12 characters"
 msgstr "Mật khẩu phải có ít nhất 12 ký tự"
 
+#. Button and field label: paste the text form of a share code.
+msgctxt "paste_share_text"
+msgid "Paste share text"
+msgstr "Dán văn bản chia sẻ"
+
 #. A placeholder text for the seedphrase field.
 msgctxt "paste_your_24_word_seedphrase_here"
 msgid "Paste your 24-word seedphrase here"
@@ -3570,10 +5113,35 @@ msgctxt "pay_with_stripe"
 msgid "Join with Stripe"
 msgstr "Tham gia qua Stripe"
 
+#. Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.
+msgctxt "payment_confirmation_delayed"
+msgid "Confirmation is taking longer than expected. Your plan will update automatically once it's confirmed — there's no need to buy again."
+msgstr "Việc xác nhận đang lâu hơn dự kiến. Gói của bạn sẽ tự động cập nhật ngay khi được xác nhận — không cần mua lại."
+
+#. Body of the post-purchase overlay while the server has not yet confirmed the subscription. Replaces the optimistic 'You're premium.' claim until currentSubscription actually confirms.
+msgctxt "payment_confirmation_processing"
+msgid "We're confirming your payment now. Your plan will update automatically — you don't need to do anything."
+msgstr "Chúng tôi đang xác nhận thanh toán của bạn. Gói của bạn sẽ tự động cập nhật — bạn không cần làm gì cả."
+
+#. Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.
+msgctxt "payment_not_completed"
+msgid "Your payment could not be completed."
+msgstr "Không thể hoàn tất thanh toán của bạn."
+
 #. Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.
 msgctxt "payment_problem"
 msgid "Payment problem"
 msgstr "Sự cố thanh toán"
+
+#. Title of the post-purchase screen while the server has not yet confirmed the entitlement (Shared/Views/PurchaseSuccessView.swift). StoreKit took the payment; the confirmation poll is still running — the copy must not claim premium yet.
+msgctxt "payment_received"
+msgid "Payment received."
+msgstr "Đã nhận thanh toán."
+
+#. Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.
+msgctxt "payment_received_title"
+msgid "Payment received"
+msgstr "Đã nhận thanh toán"
 
 #. Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.
 msgctxt "payout_wallet_updated"
@@ -3665,6 +5233,16 @@ msgctxt "plan_monthly_price"
 msgid "$5/month"
 msgstr "$5/month"
 
+#. Monthly plan card label: the store-formatted price per month.
+msgctxt "plan_price_per_month"
+msgid "{}/month"
+msgstr "{}/tháng"
+
+#. Yearly plan card label: the store-formatted price per year.
+msgctxt "plan_price_per_year"
+msgid "{}/year"
+msgstr "{}/năm"
+
 #. Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.
 msgctxt "plan_save_percent"
 msgid "Save {}%"
@@ -3721,6 +5299,11 @@ msgctxt "points"
 msgid "Points"
 msgstr "Điểm"
 
+#. Headline label of the earnings screen.
+msgctxt "points_earned"
+msgid "Points earned"
+msgstr "Điểm đã kiếm được"
+
 #. Points leaderboard: the explanation under the list header.
 msgctxt "points_leaderboard_description"
 msgid "All-time points. A block is one finalized epoch; the streak counts consecutive blocks with points, ending at the latest one."
@@ -3735,6 +5318,11 @@ msgstr "Chưa có ai trên bảng xếp hạng điểm."
 msgctxt "points_leaderboard_private_hint"
 msgid "Your network appears as Anonymous until you turn this on."
 msgstr "Mạng của bạn hiển thị là Ẩn danh cho đến khi bạn bật tùy chọn này."
+
+#. Points count with unit for history rows.
+msgctxt "points_short"
+msgid "{} pts"
+msgstr "{} điểm"
 
 #. Connect drawer: post quantum encryption toggle label.
 msgctxt "post_quantum_encryption"
@@ -3765,6 +5353,26 @@ msgstr "Mở cài đặt mạng"
 msgctxt "private_dns_strict_notice"
 msgid "Private DNS is set to {}. Android sends lookups there directly instead of through URnetwork. If sites stop loading, set Private DNS to Automatic."
 msgstr "DNS riêng tư được đặt thành {}. Android gửi truy vấn trực tiếp đến đó thay vì qua URnetwork. Nếu các trang web ngừng tải, hãy đặt DNS riêng tư thành Tự động."
+
+#. Title of the advanced private extender fields: one extender with a secret that replaces discovery.
+msgctxt "private_extender"
+msgid "Private extender"
+msgstr "Bộ mở rộng riêng"
+
+#. Help text under the private extender fields.
+msgctxt "private_extender_hint"
+msgid "A private extender replaces every discovered extender. Leave it empty to use discovery."
+msgstr "Bộ mở rộng riêng sẽ thay thế mọi bộ mở rộng đã phát hiện. Để trống để dùng tính năng tự phát hiện."
+
+#. Label of the private extender IP address field.
+msgctxt "private_extender_ip"
+msgid "IP address"
+msgstr "Địa chỉ IP"
+
+#. Label of the private extender secret field.
+msgctxt "private_extender_secret"
+msgid "Secret"
+msgstr "Khóa bí mật"
 
 #. Network name when privacy is enabled
 msgctxt "private_network"
@@ -3806,10 +5414,40 @@ msgctxt "provide"
 msgid "Provide"
 msgstr "Cung cấp"
 
+#. First bullet on the onboarding Contribute bandwidth page.
+msgctxt "provide_intro_bullet_devices"
+msgid "Allow your devices to share internet with each other"
+msgstr "Cho phép các thiết bị của bạn chia sẻ internet với nhau"
+
+#. Second bullet on the onboarding Contribute bandwidth page, with a heart.
+msgctxt "provide_intro_bullet_people"
+msgid "Share your internet with other people ❤️"
+msgstr "Chia sẻ internet của bạn với người khác ❤️"
+
+#. Lead line above the two bullets on the onboarding Contribute bandwidth page.
+msgctxt "provide_intro_lead"
+msgid "Your choice, completely optional:"
+msgstr "Tùy bạn, hoàn toàn không bắt buộc:"
+
 #. Call to action
 msgctxt "provide_mode"
 msgid "Provide mode"
 msgstr "Chế độ cung cấp"
+
+#. One-line explanation of the Always provide mode in the onboarding Contribute bandwidth picker.
+msgctxt "provide_mode_always_description"
+msgid "Provides to everyone whenever the app is running."
+msgstr "Cung cấp cho mọi người bất cứ khi nào ứng dụng đang chạy."
+
+#. One-line explanation of the Auto provide mode in the onboarding Contribute bandwidth picker: public providing only while connected, same-network peers otherwise.
+msgctxt "provide_mode_auto_description"
+msgid "Provides to everyone while you're connected, otherwise only to your own devices."
+msgstr "Cung cấp cho mọi người khi bạn đang kết nối, còn lại chỉ cho thiết bị của chính bạn."
+
+#. One-line explanation of the Network provide mode in the onboarding Contribute bandwidth picker: the private provider for the network's own devices.
+msgctxt "provide_mode_network_description"
+msgid "Provides only to your own network's devices."
+msgstr "Chỉ cung cấp cho các thiết bị trong mạng của chính bạn."
 
 #. Settings, under the cellular provide toggle: the label of the choice of what providing does while the device runs on battery.
 msgctxt "provide_power_mode"
@@ -4163,6 +5801,11 @@ msgctxt "provider_status_why"
 msgid "Why?"
 msgstr "Tại sao?"
 
+#. Title of the transport settings editor for the provider transport policy.
+msgctxt "provider_transports"
+msgid "Provider transports"
+msgstr "Phương thức truyền tải của nhà cung cấp"
+
 #. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "providing"
 msgid "Providing"
@@ -4189,6 +5832,21 @@ msgctxt "purchase_confirmation_timeout"
 msgid "We couldn't confirm your purchase yet. If you completed checkout, your plan will update automatically in a few minutes — there's no need to buy again."
 msgstr "Chúng tôi chưa thể xác nhận giao dịch mua của bạn. Nếu bạn đã hoàn tất thanh toán, kế hoạch của bạn sẽ tự động cập nhật sau vài phút — không cần mua lại."
 
+#. Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).
+msgctxt "purchase_could_not_be_verified"
+msgid "This purchase could not be verified with Google Play, so it can't be applied to your account. If you were charged and your plan doesn't update, please contact support."
+msgstr "Không thể xác minh giao dịch mua này với Google Play nên không thể áp dụng cho tài khoản của bạn. Nếu bạn đã bị tính phí và gói không cập nhật, vui lòng liên hệ hỗ trợ."
+
+#. Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "purchase_found_confirming_your_plan"
+msgid "Purchase found. Confirming your plan — it will update automatically."
+msgstr "Đã tìm thấy giao dịch mua. Đang xác nhận gói của bạn — gói sẽ tự động cập nhật."
+
+#. Error when a chosen photo or image file holds no QR code.
+msgctxt "qr_code_not_found"
+msgid "No QR code was found in the image."
+msgstr "Không tìm thấy mã QR nào trong hình ảnh."
+
 #. Tray menu item that exits the app (tears the tunnel down).
 msgctxt "quit"
 msgid "Quit"
@@ -4203,6 +5861,11 @@ msgstr "Thoát URnetwork"
 msgctxt "ranked_networks_count"
 msgid "{} ranked networks"
 msgstr "{} mạng được xếp hạng"
+
+#. Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.
+msgctxt "reads_per_second"
+msgid "reads/s"
+msgstr "lượt đọc/giây"
 
 #. Call to action
 msgctxt "ready_to_connect"
@@ -4365,6 +6028,21 @@ msgstr "Mạng giới thiệu"
 msgctxt "referral_network_updated"
 msgid "Referral network updated"
 msgstr "Đã cập nhật mạng giới thiệu"
+
+#. Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).
+msgctxt "referral_panel_detail"
+msgid "Every verified referral gives each of you {} GiB/day for free, for life."
+msgstr "Mỗi lượt giới thiệu đã xác minh mang lại cho cả hai bạn {} GiB/ngày miễn phí, trọn đời."
+
+#. Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.
+msgctxt "referral_panel_heading"
+msgid "Refer a friend and you both get free data"
+msgstr "Giới thiệu bạn bè và cả hai cùng nhận dữ liệu miễn phí"
+
+#. Status line of the gold referral panel while the network has no referral yet.
+msgctxt "referral_panel_none"
+msgid "No friends yet. Share your code and watch the crown appear. 👑"
+msgstr "Chưa có bạn bè nào. Chia sẻ mã của bạn và xem vương miện xuất hiện. 👑"
 
 #. Referrals screen: label of the points a network earned from its referrals (the payout_linked_account points), shown next to the total referral count.
 msgctxt "referral_points"
@@ -4541,10 +6219,20 @@ msgctxt "resolvers"
 msgid "Resolvers"
 msgstr "Bộ phân giải"
 
+#. Button that resets the transport settings draft to the SDK default policy.
+msgctxt "restore_default_transports"
+msgid "Restore default transports"
+msgstr "Khôi phục phương thức truyền tải mặc định"
+
 #. dns settings
 msgctxt "restore_most_secure_settings"
 msgid "Restore to most secure settings"
 msgstr "Khôi phục cài đặt an toàn nhất"
+
+#. Action label that resyncs App Store purchases (AppStore.sync + entitlement scan). Shown in Settings and in the upgrade flow's failure states (Main/Account/Settings/SettingsForm-iOS.swift, SettingsForm-macOS.swift, Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/PurchaseSuccessView.swift, Shared/Views/Introduction/IntroductionView.swift).
+msgctxt "restore_purchases"
+msgid "Restore purchases"
+msgstr "Khôi phục giao dịch mua"
 
 #. Retry action label
 msgctxt "retry"
@@ -4561,20 +6249,45 @@ msgctxt "review_urnetwork"
 msgid "Review URnetwork"
 msgstr "Đánh giá URnetwork"
 
+#. Right stop label of the onboarding route line the anonymized member travels along.
+msgctxt "route_internet"
+msgid "Internet"
+msgstr "Internet"
+
 #. Call to action
 msgctxt "route_local"
 msgid "Allow local traffic when disconnected"
 msgstr "Cho phép lưu lượng cục bộ khi ngắt kết nối"
+
+#. Left stop label of the onboarding route line the anonymized member travels along (you -> URnetwork -> internet).
+msgctxt "route_you"
+msgid "You"
+msgstr "Bạn"
 
 #. A heading for the pinned split rules.
 msgctxt "rules"
 msgid "Rules"
 msgstr "Quy tắc"
 
+#. A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.
+msgctxt "safety_rule"
+msgid "Safety rule"
+msgstr "Quy tắc an toàn"
+
+#. Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.
+msgctxt "safety_rule_detail"
+msgid "URnetwork safety rules keep this traffic off the network, for example an encrypted protocol it cannot recognize. A local split rule sends it outside the VPN from your own IP."
+msgstr "Các quy tắc an toàn của URnetwork giữ lưu lượng này ngoài mạng, ví dụ một giao thức mã hóa mà chúng không nhận diện được. Một quy tắc tách luồng cục bộ sẽ gửi nó ra ngoài VPN từ IP của chính bạn."
+
 #. Profile
 msgctxt "save"
 msgid "Save"
 msgstr "Lưu"
+
+#. Line under the yearly plan's price: the saving against paying monthly.
+msgctxt "save_33_percent"
+msgid "Save 33%"
+msgstr "Tiết kiệm 33%"
 
 #. Call to action
 msgctxt "save_logs"
@@ -4590,6 +6303,11 @@ msgstr "Lưu nhật ký"
 msgctxt "saved_as"
 msgid "Saved as {}"
 msgstr "Đã lưu thành {}"
+
+#. Button: open the camera to scan a QR code.
+msgctxt "scan_qr_code"
+msgid "Scan QR code"
+msgstr "Quét mã QR"
 
 #. App split rules: placeholder in the search field that filters the installed apps by name or package id.
 msgctxt "search_apps_placeholder"
@@ -4732,6 +6450,11 @@ msgctxt "send"
 msgid "Send"
 msgstr "Gửi"
 
+#. Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.
+msgctxt "send_feedback_contact"
+msgid "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
+msgstr "Gửi phản hồi trực tiếp cho chúng tôi, gửi email tới {0}, hoặc tham gia {1} của chúng tôi để được hỗ trợ trực tiếp."
+
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"
@@ -4746,6 +6469,11 @@ msgstr "Gửi liên kết đặt lại"
 msgctxt "send_reset_link_2"
 msgid "Send reset link"
 msgstr "Gửi liên kết đặt lại"
+
+#. Instruction to fund the gas key.
+msgctxt "send_tao_to_mirror"
+msgid "Send about {0} TAO to {1} to cover gas."
+msgstr "Gửi khoảng {0} TAO tới {1} để trả gas."
 
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "send_us_your_feedback_directly_or_join_our"
@@ -4777,10 +6505,51 @@ msgctxt "settings"
 msgid "Settings"
 msgstr "Cài đặt"
 
+#. Settings row that asks the system to add the Quick Settings tile (Android 13+).
+msgctxt "settings_add_quick_tile"
+msgid "Add quick connect tile"
+msgstr "Thêm ô kết nối nhanh"
+
+#. Description under the add-tile settings row.
+msgctxt "settings_add_quick_tile_description"
+msgid "Connect and disconnect from the Quick Settings panel and the lock screen."
+msgstr "Kết nối và ngắt kết nối từ bảng Cài đặt nhanh và màn hình khóa."
+
+#. Settings row that opens the widget picker to pin the app's widgets.
+msgctxt "settings_add_widgets"
+msgid "Add Home Screen widgets"
+msgstr "Thêm tiện ích vào Màn hình chính"
+
+#. Description under the add-widgets settings row.
+msgctxt "settings_add_widgets_description"
+msgid "Quick connect, transfer balance, providers on the globe and your top contracts."
+msgstr "Kết nối nhanh, số dư dữ liệu, nhà cung cấp trên quả địa cầu và các hợp đồng hàng đầu của bạn."
+
 #. Call to action
 msgctxt "share"
 msgid "Share"
 msgstr "Chia sẻ"
+
+#. Button and screen title: share the known extenders as a QR code.
+msgctxt "share_extenders"
+msgid "Share extenders"
+msgstr "Chia sẻ bộ mở rộng"
+
+#. How many extenders the share code carries.
+msgctxt "share_extenders_count"
+msgid "{} extender"
+msgid_plural "{} extenders"
+msgstr[0] "{} bộ mở rộng"
+
+#. Help text on the share screen under the QR code.
+msgctxt "share_extenders_hint"
+msgid "Scan this code with another URnetwork app to share these extenders."
+msgstr "Quét mã này bằng một ứng dụng URnetwork khác để chia sẻ các bộ mở rộng này."
+
+#. Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.
+msgctxt "share_extenders_too_large"
+msgid "The share code is too large for a QR code. Copy the share text instead."
+msgstr "Mã chia sẻ quá lớn để làm mã QR. Hãy sao chép văn bản chia sẻ thay thế."
 
 #. Call to action
 msgctxt "share_logs"
@@ -4792,10 +6561,25 @@ msgctxt "share_logs_2"
 msgid "Share Logs"
 msgstr "Chia sẻ nhật ký"
 
+#. Confirmation after the share text of an extender code was copied to the clipboard.
+msgctxt "share_text_copied"
+msgid "Share text copied"
+msgstr "Đã sao chép văn bản chia sẻ"
+
 #. Used in Shared/Views/AccountMenu.swift.
 msgctxt "share_urnetwork"
 msgid "Share URnetwork"
 msgstr "Chia sẻ URnetwork"
+
+#. Long label of the launcher shortcut that connects the VPN.
+msgctxt "shortcut_connect_long"
+msgid "Connect to URnetwork"
+msgstr "Kết nối với URnetwork"
+
+#. Long label of the launcher shortcut that disconnects the VPN.
+msgctxt "shortcut_disconnect_long"
+msgid "Disconnect from URnetwork"
+msgstr "Ngắt kết nối khỏi URnetwork"
 
 #. Used in Main/Connect/ConnectView-macOS.swift.
 msgctxt "show"
@@ -4806,6 +6590,11 @@ msgstr "Hiện"
 msgctxt "show_icon_when_connected"
 msgid "Show UR icon when connected"
 msgstr "Hiện biểu tượng UR khi đã kết nối"
+
+#. Accessibility label for the kill switch exception information button.
+msgctxt "show_kill_switch_exception"
+msgid "Show kill switch exception"
+msgstr "Hiện ngoại lệ của Kill switch"
 
 #. Points leaderboard: the switch that reveals this network's name on the list. Every ranked network is listed; off = shown as Anonymous.
 msgctxt "show_on_points_leaderboard"
@@ -4850,6 +6639,11 @@ msgstr "Đã thêm phương thức đăng nhập thành công"
 msgctxt "sign_in_methods"
 msgid "Sign-In Methods"
 msgstr "Phương thức đăng nhập"
+
+#. Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge
+msgctxt "sign_in_with_apple"
+msgid "Sign in with Apple"
+msgstr "Đăng nhập bằng Apple"
 
 #. Button that signs in with a pasted auth code instead of a password.
 msgctxt "sign_in_with_code"
@@ -4910,6 +6704,16 @@ msgctxt "site_app_connect_to_view"
 msgid "Connect to view live activity"
 msgstr "Kết nối để xem hoạt động trực tiếp"
 
+#. App connect screen: contract details section title
+msgctxt "site_app_contracts"
+msgid "Contracts"
+msgstr "Hợp đồng"
+
+#. App: copied flash. Also the linux share-dialog toast after copying the identity payload.
+msgctxt "site_app_copied"
+msgid "Copied"
+msgstr "Đã sao chép"
+
 #. Reliability: country column
 msgctxt "site_app_country"
 msgid "Country"
@@ -4965,6 +6769,11 @@ msgctxt "site_app_plan"
 msgid "Plan"
 msgstr "Gói"
 
+#. App connect screen: provider grid section title
+msgctxt "site_app_providers"
+msgid "Providers"
+msgstr "Nhà cung cấp"
+
 #. App account: proxies row/screen title
 msgctxt "site_app_proxies"
 msgid "Proxies"
@@ -4989,6 +6798,11 @@ msgstr "Luôn bật trong trình duyệt, vốn không bao giờ kết nối tr�
 msgctxt "site_app_throughput"
 msgid "Transfer"
 msgstr "Truyền tải"
+
+#. Account panel: billing portal failed to open
+msgctxt "site_billing_portal_error"
+msgid "Could not open the billing portal."
+msgstr "Không thể mở cổng thanh toán."
 
 #. Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.
 msgctxt "site_connect_code_hint"
@@ -5220,6 +7034,11 @@ msgctxt "site_sub_stripe_body"
 msgid "Your Pro subscription is billed through Stripe. Update your payment details or cancel anytime below."
 msgstr "Gói đăng ký Pro của bạn được thanh toán qua Stripe. Cập nhật thông tin thanh toán hoặc hủy bất cứ lúc nào ở bên dưới."
 
+#. Small muted button at the top of the post-login onboarding flow that leaves the whole flow.
+msgctxt "skip"
+msgid "Skip"
+msgstr "Bỏ qua"
+
 #. The subnet alpha token symbol.
 msgctxt "sn_alpha_symbol"
 msgid "SN25α"
@@ -5235,15 +7054,45 @@ msgctxt "sn_payout_schedule_times"
 msgid "This epoch ends {0}. Claim your share from {1} until {2}."
 msgstr "Epoch này kết thúc vào {0}. Nhận phần của bạn từ {1} đến {2}."
 
+#. Claim status of an epoch whose alpha can be claimed now.
+msgctxt "sn_status_claimable"
+msgid "Claimable"
+msgstr "Có thể nhận"
+
+#. Claim status of an epoch the vault has not finalized yet.
+msgctxt "sn_status_not_finalized"
+msgid "Not finalized"
+msgstr "Chưa hoàn tất"
+
+#. Claim status of an epoch that is still open (not yet finalized on chain).
+msgctxt "sn_status_open"
+msgid "Open"
+msgstr "Đang mở"
+
 #. Blockchain name. A product name: never translated.
 msgctxt "solana"
 msgid "Solana"
 msgstr "Solana"
 
+#. Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.
+msgctxt "solana_one_time_payment"
+msgid "Paying with USDC on Solana is a one-time yearly payment, with no free trial."
+msgstr "Thanh toán bằng USDC trên Solana là khoản thanh toán một lần theo năm, không có dùng thử miễn phí."
+
+#. Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.
+msgctxt "solana_payment_still_checking"
+msgid "Still checking for your Solana payment. Confirmation on the network can take a minute or two."
+msgstr "Vẫn đang kiểm tra khoản thanh toán Solana của bạn. Việc xác nhận trên mạng có thể mất một hai phút."
+
 #. Call to action
 msgctxt "solana_sign_in"
 msgid "Sign in with Solana"
 msgstr "Đăng nhập bằng Solana"
+
+#. Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).
+msgctxt "solana_wallet"
+msgid "Solana wallet"
+msgstr "Ví Solana"
 
 #. Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "solflare"
@@ -5371,6 +7220,11 @@ msgctxt "start_earning_join"
 msgid "To start earning, join the network"
 msgstr "Để bắt đầu kiếm tiền, hãy tham gia mạng"
 
+#. Primary button of the plan picker (onboarding and upgrade): starts the paid plan's free trial. Replaces 'Join the movement'.
+msgctxt "start_free_trial"
+msgid "Start free trial"
+msgstr "Bắt đầu dùng thử miễn phí"
+
 #. Confirmation button that keeps the user on the seedphrase screen after the warning.
 msgctxt "stay"
 msgid "Stay"
@@ -5441,6 +7295,16 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "Ẩn danh mạnh"
 
+#. Button on the plan picker for the monthly plan, which has no free trial.
+msgctxt "subscribe"
+msgid "Subscribe"
+msgstr "Đăng ký"
+
+#. The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.
+msgctxt "subscription_purchased_under_different_account"
+msgid "Your subscription was purchased under a different account. Log in to that account to use it."
+msgstr "Gói đăng ký của bạn được mua bằng tài khoản khác. Hãy đăng nhập vào tài khoản đó để sử dụng."
+
 #. Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "successfully_claimed_multiplier"
 msgid "Successfully claimed multiplier!"
@@ -5505,6 +7369,11 @@ msgctxt "symbol_dash"
 msgid "-"
 msgstr "-"
 
+#. An ellipsis character used to indicate ongoing processing.
+msgctxt "symbol_ellipsis"
+msgid "..."
+msgstr "..."
+
 msgctxt "symbol_empty"
 msgid ""
 msgstr ""
@@ -5536,6 +7405,11 @@ msgstr "Đồng bộ vị trí thiết bị với nhà cung cấp"
 msgctxt "system"
 msgid "System"
 msgstr "Hệ thống"
+
+#. A TAO amount with its unit (the gas key balance).
+msgctxt "tao_amount_linux"
+msgid "{} TAO"
+msgstr "{} TAO"
 
 #. Connect
 msgctxt "tap_to_connect"
@@ -5577,6 +7451,11 @@ msgctxt "thanks_for_the_feedback"
 msgid "Thanks for the feedback!"
 msgstr "Cảm ơn phản hồi của bạn!"
 
+#. Shown inline in the upgrade flow when a StoreKit purchase attempt throws (Shared/ViewModels/AppStoreSubscriptionManager.swift). Every purchase failure is shown to the user — a payment error they cannot see is one they will hit again. User cancellation is not an error and never shows this.
+msgctxt "the_purchase_could_not_be_completed"
+msgid "The purchase could not be completed. Please try again."
+msgstr "Không thể hoàn tất giao dịch mua. Vui lòng thử lại."
+
 #. Used in Authenticate/CreateNetwork/CreateNetworkViewModel.swift.
 msgctxt "there_was_an_error_checking_the_network_name"
 msgid "There was an error checking the network name"
@@ -5597,6 +7476,11 @@ msgctxt "this_is_the_only_time_you_ll"
 msgid "⚠️ This is the ONLY time you'll see this."
 msgstr "⚠️ Đây là lần duy nhất bạn nhìn thấy nó."
 
+#. Shown inline in the upgrade flow when the server's verify answer for a purchase's transaction JWS is terminal `invalid` — the proof will never verify. The transaction is still finished so StoreKit stops redelivering it; this message is how the failure reaches the user instead of a silent success (Shared/ViewModels/AppStoreSubscriptionManager.swift). Apple sibling of purchase_could_not_be_verified (android).
+msgctxt "this_purchase_couldn_t_be_verified"
+msgid "This purchase couldn't be verified with the App Store, so it can't be applied to your account. If you were charged and your plan doesn't update, please contact support."
+msgstr "Không thể xác minh giao dịch mua này với App Store nên không thể áp dụng cho tài khoản của bạn. Nếu bạn đã bị tính phí và gói không cập nhật, vui lòng liên hệ hỗ trợ."
+
 #. dns settings
 msgctxt "this_region"
 msgid "this region"
@@ -5615,6 +7499,36 @@ msgstr "Đã ngắt kết nối"
 msgctxt "title_login"
 msgid "Login"
 msgstr "Đăng nhập"
+
+#. Badge text for the head mining spot.
+msgctxt "top200"
+msgid "Top 200"
+msgstr "Top 200"
+
+#. Detail under the bound status.
+msgctxt "top200_bound_detail"
+msgid "Emission is paid to your coldkey directly. Bindings renew per epoch."
+msgstr "Phần phát hành được trả trực tiếp vào coldkey của bạn. Các liên kết được gia hạn mỗi epoch."
+
+#. Status row once bound.
+msgctxt "top200_bound_status"
+msgid "UID {0} · rank #{1}"
+msgstr "UID {0} · hạng #{1}"
+
+#. Warning when the score nears the floor.
+msgctxt "top200_demotion_warning"
+msgid "Your score is close to the eviction floor. Add routable IPs to keep the spot."
+msgstr "Điểm của bạn đang gần ngưỡng loại. Hãy thêm IP có thể định tuyến để giữ chỗ."
+
+#. Detail of the Top 200 tile when eligible.
+msgctxt "top200_detail"
+msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
+msgstr "Độ đa dạng IP có thể định tuyến của mạng bạn xếp khoảng hạng #{0} trong {1} vị trí dẫn đầu. Các thợ đào dẫn đầu kiếm SN25α trực tiếp, mỗi tempo."
+
+#. Headline of the Top 200 tile when eligible.
+msgctxt "top200_you_qualify"
+msgid "You qualify"
+msgstr "Bạn đủ điều kiện"
 
 #. Locations List
 msgctxt "top_matches"
@@ -5672,6 +7586,76 @@ msgctxt "transfer_submitted_details"
 msgid "Your transfer has been initiated and will complete once the transaction is processed on chain."
 msgstr "Lệnh chuyển của bạn đã được khởi tạo và sẽ hoàn tất sau khi giao dịch được xử lý trên chuỗi."
 
+#. Section header of the transport mode selection (Auto or a single transport).
+msgctxt "transport"
+msgid "Transport"
+msgstr "Truyền tải"
+
+#. Generic warning banner in the transport settings editor when the Auto policy is degraded for a constraint this app version does not recognize (the SDK may report new constraint kinds; "memory" has its own banner).
+msgctxt "transport_auto_degraded"
+msgid "Auto is degraded because system constraints prevent some enabled transports from running."
+msgstr "Chế độ Tự động đang bị giới hạn vì các ràng buộc hệ thống khiến một số phương thức truyền tải đã bật không thể chạy."
+
+#. Warning banner in the transport settings editor when the Auto policy is degraded because the platform memory budget cannot admit every enabled transport.
+msgctxt "transport_auto_degraded_memory"
+msgid "Auto is degraded because system memory limits prevent some enabled transports from running."
+msgstr "Chế độ Tự động đang bị giới hạn vì giới hạn bộ nhớ của hệ thống khiến một số phương thức truyền tải đã bật không thể chạy."
+
+#. Subtitle of the Auto transport mode row.
+msgctxt "transport_auto_description"
+msgid "Recommended. Uses the enabled transports below."
+msgstr "Khuyên dùng. Dùng các phương thức truyền tải đã bật bên dưới."
+
+#. Footer of the client transport mode section.
+msgctxt "transport_client_footer"
+msgid "The transport this device uses to reach providers. Auto tries the enabled transports in preference order and keeps every healthy transport of the same tier connected in parallel."
+msgstr "Phương thức truyền tải mà thiết bị này dùng để kết nối tới nhà cung cấp. Chế độ Tự động thử các phương thức đã bật theo thứ tự ưu tiên và giữ kết nối song song mọi phương thức hoạt động tốt cùng cấp."
+
+#. One line description of the whodis (DNS) transport in the transport settings editor.
+msgctxt "transport_dns_description"
+msgid "Disguised as DNS traffic. For networks that filter direct connections."
+msgstr "Ngụy trang thành lưu lượng DNS. Dành cho mạng lọc kết nối trực tiếp."
+
+#. One line description of the whodis pump (DNS pump) transport in the transport settings editor.
+msgctxt "transport_dnspump_description"
+msgid "Disguised as DNS traffic with a constant reply pump. Lowest bandwidth, highest availability."
+msgstr "Ngụy trang thành lưu lượng DNS với luồng phản hồi liên tục. Băng thông thấp nhất, khả dụng cao nhất."
+
+#. One line description of the H1 transport in the transport settings editor.
+msgctxt "transport_h1_description"
+msgid "Direct over TLS. Works on most networks."
+msgstr "Trực tiếp qua TLS. Hoạt động trên hầu hết các mạng."
+
+#. One line description of the H3 transport in the transport settings editor.
+msgctxt "transport_h3_description"
+msgid "Direct over QUIC. Fastest where it is not filtered."
+msgstr "Trực tiếp qua QUIC. Nhanh nhất ở nơi không bị lọc."
+
+#. Footer of the provider transport mode section.
+msgctxt "transport_provider_footer"
+msgid "The transport this device uses while providing for others. Auto tries the enabled transports in preference order and keeps every healthy transport of the same tier connected in parallel."
+msgstr "Phương thức truyền tải mà thiết bị này dùng khi cung cấp cho người khác. Chế độ Tự động thử các phương thức đã bật theo thứ tự ưu tiên và giữ kết nối song song mọi phương thức hoạt động tốt cùng cấp."
+
+#. Transport bar label for traffic admitted for sending but not yet attributed to a physical transport.
+msgctxt "transport_queued"
+msgid "queued"
+msgstr "đang chờ"
+
+#. Accessibility label / tooltip on the warning icon next to a transport that is enabled under Auto but not currently eligible under a system constraint (for example the platform memory budget). A runtime warning, not a settings restriction: the toggle stays editable.
+msgctxt "transport_unavailable_system_constraints"
+msgid "Unavailable due to system constraints"
+msgstr "Không khả dụng do ràng buộc hệ thống"
+
+#. Prefix of the transport bar footer listing the enabled transports that carried no traffic in the stats window.
+msgctxt "transport_unused"
+msgid "unused"
+msgstr "không dùng"
+
+#. Title of the transport distribution bar under the client statistics chart and of the transport settings editor.
+msgctxt "transports"
+msgid "Transports"
+msgstr "Phương thức truyền tải"
+
 #. Used in Shared/Views/Introduction/IntroductionView.swift.
 msgctxt "trusted_by_over_100_000_private_networks"
 msgid "Trusted by over 100,000 private networks"
@@ -5701,6 +7685,11 @@ msgstr "Không thể khởi động kết nối"
 msgctxt "tunnel_stopped_unexpectedly"
 msgid "The connection stopped."
 msgstr "Kết nối đã dừng."
+
+#. Label of the unclaimed alpha tile.
+msgctxt "unclaimed"
+msgid "Unclaimed"
+msgstr "Chưa nhận"
 
 #. A label displayed in the custom dns settings section.
 msgctxt "unencrypted_dns"
@@ -5832,6 +7821,11 @@ msgctxt "urnetwork_vpn_started"
 msgid "URnetwork VPN started"
 msgstr "URnetwork VPN đã khởi động"
 
+#. Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.
+msgctxt "usdc_payouts_until_migration"
+msgid "USDC payouts continue to this wallet until the migration to Bittensor is complete."
+msgstr "Các khoản thanh toán USDC vẫn tiếp tục về ví này cho đến khi hoàn tất việc chuyển sang Bittensor."
+
 #. Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.
 msgctxt "usdc_solana_network_only"
 msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
@@ -5855,6 +7849,11 @@ msgstr "Dùng làm proxy thay thế (không có VPN)"
 msgctxt "use_as_proxy_no_vpn_detail"
 msgid "Opens ur.io to run URnetwork as an HTTPS proxy without the VPN. SOCKS and WireGuard are available on Pro."
 msgstr "Mở ur.io để chạy URnetwork như một proxy HTTPS mà không cần VPN. SOCKS và WireGuard có sẵn trên Pro."
+
+#. Toggle on the import screen: also apply the extender settings carried by the code.
+msgctxt "use_extender_settings"
+msgid "Use extender settings"
+msgstr "Dùng cài đặt bộ mở rộng"
 
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"
@@ -5914,6 +7913,10 @@ msgctxt "value_int"
 msgid "{}"
 msgstr "{}"
 
+msgctxt "value_string"
+msgid "{}"
+msgstr "{}"
+
 msgctxt "value_with_unit"
 msgid "{0} {1}"
 msgstr "{0} {1}"
@@ -5968,6 +7971,11 @@ msgstr "Đã xảy ra sự cố khi xác thực mã xác minh của bạn."
 msgctxt "verify_input_label"
 msgid "Verification code"
 msgstr "Mã xác minh"
+
+#. Standalone Seeker verification action (points multiplier only).
+msgctxt "verify_seeker"
+msgid "Verify Seeker"
+msgstr "Xác minh Seeker"
 
 #. Call to action
 msgctxt "verify_seeker_token_btn"
@@ -6219,20 +8227,50 @@ msgctxt "wallet"
 msgid "Wallet"
 msgstr "Ví"
 
+#. Error when a wallet address is on the operator's ban list; the user cannot continue.
+msgctxt "wallet_blocked"
+msgid "This wallet can't be used with URnetwork."
+msgstr "Ví này không thể dùng với URnetwork."
+
 #. Error shown when connecting an external wallet to the account fails.
 msgctxt "wallet_connect_failed"
 msgid "Failed to connect the wallet."
 msgstr "Không thể kết nối ví."
+
+#. Note under the manual address entry: the wallet only signs a proof of ownership.
+msgctxt "wallet_connect_signed_note_linux"
+msgid "Your wallet signs a message to prove it is yours. Nothing is sent on chain."
+msgstr "Ví của bạn ký một tin nhắn để chứng minh ví thuộc về bạn. Không có gì được gửi lên chuỗi."
 
 #. Confirmation shown after an external wallet is connected to the account.
 msgctxt "wallet_connected"
 msgid "Wallet connected."
 msgstr "Đã kết nối ví."
 
+#. Line under the connected coldkey.
+msgctxt "wallet_connected_to_protocol"
+msgid "Connected to the UR protocol. Claims land here. Alpha accrues from the next epoch after connecting."
+msgstr "Đã kết nối với giao thức UR. Các khoản nhận sẽ về đây. Alpha được tích lũy từ epoch sau khi kết nối."
+
+#. Warning when a wallet address has no activity on the Bittensor chain yet; the user may continue.
+msgctxt "wallet_looks_new_warning"
+msgid "This address has no activity on the Bittensor chain yet. It looks like a new wallet. Make sure it is yours before continuing."
+msgstr "Địa chỉ này chưa có hoạt động nào trên chuỗi Bittensor. Có vẻ đây là ví mới. Hãy chắc chắn ví này là của bạn trước khi tiếp tục."
+
 #. Shown on the create-network step after a wallet sign-in when the wallet isn't linked to any network yet. The user picks a network name and accepts the terms to create one; the wallet signature carries over.
 msgctxt "wallet_needs_network"
 msgid "This wallet isn't linked to a network yet. Pick a network name to create one."
 msgstr "Ví này chưa được liên kết với mạng nào. Hãy chọn tên mạng để tạo một mạng mới."
+
+#. Line on the wallet block before a wallet is connected.
+msgctxt "wallet_not_retroactive"
+msgid "Connect a wallet to earn SN25α from the next epoch. Earlier epochs are not settled retroactively."
+msgstr "Kết nối ví để kiếm SN25α từ epoch tiếp theo. Các epoch trước không được quyết toán hồi tố."
+
+#. Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.
+msgctxt "wallet_options"
+msgid "Wallet options"
+msgstr "Tùy chọn ví"
 
 #. Error shown when signing in with a wallet fails.
 msgctxt "wallet_sign_in_failed"
@@ -6243,6 +8281,16 @@ msgstr "Đăng nhập bằng ví thất bại"
 msgctxt "wallet_sign_in_method_added"
 msgid "Wallet sign-in method added"
 msgstr "Đã thêm phương thức đăng nhập bằng ví"
+
+#. Error when the bridge signed with a different wallet than the address the user typed.
+msgctxt "wallet_signature_mismatch_linux"
+msgid "The wallet that signed is not the address you entered."
+msgstr "Ví đã ký không phải là địa chỉ bạn đã nhập."
+
+#. Body of the post-purchase screen while the confirmation poll runs (Shared/Views/PurchaseSuccessView.swift). Processing-shaped, not premium-shaped: the server learns of the purchase by webhook and has not confirmed yet.
+msgctxt "we_re_confirming_your_purchase_with_the_app_store"
+msgid "We're confirming your purchase with the App Store. Your plan will update automatically."
+msgstr "Chúng tôi đang xác nhận giao dịch mua của bạn với App Store. Gói của bạn sẽ tự động cập nhật."
 
 #. Onboarding offer screen: the small uppercase eyebrow above the headline.
 msgctxt "welcome_offer_eyebrow"
@@ -6263,6 +8311,140 @@ msgstr "Khi hủy liên kết mạng giới thiệu của bạn, bạn sẽ khô
 msgctxt "when_you_refer_a_friend"
 msgid "When you refer a friend:"
 msgstr "Khi bạn giới thiệu bạn bè:"
+
+#. Dashboard widget chart title: this device's own traffic.
+msgctxt "widget_client"
+msgid "Client"
+msgstr "Máy khách"
+
+#. Dashboard widget footer before the tunnel has ever written data.
+msgctxt "widget_connect_once"
+msgid "Connect once to see your traffic here"
+msgstr "Kết nối một lần để xem lưu lượng của bạn tại đây"
+
+#. Contracts widget empty state while the tunnel is down.
+msgctxt "widget_connect_to_see_contracts"
+msgid "Connect to see your contracts"
+msgstr "Kết nối để xem hợp đồng của bạn"
+
+#. Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.
+msgctxt "widget_contract_stack_accessibility"
+msgid "{0} contract, {1}"
+msgid_plural "{0} contracts, {1}"
+msgstr[0] "{0} hợp đồng, {1}"
+
+#. Description of the contracts widget in the widget gallery.
+msgctxt "widget_contracts_description"
+msgid "Your top client contracts, flowing as they come and go."
+msgstr "Các hợp đồng máy khách hàng đầu của bạn, chuyển động khi chúng đến và đi."
+
+#. Description of the quick connect control in the Control Center gallery.
+msgctxt "widget_control_description"
+msgid "Connect or disconnect the URnetwork VPN."
+msgstr "Kết nối hoặc ngắt kết nối VPN URnetwork."
+
+#. Description of the dashboard widget in the widget gallery.
+msgctxt "widget_dashboard_description"
+msgid "Transfer balance, connected location and traffic, with quick connect."
+msgstr "Số dư dữ liệu, vị trí đã kết nối và lưu lượng, kèm kết nối nhanh."
+
+#. Description of the provider globe widget in the widget gallery.
+msgctxt "widget_globe_description"
+msgid "Your connected providers on the globe."
+msgstr "Các nhà cung cấp đã kết nối của bạn trên quả địa cầu."
+
+#. Provider globe widget: providers not shown in the list. The argument is a count.
+msgctxt "widget_more_providers"
+msgid "+{} more"
+msgstr "+{} nữa"
+
+#. Contracts widget empty state while connected with no open client contracts.
+msgctxt "widget_no_contracts"
+msgid "No contracts"
+msgstr "Không có hợp đồng"
+
+#. Badge on the small provider globe widget when no providers are connected.
+msgctxt "widget_no_providers"
+msgid "No providers"
+msgstr "Không có nhà cung cấp"
+
+#. Dashboard widget provider chart label when providing is off.
+msgctxt "widget_not_providing"
+msgid "Not providing"
+msgstr "Không cung cấp"
+
+#. Quick connect control / widget value when the app has no tunnel configuration yet (fresh install or logged out).
+msgctxt "widget_not_signed_in"
+msgid "Not signed in"
+msgstr "Chưa đăng nhập"
+
+#. Button on the Home Screen widget that opens the app when the tunnel is not configured yet.
+msgctxt "widget_open"
+msgid "Open"
+msgstr "Mở"
+
+#. Widget subtitle when the app has no tunnel configuration yet.
+msgctxt "widget_open_to_set_up"
+msgid "Open URnetwork to set up"
+msgstr "Mở URnetwork để thiết lập"
+
+#. Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.
+msgctxt "widget_peak_rate"
+msgid "{} peak"
+msgstr "Đỉnh {}"
+
+#. Contracts widget header: number of peers with open contracts.
+msgctxt "widget_peer_count"
+msgid "{} peer"
+msgid_plural "{} peers"
+msgstr[0] "{} peer"
+
+#. Dashboard widget chart title: traffic relayed for others while providing.
+msgctxt "widget_provider"
+msgid "Provider"
+msgstr "Nhà cung cấp"
+
+#. Widget subtitle: number of connected providers.
+msgctxt "widget_provider_count"
+msgid "{} provider"
+msgid_plural "{} providers"
+msgstr[0] "{} nhà cung cấp"
+
+#. Widget subtitle: number of connected providers while this device is also providing.
+msgctxt "widget_provider_count_providing"
+msgid "{} provider · providing"
+msgid_plural "{} providers · providing"
+msgstr[0] "{} nhà cung cấp · đang cung cấp"
+
+#. Title above the provider traffic chart in the dashboard widget: the chart name with the current provide mode (Auto, Always, Network, Never).
+msgctxt "widget_provider_mode_title"
+msgid "Provider · {}"
+msgstr "Nhà cung cấp · {}"
+
+#. Shown in the dashboard widget in place of the provider traffic chart while providing is off.
+msgctxt "widget_provider_stats_when_enabled"
+msgid "Provider stats will appear when the provider is enabled."
+msgstr "Thống kê nhà cung cấp sẽ xuất hiện khi bật nhà cung cấp."
+
+#. Toast after the system added the Quick Settings tile.
+msgctxt "widget_quick_tile_added"
+msgid "Quick connect tile added"
+msgstr "Đã thêm ô kết nối nhanh"
+
+#. Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).
+msgctxt "widget_toggle_intent_title"
+msgid "Toggle URnetwork VPN"
+msgstr "Bật/tắt VPN URnetwork"
+
+#. Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.
+msgctxt "widget_updated_ago"
+msgid "Updated {}"
+msgstr "Cập nhật {}"
+
+#. Dashboard widget footer in the widget gallery preview.
+msgctxt "widget_updated_just_now"
+msgid "Updated just now"
+msgstr "Vừa cập nhật"
 
 #. Account: the Widgets section (quick connect control and Home Screen widgets, with how to add them).
 msgctxt "widgets"
@@ -6314,6 +8496,11 @@ msgctxt "you_get_3_gib_day_for_life"
 msgid "You get 3 GiB/day for life"
 msgstr "Bạn nhận 3 GiB/ngày trọn đời"
 
+#. Detail line under the onboarding data page title.
+msgctxt "you_get_free_data_every_day"
+msgid "You get free data every day."
+msgstr "Bạn nhận dữ liệu miễn phí mỗi ngày."
+
 msgctxt "you_have_n_other_devices_online"
 msgid "You have {} other device online"
 msgid_plural "You have {} other devices online"
@@ -6339,6 +8526,11 @@ msgctxt "you_re_premium"
 msgid "You're premium."
 msgstr "Bạn là thành viên cao cấp."
 
+#. Title of the onboarding data page (was 'Boost your bandwidth').
+msgctxt "your_bandwidth"
+msgid "Your bandwidth"
+msgstr "Băng thông của bạn"
+
 #. Label for the empty text field.
 msgctxt "your_email"
 msgid "Your email"
@@ -6363,6 +8555,11 @@ msgstr "Bạn của bạn nhận 3 GiB/ngày trọn đời"
 msgctxt "your_purchase_needs_to_be_approved_before_it_can"
 msgid "Your purchase needs to be approved before it can complete. UR Pro will turn on by itself once it goes through — there's no need to buy again."
 msgstr "Giao dịch của bạn cần được phê duyệt trước khi hoàn tất. UR Pro sẽ tự bật ngay khi được duyệt — bạn không cần mua lại."
+
+#. Label above the referral code pill in the gold referral panel.
+msgctxt "your_referral_code"
+msgid "Your referral code"
+msgstr "Mã giới thiệu của bạn"
 
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "your_referral_link"
