@@ -68,6 +68,7 @@
 #include "LeaderboardIndicator.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
+#include "SnPayoutPresentation.hpp"
 #include "SolanaWalletPresentation.hpp"
 #include "TransferChart.hpp"
 #include "TransportBar.hpp"
@@ -322,8 +323,11 @@ class EarningsPage : public Gtk::Box {
   void ApplyPoints(std::optional<urnet::AccountPointsList> points, Fetch state);
   void ApplyEpochs(std::optional<std::vector<AccountEpochRow>> epochs, Fetch state);
   void ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state);
+  // `schedule` is the current epoch's, read with the claims (absent when the
+  // SDK could not read the coordinator's policy)
   void ApplyClaims(std::optional<std::vector<SnClaimRow>> claims, int64_t totalClaimableRao,
-                   Fetch state, const Glib::ustring& failure = {});
+                   Fetch state, const Glib::ustring& failure = {},
+                   std::optional<snpayout::EpochSchedule> schedule = std::nullopt);
   void ApplyGas(std::optional<SnGasInfo> gas);
   void ApplyHead(std::optional<SnHeadInfo> head, Fetch state);
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
@@ -332,6 +336,8 @@ class EarningsPage : public Gtk::Box {
 
   // ---- rebuilders ------------------------------------------------------------
   void RebuildPointsCard();
+  // how and when SN payouts happen, under the points (snpayout::PayoutLineFor)
+  void RebuildPayoutLine();
   void RebuildUnclaimedTile();
   void RebuildWalletBlock();
   void RebuildTop200();
@@ -438,6 +444,11 @@ class EarningsPage : public Gtk::Box {
   Gtk::Label* pointsStatus_ = nullptr;
   Gtk::Box* pointsCard_ = nullptr;
   Gtk::Box* pointsPanel_ = nullptr;
+  Gtk::Box* payoutCard_ = nullptr;
+  Gtk::Label* payoutText_ = nullptr;
+  Gtk::Label* payoutTimes_ = nullptr;
+  Gtk::Button* setColdkeyButton_ = nullptr;
+  Gtk::Button* payoutClaimButton_ = nullptr;
   Gtk::Box* unclaimedCard_ = nullptr;
   Gtk::Label* unclaimedValue_ = nullptr;
   Gtk::Label* unclaimedStatus_ = nullptr;
@@ -569,6 +580,7 @@ class EarningsPage : public Gtk::Box {
   int64_t totalClaimableRao_ = 0;
   Fetch claimsState_ = Fetch::Loading;
   Glib::ustring claimsFailure_;
+  std::optional<snpayout::EpochSchedule> schedule_;
   std::optional<SnGasInfo> gas_;
   std::optional<SnHeadInfo> head_;
   Fetch headState_ = Fetch::Loading;

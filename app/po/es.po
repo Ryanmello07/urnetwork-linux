@@ -1123,10 +1123,10 @@ msgctxt "claims_for_epoch_expired"
 msgid "Claims for epoch {} have expired."
 msgstr "Las reclamaciones de la época {} han caducado."
 
-#. Explainer in the claim dialog.
+#. Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.
 msgctxt "claims_open_after_finalization"
-msgid "Claims open 48 hours after an epoch is finalized and stay open for the vault's expiry window."
-msgstr "Las reclamaciones se abren 48 horas después de que finaliza una época y siguen abiertas durante el periodo de caducidad de la bóveda."
+msgid "Each epoch's claims open after its payout list is finalized and stay open until they expire."
+msgstr "Las reclamaciones de cada época se abren cuando se finaliza su lista de pagos y siguen abiertas hasta que vencen."
 
 #. General UI string: a button that clears a field or setting.
 msgctxt "clear"
@@ -6034,6 +6034,16 @@ msgctxt "sent_thanks_for_your_feedback"
 msgid "Sent! Thanks for your feedback."
 msgstr "¡Enviado! Gracias por tus comentarios."
 
+#. Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).
+msgctxt "set_coldkey"
+msgid "Set coldkey"
+msgstr "Configurar coldkey"
+
+#. Earnings card: shown in place of sn_payout_schedule while no Bittensor coldkey is set. SN payouts go only to a coldkey; the set_coldkey action next to it opens the coldkey (connect wallet) flow.
+msgctxt "set_coldkey_to_get_paid"
+msgid "Set your Bittensor coldkey to get paid"
+msgstr "Configura tu coldkey de Bittensor para cobrar"
+
 #. Account Screen
 msgctxt "settings"
 msgid "Settings"
@@ -7710,6 +7720,16 @@ msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
 
+#. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
+msgctxt "sn_payout_schedule"
+msgid "Earnings settle every epoch and are paid in SN25α to your Bittensor coldkey when you claim them."
+msgstr "Las ganancias se liquidan cada época y se pagan en SN25α a tu coldkey de Bittensor cuando las reclamas."
+
+#. Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.
+msgctxt "sn_payout_schedule_times"
+msgid "This epoch ends {0}. Claim your share from {1} until {2}."
+msgstr "Esta época termina el {0}. Reclama tu parte desde el {1} hasta el {2}."
+
 #. Claim status of an epoch whose alpha can be claimed now.
 msgctxt "sn_status_claimable"
 msgid "Claimable"
@@ -8449,10 +8469,10 @@ msgctxt "usdc_solana_network_only"
 msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
 msgstr "Envía USDC solo por la red Solana. Los USDC enviados por cualquier otra red no llegarán."
 
-#. The pending USDC payout total waiting to be sent to the Solana payout wallet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions. Mirrors the email headline.
+#. The last USDC payout still pending since provider payouts moved to the UR subnet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions, only while a USDC amount is pending. Mirrors the email headline.
 msgctxt "usdc_waiting"
-msgid "{} USDC waiting"
-msgstr "{} USDC pendientes"
+msgid "Final USDC payout: {} USDC waiting"
+msgstr "Último pago en USDC: {} USDC pendientes"
 
 msgctxt "usdc_wallet_address"
 msgid "USDC wallet address"
