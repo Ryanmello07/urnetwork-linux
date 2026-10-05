@@ -25,7 +25,6 @@ using urnw::extender::kControlDohErrorHttpsRequired;
 using urnw::extender::kControlDohErrorIpRequired;
 using urnw::extender::kControlDohErrorTooMany;
 using urnw::extender::kControlDohErrorUrlInvalid;
-using urnw::extender::kSdkErrorIdInternal;
 using urnw::extender::SplitControlDohLines;
 using urnw::extender::ImportDecision;
 using urnw::extender::ImportPresentation;
@@ -174,12 +173,13 @@ UR_TEST(ControlDohErrors_EveryIdHasItsMessage) {
   }
 }
 
-// Any other id -- the SDK's internal_error for a call that could not run, an
-// id this build does not know -- is still a refusal, and none of them is about
-// the url typed: "Something went wrong.", never a raw key.
+// Any other id -- the C ABI's internal_error for a call that could not run
+// (URNET_ERROR_ID_INTERNAL, of which the app keeps no copy:
+// ErrorIdInternalTest.cpp), an id this build does not know -- is still a
+// refusal, and none of them is about the url typed: "Something went wrong.",
+// never a raw key.
 UR_TEST(ControlDohErrors_AnyOtherIdIsSomethingWentWrong) {
-  UR_EXPECT_TRUE(std::string(kSdkErrorIdInternal) == "internal_error");
-  for (const char* id : {kSdkErrorIdInternal, "control_doh_error_from_a_newer_sdk",
+  for (const char* id : {"internal_error", "control_doh_error_from_a_newer_sdk",
                          "vless_error_link_invalid", ""}) {
     UR_EXPECT_TRUE_MSG(id, ControlDohErrorText(id).key == "something_went_wrong");
     UR_EXPECT_TRUE_MSG(id, ControlDohErrorText(id).english == "Something went wrong.");
@@ -199,7 +199,7 @@ UR_TEST(ControlDohSave_TheResultLines) {
   UR_EXPECT_TRUE(refused.note.key.empty());
   // only "" is a save: a call that could not run, or an id this build does
   // not know, saved nothing
-  for (const char* id : {kSdkErrorIdInternal, "control_doh_error_from_a_newer_sdk"}) {
+  for (const char* id : {"internal_error", "control_doh_error_from_a_newer_sdk"}) {
     const auto failed = ControlDohSaveOutcomeFor(id);
     UR_EXPECT_TRUE_MSG(id, !failed.saved);
     UR_EXPECT_TRUE_MSG(id, failed.message.key == "something_went_wrong");
@@ -218,7 +218,7 @@ UR_TEST(ControlDohText_KeysAreTheCatalogs) {
   std::vector<urnw::extender::Text> texts;
   for (const char* id : {kControlDohErrorUrlInvalid, kControlDohErrorHttpsRequired,
                          kControlDohErrorIpRequired, kControlDohErrorTooMany,
-                         kSdkErrorIdInternal}) {
+                         "internal_error"}) {
     texts.push_back(ControlDohErrorText(id));
   }
   const auto saved = ControlDohSaveOutcomeFor("");

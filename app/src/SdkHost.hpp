@@ -463,8 +463,8 @@ class SdkHost {
   // caller says something went wrong); otherwise Settings (enabled) or an
   // Error id. VlessSettingsLink: "" when the settings do not validate.
   // ValidateVlessSettings: "" or the error id of the first problem (whether the
-  // settings are enabled does not matter), vless::kErrorInternal when the call
-  // failed.
+  // settings are enabled does not matter), the C ABI's URNET_ERROR_ID_INTERNAL
+  // when the call failed.
   static std::optional<urnet::VlessLinkResult> ParseVlessLink(const std::string& link);
   static std::string VlessSettingsLink(const urnet::VlessSettings& settings);
   static std::string ValidateVlessSettings(const urnet::VlessSettings& settings);

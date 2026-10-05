@@ -299,14 +299,12 @@ inline constexpr const char* kErrorFingerprintUnsupported = "vless_error_fingerp
 inline constexpr const char* kErrorPublicKeyInvalid = "vless_error_public_key_invalid";
 inline constexpr const char* kErrorShortIdInvalid = "vless_error_short_id_invalid";
 
-// What the C ABI answers when the call could not run (URNET_ERROR_ID_INTERNAL:
-// an unknown handle, json that did not decode, a recovered panic). It says
-// nothing about the settings, so it is never shown as a refusal of them.
-inline constexpr const char* kErrorInternal = "internal_error";
-
-// The message of an SDK error id. An id this build does not know --
-// kErrorInternal, or an id of a newer SDK -- is no refusal the user caused, so
-// it reads as the generic message: never a raw key, never an invalid link.
+// The message of an SDK error id. An id this build does not know -- the C
+// ABI's URNET_ERROR_ID_INTERNAL for a call that could not run (an unknown
+// handle, json that did not decode, a recovered panic), or an id of a newer
+// SDK -- is no refusal the user caused, so it reads as the generic message:
+// never a raw key, never an invalid link. No copy of the internal id is kept
+// here: the SDK header is its one source (tests/ErrorIdInternalTest.cpp).
 inline Text ErrorText(std::string_view errorId) {
   static constexpr Text kErrors[] = {
       {kErrorLinkInvalid, "This is not a valid VLESS link."},
