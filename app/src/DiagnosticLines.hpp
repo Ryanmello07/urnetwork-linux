@@ -5,7 +5,7 @@
 // are not in that upload. Android writes its Private DNS mode and whitelist
 // probe the same way (Sdk.logAppInfo).
 //
-// WHAT A LINE MAY CARRY. Only what a support reply needs and nothing that
+// What a line may carry. Only what a support reply needs and nothing that
 // identifies a person or a network: modes, states and counts as fixed tokens,
 // a two-letter country, and interface names with any MAC address taken out.
 // Never an address (a resolver, a gateway, a tunnel peer), a uid, a path, an

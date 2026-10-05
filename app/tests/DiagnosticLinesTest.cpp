@@ -29,10 +29,10 @@ Link 2 (wlp2s0): yes
 Link 5 (urnet0):
 Link 7 (wlx001122334455):
 )";
-const char* kDns = R"(Global: 1.1.1.1#cloudflare-dns.com 9.9.9.9
-Link 2 (wlp2s0): 192.168.1.1 fe80::1%2
-Link 5 (urnet0): 169.254.2.1 fd00:7572:6e77::53
-Link 7 (wlx001122334455): 10.0.0.1
+const char* kDns = R"(Global: 192.0.2.53#dns.example 198.51.100.53
+Link 2 (wlp2s0): 203.0.113.1 2001:db8::1%2
+Link 5 (urnet0): 192.0.2.1 2001:db8::53
+Link 7 (wlx001122334455): 198.51.100.1
 )";
 const char* kDefaultRoute = R"(Link 2 (wlp2s0): yes
 Link 5 (urnet0): no
@@ -45,13 +45,13 @@ UR_TEST(diagnosticTokenKeepsWordsOnly) {
   UR_EXPECT_TRUE(diag::Token("Allow-Downgrade") == "allow-downgrade");
   UR_EXPECT_TRUE(diag::Token("dns_apply_failed") == "dns_apply_failed");
   UR_EXPECT_TRUE(diag::Token("dns override lost") == "dns-override-lost");
-  for (const char* value : {"", "192.168.1.1", "fe80::1", "/etc/resolv.conf", "x\ny", "a\tb",
+  for (const char* value : {"", "203.0.113.1", "2001:db8::1", "/etc/resolv.conf", "x\ny", "a\tb",
                             "could not open /dev/net/tun", "0123456789012345678901234567890123"}) {
     UR_EXPECT_TRUE_MSG(value, diag::Token(value) == "other");
   }
   UR_EXPECT_TRUE(diag::YesNoSetting("yes") == "yes");
   UR_EXPECT_TRUE(diag::YesNoSetting("") == "default");
-  UR_EXPECT_TRUE(diag::YesNoSetting("10.0.0.1") == "other");
+  UR_EXPECT_TRUE(diag::YesNoSetting("198.51.100.1") == "other");
 }
 
 UR_TEST(diagnosticInterfaceNamesLoseTheirMac) {
@@ -74,7 +74,7 @@ UR_TEST(diagnosticResolvedModesAreKnownValues) {
   }
   UR_EXPECT_TRUE(diag::ResolvedMode("") == "default");
   UR_EXPECT_TRUE(diag::ResolvedMode("n/a") == "default");
-  UR_EXPECT_TRUE(diag::ResolvedMode("1.1.1.1") == "other");
+  UR_EXPECT_TRUE(diag::ResolvedMode("192.0.2.53") == "other");
 }
 
 UR_TEST(diagnosticParsesResolvectlListings) {
@@ -115,7 +115,7 @@ UR_TEST(diagnosticDnsLinkLinesCountServersAndNameModes) {
       diag::DnsLinkLine(diag::DnsLinkFrom("default-route", "wwan0", dns, dot, dnssec, route));
   UR_EXPECT_TRUE(unlisted == "role=default-route link=wwan0 resolved=unlisted");
   for (const std::string& line : {physical, tunnel, usbWifi}) {
-    for (const char* leak : {"192.168", "fe80", "169.254", "fd00", "10.0.0.1", "cloudflare",
+    for (const char* leak : {"192.0.2", "198.51.100", "203.0.113", "2001:db8", "dns.example",
                              "001122334455"}) {
       UR_EXPECT_TRUE_MSG(line + " / " + leak, !Has(line, leak));
     }
@@ -146,7 +146,7 @@ UR_TEST(diagnosticDnsHostLineNamesTheTierAndModes) {
   debian.resolvconf_is_resolvectl = true;  // resolved's shim is not a resolvconf
   UR_EXPECT_TRUE(Has(diag::DnsHostLine("start", debian), "tier=direct-file"));
   // a value resolved never prints becomes "other"
-  facts.dns_over_tls = "9.9.9.9";
+  facts.dns_over_tls = "198.51.100.53";
   UR_EXPECT_TRUE(Has(diag::DnsHostLine("start", facts), " dot=other "));
 }
 
@@ -227,7 +227,7 @@ UR_TEST(diagnosticTunnelLinesCarryCodesNotProse) {
   // an unsafe stop's reason may be a phrase; a message never passes
   UR_EXPECT_TRUE(diag::TunnelEndedLine("stopped", "dns override lost", "dns_apply_failed") ==
                  "stopped reason=dns-override-lost code=dns_apply_failed");
-  UR_EXPECT_TRUE(diag::TunnelEndedLine("stopped", "tun 10.0.0.1 failed", "") ==
+  UR_EXPECT_TRUE(diag::TunnelEndedLine("stopped", "tun 198.51.100.1 failed", "") ==
                  "stopped reason=other code=none");
   UR_EXPECT_TRUE(diag::DnsOverrideLine("lost", false, "direct-file") ==
                  "override=lost applied=no backend=direct-file");
