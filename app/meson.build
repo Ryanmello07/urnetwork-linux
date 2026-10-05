@@ -519,7 +519,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # official repo, the tag grammar, the own-arch asset and its digest, the
 # install-kind probe, the launch throttle) and its wiring, the split-rules
 # activity row's reading of the block action reason (the safety-rule chip and
-# the route-locally offer), and the daemon
+# the route-locally offer), the per-app exclusion's slice, rules and call
+# sites, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -603,7 +604,9 @@ urnetwork_tests = executable('urnetwork-tests',
               # TunnelPolicyTest reads Tunnel.cpp to prove the dual-stack guard
               # still has a caller. A predicate with no call site is this
               # project's most-repeated defect, and it is invisible to a test
-              # that only exercises the predicate.
+              # that only exercises the predicate. It reads the per-app
+              # exclusion's call sites, its launcher (../packaging) and
+              # ../../packaging/lib/common.sh the same way.
               # EarningsPageTeardownTest reads EarningsPage.cpp the same way:
               # its destructor must touch no widget (issue #13).
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
@@ -621,6 +624,14 @@ test('appimage-gsettings-schema-closure',
 # API, sha256 digest verified before anything runs. Fake curl/uname, no network.
 test('tarball-update-release-source',
      find_program('../packaging/tarball-update.test.sh'),
+     protocol : 'exitcode')
+
+# urnetwork-exclude: the command runs in the user's urnetwork-exclude.slice,
+# created and let out by urnetworkd before the command starts, and a host
+# without the cgroup v2 unified hierarchy is refused. Fake systemd-run/sleep,
+# nothing on the host touched.
+test('exclude-launcher',
+     find_program('../packaging/urnetwork-exclude.test.sh'),
      protocol : 'exitcode')
 
 # ABI floor gate (APPIMAGE.md R9/§10c): the daemon and the vendored SDK must

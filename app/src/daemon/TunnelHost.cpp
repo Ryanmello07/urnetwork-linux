@@ -124,6 +124,14 @@ const std::string& PlannedTunName() {
 
 TunnelHost::TunnelHost(std::string storageRoot) : storageRoot_(std::move(storageRoot)) {
   cgroup_ = SelfCgroupV2();
+  // urnetwork-exclude needs the unified hierarchy alone; ReportPreflight says
+  // which this host is.
+  {
+    std::ifstream f("/proc/self/cgroup");
+    std::ostringstream text;
+    text << f.rdbuf();
+    cgroupV2Only_ = IsCgroupV2Only(text.str());
+  }
   if (const char* env = std::getenv("URNETWORK_ALLOW_UNPROTECTED_EGRESS");
       env != nullptr && *env != '\0' && std::string(env) != "0") {
     allowUnprotectedEgress_ = true;
@@ -245,9 +253,13 @@ void TunnelHost::SetOwnerConnected(bool connected) {
   }
 }
 
+void TunnelHost::SetOwnerUid(int64_t uid) { ownerUid_.store(uid); }
+
 // ---- the nftables floor ----------------------------------------------------
 
-FilterConfig TunnelHost::FilterConfigForLocked(FilterState state, bool floor) const {
+FilterConfig TunnelHost::FilterConfigForLocked(FilterState state, bool floor,
+                                               uint64_t* excludeId) const {
+  if (excludeId != nullptr) *excludeId = 0;
   FilterConfig cfg;
   cfg.state = state;
   cfg.floor = floor;
@@ -288,12 +300,59 @@ FilterConfig TunnelHost::FilterConfigForLocked(FilterState state, bool floor) co
     // exist.
     cfg.dns_helper_cgroups = DnsHelperCgroupsV2();
   }
+  if (state != FilterState::Off) {
+    // The tunnel owner's urnetwork-exclude slice, in every installed state:
+    // in Armed too, where the floor lets it out and nothing else.
+    const CgroupRef slice = ExcludeSliceLocked(excludeId);
+    if (slice.valid) cfg.exclude_cgroups.push_back(slice);
+  }
   return cfg;
 }
 
+CgroupRef TunnelHost::ExcludeSliceLocked(uint64_t* id) const {
+  if (id != nullptr) *id = 0;
+  // The slice is matched by socket cgroup: the unified hierarchy has to be the
+  // only one, and nft has to support the match (re-probed every session).
+  if (!cgroupV2Only_ || !cgroupSocketMatchSupported_) return CgroupRef();
+  const std::string path = ExcludeSliceCgroupPath(ownerUid_.load());
+  if (path.empty()) return CgroupRef();
+  struct stat st {};
+  const std::string full = std::string("/sys/fs/cgroup/") + path;
+  if (::stat(full.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) return CgroupRef();
+  const uint64_t inode = static_cast<uint64_t>(st.st_ino);
+  if (inode == excludeRefusedId_) return CgroupRef();
+  CgroupRef ref;
+  ref.valid = true;
+  ref.path = path;
+  ref.level = CgroupPathLevel(path);
+  if (id != nullptr) *id = inode;
+  return ref;
+}
+
 bool TunnelHost::InstallFilterLocked(FilterState state, bool floor, std::string* error) {
-  const FilterConfig cfg = FilterConfigForLocked(state, floor);
+  uint64_t excludeId = 0;
+  const FilterConfig cfg = FilterConfigForLocked(state, floor, &excludeId);
   const bool ok = filter_.Apply(cfg, error);
+  if (ok) {
+    // What is IN FORCE: NetFilter::Apply drops a slice the kernel refused.
+    const bool excluded = !filter_.appliedConfig().exclude_cgroups.empty();
+    if (excludeId != 0 && !excluded) {
+      excludeRefusedId_ = excludeId;
+      DaemonLogf("[tunnel] the per-app exclusion for %s could not be installed; its commands "
+                 "stay in the tunnel\n",
+                 cfg.exclude_cgroups.front().path.c_str());
+    }
+    const uint64_t appliedId = excluded ? excludeId : 0;
+    if (appliedId != excludeAppliedId_) {
+      if (appliedId != 0) {
+        DaemonLogf("[tunnel] per-app exclusion in force for %s\n",
+                   cfg.exclude_cgroups.front().path.c_str());
+      } else if (excludeAppliedId_ != 0) {
+        DaemonLogf("[tunnel] per-app exclusion lifted\n");
+      }
+    }
+    excludeAppliedId_ = appliedId;
+  }
 
   // What is IN FORCE, never what was asked for.
   const bool floorInForce = ok && filter_.floorInstalled();
@@ -1340,7 +1399,32 @@ void TunnelHost::MaintainFilterLocked() {
     }
   }
 
-  // 2) TAMPER / FLUSH DETECTION. nftables hands out no notification when a
+  // 2) PER-APP EXCLUSION. nft binds the urnetwork-exclude slice to its cgroup
+  //    id when the ruleset loads, so a slice that appears (the first
+  //    urnetwork-exclude of a login), disappears (logout) or comes back, and a
+  //    tunnel that changes owner, all need the SAME state installed again with
+  //    the slice as it is now. One stat a tick; an nft run only on a change.
+  if (filter_.installed()) {
+    uint64_t excludeId = 0;
+    ExcludeSliceLocked(&excludeId);
+    if (excludeId != excludeAppliedId_ && --excludeRetryTicks_ <= 0) {
+      std::string excludeError;
+      if (ReinstallFilterLocked(&excludeError)) {
+        excludeRetryTicks_ = 0;
+        excludeRetryFailures_ = 0;
+      } else {
+        // The tamper repair's cadence and log rate: an nft that keeps failing
+        // is not worth a fork every second.
+        excludeRetryTicks_ = kFilterVerifyIntervalSeconds;
+        if ((excludeRetryFailures_++ % kFilterVerifyLogEvery) == 0) {
+          DaemonLogf("[tunnel] could not update the per-app exclusion: %s\n",
+                     excludeError.c_str());
+        }
+      }
+    }
+  }
+
+  // 3) TAMPER / FLUSH DETECTION. nftables hands out no notification when a
   //    third party destroys our table, and `nft flush ruleset` is the FIRST
   //    LINE of the /etc/sysconfig/nftables.conf Fedora and Bazzite ship — so
   //    `systemctl restart nftables` silently deletes `table inet urnetwork`,

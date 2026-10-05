@@ -157,6 +157,7 @@ else
     MANIFEST="${LIB_DIR}/urnetworkd
 ${LIB_DIR}/libURnetworkSdk.so
 ${BIN_DIR}/urnetwork
+${BIN_DIR}/urnetwork-exclude
 /lib/systemd/system/urnetworkd.service
 /usr/lib/systemd/system/urnetworkd.service
 /etc/systemd/system/urnetworkd.service

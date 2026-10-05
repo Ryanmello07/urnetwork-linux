@@ -44,6 +44,20 @@ binary names and artifact names.
   `~/Applications/URnetwork*.AppImage`, `/usr/lib/urnetwork/URnetwork.AppImage`,
   `urnetwork-gui` on `$PATH`, then the `com.bringyour.network` Flatpak.
 
+## Excluding an app from the tunnel
+
+`urnetwork-exclude <command> [<argument>...]`, installed by the daemon package,
+runs a command and everything it starts outside the tunnel: its traffic leaves
+through the physical network, and the kill switch does not block it, while
+everything else stays in the tunnel. The command runs in the user's systemd
+slice `urnetwork-exclude.slice`, and urnetworkd lets that slice out only for the
+user who started the tunnel. It needs systemd and the cgroup v2 unified
+hierarchy and refuses on other hosts. Start the app this way while it is not
+already running: an app that hands its window to an instance that is already
+running stays in the tunnel with that instance. On a systemd-resolved host the
+command's name lookups still go through the tunnel's DNS, so while the kill
+switch blocks the machine after a drop it can connect but not resolve names.
+
 ## Stack
 
 **C++17 + GTK4 (gtkmm-4.0) + libadwaita**, on top of the shared **cgo SDK**
