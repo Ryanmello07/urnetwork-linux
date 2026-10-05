@@ -2,8 +2,9 @@
 // migration host, and every launch moves a space stored under the retired
 // ur.network key BEFORE the bundled space is built or any NetworkSpace is
 // taken from the manager. The build writes the official values over what the
-// space stores, so a launch never wipes a VLESS server saved in it. The
-// bootstrap is templated over the SDK's shapes
+// space stores, so a launch never wipes a VLESS server saved in it, and the GUI
+// then binds the space the user last chose in the network sheet, so a custom
+// server survives a relaunch. The bootstrap is templated over the SDK's shapes
 // (NetworkSpaceBootstrap.hpp), so a recording fake stands in for the manager
 // here and the ORDER of the calls is what this file pins. The call sites in
 // SdkHost.cpp and the daemon's TunnelHost.cpp are read as text, the way
@@ -35,6 +36,7 @@ using urnw::kUrEnvName;
 using urnw::kUrHostName;
 using urnw::kUrLegacyHostName;
 using urnw::kUrLinkHostName;
+using urnw::LaunchUrNetworkSpace;
 using urnw::MigrateLegacyUrNetworkSpace;
 using urnw::UrNetworkSpaceKey;
 using urnw::UrNetworkSpaceValues;
@@ -105,6 +107,9 @@ struct RecordingManager {
   bool migrateResult = false;
   // what the space under the current key stores, as its toJson() ("" = none)
   std::string storedJson;
+  // the space the manager's storage records as active (none = no selection);
+  // the SDK keeps a space active across its own rebuild, so a key stands in
+  std::optional<Key> activeKey;
   mutable std::vector<std::string> calls;
   std::optional<Values> built;
 
@@ -119,9 +124,29 @@ struct RecordingManager {
   Space updateNetworkSpaceValues(const std::optional<Key>& key, const std::optional<Values>& values) {
     calls.push_back("update " + Show(key));
     built = values;
-    return Space{key.value_or(Key{}), std::string()};
+    return Space{key.value_or(Key{}), "{}"};
+  }
+  Space getActiveNetworkSpace() const {
+    calls.push_back("active");
+    if (!activeKey) return Space{};
+    return Space{*activeKey, "{}"};
+  }
+  void setActiveNetworkSpace(const Space& space) {
+    calls.push_back("activate " + Show(space.key));
+    activeKey = space.key;
   }
 };
+
+Key CustomKey() {
+  Key key;
+  key.host_name = "example.test";
+  key.env_name = "main";
+  return key;
+}
+
+// A bundled space an earlier launch stored.
+constexpr const char* kStoredBundledJson =
+    R"({"key": {"host_name": "bringyour.com", "env_name": "main"}, "values": {"bundled": true}})";
 
 std::string ReadSource(const std::string& relative) {
   std::ifstream in(std::string(UR_SRC_DIR) + "/" + relative, std::ios::binary);
@@ -283,6 +308,80 @@ UR_TEST(theLegacyMoveIsFromTheRetiredKeyToTheCurrentOne) {
   UR_EXPECT_TRUE(key.env_name == std::optional<std::string>("main"));
 }
 
+// ---- the space the GUI binds at launch ------------------------------------------
+
+// The relaunch after the user applied a custom server in the network sheet:
+// the manager recorded that space as active, and the launch binds it -- its jwt
+// and its api with it -- instead of the bundled one, which is still refreshed.
+UR_TEST(aCustomServerChosenBeforeTheRelaunchIsBound) {
+  RecordingManager manager;
+  manager.storedJson = kStoredBundledJson;
+  manager.activeKey = CustomKey();
+  const Space space = LaunchUrNetworkSpace<Key, Values>(manager);
+  UR_EXPECT_TRUE_MSG("bound " + Show(space.key), space.key.host_name == CustomKey().host_name);
+  UR_EXPECT_TRUE_MSG("the choice is kept", manager.activeKey &&
+                                               manager.activeKey->host_name == CustomKey().host_name);
+  bool refreshed = false;
+  for (const auto& call : manager.calls) {
+    UR_EXPECT_TRUE_MSG("a relaunch overrode the user's choice: " + call,
+                       call.rfind("activate", 0) != 0);
+    refreshed = refreshed || call == "update bringyour.com/main";
+  }
+  UR_EXPECT_TRUE_MSG("the bundled space is still refreshed", refreshed);
+}
+
+// A first launch: no bundled space yet and nothing active, so the bundled
+// space is created, made active and bound.
+UR_TEST(aFirstLaunchActivatesTheBundledSpace) {
+  RecordingManager manager;
+  const Space space = LaunchUrNetworkSpace<Key, Values>(manager);
+  UR_EXPECT_TRUE(space.key.host_name == std::optional<std::string>("bringyour.com"));
+  UR_EXPECT_TRUE(manager.activeKey &&
+                 manager.activeKey->host_name == std::optional<std::string>("bringyour.com"));
+}
+
+// A bundled space with nothing recorded active (a storage that predates the
+// selection, or one that did not read) is made active, as on android and apple.
+UR_TEST(aLaunchWithNothingActiveActivatesTheBundledSpace) {
+  RecordingManager manager;
+  manager.storedJson = kStoredBundledJson;
+  const Space space = LaunchUrNetworkSpace<Key, Values>(manager);
+  UR_EXPECT_TRUE(space.key.host_name == std::optional<std::string>("bringyour.com"));
+  UR_EXPECT_TRUE(manager.activeKey &&
+                 manager.activeKey->host_name == std::optional<std::string>("bringyour.com"));
+}
+
+// A bundled space created by this launch takes over from whatever was active:
+// a new bundle replaces the one the selection was made under.
+UR_TEST(aNewlyCreatedBundledSpaceIsActivated) {
+  RecordingManager manager;
+  manager.activeKey = CustomKey();
+  const Space space = LaunchUrNetworkSpace<Key, Values>(manager);
+  UR_EXPECT_TRUE(space.key.host_name == std::optional<std::string>("bringyour.com"));
+}
+
+// The ORDER: the legacy move first, the bundled space's existence sampled
+// before the refresh can create it, and the selection read after the refresh.
+UR_TEST(theLaunchSamplesTheBundledSpaceBeforeTheRefresh) {
+  RecordingManager manager;
+  manager.storedJson = kStoredBundledJson;
+  manager.activeKey = CustomKey();
+  LaunchUrNetworkSpace<Key, Values>(manager);
+  const std::vector<std::string> expected = {
+      "migrate ur.network/main -> bringyour.com/main",
+      "get bringyour.com/main",  // did the bundled space exist
+      "get bringyour.com/main",  // what it stores, for the refresh
+      "update bringyour.com/main",
+      "active",  // a selection to keep
+      "active",  // the space bound
+  };
+  UR_EXPECT_EQ(static_cast<double>(expected.size()), static_cast<double>(manager.calls.size()));
+  for (size_t i = 0; i < expected.size() && i < manager.calls.size(); ++i) {
+    UR_EXPECT_TRUE_MSG("call " + std::to_string(i) + ": " + manager.calls[i],
+                       manager.calls[i] == expected[i]);
+  }
+}
+
 // ---- the call sites ---------------------------------------------------------
 
 UR_TEST(theGuiBootstrapsTheSpaceWhereItCreatesTheManager) {
@@ -293,10 +392,13 @@ UR_TEST(theGuiBootstrapsTheSpaceWhereItCreatesTheManager) {
   }
   const std::string init = FunctionBody(source, "bool SdkHost::Initialize(");
   UR_EXPECT_TRUE_MSG("Initialize creates the manager", Has(init, "newNetworkSpaceManager("));
-  UR_EXPECT_TRUE_MSG("Initialize runs the bootstrap (the legacy move rides in it)",
-                     Has(init, "BuildUrNetworkSpace(*spaceManager_)"));
-  UR_EXPECT_TRUE_MSG("the bootstrap runs before anything is derived from the space",
-                     Position(init, "BuildUrNetworkSpace(") < Position(init, "getApi()"));
+  UR_EXPECT_TRUE_MSG("Initialize runs the launch (the legacy move and the bootstrap ride in it) "
+                     "and binds the space it answers",
+                     Has(init, "networkSpace_ = LaunchUrNetworkSpace(*spaceManager_);"));
+  UR_EXPECT_TRUE_MSG("the launch runs before anything is derived from the space",
+                     Position(init, "LaunchUrNetworkSpace(") < Position(init, "getApi()"));
+  UR_EXPECT_TRUE_MSG("the GUI binds the user's choice, not always the bundled space",
+                     !Has(init, "BuildUrNetworkSpace("));
   // the network-server switch writes the shared host values, not its own copy
   // with a migration host of its own -- over what the space stores under the
   // key it writes

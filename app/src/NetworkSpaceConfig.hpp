@@ -62,6 +62,14 @@ inline urnet::NetworkSpace BuildUrNetworkSpace(urnet::NetworkSpaceManager& manag
   return BootstrapUrNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(manager);
 }
 
+// The GUI's launch: the same build/refresh, then the space the user last
+// chose in the network sheet, which the manager persisted as active
+// (NetworkSpaceBootstrap.hpp LaunchUrNetworkSpace). The daemon keeps
+// BuildUrNetworkSpace: it binds the space start_tunnel hands it.
+inline urnet::NetworkSpace LaunchUrNetworkSpace(urnet::NetworkSpaceManager& manager) {
+  return LaunchUrNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(manager);
+}
+
 // The value set of a host's space that stores nothing yet
 // (NetworkSpaceBootstrap.hpp).
 inline urnet::NetworkSpaceValues UrNetworkSpaceValues(bool official, const std::string& hostName) {
