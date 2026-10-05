@@ -627,12 +627,22 @@ UR_TEST(VlessErrors_EveryIdHasItsMessage) {
   UR_EXPECT_EQ(12, static_cast<int>(keys.size()));
 }
 
-// An id this build does not know is still a refusal: the invalid-link message,
-// never a raw key on screen.
-UR_TEST(VlessErrors_AnUnknownIdReadsAsAnInvalidLink) {
-  for (const char* id : {"", "vless_error_from_the_future", "something_went_wrong"}) {
-    UR_EXPECT_TEXT("vless_error_link_invalid", std::string(urnw::vless::ErrorText(id).key));
+// An id this build does not know -- the C ABI's internal one for a call that
+// could not run, or a newer SDK's -- is no refusal the user caused: the generic
+// message, never a raw key and never an invalid link. A save that never ran
+// says so, and nothing reads as saved.
+UR_TEST(VlessErrors_AnUnknownOrInternalIdReadsAsTheGenericMessage) {
+  UR_EXPECT_TEXT("internal_error", std::string(urnw::vless::kErrorInternal));
+  for (const char* id : {urnw::vless::kErrorInternal, "", "vless_error_from_the_future",
+                         "VLESS_ERROR_PORT_INVALID"}) {
+    const Text text = urnw::vless::ErrorText(id);
+    UR_EXPECT_TEXT("something_went_wrong", std::string(text.key));
+    UR_EXPECT_TEXT("Something went wrong.", std::string(text.english));
   }
+  const auto failed = urnw::vless::SaveOutcomeFor(urnw::vless::kErrorInternal);
+  UR_EXPECT_FALSE(failed.saved);
+  UR_EXPECT_TEXT("something_went_wrong", std::string(failed.message.key));
+  UR_EXPECT_TRUE(failed.note.key.empty());
 }
 
 // Saved carries the next-connect note (the VPN runs in urnetworkd, which reads
@@ -675,6 +685,7 @@ UR_TEST(VlessText_KeysAreTheCatalogs) {
         urnw::vless::kErrorPublicKeyInvalid, urnw::vless::kErrorShortIdInvalid}) {
     texts.push_back(urnw::vless::ErrorText(id));
   }
+  texts.push_back(urnw::vless::ErrorText(urnw::vless::kErrorInternal));
   const auto saved = urnw::vless::SaveOutcomeFor("");
   texts.push_back(saved.message);
   texts.push_back(saved.note);
@@ -687,8 +698,8 @@ UR_TEST(VlessText_KeysAreTheCatalogs) {
     UR_EXPECT_TRUE_MSG(entry, catalog.find(entry) != std::string::npos);
   }
   // 3 networks, none (shared by security, flow and fingerprint), tls, reality,
-  // vision, the 12 errors, saved and the next-connect note
-  UR_EXPECT_EQ(21, static_cast<int>(keys.size()));
+  // vision, the 12 errors, the generic message, saved and the next-connect note
+  UR_EXPECT_EQ(22, static_cast<int>(keys.size()));
 }
 
 // ---- the stored network space values ---------------------------------------------------
@@ -845,6 +856,19 @@ UR_TEST(VlessWiring_SpaceWritesStartFromTheStoredValues) {
   UR_EXPECT_TRUE(Contains(save, "networkSpace_->setVlessSettings(settings)"));
   UR_EXPECT_TRUE_MSG("a VLESS save does not rebuild the space",
                      !Contains(save, "updateNetworkSpaceValues"));
+}
+
+// A check that could not run answers what the C ABI answers for a call that
+// could not run, so it reads as the generic message: never a pass, and never
+// an invalid link the user did not paste.
+UR_TEST(VlessWiring_AValidateThatThrowsAnswersTheInternalId) {
+  const std::string host = ReadVlessSource("SdkHost.cpp");
+  const std::string validate =
+      VlessFunctionBody(host, "std::string SdkHost::ValidateVlessSettings(");
+  UR_EXPECT_TRUE(!validate.empty());
+  UR_EXPECT_TRUE(Contains(validate, "return vless::kErrorInternal;"));
+  UR_EXPECT_TRUE_MSG("a validate that throws reads as an invalid link",
+                     !Contains(validate, "VlessErrorLinkInvalid"));
 }
 
 // Both doors open the same editor: the Settings row and the login screen's

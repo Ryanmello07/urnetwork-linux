@@ -454,10 +454,11 @@ class SdkHost {
   std::optional<std::string> SetVlessSettings(const urnet::VlessSettings& settings);
   // The SDK's free functions, wrapped so an SDK exception never reaches a view.
   // They touch no host state. ParseVlessLink: nullopt when the call failed (the
-  // caller reads that as an invalid link); otherwise Settings (enabled) or an
+  // caller says something went wrong); otherwise Settings (enabled) or an
   // Error id. VlessSettingsLink: "" when the settings do not validate.
   // ValidateVlessSettings: "" or the error id of the first problem (whether the
-  // settings are enabled does not matter).
+  // settings are enabled does not matter), vless::kErrorInternal when the call
+  // failed.
   static std::optional<urnet::VlessLinkResult> ParseVlessLink(const std::string& link);
   static std::string VlessSettingsLink(const urnet::VlessSettings& settings);
   static std::string ValidateVlessSettings(const urnet::VlessSettings& settings);

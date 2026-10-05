@@ -32,6 +32,7 @@
 #include "SecretServiceRpcSessionStore.hpp"
 #include "SsoBridge.hpp"
 #include "Ui.hpp"  // PostToMain — the only UI dependency here, and only to marshal
+#include "VlessPresentation.hpp"
 #include "WalletBridgeRoute.hpp"
 
 // The release version, threaded in via the -Dapp_version meson option (the
@@ -782,9 +783,10 @@ std::string SdkHost::ValidateVlessSettings(const urnet::VlessSettings& settings)
   try {
     return urnet::validateVlessSettings(settings);
   } catch (const std::exception& e) {
-    // a check that could not run is not a pass
+    // a check that could not run is not a pass, and no refusal of the
+    // settings either: the C ABI's own answer for a call that could not run
     std::fprintf(stderr, "[sdk] validateVlessSettings failed: %s\n", e.what());
-    return urnet::VlessErrorLinkInvalid;
+    return vless::kErrorInternal;
   }
 }
 
