@@ -3232,7 +3232,22 @@ void EarningsPage::LoadLegacyWallets(bool reset) {
 }
 
 void EarningsPage::ApplyLegacyWallets() {
-  if (legacyLoad_.Commit(legacyCommitted_)) RebuildSolanaCard();
+  if (legacyLoad_.Commit(legacyCommitted_)) {
+    RebuildSolanaCard();
+    NotifyPromotedPayoutWallet();
+  }
+}
+
+void EarningsPage::NotifyPromotedPayoutWallet() {
+  if (!payoutRemoval_) return;
+  const solana::PayoutRemoval removal = *payoutRemoval_;
+  payoutRemoval_.reset();
+  // the card shows the promoted wallet now; the line says payouts moved to it
+  if (const auto promoted = solana::PromotedPayoutWallet(removal, legacyCommitted_)) {
+    Notify(Format(T_("payouts_now_go_to", "Payouts now go to {}."),
+                  solana::ShortAddress(promoted->address)),
+           kit::Snackbar::Severity::Success);
+  }
 }
 
 void EarningsPage::RebuildSolanaCard() {
@@ -3463,16 +3478,19 @@ void EarningsPage::RemoveSolanaWallet(const std::string& walletId) {
   });
   urnet::RemoveWalletArgs args;
   args.wallet_id = walletId;
+  // the payout wallet now, to tell a promotion from no payout wallet afterwards
+  const solana::PayoutRemoval removal{legacyCommitted_.networkId, walletId,
+                                      legacyCommitted_.payoutWalletId};
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   host_.api().removeWallet(
-      args, [this, epoch, seen, generation](std::optional<urnet::RemoveWalletResult> result,
-                                            std::optional<std::string> err) {
+      args, [this, epoch, seen, generation, removal](std::optional<urnet::RemoveWalletResult> result,
+                                                     std::optional<std::string> err) {
         const bool ok = !err.has_value() && result.has_value() && result->success;
         std::string detail;
         if (result && result->error) detail = result->error->message;
         if (detail.empty() && err) detail = *err;
-        PostToMain([this, epoch, seen, generation, ok, detail] {
+        PostToMain([this, epoch, seen, generation, ok, detail, removal] {
           if (*epoch != seen) return;
           if (!SettleFlow(removeSolanaFlow_, generation, "wallet removal")) return;
           removingSolanaWallet_ = false;
@@ -3483,8 +3501,12 @@ void EarningsPage::RemoveSolanaWallet(const std::string& walletId) {
             RebuildSolanaCard();
             return;
           }
-          // the removal reports itself by the card leaving: the store has no
-          // "wallet removed" sentence, and inventing English is banned
+          // Removing the payout wallet makes another active Solana or Polygon
+          // wallet the payout wallet when the network has one: the round after
+          // it names it (NotifyPromotedPayoutWallet). Otherwise the removal
+          // reports itself by the card leaving: the store has no "wallet
+          // removed" sentence, and inventing English is banned.
+          payoutRemoval_ = removal;
           LoadLegacyWallets(/*reset=*/true);
         });
       });

@@ -25,8 +25,10 @@ using urnw::solana::LegacyReads;
 using urnw::solana::LegacyWallet;
 using urnw::solana::LooksLikeSolanaAddress;
 using urnw::solana::NeedsPayoutSwitch;
+using urnw::solana::PayoutRemoval;
 using urnw::solana::PayoutWalletFor;
 using urnw::solana::PendingUsdcNanoCents;
+using urnw::solana::PromotedPayoutWallet;
 using urnw::solana::ShortAddress;
 
 namespace {
@@ -735,3 +737,64 @@ UR_TEST(SolanaWallet_AFailureWithWordsShowsThem) {
 UR_TEST(SolanaWallet_AFailureWithoutWordsIsSomethingWentWrong) {
   UR_EXPECT_TRUE(std::string(FailureKey("")) == "something_went_wrong");
 }
+
+// ---- a removal that promotes another payout wallet
+
+namespace {
+
+// the round after removing "w-sol" from net-1, whose payout wallet it was
+LegacyCommitted RoundAfterRemoval(std::vector<LegacyWallet> wallets, const std::string& payoutId,
+                                  bool payoutOk = true) {
+  LegacyCommitted committed;
+  LegacyLoad load;
+  AnswerRound(load, load.Begin(committed, "net-1", false), {Wallet("w-sol", "SOL")}, "w-sol", 0);
+  load.Commit(committed);
+  const uint64_t round = load.Begin(committed, "net-1", /*reset=*/true);
+  load.AnswerWallets(round, true, std::move(wallets));
+  load.AnswerPayout(round, payoutOk, payoutId);
+  load.AnswerPayments(round, true, 0);
+  load.Commit(committed);
+  return committed;
+}
+
+const PayoutRemoval kRemovedPayout{"net-1", "w-sol", "w-sol"};
+
+}  // namespace
+
+// Removing the payout wallet makes another active Solana or Polygon wallet of
+// the network the payout wallet when there is one (server
+// fix/remove-wallet-promote); the round after the removal names it.
+UR_TEST(SolanaWallet_RemovingThePayoutWalletNamesThePromotedOne) {
+  const LegacyCommitted committed =
+      RoundAfterRemoval({Wallet("w-sol-2", "SOL"), Wallet("w-matic", "MATIC")}, "w-sol-2");
+  const auto promoted = PromotedPayoutWallet(kRemovedPayout, committed);
+  UR_EXPECT_TRUE(promoted.has_value());
+  UR_EXPECT_TRUE(promoted && promoted->id == "w-sol-2");
+  UR_EXPECT_TRUE(CardFor(committed).showCard);
+
+  const auto polygon = PromotedPayoutWallet(kRemovedPayout, RoundAfterRemoval({Wallet("w-matic", "MATIC")}, "w-matic"));
+  UR_EXPECT_TRUE(polygon && polygon->id == "w-matic");
+}
+
+UR_TEST(SolanaWallet_ARemovalThatPromotedNothingNamesNothing) {
+  // no other Solana or Polygon wallet: no payout id, so the removed id stands
+  const LegacyCommitted none = RoundAfterRemoval({Wallet("w-matic", "MATIC", false)}, "");
+  UR_EXPECT_TRUE(none.payoutWalletId == "w-sol");
+  UR_EXPECT_FALSE(PromotedPayoutWallet(kRemovedPayout, none).has_value());
+  // a failed payout read says nothing about where payouts go
+  UR_EXPECT_FALSE(PromotedPayoutWallet(kRemovedPayout,
+                                       RoundAfterRemoval({Wallet("w-sol-2", "SOL")}, "w-sol-2", false))
+                      .has_value());
+  // a payout wallet the card cannot show (a TAO account wallet)
+  UR_EXPECT_FALSE(PromotedPayoutWallet(kRemovedPayout, RoundAfterRemoval({Wallet("w-tao", "TAO")}, "w-tao"))
+                      .has_value());
+}
+
+UR_TEST(SolanaWallet_OnlyARemovedPayoutWalletOnThisNetworkNamesOne) {
+  const LegacyCommitted committed = RoundAfterRemoval({Wallet("w-sol-2", "SOL")}, "w-sol-2");
+  const PayoutRemoval notPayout{"net-1", "w-other", "w-sol"};
+  UR_EXPECT_FALSE(PromotedPayoutWallet(notPayout, committed).has_value());
+  const PayoutRemoval otherNetwork{"net-2", "w-sol", "w-sol"};
+  UR_EXPECT_FALSE(PromotedPayoutWallet(otherNetwork, committed).has_value());
+}
+

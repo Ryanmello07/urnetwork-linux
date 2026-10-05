@@ -392,6 +392,8 @@ class EarningsPage : public Gtk::Box {
   // write) hides it until they land.
   void LoadLegacyWallets(bool reset = false);
   void ApplyLegacyWallets();  // commits a round once all three reads answered
+  // the round after a removal committed: name the wallet the server promoted
+  void NotifyPromotedPayoutWallet();
   void RebuildSolanaCard();
   void OnConnectSolanaWallet();  // the overflow's item: the connect sheet
   // The sheet linked `walletId`: make it the payout wallet unless a fresh read
@@ -649,6 +651,8 @@ class EarningsPage : public Gtk::Box {
   bool applyingRankingToggle_ = false;  // ECHO GUARD on the public switch
   bool leaderboardRequested_ = false;
   bool removingSolanaWallet_ = false;
+  // a removal that landed, until the round of reads after it commits
+  std::optional<solana::PayoutRemoval> payoutRemoval_;
   bool switchingPayoutWallet_ = false;  // the fresh read and the switch after a link
 
   // manual entry validation: the verdict for the address in the box
