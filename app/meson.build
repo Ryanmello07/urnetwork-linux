@@ -309,6 +309,7 @@ executable('urnetworkd',
     'src/daemon/DaemonLog.cpp',
     'src/daemon/HostMemory.cpp',
     'src/daemon/NetworkCountryWatcher.cpp',
+    'src/daemon/SupportDiagnostics.cpp',
     'src/Tunnel.cpp',
     'src/ControlClient.cpp',
     'src/LocationOverride.cpp',
@@ -536,8 +537,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # sites, what a network peer row connects to, the provider card's idle
 # reason, status line, demand histogram and ranking rows, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
-# country's operator-code table and default-route rule, and the daemon
-# control protocol: framing,
+# country's operator-code table and default-route rule, the support log's
+# lines and their filters, and the daemon control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
 # authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
@@ -630,6 +631,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ExcludeLauncherTest.cpp',
     'tests/NetworkCountryTest.cpp',
     'tests/NetworkCountryWiringTest.cpp',
+    'tests/DiagnosticLinesTest.cpp',
+    'tests/DiagnosticLogWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -657,7 +660,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # ProviderOnlyStatusWiringTest its statistics and settings call sites.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and
-              # GUI call sites the same way.
+              # GUI call sites the same way, and DiagnosticLogWiringTest the support log's.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

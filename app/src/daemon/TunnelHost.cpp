@@ -21,6 +21,7 @@
 #include "TunnelPolicy.hpp"
 #include "daemon/HostMemory.hpp"
 #include "daemon/DaemonLog.hpp"
+#include "daemon/SupportDiagnostics.hpp"
 
 namespace urnw {
 namespace {
@@ -413,6 +414,20 @@ bool TunnelHost::InstallFilterLocked(FilterState state, bool floor, std::string*
         "the machine stays blocked; recover with: %s\n",
         ToString(state), NetFilter::RecoveryCommand());
   }
+  // The support log's view of the same: what is in force after this
+  // transaction, which is what a "my network is blocked" report needs.
+  {
+    diag::KillSwitchFacts facts;
+    facts.requested = killSwitchRequested_.load();
+    facts.state = ToString(filter_.state());
+    facts.published = ctl::ToString(Status().kill_switch);
+    facts.floor = filter_.floorInstalled();
+    facts.ipv6_blocked = filter_.installed() && RulesetBlocksIpv6(filter_.appliedConfig());
+    facts.dns_floor = filter_.installed() && RulesetPinsDns(filter_.appliedConfig());
+    facts.exclusion = excludeAppliedId_ != 0;
+    facts.applied = ok;
+    support::LogKillSwitch(facts);
+  }
   return ok;
 }
 
@@ -572,6 +587,10 @@ urnet::DeviceLocal TunnelHost::NewDeviceLocked(const std::string& byJwt,
 }
 
 void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
+  // The up edge's support lines, written after opMutex_ is released: they fork
+  // resolvectl, which must not hold up a Disconnect or the reaper.
+  std::optional<diag::TunnelUpFacts> upFacts;
+  std::string upInterface;
   {
     std::scoped_lock lock(opMutex_);
     // What was in force BEFORE this attempt, captured before anything can
@@ -1009,6 +1028,13 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
                    tunnel_->report().ipv6_captured ? 1 : 0,
                    tunnel_->report().egress_protected ? 1 : 0,
                    tunnel_->report().dns_applied ? 1 : 0);
+      upFacts.emplace();
+      upFacts->dns_backend = support::DnsBackendName(tunnel_->dnsBackend());
+      upFacts->dns_applied = tunnel_->report().dns_applied;
+      upFacts->ipv6_captured = tunnel_->report().ipv6_captured;
+      upFacts->egress_protected = tunnel_->report().egress_protected;
+      upFacts->socket_marker = socketMarkerProven_;
+      upInterface = tunnel_->name();
     } catch (const std::exception& e) {
       {
         std::scoped_lock lock(statusMutex_);
@@ -1076,9 +1102,13 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
           status_.kill_switch_detail = keptError;
         }
       }
+      // The code, never the prose: the message can name paths and addresses.
+      support::LogTunnelEnded("start-failed", "start_failed", keptCode);
+      support::LogConnectivity("start-failed");
     }
   }
   busy_.store(false);
+  if (upFacts) support::LogTunnelUp(*upFacts, upInterface);
 }
 
 void TunnelHost::Stop(const std::string& reason) {
@@ -1343,6 +1373,8 @@ void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
     status_.error = detail;
     status_.error_code = code;
   }
+  // Touches no status_ field, so the rule above holds.
+  support::LogTunnelEnded("stopped", reason, code);
 }
 
 // ---- provide mode / kill switch --------------------------------------------
@@ -1806,6 +1838,7 @@ void TunnelHost::MaintainDnsLocked() {
     status_.dns_applied = tunnel_->report().dns_applied;
     status_.dns_detail = tunnel_->report().dns_detail;
   }
+  support::LogDnsOverride("lost", applied, tunnel_->dnsBackend());
   if (applied) {
     dnsVerifyFailures_ = 0;
     DaemonLogf("[tunnel] the DNS override has been re-applied (%s)\n",
@@ -2027,6 +2060,7 @@ void TunnelHost::Reap() {
     try {
       if (networkChange == LinuxNetworkChange::Path) {
         DaemonLogf("[tunnel] physical network path changed; refreshing transports\n");
+        support::LogConnectivity("path-change");
         liveDevice->networkChanged();
       } else if (networkChange == LinuxNetworkChange::Quality) {
         DaemonLogf("[tunnel] physical network quality changed; remeasuring transfer pacing\n");
@@ -2114,6 +2148,7 @@ void TunnelHost::Reap() {
       status_.error = "the tunnel stopped unexpectedly";
       status_.error_code = ctl::kCodeTunOpenFailed;
     }
+    support::LogTunnelEnded("stopped", "io_loop", ctl::kCodeTunOpenFailed);
     return;
   }
 
@@ -2143,6 +2178,7 @@ void TunnelHost::OnResolvedAppeared(GDBusConnection*, const gchar*, const gchar*
     self->status_.dns_applied = report.dns_applied;
     self->status_.dns_detail = report.dns_detail;
   }
+  support::LogDnsOverride("resolved-restarted", applied, self->tunnel_->dnsBackend());
   // The DNS port floor is only correct while the override is in force, and the
   // resolvers it pins come back out of the tunnel on this same pass — so this
   // re-apply is what keeps the pinned :53 permit naming the servers resolved
