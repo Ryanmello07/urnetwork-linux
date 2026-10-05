@@ -713,6 +713,11 @@ msgctxt "bittensor"
 msgid "Bittensor"
 msgstr "Bittensor"
 
+#. ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
+msgctxt "bittensor_error_address_not_in_wallet"
+msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
+msgstr "Din {}-plånbok har inte adressen du angav. Lägg till eller anslut det kontot i plånboken, eller ange en adress som finns i den."
+
 #. Call to action
 msgctxt "bittensor_sign_in"
 msgid "Sign in with Bittensor"
