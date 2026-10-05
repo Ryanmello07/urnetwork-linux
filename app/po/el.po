@@ -713,10 +713,35 @@ msgctxt "bittensor"
 msgid "Bittensor"
 msgstr "Bittensor"
 
-#. ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
+#. Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
 msgctxt "bittensor_error_address_not_in_wallet"
 msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
 msgstr "Το πορτοφόλι {} σας δεν περιέχει τη διεύθυνση που εισαγάγατε. Προσθέστε ή συνδέστε αυτόν τον λογαριασμό στο πορτοφόλι ή εισαγάγετε μια διεύθυνση που περιέχει."
+
+#. Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).
+msgctxt "bittensor_error_extension_not_found"
+msgid "The {} extension was not found in this browser. Install it, then try again."
+msgstr "Η επέκταση {} δεν βρέθηκε σε αυτό το πρόγραμμα περιήγησης. Εγκαταστήστε την και δοκιμάστε ξανά."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
+msgctxt "bittensor_error_no_account"
+msgid "Your {} wallet has no account to sign with. Add or connect an account in the wallet, then try again."
+msgstr "Το πορτοφόλι {} σας δεν έχει λογαριασμό για υπογραφή. Προσθέστε ή συνδέστε έναν λογαριασμό στο πορτοφόλι και δοκιμάστε ξανά."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.
+msgctxt "bittensor_error_user_rejected"
+msgid "The request was declined in your wallet. Start again and approve it to continue."
+msgstr "Το αίτημα απορρίφθηκε στο πορτοφόλι σας. Ξεκινήστε ξανά και εγκρίνετέ το για να συνεχίσετε."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_expired: the WalletConnect pairing or the signature request ran out of time before the wallet answered. WalletConnect is a product name.
+msgctxt "bittensor_error_walletconnect_expired"
+msgid "The WalletConnect request expired before the wallet answered. Start again."
+msgstr "Το αίτημα WalletConnect έληξε πριν απαντήσει το πορτοφόλι. Ξεκινήστε ξανά."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.
+msgctxt "bittensor_error_walletconnect_unavailable"
+msgid "WalletConnect is not available right now. Try again later, or enter your address manually."
+msgstr "Το WalletConnect δεν είναι διαθέσιμο αυτή τη στιγμή. Δοκιμάστε ξανά αργότερα ή εισαγάγετε τη διεύθυνσή σας χειροκίνητα."
 
 #. Call to action
 msgctxt "bittensor_sign_in"
