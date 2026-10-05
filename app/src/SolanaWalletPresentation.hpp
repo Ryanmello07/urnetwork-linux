@@ -297,6 +297,35 @@ inline CardView CardFor(const LegacyCommitted& committed) {
                  committed.pendingNanoCents);
 }
 
+// ---- a removal that promotes another payout wallet --------------------------------
+
+// A removal of the payout wallet, waiting for the round of reads after it.
+struct PayoutRemoval {
+  std::string networkId;      // the network the wallet was removed from
+  std::string removedId;      // the wallet removed
+  std::string priorPayoutId;  // the payout wallet id before the removal
+};
+
+// The wallet that became the payout wallet when `removal` removed it, from the
+// round committed after the removal: removing the payout wallet makes another
+// active Solana or Polygon wallet of the network the payout wallet when there
+// is one (server fix/remove-wallet-promote), and the page says so ("Payouts now
+// go to …", payouts_now_go_to). Nothing when the removed wallet was not the
+// payout wallet, when the payout read failed or found none (an empty id keeps
+// the removed one), when the new payout wallet is not one the card shows, or
+// for another network's round.
+inline std::optional<LegacyWallet> PromotedPayoutWallet(const PayoutRemoval& removal,
+                                                        const LegacyCommitted& committed) {
+  if (removal.removedId.empty() || removal.priorPayoutId != removal.removedId) return std::nullopt;
+  if (committed.networkId != removal.networkId || !committed.ready || !committed.reads.payout) {
+    return std::nullopt;
+  }
+  if (committed.payoutWalletId.empty() || committed.payoutWalletId == removal.removedId) {
+    return std::nullopt;
+  }
+  return PayoutWalletFor(committed.wallets, committed.payoutWalletId);
+}
+
 // ---- the connect sheet -----------------------------------------------------------
 
 // The store key a connect, link or remove failure renders with -- one rule on

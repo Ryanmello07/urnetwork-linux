@@ -3581,6 +3581,11 @@ msgctxt "payout_wallet_updated"
 msgid "Payout wallet updated"
 msgstr "Portefeuille de paiement mis à jour"
 
+#. Status line or snackbar after removing the payout wallet made another of the account's wallets the payout wallet (the server promotes the newest other Solana or Polygon wallet). The placeholder is the new payout wallet's shortened address, its first and last four characters around an ellipsis.
+msgctxt "payouts_now_go_to"
+msgid "Payouts now go to {}."
+msgstr "Les paiements sont désormais envoyés à {}."
+
 #. Post quantum identity panel: peer identity count indicator, singular.
 msgctxt "peer_count_one"
 msgid "1 peer"
