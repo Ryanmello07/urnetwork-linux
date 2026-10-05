@@ -93,6 +93,8 @@ class ReferralsPage : public Gtk::Box {
   Gtk::Button* totalRetry_ = nullptr;   // shown only on a failed read
   Gtk::Button* pointsRetry_ = nullptr;
   kit::PaneTwoLineRowButton referralNetworkRow_;
+  // no referral network linked: the row is the "Add referral code" action
+  Gtk::Button* addReferralCode_ = nullptr;
 
   AccountFlow pointsFlow_;
   AccountFlow referralNetworkFlow_;

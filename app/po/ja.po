@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "紹介コードを追加"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "紹介コードを追加して追加の特典を獲得"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "サインイン方法を追加"
@@ -524,11 +519,6 @@ msgstr "アプリのバージョン"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Appleのサインイン方法を追加しました"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "ボーナスを適用"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1952,11 +1942,6 @@ msgstr "ネットワーク名を編集"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "プロフィールを編集"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "紹介コードを編集"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3893,6 +3878,11 @@ msgstr "このコードはすでに使われています"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "紹介コードを読み込めませんでした。"
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "紹介コード（任意）"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

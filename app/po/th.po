@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "เพิ่มรหัสแนะนำ"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "เพิ่มรหัสการแนะนำเพื่อรับรางวัลเสริม"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "เพิ่มวิธีลงชื่อเข้าใช้"
@@ -524,11 +519,6 @@ msgstr "เวอร์ชันแอป"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "เพิ่มวิธีลงชื่อเข้าใช้ Apple แล้ว"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "รับโบนัส"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1952,11 +1942,6 @@ msgstr "แก้ไขชื่อเครือข่าย"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "แก้ไขโปรไฟล์"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "แก้ไขรหัสแนะนำ"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3893,6 +3878,11 @@ msgstr "โค้ดนี้ถูกใช้หมดแล้ว"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "ไม่สามารถโหลดรหัสแนะนำของคุณได้"
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "รหัสการแนะนำ (ไม่บังคับ)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

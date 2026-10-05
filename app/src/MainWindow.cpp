@@ -1411,60 +1411,14 @@ void MainWindow::BuildInstantStep() {
   updatesRow->append(*updatesText);
   scaffold.card->append(*updatesRow);
 
-  // optional referral code (android/apple instant-account parity): the server
-  // links the referral on the guest/seedphrase create path too
-  instantReferralToggle_ =
-      Gtk::make_managed<Gtk::Button>(T_("add_referral_code", "Add referral code"));
-  instantReferralToggle_->add_css_class("flat");
-  instantReferralToggle_->set_halign(Gtk::Align::START);
-  instantReferralToggle_->signal_clicked().connect([this] {
-    instantReferralRevealer_->set_reveal_child(!instantReferralRevealer_->get_reveal_child());
-  });
-  scaffold.card->append(*instantReferralToggle_);
-
-  instantReferralRevealer_ = Gtk::make_managed<Gtk::Revealer>();
-  auto* instantReferralBox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
-  auto* instantReferralRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  instantReferralEntry_ = Gtk::make_managed<Gtk::Entry>();
-  instantReferralEntry_->set_placeholder_text(
-      T_("enter_a_bonus_referral_code", "Enter a bonus referral code"));
-  instantReferralEntry_->set_hexpand(true);
-  instantReferralEntry_->signal_changed().connect([this] {
-    // retyping invalidates the previous validation
-    instantReferralValid_ = false;
-    instantReferralSupporting_->set_text("");
-    instantReferralApplied_->set_visible(false);
-    instantReferralApply_->set_sensitive(
-        !TrimWhitespace(instantReferralEntry_->get_text()).empty());
-  });
-  instantReferralRow->append(*instantReferralEntry_);
-  instantReferralApply_ = Gtk::make_managed<Gtk::Button>(T_("apply_bonus", "Apply bonus"));
-  instantReferralApply_->set_sensitive(false);
-  instantReferralApply_->signal_clicked().connect(
-      sigc::mem_fun(*this, &MainWindow::OnInstantValidateReferral));
-  instantReferralRow->append(*instantReferralApply_);
-  instantReferralBox->append(*instantReferralRow);
-  instantReferralSupporting_ = Gtk::make_managed<Gtk::Label>();
-  instantReferralSupporting_->add_css_class("ur-error-text");
-  instantReferralSupporting_->set_xalign(0);
-  instantReferralSupporting_->set_wrap(true);
-  instantReferralBox->append(*instantReferralSupporting_);
-  instantReferralRevealer_->set_child(*instantReferralBox);
-  scaffold.card->append(*instantReferralRevealer_);
-
-  // referral accepted: the gold king-frog line
-  instantReferralApplied_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
-  {
-    auto* appliedLabel = Gtk::make_managed<Gtk::Label>();
-    appliedLabel->set_markup("<span foreground='" + HexForMarkup(kReferralGoldLight) + "'>" +
-                             Glib::Markup::escape_text(
-                                 T_("referral_bonus_applied_2", "Referral Bonus applied")) +
-                             "</span>");
-    appliedLabel->add_css_class("caption");
-    instantReferralApplied_->append(*appliedLabel);
-  }
-  instantReferralApplied_->set_visible(false);
-  scaffold.card->append(*instantReferralApplied_);
+  // the optional referral code, always visible above Create Account
+  // (android/apple instant-account parity): the server links the referral on
+  // the seedphrase create path too
+  instantReferralCode_ = Gtk::make_managed<ReferralCodeBox>(host_);
+  instantReferralCode_->on_edit = [this] {
+    if (instantError_) instantError_->set_text("");
+  };
+  scaffold.card->append(*instantReferralCode_);
 
   instantCreate_ = Gtk::make_managed<Gtk::Button>(T_("create_account_2", "Create Account"));
   instantCreate_->add_css_class("suggested-action");
@@ -1481,56 +1435,22 @@ void MainWindow::BuildInstantStep() {
   stack_.add(*scaffold.page, "instant");
 }
 
-void MainWindow::OnInstantValidateReferral() {
-  if (validatingInstantReferral_) return;
-  const std::string code = TrimWhitespace(instantReferralEntry_->get_text());
-  if (code.empty()) return;
-  validatingInstantReferral_ = true;
-  instantReferralApply_->set_sensitive(false);
-  instantReferralSupporting_->set_text("");
-
-  host_.ValidateReferralCode(code, [this](bool ok, bool valid, bool capped) {
-    PostToMain([this, ok, valid, capped] {
-      validatingInstantReferral_ = false;
-      instantReferralApply_->set_sensitive(
-          !TrimWhitespace(instantReferralEntry_->get_text()).empty());
-      instantReferralValid_ = ok && valid && !capped;
-      if (instantReferralValid_) {
-        // the royal welcome: the gold king-frog moment for the referred
-        instantReferralRevealer_->set_reveal_child(false);
-        instantReferralApplied_->set_visible(true);
-        instantReferralToggle_->set_label(T_("edit_referral_code", "Edit referral code"));
-        ShowRoyalWelcomeSheet(*this);
-      } else if (ok && capped) {
-        instantReferralSupporting_->set_text(
-            T_("referral_code_capped", "This code has been used up"));
-      } else if (ok) {
-        instantReferralSupporting_->set_text(
-            T_("invalid_referral_code", "This code is not valid"));
-      } else {
-        instantReferralSupporting_->set_text(
-            T_("something_went_wrong", "Something went wrong."));
-      }
-    });
-  });
-}
-
 void MainWindow::OnInstantSubmit() {
   if (creatingInstant_ || !instantTerms_ || !instantTerms_->get_active()) return;
   creatingInstant_ = true;
   instantCreate_->set_sensitive(false);
   instantTerms_->set_sensitive(false);
+  instantReferralCode_->set_sensitive(false);
   instantError_->set_text("");
 
-  const std::string referralCode =
-      instantReferralValid_ ? TrimWhitespace(instantReferralEntry_->get_text())
-                            : std::string();
+  const std::string referralCode = instantReferralCode_->CreateCode();
   // the marketing opt-out rides on the create call (absent = opted in)
   host_.SetProductUpdatesOptOut(instantProductUpdates_ && !instantProductUpdates_->get_active());
   host_.CreateInstantAccount(referralCode, [this](SdkHost::InstantAccount account) {
     PostToMain([this, account = std::move(account)]() mutable {
       creatingInstant_ = false;
       instantTerms_->set_sensitive(true);
+      instantReferralCode_->set_sensitive(true);
       instantCreate_->set_sensitive(instantTerms_->get_active());
       if (!account.ok) {
         instantError_->set_text(account.error.empty()

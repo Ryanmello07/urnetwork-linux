@@ -45,3 +45,4 @@ src/EarningsPage.cpp
 src/SolanaWalletSheet.cpp
 src/AccountPage.cpp
 src/ReferralRoyalty.cpp
+src/ReferralCodeBox.cpp

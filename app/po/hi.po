@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "रेफरल कोड जोड़ें"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "अतिरिक्त पुरस्कार पाने के लिए रेफरल कोड जोड़ें"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "साइन-इन विधि जोड़ें"
@@ -524,11 +519,6 @@ msgstr "ऐप संस्करण"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Apple साइन-इन विधि जोड़ी गई"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "बोनस लागू करें"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1956,11 +1946,6 @@ msgstr "नेटवर्क का नाम संपादित करे�
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "प्रोफ़ाइल संपादित करें"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "रेफरल कोड संपादित करें"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3909,6 +3894,11 @@ msgstr "यह कोड पहले ही उपयोग हो चुका
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "आपका रेफ़रल कोड लोड नहीं हो सका।"
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "रेफरल कोड (वैकल्पिक)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

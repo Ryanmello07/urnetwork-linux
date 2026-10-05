@@ -4,8 +4,8 @@
 //   * CreateNetworkPage — CreateNetworkView/ViewModel: network name with
 //     debounced availability through the SDK's shared
 //     NetworkNameValidationViewController, password (12+ chars), the terms
-//     switch, and an optional bonus referral code validated with
-//     Api::validateReferralCode. Three modes share the form the way the mac
+//     switch, and the optional referral code field above Continue
+//     (ReferralCodeBox). Three modes share the form the way the mac
 //     view does: password sign-up (email + password), wallet sign-up (the
 //     wallet_auth captured from a Solana/Bittensor sign-in that had no
 //     network — name + terms only), and the same for an SSO identity.
@@ -28,6 +28,7 @@
 #include <gtkmm.h>
 
 #include "NetworkNameCheck.hpp"
+#include "ReferralCodeBox.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
@@ -61,7 +62,6 @@ class CreateNetworkPage : public Gtk::Box {
   void OnNetworkNameChanged();
   void OnNameStateChanged(NetworkNameState state);
   void SetNameSupporting(const char* text, const char* cssClass);
-  void OnValidateReferral();
   void UpdateFormValid();
   void OnContinue();
   void SetCreating(bool creating);
@@ -69,9 +69,6 @@ class CreateNetworkPage : public Gtk::Box {
   SdkHost& host_;
   Mode mode_ = Mode::Password;
   bool creating_ = false;
-  bool referralValid_ = false;
-  bool referralCapped_ = false;
-  bool validatingReferral_ = false;
   // the pending debounce or recheck timer of nameChecker_
   sigc::connection nameDebounce_;
   NetworkNameChecker nameChecker_;
@@ -90,12 +87,7 @@ class CreateNetworkPage : public Gtk::Box {
   // default (mmm/onboarding/PLAN.md). Off -> the create carries
   // product_updates=false and signup.optout_changed fires.
   Gtk::Switch* productUpdates_ = nullptr;
-  Gtk::Button* referralToggle_ = nullptr;
-  Gtk::Revealer* referralRevealer_ = nullptr;
-  Gtk::Entry* referralEntry_ = nullptr;
-  Gtk::Button* referralApply_ = nullptr;
-  Gtk::Label* referralSupporting_ = nullptr;
-  Gtk::Box* referralAppliedRow_ = nullptr;
+  ReferralCodeBox* referralCode_ = nullptr;
   Gtk::Button* continueBtn_ = nullptr;
   Gtk::Spinner* spinner_ = nullptr;
   Gtk::Label* errorLabel_ = nullptr;

@@ -104,11 +104,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "添加推荐码"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "添加推荐码以获得额外奖励"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "添加登录方式"
@@ -549,11 +544,6 @@ msgstr "Apple"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "已添加 Apple 登录方式"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "应用奖励"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -3064,11 +3054,6 @@ msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "编辑个人资料"
 
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "编辑推荐码"
-
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
 msgid "Edit split rule"
@@ -5531,6 +5516,11 @@ msgstr "此代码已被用完"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "无法加载你的推荐码。"
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "推荐码（可选）"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"
