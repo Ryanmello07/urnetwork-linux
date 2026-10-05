@@ -718,17 +718,17 @@ msgctxt "bittensor_error_address_not_in_wallet"
 msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
 msgstr "Din {}-plånbok har inte adressen du angav. Lägg till eller anslut det kontot i plånboken, eller ange en adress som finns i den."
 
-#. Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).
+#. Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when a ur.io wallet bridge page returns extension_not_found). The argument is the wallet product name (Talisman on the Bittensor page, Phantom or Solflare on the Solana page).
 msgctxt "bittensor_error_extension_not_found"
 msgid "The {} extension was not found in this browser. Install it, then try again."
 msgstr "Tillägget {} hittades inte i den här webbläsaren. Installera det och försök sedan igen."
 
-#. Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
+#. Wallet error in the apps, when a ur.io wallet bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect on the Bittensor page, Phantom or Solflare on the Solana page).
 msgctxt "bittensor_error_no_account"
 msgid "Your {} wallet has no account to sign with. Add or connect an account in the wallet, then try again."
 msgstr "Din {}-plånbok har inget konto att signera med. Lägg till eller anslut ett konto i plånboken och försök sedan igen."
 
-#. Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.
+#. Wallet error in the apps, when a ur.io wallet bridge page returns user_rejected: the user declined the connection or the signature request in the wallet, so nothing was signed. The Bittensor page (Talisman, or a WalletConnect wallet) and the Solana page of the desktop apps (Phantom or Solflare) both return it; on iOS, Phantom and Solflare decline with 4001, which reads the same.
 msgctxt "bittensor_error_user_rejected"
 msgid "The request was declined in your wallet. Start again and approve it to continue."
 msgstr "Begäran avvisades i din plånbok. Börja om och godkänn den för att fortsätta."
@@ -892,6 +892,16 @@ msgstr "Kontrollerar betalning"
 msgctxt "checking_solana_transactions"
 msgid "Checking for Solana Transactions"
 msgstr "Söker efter Solana-transaktioner"
+
+#. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back stripe_unavailable: Stripe's payment form could not be loaded in the checkout page (usually no internet connection, or a network that blocks it). Nothing was charged.
+msgctxt "checkout_error_payment_form_unavailable"
+msgid "The payment form couldn't load. Check your internet connection, then try again."
+msgstr "Betalningsformuläret kunde inte läsas in. Kontrollera din internetanslutning och försök sedan igen."
+
+#. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.
+msgctxt "checkout_error_unavailable"
+msgid "Checkout isn't available right now. Please try again later."
+msgstr "Betalningen är inte tillgänglig just nu. Försök igen senare."
 
 #. Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.
 msgctxt "checkout_opened_in_browser"
@@ -5290,6 +5300,11 @@ msgstr "Solana"
 msgctxt "solana_sign_in"
 msgid "Sign in with Solana"
 msgstr "Logga in med Solana"
+
+#. Solana wallet error in the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns session_not_found: the browser no longer has the wallet connection made in the connect step (another browser or a private window, or its site data was cleared), so nothing was signed. Starting again reconnects the wallet (Phantom or Solflare).
+msgctxt "solana_wallet_error_session_not_found"
+msgid "The wallet connection wasn't found in this browser. Start again to reconnect your wallet."
+msgstr "Plånboksanslutningen hittades inte i den här webbläsaren. Börja om för att ansluta din plånbok igen."
 
 #. Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "solflare"

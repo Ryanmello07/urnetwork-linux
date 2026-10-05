@@ -12,6 +12,7 @@
 
 #include "BittensorWalletFlow.hpp"
 #include "I18n.hpp"
+#include "SolanaWalletPresentation.hpp"
 #include "SsoBridge.hpp"
 
 namespace urnw {
@@ -58,6 +59,18 @@ std::map<std::string, std::string> ParseQuery(const std::string& query) {
     i = amp + 1;
   }
   return out;
+}
+
+// The words for a failure the bridge page handed back: this app's own for a
+// code it knows (solana::BridgeErrorTextFor), with the wallet's name where the
+// string takes it, else the page's text.
+std::string LocalizedBridgeError(WalletConnect::Provider p, const std::string& code,
+                                 const std::string& pageText) {
+  const solana::BridgeErrorText text = solana::BridgeErrorTextFor(code);
+  if (!text.key) return pageText;
+  const char* localized = g_dpgettext2(GETTEXT_PACKAGE, text.key, text.english);
+  if (!text.takesWalletName) return localized;
+  return Format(localized, p == WalletConnect::Provider::Solflare ? "Solflare" : "Phantom");
 }
 
 }  // namespace
@@ -278,7 +291,11 @@ bool WalletConnect::HandleDeepLink(const std::string& url) {
 void WalletConnect::HandleConnect(Provider p, const std::string& query) {
   auto params = ParseQuery(query);
   if (params.count("errorCode")) {
-    if (on_error) on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet connect error");
+    if (on_error) {
+      const std::string pageText =
+          params.count("errorMessage") ? params["errorMessage"] : "wallet connect error";
+      on_error(LocalizedBridgeError(p, params["errorCode"], pageText));
+    }
     return;
   }
   const std::string keyParam =
@@ -312,7 +329,11 @@ void WalletConnect::HandleConnect(Provider p, const std::string& query) {
 void WalletConnect::HandleSignMessage(Provider p, const std::string& query) {
   auto params = ParseQuery(query);
   if (params.count("errorCode")) {
-    if (on_error) on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet signing error");
+    if (on_error) {
+      const std::string pageText =
+          params.count("errorMessage") ? params["errorMessage"] : "wallet signing error";
+      on_error(LocalizedBridgeError(p, params["errorCode"], pageText));
+    }
     return;
   }
   if (!params.count("nonce") || !params.count("data") || !dappKeyPair_ || !walletEncryptionPublicKey_) {
@@ -388,8 +409,11 @@ void WalletConnect::DeliverBittensorResult(const urnet::BittensorWalletResult& r
           // a wallet_error the bridge page handed back, in this app's words for its code
           const bittensor::BridgeErrorText text =
               bittensor::BridgeErrorTextFor(result.BridgeErrorCode);
-          const char* localized = g_dpgettext2(GETTEXT_PACKAGE, std::string(text.key).c_str(),
-                                               std::string(text.english).c_str());
+          // g_dpgettext2 answers a string with no translation with the msgid
+          // pointer it was given, so the msgid must outlive `localized`
+          const std::string key(text.key);
+          const std::string english(text.english);
+          const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
           const std::string walletName =
               bittensorSession_ ? urnet::bittensorWalletDisplayName(bittensorSession_->walletId())
                                 : std::string();

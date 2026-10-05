@@ -8,7 +8,9 @@
 // (the payments neither completed nor canceled) and the wallet that receives
 // it, and the connect sheet links one -- through the ur.io wallet bridge
 // (Phantom / Solflare hand back the public key; nothing is signed) or by
-// address, checked here for its base58 shape and then by the server.
+// address, checked here for its base58 shape and then by the server. The
+// bridge page's own failure codes read in this app's words (BridgeErrorTextFor),
+// on the sheet and in a wallet sign-in alike.
 //
 // Header-only and free of GTK and the SDK so the unit tests need no vendored
 // headers (tests/SolanaWalletPresentationTest.cpp).
@@ -18,6 +20,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -510,4 +513,46 @@ struct ConnectMachine {
     }
   }
 };
+
+// ---- the bridge page's failures --------------------------------------------------
+
+// The ur.io wallet bridge hands a failure back with a stable code (the sdk's
+// urnet::SolanaWalletBridgeError*) next to its English text, on the connect or
+// the sign step (WalletConnect.cpp). What this app says for a code: the store
+// key and its English (the gettext msgid), with one {} for the wallet's product
+// name (Phantom or Solflare) when `takesWalletName`. The codes the page shares
+// with the Bittensor bridge page read in the same strings. A null key for any
+// other code (the page's invalid_request and wallet_error, a code this app does
+// not know, the -1 of pages before the codes): the page's own text is shown
+// then.
+struct BridgeErrorText {
+  const char* key;
+  const char* english;
+  bool takesWalletName;
+};
+
+constexpr BridgeErrorText BridgeErrorTextFor(std::string_view code) noexcept {
+  if (code == "extension_not_found") {
+    return {"bittensor_error_extension_not_found",
+            "The {} extension was not found in this browser. Install it, then try again.", true};
+  }
+  if (code == "no_account") {
+    return {"bittensor_error_no_account",
+            "Your {} wallet has no account to sign with. Add or connect an account in the wallet, "
+            "then try again.",
+            true};
+  }
+  if (code == "session_not_found") {
+    return {"solana_wallet_error_session_not_found",
+            "The wallet connection wasn't found in this browser. Start again to reconnect your "
+            "wallet.",
+            false};
+  }
+  if (code == "user_rejected") {
+    return {"bittensor_error_user_rejected",
+            "The request was declined in your wallet. Start again and approve it to continue.",
+            false};
+  }
+  return {nullptr, nullptr, false};
+}
 }  // namespace urnw::solana
