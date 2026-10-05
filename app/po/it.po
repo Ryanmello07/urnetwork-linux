@@ -278,6 +278,16 @@ msgctxt "adv_matched"
 msgid "Matched"
 msgstr "Corrispondenza"
 
+#. Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.
+msgctxt "adv_mode_rpc_only"
+msgid "rpc-only"
+msgstr "solo RPC"
+
+#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+msgctxt "adv_mode_tunnel"
+msgid "tunnel"
+msgstr "tunnel"
+
 #. Connection inspector: placeholder dash for a value that is not available.
 msgctxt "adv_na"
 msgid "—"
@@ -318,7 +328,7 @@ msgctxt "adv_providers_load_failed"
 msgid "Could not load the provider list."
 msgstr "Impossibile caricare l’elenco dei provider."
 
-#. Connection inspector: label of the raw status row.
+#. Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.
 msgctxt "adv_raw_status"
 msgid "Raw status"
 msgstr "Stato grezzo"
@@ -348,6 +358,31 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "Override di percorso"
 
+#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+msgctxt "adv_routes"
+msgid "Routes"
+msgstr "Route"
+
+#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+msgctxt "adv_routes_dns_degraded"
+msgid "on, dns not applied"
+msgstr "attive, DNS non applicato"
+
+#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+msgctxt "adv_routes_kill_switch_armed"
+msgid "off, kill switch armed"
+msgstr "disattive, Kill switch armato"
+
+#. Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.
+msgctxt "adv_routes_no_firewall"
+msgid "on, no leak guard"
+msgstr "attive, nessuna protezione dalle perdite"
+
+#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+msgctxt "adv_rpc"
+msgid "RPC"
+msgstr "RPC"
+
 #. Connection inspector: hint to select a row in the Activity list.
 msgctxt "adv_select_a_row"
 msgid "Select a row in Activity to inspect it"
@@ -367,6 +402,11 @@ msgstr "Quella connessione non è più in elenco"
 msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "Paese di uscita della sessione"
+
+#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+msgctxt "adv_session_mode"
+msgid "Session"
+msgstr "Sessione"
 
 #. Connection inspector: exit value when the destination is not in the routing table.
 msgctxt "adv_unknown_exit"
@@ -758,6 +798,11 @@ msgctxt "blocked_locations_could_not_be_loaded"
 msgid "Blocked locations could not be loaded."
 msgstr "Impossibile caricare le località bloccate."
 
+#. macOS Blocked locations screen: placeholder of the country search field.
+msgctxt "blocked_locations_search_placeholder"
+msgid "Search countries"
+msgstr "Cerca paesi"
+
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
 msgid "Blocks"
@@ -868,10 +913,25 @@ msgctxt "checking_solana_transactions"
 msgid "Checking for Solana Transactions"
 msgstr "Ricerca di transazioni Solana"
 
+#. Purchase confirmation message while the app waits for the payment to be confirmed.
+msgctxt "checkout_confirming_purchase"
+msgid "We're confirming your purchase. Your plan will update automatically."
+msgstr "Stiamo confermando il tuo acquisto. Il tuo piano si aggiornerà automaticamente."
+
+#. Purchase confirmation title after the app opened Stripe's checkout page in the browser.
+msgctxt "checkout_finish_in_browser"
+msgid "Finish in your browser."
+msgstr "Completa nel browser."
+
 #. Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.
 msgctxt "checkout_opened_in_browser"
 msgid "Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed."
 msgstr "Completa l'acquisto nel browser. Il tuo piano si aggiornerà qui automaticamente una volta confermato il pagamento."
+
+#. Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.
+msgctxt "checkout_restore_checking"
+msgid "Checking your plan again."
+msgstr "Stiamo ricontrollando il tuo piano."
 
 #. Provider list group title for cities
 msgctxt "cities"
@@ -968,6 +1028,11 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "Partner"
 
+#. Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.
+msgctxt "conn_blocked_kill_switch"
+msgid "Blocked — kill switch on"
+msgstr "Bloccato — Kill switch attivo"
+
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"
@@ -978,15 +1043,115 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "Disattivato per impostazione predefinita. Quando è attivo, URnetwork si connette al provider selezionato appena apri l’app. Vale dal prossimo avvio - non connette adesso."
 
+#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+msgctxt "conn_degraded"
+msgid "Connection degraded — reconnecting"
+msgstr "Connessione degradata — riconnessione in corso"
+
+#. Windows Connect page status while the tunnel is being stopped but its routes are still installed.
+msgctxt "conn_disconnecting"
+msgid "Disconnecting — your traffic is still going through the tunnel"
+msgstr "Disconnessione — il tuo traffico passa ancora nel tunnel"
+
 #. Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.
 msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "Impossibile connettersi"
 
+#. Windows Connect page reason line when connecting failed.
+msgctxt "conn_failed_detail"
+msgid "No providers could be reached. Retry rebuilds the connection from scratch."
+msgstr "Non è stato possibile raggiungere alcun provider. Riprovare ricostruisce la connessione da zero."
+
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+msgctxt "conn_failsafe_armed"
+msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
+msgstr "Se a breve non passa nulla, URnetwork disattiverà automaticamente il tunnel così non perdi la connessione a Internet."
+
+#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+msgctxt "conn_failsafe_blocked"
+msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
+msgstr "Il tunnel non riusciva a trasportare il traffico, quindi URnetwork lo ha chiuso. Il Kill switch è attivo, quindi nulla lascia questo computer finché non ti riconnetti o non disattivi il Kill switch — non c’è alcuna perdita."
+
+#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+msgctxt "conn_failsafe_restored"
+msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
+msgstr "URnetwork ti ha disconnesso per mantenerti online: il tunnel era attivo ma non passava nulla. Ora il tuo traffico esce normalmente e NON è protetto. Premi Connetti per riprovare."
+
+#. Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).
+msgctxt "conn_finding_providers"
+msgid "Finding providers…"
+msgstr "Ricerca dei provider…"
+
 #. Connect page: warning that the internet traffic is not protected.
 msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "Il tuo traffico Internet non è protetto."
+
+#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+msgctxt "conn_reason_auth"
+msgid "Signing in to the platform is failing…"
+msgstr "L’accesso alla piattaforma non riesce…"
+
+#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+msgctxt "conn_reason_platform"
+msgid "Contacting the platform…"
+msgstr "Contatto con la piattaforma…"
+
+#. Windows Connect page reason line while the selected providers do not answer.
+msgctxt "conn_reason_providers"
+msgid "Providers not responding — retrying…"
+msgstr "I provider non rispondono — nuovo tentativo…"
+
+#. Windows Connect page reason line while the platform asks the app to slow down.
+msgctxt "conn_reason_rate_limited"
+msgid "Rate limited — waiting…"
+msgstr "Limite di richieste raggiunto — in attesa…"
+
+#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+msgctxt "conn_traffic_blocked"
+msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
+msgstr "Nessun provider funzionante al momento — il tuo traffico è bloccato, non esposto. Disconnettiti per tornare alla tua connessione normale."
+
+#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+msgctxt "conn_traffic_blocked_unprotected"
+msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
+msgstr "Nessun provider funzionante al momento — il traffico inviato nel tunnel non arriva da nessuna parte e la protezione dalle perdite è disattivata, quindi parte del traffico potrebbe aggirarlo. Disconnettiti per tornare alla tua connessione normale."
+
+#. Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.
+msgctxt "conn_tray_blocked_kill_switch"
+msgid "Blocked (kill switch on)"
+msgstr "Bloccato (Kill switch attivo)"
+
+#. Windows tray tooltip when leak protection blocks traffic while no tunnel is up.
+msgctxt "conn_tray_blocked_no_tunnel"
+msgid "Blocked — leak protection is still in force with no tunnel up"
+msgstr "Bloccato — la protezione dalle perdite è ancora attiva senza alcun tunnel"
+
+#. Windows tray tooltip while the tunnel is being stopped but its routes are still installed.
+msgctxt "conn_tray_disconnecting"
+msgid "Disconnecting — traffic is still going through the tunnel"
+msgstr "Disconnessione — il traffico passa ancora nel tunnel"
+
+#. Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.
+msgctxt "conn_tray_failsafe_blocked"
+msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so this machine stays blocked and nothing is leaking. Reconnect, or turn off the kill switch from this menu."
+msgstr "Il tunnel non riusciva a trasportare il traffico, quindi URnetwork lo ha chiuso. Il Kill switch è attivo, quindi questo computer resta bloccato e non c’è alcuna perdita. Riconnettiti oppure disattiva il Kill switch da questo menu."
+
+#. Windows tray tooltip after the service stopped a tunnel that carried nothing.
+msgctxt "conn_tray_failsafe_stopped"
+msgid "Disconnected (the tunnel failed)"
+msgstr "Disconnesso (il tunnel non ha funzionato)"
+
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+msgctxt "conn_tray_force_tunnel_off"
+msgid "Force the tunnel off (recovery)"
+msgstr "Forza la chiusura del tunnel (ripristino)"
+
+#. Windows tray menu item that lifts the kill switch's block on this computer.
+msgctxt "conn_tray_lift_kill_switch"
+msgid "Turn off the kill switch (unblock this machine)"
+msgstr "Disattiva il Kill switch (sblocca questo computer)"
 
 #. Button text to connect to URnetwork VPN
 msgctxt "connect"
@@ -1127,9 +1292,9 @@ msgctxt "contracts_appear_providing"
 msgid "Contracts appear here while providing."
 msgstr "I contratti appaiono qui mentre fornisci."
 
-#. Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.
+#. Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).
 msgctxt "contribute_bandwidth"
-msgid "Contribute Bandwidth"
+msgid "Contribute bandwidth"
 msgstr "Fornisci larghezza di banda"
 
 #. Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.
@@ -1342,15 +1507,30 @@ msgctxt "daemon_auth_unavailable"
 msgid "This device has no polkit authorization service, so the URnetwork system service falls back to the 'urnetwork' group. Add your user to it and sign out and back in."
 msgstr "Questo dispositivo non ha un servizio di autorizzazione polkit, quindi il servizio di sistema URnetwork ricorre al gruppo 'urnetwork'. Aggiungi il tuo utente al gruppo, poi esci e accedi di nuovo."
 
+#. Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.
+msgctxt "daemon_legacy_group_auth"
+msgid "The URnetwork system service on this device is an older version that still requires group membership. Update the service, or add your user to the 'urnetwork' group and sign out and back in."
+msgstr "Il servizio di sistema URnetwork su questo dispositivo è una versione precedente che richiede ancora l’appartenenza a un gruppo. Aggiorna il servizio, oppure aggiungi il tuo utente al gruppo 'urnetwork' ed esci e rientra nella sessione."
+
 #. Error: the system service did not answer.
 msgctxt "daemon_no_answer"
 msgid "The URnetwork system service did not answer."
 msgstr "Il servizio di sistema URnetwork non ha risposto."
 
+#. Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.
+msgctxt "daemon_not_reachable"
+msgid "The URnetwork system service could not be reached."
+msgstr "Impossibile raggiungere il servizio di sistema URnetwork."
+
 #. Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.
 msgctxt "daemon_sdk_mismatch"
 msgid "The app and the URnetwork system service are different builds. Update both to the same version."
 msgstr "L'app e il servizio di sistema URnetwork sono build diverse. Aggiorna entrambi alla stessa versione."
+
+#. Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.
+msgctxt "daemon_stale_sandbox_mount"
+msgid "The URnetwork system service restarted while this app was open. Close the app and open it again to reconnect to it."
+msgstr "Il servizio di sistema URnetwork si è riavviato mentre questa app era aperta. Chiudi l’app e riaprila per riconnetterti al servizio."
 
 #. Shown on the linux home screen when the installed urnetworkd system service speaks an older control protocol than this app supports. Distinct from daemon_unreachable by contract; the fix is updating the service, not the app.
 msgctxt "daemon_too_old"
@@ -1467,10 +1647,25 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 
+#. Developer page: what a setting's 0 means when it probes every host ('Probe hosts per pass').
+msgctxt "dev_all"
+msgid "All"
+msgstr "All"
+
 #. Developer page: label of the app version row.
 msgctxt "dev_app_version"
 msgid "App version"
 msgstr "App version"
+
+#. Developer page: label of the 'Busy probe wait' setting.
+msgctxt "dev_busy_probe_wait"
+msgid "Busy probe wait"
+msgstr "Busy probe wait"
+
+#. Developer page: the explanation under the 'Busy probe wait' setting.
+msgctxt "dev_busy_probe_wait_detail"
+msgid "How long the stall probe waits for an answer before convicting, in ms. Off derives half the stall bar"
+msgstr "How long the stall probe waits for an answer before convicting, in ms. Off derives half the stall bar"
 
 #. Developer page: button that checks for a new release now.
 msgctxt "dev_check_updates"
@@ -1552,10 +1747,35 @@ msgctxt "dev_col_window"
 msgid "Window"
 msgstr "Window"
 
+#. Developer page (Apple): note shown while disconnected.
+msgctxt "dev_connect_for_live_tools"
+msgid "Connect to use the live connection tools. Diagnostics below work either way."
+msgstr "Connect to use the live connection tools. Diagnostics below work either way."
+
+#. Developer page: label of the 'Corroborate silent exits' setting.
+msgctxt "dev_corroborate_silent_exits"
+msgid "Corroborate silent exits"
+msgstr "Corroborate silent exits"
+
+#. Developer page: the explanation under the 'Corroborate silent exits' setting.
+msgctxt "dev_corroborate_silent_exits_detail"
+msgid "How many distinct destinations must be silent before an exit is convicted on no-receive, so one dead site cannot remove a working exit"
+msgstr "How many distinct destinations must be silent before an exit is convicted on no-receive, so one dead site cannot remove a working exit"
+
 #. Developer page: suffix after a count of affected flows.
 msgctxt "dev_count_affected"
 msgid "affected"
 msgstr "affected"
+
+#. Developer page: label of the 'Cut dead connects early' setting.
+msgctxt "dev_cut_dead_connects_early"
+msgid "Cut dead connects early"
+msgstr "Cut dead connects early"
+
+#. Developer page: the explanation under the 'Cut dead connects early' setting.
+msgctxt "dev_cut_dead_connects_early_detail"
+msgid "Drop an exit that has established nothing sooner when two sibling exits are receiving, in ms. Off waits the full 30s connect bar"
+msgstr "Drop an exit that has established nothing sooner when two sibling exits are receiving, in ms. Off waits the full 30s connect bar"
 
 #. Developer page: report line when the SDK refused an exit action.
 msgctxt "dev_declined_exit"
@@ -1577,6 +1797,16 @@ msgctxt "dev_developer"
 msgid "Developer"
 msgstr "Developer"
 
+#. Developer page: label of the 'Drop stalled exits fast' setting.
+msgctxt "dev_drop_stalled_exits_fast"
+msgid "Drop stalled exits fast"
+msgstr "Drop stalled exits fast"
+
+#. Developer page: the explanation under the 'Drop stalled exits fast' setting.
+msgctxt "dev_drop_stalled_exits_fast_detail"
+msgid "How long an exit may stop delivering before it is dropped, in ms. Off waits 30s"
+msgstr "How long an exit may stop delivering before it is dropped, in ms. Off waits 30s"
+
 #. Developer page: report line after an exit was dropped.
 msgctxt "dev_dropped_exit"
 msgid "Dropped exit"
@@ -1586,6 +1816,46 @@ msgstr "Dropped exit"
 msgctxt "dev_exits_actions_detail"
 msgid "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
 msgstr "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
+
+#. Developer page: label of the 'Fast first-exit poll' setting.
+msgctxt "dev_fast_first_exit_poll"
+msgid "Fast first-exit poll"
+msgstr "Fast first-exit poll"
+
+#. Developer page: the explanation under the 'Fast first-exit poll' setting.
+msgctxt "dev_fast_first_exit_poll_detail"
+msgid "How often a connecting flow re-checks an empty window, in ms, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
+msgstr "How often a connecting flow re-checks an empty window, in ms, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
+
+#. Developer page: label of the 'Follow benched exits' setting.
+msgctxt "dev_follow_benched_exits"
+msgid "Follow benched exits"
+msgstr "Follow benched exits"
+
+#. Developer page: the explanation under the 'Follow benched exits' setting.
+msgctxt "dev_follow_benched_exits_detail"
+msgid "A quarantined exit keeps its own sites' new connections through the early bench, when the verdict is least proven. New sites still avoid it"
+msgstr "A quarantined exit keeps its own sites' new connections through the early bench, when the verdict is least proven. New sites still avoid it"
+
+#. Developer page: label of the 'Follow window' setting.
+msgctxt "dev_follow_window"
+msgid "Follow window"
+msgstr "Follow window"
+
+#. Developer page: the explanation under the 'Follow window' setting.
+msgctxt "dev_follow_window_detail"
+msgid "How long into a bench a site's new connections keep following their exit, in ms. Off scatters immediately"
+msgstr "How long into a bench a site's new connections keep following their exit, in ms. Off scatters immediately"
+
+#. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
+msgctxt "dev_group_follow_window_ms_detail"
+msgid "How long into a bench a site's new connections keep following their exit, in ms — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
+msgstr "How long into a bench a site's new connections keep following their exit, in ms — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
+
+#. Developer page (Apple): the explanation under the 'State heartbeat' setting, with its unit.
+msgctxt "dev_heartbeat_ms_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it; shorter spots a transition, longer keeps more buffer"
+msgstr "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it; shorter spots a transition, longer keeps more buffer"
 
 #. Developer page: intro line under the title.
 msgctxt "dev_intro"
@@ -1632,10 +1902,35 @@ msgctxt "dev_ip_family_force6_detail"
 msgid "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
 msgstr "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
 
+#. Developer page: label of the 'Keep quiet providers longer' setting.
+msgctxt "dev_keep_quiet_providers_longer"
+msgid "Keep quiet providers longer"
+msgstr "Keep quiet providers longer"
+
+#. Developer page: the explanation under the 'Keep quiet providers longer' setting.
+msgctxt "dev_keep_quiet_providers_longer_detail"
+msgid "How long a provider still acknowledging traffic may return nothing before it is dropped, in ms. Off keeps them until they stop acknowledging"
+msgstr "How long a provider still acknowledging traffic may return nothing before it is dropped, in ms. Off keeps them until they stop acknowledging"
+
+#. Developer page: label of the 'Longer TCP idle timeout' setting.
+msgctxt "dev_longer_tcp_idle_timeout"
+msgid "Longer TCP idle timeout"
+msgstr "Longer TCP idle timeout"
+
+#. Developer page: the explanation under the 'Longer TCP idle timeout' setting.
+msgctxt "dev_longer_tcp_idle_timeout_detail"
+msgid "How long a TCP connection may sit idle, in ms. Off uses the UDP bound"
+msgstr "How long a TCP connection may sit idle, in ms. Off uses the UDP bound"
+
 #. Developer page: button that migrates the live connection.
 msgctxt "dev_migrate"
 msgid "Migrate"
 msgstr "Migrate"
+
+#. Developer page: last-action report after moving an exit's flows to another exit; the exit's short id follows.
+msgctxt "dev_migrated_exit"
+msgid "Migrated exit"
+msgstr "Migrated exit"
 
 #. Developer page: value of the flows that never came back, {done} of {total}.
 msgctxt "dev_never_came_back_value"
@@ -1677,6 +1972,11 @@ msgctxt "dev_nothing_in_force"
 msgid "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
 msgstr "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
 
+#. Developer page: what a setting's 0 means when it falls back to the minimum of 1 ('Candidates evaluated per slot').
+msgctxt "dev_one_min"
+msgid "1 (min)"
+msgstr "1 (min)"
+
 #. Developer page: button that probes every exit now.
 msgctxt "dev_probe_all_exits_now"
 msgid "Probe all exits now"
@@ -1691,6 +1991,31 @@ msgstr "failed"
 msgctxt "dev_probe_ok"
 msgid "ok"
 msgstr "ok"
+
+#. Developer page: label of the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak"
+msgid "Probe silence streak"
+msgstr "Probe silence streak"
+
+#. Developer page: the explanation under the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak_detail"
+msgid "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement. Placement only"
+msgstr "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement. Placement only"
+
+#. Developer page (Apple): the explanation under the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak_long_detail"
+msgid "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement — the compensation for providers that leave the network mid-session. Placement only: removal stays traffic-based, and any sign of life clears the streak"
+msgstr "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement — the compensation for providers that leave the network mid-session. Placement only: removal stays traffic-based, and any sign of life clears the streak"
+
+#. Developer page: label of the 'Probe stalled exits before dropping' setting.
+msgctxt "dev_probe_stalled_exits"
+msgid "Probe stalled exits before dropping"
+msgstr "Probe stalled exits before dropping"
+
+#. Developer page: the explanation under the 'Probe stalled exits before dropping' setting.
+msgctxt "dev_probe_stalled_exits_detail"
+msgid "When an exit stalls, ping it once before convicting. A congested but alive exit answers and keeps its flows; a dead one is still dropped"
+msgstr "When an exit stalls, ping it once before convicting. A congested but alive exit answers and keeps its flows; a dead one is still dropped"
 
 #. Developer page: heading of the probe suite section.
 msgctxt "dev_probe_suite"
@@ -1737,6 +2062,16 @@ msgctxt "dev_probe_suite_stopped"
 msgid "Probe suite stopped"
 msgstr "Probe suite stopped"
 
+#. Developer page: label of the 'Probe wait' setting.
+msgctxt "dev_probe_wait"
+msgid "Probe wait"
+msgstr "Probe wait"
+
+#. Developer page: the explanation under the 'Probe wait' setting.
+msgctxt "dev_probe_wait_detail"
+msgid "How long a qualification probe waits for an answer, in ms. Off uses the built-in 4s. It only bounds waiting for proof, it never convicts"
+msgstr "How long a qualification probe waits for an answer, in ms. Off uses the built-in 4s. It only bounds waiting for proof, it never convicts"
+
 #. Developer page: heading of the probed exits table.
 msgctxt "dev_probed_exits"
 msgid "Probed exits"
@@ -1752,6 +2087,36 @@ msgctxt "dev_recovery_time_value"
 msgid "avg {0}, worst {1}"
 msgstr "avg {0}, worst {1}"
 
+#. Developer page: label of the 'Release stuck retransmits' setting.
+msgctxt "dev_release_stuck_retransmits"
+msgid "Release stuck retransmits"
+msgstr "Release stuck retransmits"
+
+#. Developer page: the explanation under the 'Release stuck retransmits' setting.
+msgctxt "dev_release_stuck_retransmits_detail"
+msgid "How long retransmits are held before one is released, in ms. Off waits 30s"
+msgstr "How long retransmits are held before one is released, in ms. Off waits 30s"
+
+#. Developer page: label of the 'Removal storm limit' setting.
+msgctxt "dev_removal_storm_limit"
+msgid "Removal storm limit"
+msgstr "Removal storm limit"
+
+#. Developer page: the explanation under the 'Removal storm limit' setting.
+msgctxt "dev_removal_storm_limit_detail"
+msgid "How many verdict removals are allowed per window before the rest are deferred; a burst is more likely one local cause than many failures"
+msgstr "How many verdict removals are allowed per window before the rest are deferred; a burst is more likely one local cause than many failures"
+
+#. Developer page: label of the 'Removal storm window' setting.
+msgctxt "dev_removal_storm_window"
+msgid "Removal storm window"
+msgstr "Removal storm window"
+
+#. Developer page: the explanation under the 'Removal storm window' setting.
+msgctxt "dev_removal_storm_window_detail"
+msgid "The window the removal limit is counted over, in ms. Off (like a limit of 0) turns the breaker off"
+msgstr "The window the removal limit is counted over, in ms. Off (like a limit of 0) turns the breaker off"
+
 #. Developer page: label before the requested value of an override.
 msgctxt "dev_requested"
 msgid "Requested:"
@@ -1761,6 +2126,11 @@ msgstr "Requested:"
 msgctxt "dev_reset_to_shipped_defaults"
 msgid "Reset to shipped defaults"
 msgstr "Reset to shipped defaults"
+
+#. Developer page (Apple): the explanation under the 'Suspend detector' setting, with its unit.
+msgctxt "dev_scheduler_pause_tolerance_ms_detail"
+msgid "How much timer overshoot reads as the phone being suspended rather than an exit stalling, in ms, so a resumed phone does not convict every exit at once. Off disables it"
+msgstr "How much timer overshoot reads as the phone being suspended rather than an exit stalling, in ms, so a resumed phone does not convict every exit at once. Off disables it"
 
 #. Developer page: shown when the system service is not attached.
 msgctxt "dev_service_detached"
@@ -1802,6 +2172,16 @@ msgctxt "dev_session_log_restarted"
 msgid "The daemon restarted. This is a new log; the previous run's lines are gone."
 msgstr "The daemon restarted. This is a new log; the previous run's lines are gone."
 
+#. Developer page (Apple): button that applies a typed value.
+msgctxt "dev_set"
+msgid "Set"
+msgstr "Set"
+
+#. Developer page (Apple): button that shares an exported log file. {name} is the file name.
+msgctxt "dev_share_file"
+msgid "Share {}"
+msgstr "Share {}"
+
 #. Developer page: report line after an exit was stalled.
 msgctxt "dev_stalled_exit"
 msgid "Stalled exit"
@@ -1816,6 +2196,16 @@ msgstr "benched"
 msgctxt "dev_state_done"
 msgid "done"
 msgstr "done"
+
+#. Developer page: label of the 'State heartbeat' setting.
+msgctxt "dev_state_heartbeat"
+msgid "State heartbeat"
+msgstr "State heartbeat"
+
+#. Developer page: the explanation under the 'State heartbeat' setting.
+msgctxt "dev_state_heartbeat_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it"
+msgstr "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it"
 
 #. Developer page: exit state, p2p.
 msgctxt "dev_state_p2p"
@@ -1832,10 +2222,70 @@ msgctxt "dev_state_warned"
 msgid "warned"
 msgstr "warned"
 
+#. Developer page: label of the 'Sticky site affinity' setting.
+msgctxt "dev_sticky_site_affinity"
+msgid "Sticky site affinity"
+msgstr "Sticky site affinity"
+
+#. Developer page: the explanation under the 'Sticky site affinity' setting.
+msgctxt "dev_sticky_site_affinity_detail"
+msgid "A site's new connections stay on the exit its earlier ones already use, even past the flow cap, so a busy site keeps one egress IP"
+msgstr "A site's new connections stay on the exit its earlier ones already use, even past the flow cap, so a busy site keeps one egress IP"
+
+#. Developer page: label of the 'Suspend detector' setting.
+msgctxt "dev_suspend_detector"
+msgid "Suspend detector"
+msgstr "Suspend detector"
+
+#. Developer page: the explanation under the 'Suspend detector' setting.
+msgctxt "dev_suspend_detector_detail"
+msgid "How much timer overshoot reads as the machine being suspended rather than an exit stalling, in ms, so a resumed machine does not convict every exit at once. Off disables it"
+msgstr "How much timer overshoot reads as the machine being suspended rather than an exit stalling, in ms, so a resumed machine does not convict every exit at once. Off disables it"
+
+#. Developer page: label of the 'Suspend recovery window' setting.
+msgctxt "dev_suspend_recovery_window"
+msgid "Suspend recovery window"
+msgstr "Suspend recovery window"
+
+#. Developer page: the explanation under the 'Suspend recovery window' setting.
+msgctxt "dev_suspend_recovery_window_detail"
+msgid "How long verdicts stay held after a detected suspend, in ms, giving transports time to re-register. Off uses the built-in 5s"
+msgstr "How long verdicts stay held after a detected suspend, in ms, giving transports time to re-register. Off uses the built-in 5s"
+
+#. Developer page: label of the 'Suspends caught' setting.
+msgctxt "dev_suspends_caught"
+msgid "Suspends caught"
+msgstr "Suspends caught"
+
+#. Developer page: the explanation under the 'Suspends caught' setting.
+msgctxt "dev_suspends_caught_detail"
+msgid "Host suspends the detector caught, each one a batch of verdicts held instead of executed on a just-resumed machine"
+msgstr "Host suspends the detector caught, each one a batch of verdicts held instead of executed on a just-resumed machine"
+
 #. Developer page: button that syncs the reliability settings.
 msgctxt "dev_sync"
 msgid "Sync"
 msgstr "Sync"
+
+#. Developer page: label of the 'UDP idle timeout' setting (desktop wording of dev_udp_idle_timeout).
+msgctxt "dev_udp_idle_timeout_desktop"
+msgid "UDP idle timeout"
+msgstr "UDP idle timeout"
+
+#. Developer page: the explanation under the 'UDP idle timeout' setting, with the unit the number box takes.
+msgctxt "dev_udp_idle_timeout_desktop_detail"
+msgid "How long a non-TCP flow may sit idle before it is reaped, in ms"
+msgstr "How long a non-TCP flow may sit idle before it is reaped, in ms"
+
+#. Developer page: what a setting's 0 means when it removes the cap ('Max connections per exit').
+msgctxt "dev_unlimited"
+msgid "Unlimited"
+msgstr "Unlimited"
+
+#. Developer page: per-exit button that releases an exit stalled with Stall.
+msgctxt "dev_unstall"
+msgid "Unstall"
+msgstr "Unstall"
 
 #. Developer page: report line after a stall was cleared on an exit.
 msgctxt "dev_unstalled_exit"
@@ -1846,6 +2296,76 @@ msgstr "Cleared stall on exit"
 msgctxt "dev_update_check_failed"
 msgid "The update check failed — see the app log."
 msgstr "The update check failed — see the app log."
+
+#. Developer page: update check status while checking.
+msgctxt "dev_update_checking"
+msgid "Checking for updates…"
+msgstr "Checking for updates…"
+
+#. Developer page: update check result on a development build. {version} is the newest release version.
+msgctxt "dev_update_dev_build"
+msgid "Development build: the newest release is v{}, and a development build is never updated automatically."
+msgstr "Development build: the newest release is v{}, and a development build is never updated automatically."
+
+#. Developer page (Windows): the rest of the development build line, after the version.
+msgctxt "dev_update_dev_build_note"
+msgid "this is a dev build (code 0), which never self-updates"
+msgstr "this is a dev build (code 0), which never self-updates"
+
+#. Developer page: update check result when a newer release exists; Settings shows the update. {version} is the release version.
+msgctxt "dev_update_found"
+msgid "Update available: v{} — see Settings."
+msgstr "Update available: v{} — see Settings."
+
+#. Developer page (Windows): prefix of the update check result when a newer release exists; the version follows.
+msgctxt "dev_update_found_label"
+msgid "Update found:"
+msgstr "Update found:"
+
+#. Developer page (Windows): prefix of the update check result on a development build; the version follows.
+msgctxt "dev_update_newest_release_is"
+msgid "Newest release is"
+msgstr "Newest release is"
+
+#. Developer page (Windows): inside the parentheses after 'No update', before the newest release's version.
+msgctxt "dev_update_newest_seen"
+msgid "newest release seen:"
+msgstr "newest release seen:"
+
+#. Developer page: update check result when there is no stable release.
+msgctxt "dev_update_no_releases"
+msgid "No stable release has been published yet."
+msgstr "No stable release has been published yet."
+
+#. Developer page (Windows): update check result on the newest release; the version details follow in parentheses.
+msgctxt "dev_update_none"
+msgid "No update: this build is current"
+msgstr "No update: this build is current"
+
+#. Developer page: update check result on the newest release. {version} is the release version.
+msgctxt "dev_update_up_to_date"
+msgid "Up to date. Newest release: v{}"
+msgstr "Up to date. Newest release: v{}"
+
+#. Developer page: label of the 'Uplink silence gate' setting.
+msgctxt "dev_uplink_silence_gate"
+msgid "Uplink silence gate"
+msgstr "Uplink silence gate"
+
+#. Developer page: the explanation under the 'Uplink silence gate' setting.
+msgctxt "dev_uplink_silence_gate_detail"
+msgid "How long the whole tunnel may be silent before provider verdicts are held as inadmissible, in ms. 0 convicts as before"
+msgstr "How long the whole tunnel may be silent before provider verdicts are held as inadmissible, in ms. 0 convicts as before"
+
+#. Developer page: label of the 'Verdicts held' measurement (desktop wording of dev_verdicts_held).
+msgctxt "dev_verdicts_held_desktop"
+msgid "Verdicts held"
+msgstr "Verdicts held"
+
+#. Developer page: the explanation under the 'Verdicts held' measurement (desktop wording).
+msgctxt "dev_verdicts_held_desktop_detail"
+msgid "Convictions withheld because this machine's own uplink, not the provider, was silent (uplink / transport)"
+msgstr "Convictions withheld because this machine's own uplink, not the provider, was silent (uplink / transport)"
 
 #. Developer page: value of the worst single failure, {count} connections.
 msgctxt "dev_worst_single_failure_value"
@@ -1896,6 +2416,121 @@ msgstr "Modello"
 msgctxt "devices"
 msgid "Devices"
 msgstr "Dispositivi"
+
+#. macOS folder-access panel button that grants the app access to the Applications folder for the update.
+msgctxt "direct_update_allow"
+msgid "Allow"
+msgstr "Consenti"
+
+#. macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.
+msgctxt "direct_update_allow_applications"
+msgid "To install the update, allow URnetwork to replace itself in the Applications folder. Select Applications and click Allow."
+msgstr "Per installare l’aggiornamento, consenti a URnetwork di sostituirsi nella cartella Applicazioni. Seleziona Applicazioni e fai clic su Consenti."
+
+#. macOS Settings > Software update status when a newer release exists. {version} is its version.
+msgctxt "direct_update_available"
+msgid "Update available: {}"
+msgstr "Aggiornamento disponibile: {}"
+
+#. macOS Settings > Software update button that checks now.
+msgctxt "direct_update_check"
+msgid "Check for updates"
+msgstr "Cerca aggiornamenti"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason (often English, from the system).
+msgctxt "direct_update_check_failed"
+msgid "Could not check for updates: {}"
+msgstr "Impossibile cercare aggiornamenti: {}"
+
+#. macOS Settings > Software update status while checking.
+msgctxt "direct_update_checking"
+msgid "Checking for updates…"
+msgstr "Ricerca di aggiornamenti…"
+
+#. macOS Settings > Software update error: the downloaded file failed its integrity check and was deleted.
+msgctxt "direct_update_checksum_failed"
+msgid "The download did not match the release checksum and was discarded."
+msgstr "Il download non corrispondeva al checksum della versione ed è stato eliminato."
+
+#. macOS Settings > Software update status on a development build, which never updates itself. {version} is the newest release version.
+msgctxt "direct_update_development_build"
+msgid "Development build; the newest release is {}."
+msgstr "Build di sviluppo; la versione più recente è {}."
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_download_failed"
+msgid "The download failed: {}"
+msgstr "Il download non è riuscito: {}"
+
+#. macOS Settings > Software update status while the release downloads. {version} is its version.
+msgctxt "direct_update_downloading_version"
+msgid "Downloading {}…"
+msgstr "Download di {}…"
+
+#. macOS Settings > Software update button that downloads, verifies and installs the update.
+msgctxt "direct_update_install"
+msgid "Install update"
+msgstr "Installa aggiornamento"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_install_failed"
+msgid "The update could not be installed: {}"
+msgstr "Impossibile installare l’aggiornamento: {}"
+
+#. macOS Settings > Software update status while the verified update is installed.
+msgctxt "direct_update_installing"
+msgid "Installing the update…"
+msgstr "Installazione dell’aggiornamento…"
+
+#. macOS Settings > Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".
+msgctxt "direct_update_last_checked"
+msgid "Last checked {}"
+msgstr "Ultimo controllo: {}"
+
+#. macOS Settings > Software update status when the app could not replace itself. {version} is the downloaded release's version.
+msgctxt "direct_update_manual_install"
+msgid "{} was downloaded and verified. Drag the new URnetwork into the Applications folder, then open it from there."
+msgstr "{} è stata scaricata e verificata. Trascina il nuovo URnetwork nella cartella Applicazioni, poi aprilo da lì."
+
+#. macOS Settings > Software update status before the first check.
+msgctxt "direct_update_not_checked"
+msgid "Updates have not been checked yet."
+msgstr "La ricerca di aggiornamenti non è ancora stata eseguita."
+
+#. macOS Settings > Software update status while the app restarts on the new version.
+msgctxt "direct_update_relaunching"
+msgid "Relaunching URnetwork…"
+msgstr "Riavvio di URnetwork…"
+
+#. macOS Settings: title of the section that checks for and installs app updates (direct-download app).
+msgctxt "direct_update_section_title"
+msgid "Software update"
+msgstr "Aggiornamento software"
+
+#. macOS Settings > Software update button that reveals the downloaded update in Finder (the macOS file manager).
+msgctxt "direct_update_show_in_finder"
+msgid "Show in Finder"
+msgstr "Mostra nel Finder"
+
+#. macOS Settings > Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.
+msgctxt "direct_update_signature_rejected"
+msgid "The update was rejected: {}"
+msgstr "L’aggiornamento è stato rifiutato: {}"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_unpack_failed"
+msgid "The download could not be unpacked: {}"
+msgstr "Impossibile decomprimere il download: {}"
+
+#. macOS Settings > Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.
+msgctxt "direct_update_unusable_release"
+msgid "Release {0} cannot be installed by the app ({1})."
+msgstr "La versione {0} non può essere installata dall’app ({1})."
+
+#. macOS Settings > Software update status when no newer release exists.
+msgctxt "direct_update_up_to_date"
+msgid "URnetwork is up to date."
+msgstr "URnetwork è aggiornato."
 
 #. Call to action
 msgctxt "disable_ignore_battery_hint"
@@ -2142,6 +2777,11 @@ msgctxt "emoji_tag_shuffle"
 msgid "Suggest another"
 msgstr "Suggerisci un altro"
 
+#. Footer of the Auto transports section explaining the fixed preference order.
+msgctxt "enabled_under_auto_footer"
+msgid "Listed in preference order: H1 first, then H3, whodis, and whodis pump. The order is fixed. At least one transport stays enabled."
+msgstr "Elencati in ordine di preferenza: prima H1, poi H3, whodis e whodis pump. L’ordine è fisso. Almeno un trasporto resta attivo."
+
 #. Call to action
 msgctxt "enjoying_urnetwork"
 msgid "Enjoying URnetwork?"
@@ -2190,6 +2830,11 @@ msgstr "Inserisci il codice di riferimento della rete"
 msgctxt "enter_urnetwork"
 msgid "Enter URnetwork"
 msgstr "Entra in URnetwork"
+
+#. Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.
+msgctxt "enter_wallet_address"
+msgid "Enter wallet address"
+msgstr "Inserisci l'indirizzo del portafoglio"
 
 #. Error message displayed in a snackbar when there was an error changing the network name.
 msgctxt "error_changing_network_name"
@@ -3116,6 +3761,11 @@ msgctxt "need_more_data_faster"
 msgid "Need more data, faster?"
 msgstr "Ti servono più dati, più velocemente?"
 
+#. Earnings page: lowercase caption under the net points total.
+msgctxt "net_points_earned"
+msgid "net points earned"
+msgstr "punti netti guadagnati"
+
 #. Call to action
 msgctxt "net_provided"
 msgid "Net Provided"
@@ -3210,6 +3860,11 @@ msgstr "Usa rete predefinita"
 msgctxt "network_create_bonus_message"
 msgid "Someone invited you to join 🥳 \nClaim your bonus by creating a network!"
 msgstr "Qualcuno ti ha invitato a unirti 🥳 \nRichiedi il tuo bonus creando una rete!"
+
+#. Used in Main/Account/AccountRootView.swift.
+msgctxt "network_earnings"
+msgid "Network earnings"
+msgstr "Guadagni della rete"
 
 #. A message that is displayed in a snackbar when the user changes the network name. The argument is the new network name.
 msgctxt "network_name_changed_to_n"
@@ -3399,6 +4054,11 @@ msgstr "Nessun portafoglio Solana installato è stato trovato su questo disposit
 msgctxt "none"
 msgid "None"
 msgstr "Nessuno"
+
+#. macOS button that dismisses the prompt to enable the VPN system extension for now.
+msgctxt "not_now"
+msgid "Not now"
+msgstr "Non ora"
 
 #. Settings
 msgctxt "notifications_label"
@@ -3681,12 +4341,22 @@ msgctxt "plan_save_percent"
 msgid "Save {}%"
 msgstr "Risparmia il {}%"
 
+#. Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.
+msgctxt "plan_terms_first_year_price"
+msgid "{0} for your first year, then {1}/year. Cancel anytime."
+msgstr "{0} per il primo anno, poi {1}/anno. Annulla quando vuoi."
+
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
 msgid "{0} day free, then {1}/year. Cancel anytime."
 msgid_plural "{0} days free, then {1}/year. Cancel anytime."
 msgstr[0] "{0} giorno gratis, poi {1}/anno. Annulla quando vuoi."
 msgstr[1] "{0} giorni gratis, poi {1}/anno. Annulla quando vuoi."
+
+#. Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.
+msgctxt "plan_terms_yearly_billed_today"
+msgid "{} billed today, then every year. Cancel anytime."
+msgstr "{} addebitati oggi, poi ogni anno. Annulla quando vuoi."
 
 #. The yearly plan card's price on the Linux onboarding page.
 msgctxt "plan_yearly_price"
@@ -4681,7 +5351,7 @@ msgctxt "seedphrase_only_time"
 msgid "⚠️ This is the ONLY time you'll see this."
 msgstr "⚠️ Questa è l’UNICA volta che lo vedrai."
 
-#. Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).
+#. Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).
 msgctxt "seedphrase_paste_hint"
 msgid "Paste your 12 or 24-word seedphrase here"
 msgstr "Incolla qui la tua frase seed di 12 o 24 parole"
@@ -5338,6 +6008,26 @@ msgctxt "split_rule_host_placeholder"
 msgid "example.com, *.example.com, 10.0.0.0/8"
 msgstr "example.com, *.example.com, 10.0.0.0/8"
 
+#. Split rule editor: description of the Route locally mode.
+msgctxt "split_rule_mode_excluded_description"
+msgid "Selected hosts bypass the tunnel."
+msgstr "Gli host selezionati bypassano il tunnel."
+
+#. Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.
+msgctxt "split_rule_mode_included_description"
+msgid "The default: selected hosts use the tunnel with no pin."
+msgstr "Predefinito: gli host selezionati usano il tunnel senza fissaggio."
+
+#. Split rule editor: description of the Keep on one provider mode.
+msgctxt "split_rule_mode_pinned_description"
+msgid "Selected hosts hold their provider longer instead of being moved at the first sign of trouble, so the site changes IP addresses less often mid-session."
+msgstr "Gli host selezionati mantengono il loro provider più a lungo invece di essere spostati al primo segno di problemi, così il sito cambia indirizzo IP meno spesso durante la sessione."
+
+#. Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.
+msgctxt "split_rule_mode_pinned_title"
+msgid "Keep on one provider"
+msgstr "Mantieni su un solo provider"
+
 #. Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.
 msgctxt "split_rule_preset_google_meet_calls"
 msgid "Google Meet calls"
@@ -5358,6 +6048,11 @@ msgctxt "split_rules_activity_hint"
 msgid "Routing activity appears here while connected."
 msgstr "L'attività di instradamento appare qui mentre sei connesso."
 
+#. Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.
+msgctxt "split_rules_connect_to_load"
+msgid "Connect once to load the rules you already have."
+msgstr "Connettiti una volta per caricare le regole che hai già."
+
 #. A description of how to route traffic locally.
 msgctxt "split_rules_hint"
 msgid "Tap traffic below to route it locally, bypassing the tunnel."
@@ -5368,10 +6063,20 @@ msgctxt "split_rules_host_hint"
 msgid "Add a host above, or tap traffic below to route it locally, bypassing the tunnel."
 msgstr "Aggiungi un host qui sopra, oppure tocca il traffico qui sotto per instradarlo localmente, bypassando il tunnel."
 
+#. Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.
+msgctxt "split_rules_host_hint_modes"
+msgid "Add a host above, or tap traffic below to route it locally or hold it to one provider."
+msgstr "Aggiungi un host qui sopra, oppure tocca il traffico qui sotto per instradarlo localmente o mantenerlo su un solo provider."
+
 #. transfer stats and split rules
 msgctxt "split_rules_info_note"
 msgid "Exclusions apply to the whole co-associated network cluster, so related traffic is caught together."
 msgstr "Le esclusioni si applicano all'intero gruppo di reti associate, così il traffico correlato viene escluso insieme."
+
+#. Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.
+msgctxt "split_rules_info_note_modes"
+msgid "Rules apply to the whole co-associated network cluster, so related traffic is caught together."
+msgstr "Le regole si applicano all’intero gruppo di reti associate, così il traffico correlato viene gestito insieme."
 
 #. Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.
 msgctxt "split_rules_match_sites_not_apps"
@@ -5387,6 +6092,16 @@ msgstr "Intervalli che ogni servizio pubblica per l’uso al di fuori di una VPN
 msgctxt "split_rules_start_from_preset"
 msgid "Start from a preset"
 msgstr "Inizia da una preimpostazione"
+
+#. macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.
+msgctxt "sso_browser_open_failed"
+msgid "Could not open the browser. Please try again."
+msgstr "Impossibile aprire il browser. Riprova."
+
+#. Error when a browser sign-in (Google or Apple through the browser) took too long and expired.
+msgctxt "sso_sign_in_timed_out"
+msgid "Sign-in timed out. Please try again."
+msgstr "Tempo scaduto per l’accesso. Riprova."
 
 #. Guest mode overlay
 msgctxt "start_earning_join"
@@ -5463,6 +6178,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "Anonimizzazione avanzata"
 
+#. Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.
+msgctxt "subscription_portal_open_failed"
+msgid "Couldn't open the subscription portal. Please try again."
+msgstr "Impossibile aprire il portale dell’abbonamento. Riprova."
+
 #. Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "successfully_claimed_multiplier"
 msgid "Successfully claimed multiplier!"
@@ -5493,10 +6213,50 @@ msgctxt "supporter"
 msgid "Pro"
 msgstr "Pro"
 
+#. Windows banner text when installing, starting or updating the VPN service failed.
+msgctxt "svc_action_failed"
+msgid "That didn't finish — the service is unchanged. Details are in the app log."
+msgstr "L’operazione non è stata completata — il servizio non è cambiato. I dettagli sono nel log dell’app."
+
 #. Settings: label of the VPN service row.
 msgctxt "svc_service_label"
 msgid "VPN service"
 msgstr "Servizio VPN"
+
+#. Windows banner button that installs the VPN service (Windows asks for administrator permission).
+msgctxt "svc_setup_action"
+msgid "Set up"
+msgstr "Configura"
+
+#. Windows banner text under 'Set up the VPN service'.
+msgctxt "svc_setup_message"
+msgid "URnetwork uses a Windows service to carry traffic. One click — Windows will ask for administrator permission."
+msgstr "URnetwork usa un servizio di Windows per trasportare il traffico. Un clic — Windows chiederà il permesso dell’amministratore."
+
+#. Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.
+msgctxt "svc_setup_title"
+msgid "Set up the VPN service"
+msgstr "Configura il servizio VPN"
+
+#. Windows banner button that starts the stopped VPN service.
+msgctxt "svc_start_action"
+msgid "Start"
+msgstr "Avvia"
+
+#. Windows banner text under 'Start the VPN service'.
+msgctxt "svc_start_message"
+msgid "The service is installed but not running."
+msgstr "Il servizio è installato ma non è in esecuzione."
+
+#. Windows banner title when the VPN service is installed but stopped.
+msgctxt "svc_start_title"
+msgid "Start the VPN service"
+msgstr "Avvia il servizio VPN"
+
+#. Windows banner text after the user closed the administrator permission (UAC) prompt without approving.
+msgctxt "svc_uac_declined"
+msgid "Windows asked for permission and the prompt was closed. Click again whenever you're ready."
+msgstr "Windows ha chiesto l’autorizzazione e la richiesta è stata chiusa. Fai di nuovo clic quando sei pronto."
 
 #. Settings: button that uninstalls the VPN service.
 msgctxt "svc_uninstall_action"
@@ -5508,10 +6268,30 @@ msgctxt "svc_uninstall_confirm"
 msgid "This stops the URnetwork service and removes its systemd unit. The app can't connect until it is set up again. You will be asked for administrator permission."
 msgstr "Questo arresta il servizio URnetwork e rimuove la sua unità systemd. L’app non può connettersi finché non viene configurato di nuovo. Ti verrà chiesto il permesso dell’amministratore."
 
+#. Windows Settings: confirmation dialog before uninstalling the VPN service.
+msgctxt "svc_uninstall_confirm_windows"
+msgid "This stops the URnetwork service and removes it from Windows. The app can't connect until it is set up again. Windows will ask for administrator permission."
+msgstr "Questo arresta il servizio URnetwork e lo rimuove da Windows. L’app non può connettersi finché non viene configurato di nuovo. Windows chiederà il permesso dell’amministratore."
+
 #. Settings: explanation under the uninstall service button.
 msgctxt "svc_uninstall_note"
 msgid "Remove the systemd service URnetwork uses to carry traffic."
 msgstr "Rimuovi il servizio systemd che URnetwork usa per trasportare il traffico."
+
+#. Windows Settings > VPN service row: what the Uninstall button removes.
+msgctxt "svc_uninstall_note_windows"
+msgid "Remove the Windows service URnetwork uses to carry traffic."
+msgstr "Rimuovi il servizio di Windows che URnetwork usa per trasportare il traffico."
+
+#. Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.
+msgctxt "svc_update_message"
+msgid "The installed service is a different version than this app."
+msgstr "Il servizio installato ha una versione diversa da questa app."
+
+#. Windows banner title when the installed VPN service is a different version than the app.
+msgctxt "svc_update_title"
+msgid "Update the VPN service"
+msgstr "Aggiorna il servizio VPN"
 
 #. Call to action
 msgctxt "switch_account"
@@ -5695,6 +6475,31 @@ msgctxt "transfer_submitted_details"
 msgid "Your transfer has been initiated and will complete once the transaction is processed on chain."
 msgstr "Il tuo trasferimento è stato avviato e verrà completato una volta che la transazione sarà elaborata on chain."
 
+#. Transport name: the DNS-disguised transport. A product name; never translated.
+msgctxt "transport_dns"
+msgid "whodis"
+msgstr "whodis"
+
+#. Transport name: the DNS-disguised transport with a reply pump. A product name; never translated.
+msgctxt "transport_dnspump"
+msgid "whodis pump"
+msgstr "whodis pump"
+
+#. Transport name: HTTP/1.1 over TLS. A protocol name; never translated.
+msgctxt "transport_h1"
+msgid "H1"
+msgstr "H1"
+
+#. Transport name: HTTP/3 over QUIC. A protocol name; never translated.
+msgctxt "transport_h3"
+msgid "H3"
+msgstr "H3"
+
+#. Transport name: peer to peer. A protocol name; never translated.
+msgctxt "transport_p2p"
+msgid "P2P"
+msgstr "P2P"
+
 #. Used in Shared/Views/Introduction/IntroductionView.swift.
 msgctxt "trusted_by_over_100_000_private_networks"
 msgid "Trusted by over 100,000 private networks"
@@ -5774,6 +6579,101 @@ msgstr "Cerca aggiornamenti automaticamente"
 msgctxt "upd_auto_check_note"
 msgid "Look for new releases shortly after launch and every six hours. Nothing is ever installed without a click."
 msgstr "Cerca nuove versioni poco dopo l’avvio e ogni sei ore. Non viene mai installato nulla senza un clic."
+
+#. Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.
+msgctxt "upd_available_appimage_message"
+msgid "One click downloads the release, verifies it against the release's checksum and replaces this AppImage. The VPN service updates separately."
+msgstr "Con un clic la versione viene scaricata, verificata con il suo checksum e sostituisce questa AppImage. Il servizio VPN si aggiorna separatamente."
+
+#. Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).
+msgctxt "upd_available_msi_message"
+msgid "One click downloads the release, verifies it and runs its installer, which updates the app and the VPN service. The app closes while it installs."
+msgstr "Con un clic la versione viene scaricata, verificata e ne viene avviato il programma di installazione, che aggiorna l’app e il servizio VPN. L’app si chiude durante l’installazione."
+
+#. Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.
+msgctxt "upd_available_package_message"
+msgid "Download {} from the release page, then run the command below."
+msgstr "Scarica {} dalla pagina della versione, poi esegui il comando qui sotto."
+
+#. Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.
+msgctxt "upd_available_title_version"
+msgid "Update available: v{}"
+msgstr "Aggiornamento disponibile: v{}"
+
+#. Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.
+msgctxt "upd_downloaded_message"
+msgid "This AppImage's folder is not writable, so the verified download was saved below. Replace the AppImage with it by hand."
+msgstr "La cartella di questa AppImage non è scrivibile, quindi il download verificato è stato salvato qui sotto. Sostituisci manualmente l’AppImage con questo file."
+
+#. Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.
+msgctxt "upd_failed_checksum"
+msgid "The download didn't match the release's checksums, so it was discarded. Click to try again."
+msgstr "Il download non corrispondeva ai checksum della versione ed è stato eliminato. Fai clic per riprovare."
+
+#. Update notice error (Linux Settings, Windows update banner): the release download failed.
+msgctxt "upd_failed_download"
+msgid "The download didn't finish. Check the connection and click to try again."
+msgstr "Il download non è stato completato. Controlla la connessione e fai clic per riprovare."
+
+#. Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.
+msgctxt "upd_failed_install"
+msgid "The AppImage couldn't be replaced. Check the folder's permissions and click to try again."
+msgstr "Impossibile sostituire l’AppImage. Controlla i permessi della cartella e fai clic per riprovare."
+
+#. Linux Settings update notice: button that downloads, verifies and installs the update.
+msgctxt "upd_install"
+msgid "Install"
+msgstr "Installa"
+
+#. Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.
+msgctxt "upd_manual_install_message"
+msgid "The installer didn't start (it needs administrator approval). The verified download was shown in Explorer — quit the app and run it."
+msgstr "Il programma di installazione non è partito (serve l’approvazione di un amministratore). Il download verificato è stato mostrato in Esplora file — chiudi l’app ed eseguilo."
+
+#. Linux Settings update notice once the update is installed and waiting for a relaunch.
+msgctxt "upd_ready_message"
+msgid "The new AppImage is in place and verified. Relaunch to start using it; the previous file is kept beside it until then."
+msgstr "La nuova AppImage è al suo posto e verificata. Riavvia per iniziare a usarla; il file precedente resta accanto fino ad allora."
+
+#. Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.
+msgctxt "upd_ready_title"
+msgid "Ready to relaunch: v{}"
+msgstr "Pronto per il riavvio: v{}"
+
+#. Linux Settings update notice: button that restarts the app on the newly installed version.
+msgctxt "upd_relaunch"
+msgid "Relaunch"
+msgstr "Riavvia"
+
+#. Linux Settings update notice: button that opens the release's download page in the browser.
+msgctxt "upd_release_page"
+msgid "Release page"
+msgstr "Pagina della versione"
+
+#. Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.
+msgctxt "upd_show_file"
+msgid "Show file"
+msgstr "Mostra file"
+
+#. Update notice progress line (Linux Settings, Windows update banner) while the release downloads.
+msgctxt "upd_stage_downloading"
+msgid "Downloading the update…"
+msgstr "Download dell’aggiornamento…"
+
+#. Windows update banner progress line while the verified installer is being launched.
+msgctxt "upd_stage_installing"
+msgid "Starting the installer…"
+msgstr "Avvio del programma di installazione…"
+
+#. Linux Settings update notice progress line while the verified download replaces the running AppImage file.
+msgctxt "upd_stage_replacing"
+msgid "Replacing the AppImage…"
+msgstr "Sostituzione dell’AppImage…"
+
+#. Update progress line (Linux Settings, Windows update banner, macOS Settings > Software update) while the downloaded release is checked against its published checksum.
+msgctxt "upd_stage_verifying"
+msgid "Verifying the download…"
+msgstr "Verifica del download…"
 
 #. Call to action
 msgctxt "update"
@@ -6287,6 +7187,21 @@ msgstr "Quando scolleghi la tua rete di riferimento, non potrai più guadagnare 
 msgctxt "when_you_refer_a_friend"
 msgid "When you refer a friend:"
 msgstr "Quando inviti un amico:"
+
+#. Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".
+msgctxt "widget_chart_peak"
+msgid "peak"
+msgstr "picco"
+
+#. Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.
+msgctxt "widget_intent_source_parameter"
+msgid "Source"
+msgstr "Origine"
+
+#. Title of the action that refreshes the app's Home Screen widgets.
+msgctxt "widget_refresh_intent_title"
+msgid "Refresh URnetwork widgets"
+msgstr "Aggiorna i widget di URnetwork"
 
 #. Account: the Widgets section (quick connect control and Home Screen widgets, with how to add them).
 msgctxt "widgets"
