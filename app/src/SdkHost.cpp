@@ -272,6 +272,14 @@ AuthResult VerificationRequired(const std::optional<urnet::AuthVerifySendError>&
   return r;
 }
 
+// Present while a sign-out is owed to the daemon (SignOut.hpp): beside the
+// app's preferences (AppPrefs.hpp), where no local logout reaches.
+std::string SignOutOwedPath() {
+  const std::string dir = std::string(g_get_user_config_dir()) + "/urnetwork";
+  g_mkdir_with_parents(dir.c_str(), 0700);
+  return dir + "/sign_out_owed";
+}
+
 }  // namespace
 
 SdkHost::~SdkHost() {
@@ -339,6 +347,13 @@ void SdkHost::ReleaseDeviceRpcDefaultPort() {
 
 bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDir) {
   std::scoped_lock lock(mutex_);
+  // A sign-out an earlier run could not deliver: the first reconcile (the
+  // health poll's) or a Connect delivers it before anything starts.
+  signOut_.Load();
+  if (signOut_.Owed()) {
+    g_message("sdkhost: a sign-out is still owed to the daemon from an earlier run; it is "
+              "delivered before anything starts");
+  }
   try {
     urnet::setLogDir(logDir);
     urnet::setMemoryLimit(kMemoryLimit);
@@ -394,7 +409,9 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
 
 bool SdkHost::IsLoggedIn() {
   std::scoped_lock lock(mutex_);
-  return localState_ && !localState_->getByClientJwt().empty();
+  // A sign-out is the answer at once: the stored jwt outlives it until the
+  // asynchronous local logout lands (Logout).
+  return !signedOut_.load() && localState_ && !localState_->getByClientJwt().empty();
 }
 
 // ---- auth (mirrors the Windows SdkHost) -----------------------------------
@@ -715,6 +732,9 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       }
       networkNameVc_ = urnet::newNetworkNameValidationViewController(*api_);
       loggedIn = !localState_->getByClientJwt().empty();
+      // the new space's stored credential is the answer, not a sign-out made
+      // in another space
+      signedOut_.store(!loggedIn);
       ok = true;
     } catch (const std::exception& e) {
       std::fprintf(stderr, "[sdk] switch network space to '%s' failed: %s\n",
@@ -2090,6 +2110,8 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void
           done({false, false, "could not save session"});
           return;
         }
+        // the stored credential is this sign-in's from here
+        signedOut_.store(false);
         if (onAuth_) onAuth_(true);
         done({true, false, ""});
       });
@@ -2121,7 +2143,11 @@ TunnelStartResult SdkHost::StartTunnelLocked() {
   // not in the journal, not in the daemon (which is never reached on most of
   // these paths). "Pressing Connect does nothing" was unanswerable as a result.
   g_message("connect: start_tunnel requested");
-  const std::string clientJwt = localState_->getByClientJwt();
+  // An owed sign-out first, at once: a Connect is a person asking (SignOut.hpp).
+  SettleSignOutLocked("connect", /*userInitiated=*/true);
+  // Signed out reads as no jwt: the stored one outlives a sign-out until its
+  // asynchronous local logout lands.
+  const std::string clientJwt = signedOut_.load() ? std::string() : localState_->getByClientJwt();
   if (clientJwt.empty()) {
     lastTunnelError_ = "not signed in";
     g_warning("connect: refused — no client jwt (not signed in)");
@@ -2169,6 +2195,15 @@ TunnelStartResult SdkHost::StartTunnelLocked() {
       lastTunnelError_ = error;
       g_warning("connect: control session error: %s", error.c_str());
       return TunnelStartResult::Failed;
+  }
+  // A sign-out the daemon has not done yet: what it runs may still be the
+  // account's that left. Nothing is attached or started until it has been;
+  // the delivery above tried, and the health poll keeps trying.
+  if (signOut_.Owed()) {
+    lastTunnelError_ =
+        "the URnetwork system service has not yet stopped what the previous sign-in ran";
+    g_warning("connect: refused — a sign-out is still owed to the daemon");
+    return TunnelStartResult::Failed;
   }
 
   // 2) the device-RPC mTLS material.
@@ -4353,10 +4388,16 @@ bool SdkHost::ProviderRuns() { return hasDevice() || daemonProviderRunning_.load
 void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
                                       bool settingsChanged) {
   if (!localState_ || providerReconcileClosed_) return;
+  // An owed sign-out first (SignOut.hpp): nothing below starts while it is owed.
+  SettleSignOutLocked(reason, userInitiated);
   const std::string clientJwt = localState_->getByClientJwt();
   const std::string instanceId = localState_->getInstanceId();
-  if (clientJwt.empty() || instanceId.empty()) return;  // signed out: nothing provides
-  const std::string mode = localState_->getProvideControlMode();
+  // Signed out, nothing provides: a provider the daemon still runs for this
+  // user (a sign-out it missed) is stopped like any mode that does not
+  // provide. signedOut_ first: the stored jwt outlives a sign-out until its
+  // asynchronous local logout lands.
+  const bool signedIn = !signedOut_.load() && !clientJwt.empty() && !instanceId.empty();
+  const std::string mode = signedIn ? localState_->getProvideControlMode() : std::string("never");
   const provide::ControlMode controlMode = provide::ControlModeFrom(mode);
   // A mode that does not provide asks the daemon nothing once nothing is known
   // to run. The first call after launch still asks once: a provider an earlier
@@ -4399,6 +4440,14 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
   if (!providerBackoff_.Allows(nowMillis)) return;
 
   if (step == provide::DisconnectedStep::Start) {
+    // A sign-out the daemon has not done yet holds every start: the device
+    // would run beside, or after, what the account that left still runs.
+    if (signOut_.Owed()) {
+      g_warning("provide: not starting the provider (%s): a sign-out is still owed to the "
+                "daemon",
+                reason);
+      return;
+    }
     ctl::StartProviderRequest request;
     request.by_jwt = clientJwt;
     request.instance_id = instanceId;
@@ -4663,12 +4712,33 @@ void SdkHost::Shutdown() {
   DropDaemonProviderStatsLocked();
 }
 
+// See the contract in the header.
 void SdkHost::Logout() {
   std::scoped_lock lock(mutex_);
+  // Signed out from here: a posted reconcile, the health poll or a Connect that
+  // runs after this starts nothing for the account that is leaving.
+  signedOut_.store(true);
+  pendingWalletAuth_.reset();
+  // The local credentials first, because nothing can hold them up: the app is
+  // signed out on disk even if it is ended while the daemon is asked below.
+  if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+  if (events_) events_->NewSession();  // the next sign-in is a new session
   TeardownDeviceLocked();
-  // the session is over: bring the daemon's tunnel down too (best effort — an
-  // unreachable daemon has nothing running for us anyway)
-  control_.StopTunnel();
+  // The daemon as Quit stops it (Shutdown), owed until it has (SignOut.hpp). A
+  // person asked, so at once rather than at the backoff's pace. It used to be a
+  // best-effort stop_tunnel: "an unreachable daemon has nothing running for
+  // us" holds when the daemon is not running, not when its socket, its hello
+  // or polkit fails while it still runs the account's tunnel or provider.
+  signOutBackoff_.NoteSuccess();
+  const signout::Delivery delivery = signOut_.Begin(SignOutDaemonLocked());
+  if (delivery == signout::Delivery::Delivered) {
+    g_message("sdkhost: sign-out: the daemon runs nothing of the account that signed out");
+  } else {
+    signOutBackoff_.NoteFailure(g_get_monotonic_time() / 1000);
+    g_warning("sdkhost: sign-out: %s; the sign-out stays owed to the daemon, which is told "
+              "as soon as it can be, and nothing starts until it has been",
+              signout::ToString(delivery));
+  }
   ForgetRpcSession();
   // stop_tunnel retired the provider-only device too; nothing provides for a
   // signed-out app.
@@ -4678,11 +4748,84 @@ void SdkHost::Logout() {
   DropDaemonProviderStatsLocked();
   providerStateKnown_ = false;
   providerBackoff_.NoteSuccess();
-  pendingWalletAuth_.reset();
-  if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
-  if (events_) events_->NewSession();  // the next sign-in is a new session
   if (onAuth_) onAuth_(false);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);  // drawer falls back to empty states
+}
+
+signout::Daemon SdkHost::SignOutDaemonLocked() {
+  // requires mutex_, across the calls the delivery makes
+  signout::Daemon daemon;
+  daemon.reach = [this] {
+    std::string error;
+    const bool reached = control_.EnsureSession(&error) == DaemonSessionState::Ok;
+    if (!reached) {
+      g_warning("sdkhost: sign-out: the daemon session is not usable: %s",
+                error.empty() ? "no detail" : error.c_str());
+    }
+    return reached;
+  };
+  daemon.otherUsersSession = [this]() -> std::optional<bool> {
+    std::string error;
+    const std::optional<ctl::StatusReply> status = control_.Status(&error);
+    if (!status) {
+      g_warning("sdkhost: sign-out: the daemon did not answer `status`: %s",
+                error.empty() ? "no detail" : error.c_str());
+      return std::nullopt;
+    }
+    return status->redacted;
+  };
+  daemon.send = [this](signout::Request request) {
+    switch (request) {
+      case signout::Request::StopTunnel: {
+        std::string error;
+        if (control_.StopTunnel(&error)) return true;
+        g_warning("sdkhost: sign-out: stop_tunnel failed: %s",
+                  error.empty() ? "no detail" : error.c_str());
+        return false;
+      }
+    }
+    return false;
+  };
+  return daemon;
+}
+
+void SdkHost::SettleSignOutLocked(const char* reason, bool userInitiated) {
+  if (!signOut_.Owed()) return;
+  const int64_t nowMillis = g_get_monotonic_time() / 1000;
+  if (userInitiated) signOutBackoff_.NoteSuccess();
+  if (!signOutBackoff_.Allows(nowMillis)) return;
+  const signout::Delivery delivery = signOut_.Settle(SignOutDaemonLocked());
+  if (delivery == signout::Delivery::Delivered) {
+    signOutBackoff_.NoteSuccess();
+    g_message("sdkhost: the owed sign-out is delivered (%s)", reason);
+    return;
+  }
+  signOutBackoff_.NoteFailure(nowMillis);
+  g_warning("sdkhost: the sign-out is still owed (%s): %s; nothing starts until it is "
+            "delivered, next try in %llds",
+            reason, signout::ToString(delivery),
+            static_cast<long long>(signOutBackoff_.DelayMillis() / 1000));
+}
+
+signout::Marker SdkHost::SignOutMarker() {
+  signout::Marker marker;
+  marker.read = [] { return g_file_test(SignOutOwedPath().c_str(), G_FILE_TEST_EXISTS) != 0; };
+  marker.write = [](bool owed) {
+    const std::string path = SignOutOwedPath();
+    if (!owed) {
+      // One left behind is delivered again at the next launch, which stops
+      // what this user runs then; said, as that is the one way it can surprise.
+      if (g_remove(path.c_str()) != 0 && errno != ENOENT) {
+        g_warning("sdkhost: sign-out: the owed marker could not be removed: %s",
+                  g_strerror(errno));
+      }
+      return;
+    }
+    std::ofstream file(path, std::ios::trunc);
+    file << "a sign-out the URnetwork system service has not done yet\n";
+    if (!file) g_warning("sdkhost: sign-out: the owed marker could not be written");
+  };
+  return marker;
 }
 
 }  // namespace urnw
