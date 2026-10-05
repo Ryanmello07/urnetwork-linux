@@ -110,6 +110,10 @@ enum class DrawerEvent {
   // this device's own extender role changed state or setting (the connect
   // page's extender row, the earnings page's read-only row and statistics)
   ExtenderProvideStatus,
+  // this device's provider status: a poll landed or failed, a stop dropped
+  // one in flight, or the controller opened or closed (the earnings page's
+  // reason line, demand histogram and ranking numbers)
+  ProviderStatus,
 };
 
 // Outcome of StartTunnel. Everything except Started is a degraded state the
@@ -928,6 +932,32 @@ class SdkHost {
   std::optional<urnet::NetExtender> GetPrivateExtender();
   bool SetPrivateExtender(const std::string& ip, const std::string& secret);
 
+  // ---- this device's provider status (support part P008) -------------------
+  // The SDK's ProviderStatusViewController: GET /network/provider-status about
+  // once a minute while it polls, publishing how often the network offered
+  // this device to clients per minute over the last hour, the numbers it is
+  // ranked by and the first reason holding it back. Opened with the rest of
+  // the presentation (SubscribeDrawer), but only while the provide control
+  // mode is not never, and closed with it or when the mode becomes never.
+  // Changes arrive as DrawerEvent::ProviderStatus after every poll, success or
+  // failure, after a stop that dropped a poll in flight, and when the
+  // controller opens or closes.
+  struct ProviderStatusSnapshot {
+    bool open = false;    // a controller exists
+    bool loaded = false;  // a poll has succeeded
+    std::string lastFetchError;  // the last failed poll's error, "" once one succeeds
+    // this device's status; nullopt before a poll, or when the device is not
+    // one of the network's provider clients
+    std::optional<urnet::ProviderStatus> status;
+  };
+  // The controller's state, read together under the lock.
+  ProviderStatusSnapshot ProviderStatusNow();
+  // Polling follows the Earnings destination on screen: true starts the
+  // controller (one poll at once, then about once a minute), false stops it
+  // and keeps its last snapshot. Remembered across the controller's close and
+  // reopen.
+  void SetProviderStatusPolling(bool polling);
+
   // ---- reliability / exits (Home's Advanced inspector + the Developer page) --
   // The locked, BLOCKING read. Every field behind it is a synchronous device
   // rpc over the loopback mTLS channel to urnetworkd — three for ExitsOnly,
@@ -1068,6 +1098,12 @@ class SdkHost {
   void SubscribeStats();   // caller holds mutex_; opens presentation controllers
   void SubscribeDrawer();  // caller holds mutex_; opens presentation controllers
   void ClosePresentationLocked();
+  // The provider status controller's two halves (P008). The open is a no-op
+  // with no device, with one already open or with the mode never, and starts
+  // the controller when polling; the close drops its listener first, then
+  // hands it back with the typed close. Both require mutex_.
+  void OpenProviderStatusLocked(const std::string& provideControlMode);
+  void CloseProviderStatusLocked();
   void EmitDrawerEvent(DrawerEvent event);
   LiveStats ReadStats();  // read the current snapshot from the SDK getters
   void PublishStats();    // ReadStats() -> onStats_
@@ -1172,6 +1208,12 @@ class SdkHost {
   std::optional<urnet::ProviderLocationsViewController> providerLocationsVc_;
   // extender settings, share and import (the SDK owns the payload format)
   std::optional<urnet::ExtenderViewController> extenderVc_;
+  // this device's provider status (P008), open with the presentation while the
+  // provide control mode is not never. Its listener is held apart from
+  // presentationSubs_ so a mode change to never can drop it before the close.
+  std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
+  std::optional<urnet::Sub> providerStatusSub_;
+  bool providerStatusPolling_ = false;  // the Earnings destination is on screen
   // control channel to urnetworkd (tunnel lifecycle + location override)
   ControlClient control_;
   std::string lastTunnelError_;

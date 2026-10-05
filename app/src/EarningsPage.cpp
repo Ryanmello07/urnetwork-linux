@@ -307,6 +307,232 @@ Gtk::Box* MakeChartRow(int height, TransferChart* chart) {
   return row;
 }
 
+// ---- the provider status's words (support part P008) --------------------------
+
+static_assert(providerstatus::kProvideModePublic == urnet::ProvideModePublic,
+              "the idle reason compares the live provide mode with the SDK's public mode");
+
+Glib::ustring IdleReasonText(providerstatus::ProviderIdleReason reason) {
+  switch (reason) {
+    case providerstatus::ProviderIdleReason::None:
+      return {};
+    case providerstatus::ProviderIdleReason::AutoNotConnected:
+      return T_("provider_idle_auto_not_connected",
+                "Auto shares with everyone only while you're connected. Choose Always to earn "
+                "while idle.");
+    case providerstatus::ProviderIdleReason::NetworkOnly:
+      return T_("provider_idle_network_only",
+                "Shared only with your own devices. Choose Always to share with everyone.");
+    case providerstatus::ProviderIdleReason::PausedWifiOnly:
+      return T_("provider_idle_paused_wifi_only",
+                "Paused: providing is set to Wi-Fi only, and this device isn't on Wi-Fi.");
+    case providerstatus::ProviderIdleReason::PausedNoNetwork:
+      return T_("provider_idle_paused_no_network",
+                "Paused: this device can't provide on its current network.");
+    case providerstatus::ProviderIdleReason::NoTrafficYet:
+      return T_("provider_idle_no_traffic_yet",
+                "New providers need several hours of steady uptime and a speed test before "
+                "clients are sent to them. Traffic also depends on demand in your region.");
+  }
+  return {};
+}
+
+// provider_status_reason_<code>, for every code the server sends
+Glib::ustring ServerReasonText(providerstatus::ServerReason reason) {
+  switch (reason) {
+    case providerstatus::ServerReason::Unknown:
+      return {};
+    case providerstatus::ServerReason::NotProviding:
+      return T_("provider_status_reason_not_providing",
+                "This device isn't set to share its connection.");
+    case providerstatus::ServerReason::NotConnected:
+      return T_("provider_status_reason_not_connected",
+                "This device isn't connected right now. Clients are offered only connected "
+                "devices.");
+    case providerstatus::ServerReason::LocationInvalid:
+      return T_("provider_status_reason_location_invalid",
+                "This device is connecting from more than one address, or its location is "
+                "unknown. Clients are offered only devices with one address and a known "
+                "location.");
+    case providerstatus::ServerReason::NetworkOnly:
+      return T_("provider_status_reason_network_only",
+                "This device provides only to your own devices. Choose Always to share with "
+                "everyone.");
+    case providerstatus::ServerReason::ReliabilityWarmingUp:
+      return T_("provider_status_reason_reliability_warming_up",
+                "Building reliability. This device has been steady for the last hour; clients "
+                "are offered it once its 12-hour reliability reaches the minimum, about 8 hours "
+                "after a fresh start.");
+    case providerstatus::ServerReason::ReliabilityLow:
+      return T_("provider_status_reason_reliability_low",
+                "Reliability over the last hour is below what clients need. It rises with every "
+                "minute this device stays connected; disconnects lower it.");
+    case providerstatus::ServerReason::NotEligible:
+      return T_("provider_status_reason_not_eligible",
+                "This connection isn't eligible to provide right now.");
+    case providerstatus::ServerReason::EgressUnprobed:
+      return T_("provider_status_reason_egress_unprobed",
+                "The network check hasn't run on this connection yet. Until it passes, clients "
+                "are offered this device only when checked providers run out.");
+    case providerstatus::ServerReason::EgressFailing:
+      return T_("provider_status_reason_egress_failing",
+                "Too many test sites failed to load through this connection in the last 8 "
+                "hours. Clients are offered this device only when checked providers run out.");
+    case providerstatus::ServerReason::SpeedTestMissing:
+      return T_("provider_status_reason_speed_test_missing",
+                "No speed test yet. Until one completes, clients are offered this device much "
+                "less often.");
+    case providerstatus::ServerReason::Slow:
+      return T_("provider_status_reason_slow",
+                "This connection measured slower than clients need, so it is offered much less "
+                "often.");
+    case providerstatus::ServerReason::None:
+      return T_("provider_status_reason_none",
+                "Everything checks out. How often clients are offered this device depends on "
+                "demand in its region and on how it ranks against nearby providers.");
+  }
+  return {};
+}
+
+Glib::ustring NumberLabelText(providerstatus::NumberLabel label) {
+  switch (label) {
+    case providerstatus::NumberLabel::Reliability5m:
+      return T_("provider_status_number_reliability_5m", "Reliability, last 5 minutes");
+    case providerstatus::NumberLabel::Reliability1h:
+      return T_("provider_status_number_reliability_1h", "Reliability, last hour");
+    case providerstatus::NumberLabel::Reliability12h:
+      return T_("provider_status_number_reliability_12h", "Reliability, last 12 hours");
+    case providerstatus::NumberLabel::ReliabilityOther:
+      return T_("reliability", "Reliability");
+    case providerstatus::NumberLabel::UrlChecks:
+      return T_("provider_status_number_url_checks", "Network checks");
+    case providerstatus::NumberLabel::SpeedTest:
+      return T_("provider_status_number_speed_test", "Speed test");
+    case providerstatus::NumberLabel::Latency:
+      return T_("provider_status_number_latency", "Delay");
+    case providerstatus::NumberLabel::WeightQuality:
+      return T_("provider_status_number_weight_quality", "Selection weight (quality)");
+    case providerstatus::NumberLabel::WeightSpeed:
+      return T_("provider_status_number_weight_speed", "Selection weight (speed)");
+    case providerstatus::NumberLabel::TierQuality:
+      return T_("provider_status_number_tier_quality", "Tier (quality)");
+    case providerstatus::NumberLabel::TierSpeed:
+      return T_("provider_status_number_tier_speed", "Tier (speed)");
+    case providerstatus::NumberLabel::Country:
+      return T_("country", "Country");
+  }
+  return {};
+}
+
+Glib::ustring NumberHelpText(providerstatus::NumberLabel label) {
+  switch (label) {
+    case providerstatus::NumberLabel::Reliability5m:
+      return T_("provider_status_help_reliability_5m",
+                "How steadily this device stayed connected over the last 5 minutes. It scales "
+                "how often clients are offered this device; staying connected raises it.");
+    case providerstatus::NumberLabel::Reliability1h:
+      return T_("provider_status_help_reliability_1h",
+                "How steadily this device stayed connected over the last hour. It must reach "
+                "the minimum to be offered to clients; disconnects lower it and steady uptime "
+                "raises it.");
+    case providerstatus::NumberLabel::Reliability12h:
+      return T_("provider_status_help_reliability_12h",
+                "How steadily this device stayed connected over the last 12 hours. It must "
+                "reach the minimum to be offered to clients; from a fresh start this takes "
+                "about 8 hours of steady uptime.");
+    case providerstatus::NumberLabel::ReliabilityOther:
+      return T_("provider_status_help_reliability_other",
+                "How steadily this device stayed connected over a longer window. It must reach "
+                "the minimum to be offered to clients.");
+    case providerstatus::NumberLabel::UrlChecks:
+      return T_("provider_status_help_url_checks",
+                "Test sites that loaded through this connection in the last 8 hours. Most must "
+                "load; filtering by your internet provider lowers it.");
+    case providerstatus::NumberLabel::SpeedTest:
+      return T_("provider_status_help_speed_test",
+                "Speed measured through this device. Faster connections are offered more "
+                "often.");
+    case providerstatus::NumberLabel::Latency:
+      return T_("provider_status_help_latency",
+                "Delay measured above what is expected for this location. Lower delay is "
+                "offered more often.");
+    case providerstatus::NumberLabel::WeightQuality:
+    case providerstatus::NumberLabel::WeightSpeed:
+      return T_("provider_status_help_weight",
+                "Combines reliability, speed and passed network checks. Clients are offered "
+                "providers with a higher weight more often.");
+    case providerstatus::NumberLabel::TierQuality:
+    case providerstatus::NumberLabel::TierSpeed:
+      return T_("provider_status_help_tier",
+                "Clients try lower tiers first. 0 is best; 3 means past the speed or delay "
+                "cutoff.");
+    case providerstatus::NumberLabel::Country:
+      return T_("provider_status_help_country",
+                "Clients who choose this country can be offered this device.");
+  }
+  return {};
+}
+
+// The store's value templates and the app's byte rate, for NumberRowsFor.
+providerstatus::NumberWords ProviderStatusNumberWords() {
+  providerstatus::NumberWords words;
+  words.withMinimum = [](const std::string& value, const std::string& minimum) {
+    return Format(T_("provider_status_value_with_minimum", "{0} (needs {1})"), value, minimum);
+  };
+  words.withMaximum = [](const std::string& value, const std::string& maximum) {
+    return Format(T_("provider_status_value_with_maximum", "{0} (at most {1})"), value,
+                  maximum);
+  };
+  words.countOfTotal = [](int64_t count, int64_t total) {
+    return Format(T_("provider_status_value_count_of_total", "{0} of {1} loaded"), count, total);
+  };
+  words.rate = [](double bytesPerSecond) {
+    return FormatByteRate(static_cast<int64_t>(std::llround(bytesPerSecond)));
+  };
+  words.notYet = T_("provider_status_value_not_yet", "Not yet");
+  words.noHistory = T_("provider_status_value_no_history", "No history yet");
+  words.notInPool = T_("provider_status_value_not_in_pool", "Not in this pool");
+  return words;
+}
+
+// The controller's reading in the presentation's terms.
+providerstatus::Poll ProviderStatusPollOf(const SdkHost::ProviderStatusSnapshot& snapshot) {
+  providerstatus::Poll poll;
+  poll.open = snapshot.open;
+  poll.loaded = snapshot.loaded;
+  poll.lastFetchError = snapshot.lastFetchError;
+  if (!snapshot.status) return poll;
+  const urnet::ProviderStatus& status = *snapshot.status;
+  poll.hasStatus = true;
+  poll.reason = status.reason;
+  poll.reasonText = status.reason_text;
+  if (status.appearances) {
+    poll.hasAppearances = true;
+    poll.appearancesPerMinute =
+        status.appearances->appearances_per_minute.value_or(urnet::Int64List());
+  }
+  if (status.ranking) {
+    for (const urnet::ProviderRankingNumber& number : *status.ranking) {
+      providerstatus::RankingNumber out;
+      out.name = number.name;
+      out.hasValue = number.has_value;
+      out.value = number.value;
+      out.hasMinimum = number.has_minimum;
+      out.minimum = number.minimum;
+      out.hasMaximum = number.has_maximum;
+      out.maximum = number.maximum;
+      out.passes = number.passes;
+      out.count = number.count;
+      out.total = number.total;
+      poll.ranking.push_back(out);
+    }
+  }
+  if (status.country) {
+    poll.country = providerstatus::Country{status.country->country_code, status.country->country};
+  }
+  return poll;
+}
+
 // A label whose text is a link: the whole line opens `url` in the browser.
 Gtk::Label* MakeLinkLabel(const Glib::ustring& text, const std::string& url,
                           std::function<void(const std::string&)> open) {
@@ -1242,6 +1468,12 @@ EarningsPage::EarningsPage(SdkHost& host)
   ApplyExtenderProvideState();
   PullProviderThroughput(/*forced=*/true);
   ApplyStatsSections();
+  ApplyProviderStatus();
+  // The provider status polls while this destination is on screen: the
+  // mapped stack child of a presented window (ConnectPage's rule for its
+  // clock). Hidden, the controller stops and keeps its last snapshot.
+  signal_map().connect([this] { host_.SetProviderStatusPolling(true); });
+  signal_unmap().connect([this] { host_.SetProviderStatusPolling(false); });
 
   // every panel opens on its LOADING state and the stat values on the faint
   // dash: an unloaded blank destination would read "there is nothing"
@@ -1873,7 +2105,8 @@ void EarningsPage::BuildNetworkPane() {
     label->set_xalign(0);
     label->set_hexpand(true);
     rowBox->append(*label);
-    provideModeValue_ = Gtk::make_managed<Gtk::Label>(ProvideModeValueText(host_.GetProvideControlMode()));
+    controlMode_ = host_.GetProvideControlMode();
+    provideModeValue_ = Gtk::make_managed<Gtk::Label>(ProvideModeValueText(controlMode_));
     provideModeValue_->add_css_class("dim-label");
     rowBox->append(*provideModeValue_);
     auto* chevron = Gtk::make_managed<Gtk::Image>();
@@ -1889,6 +2122,29 @@ void EarningsPage::BuildNetworkPane() {
       if (on_open_provide_settings) on_open_provide_settings();
     });
     content->append(*provideModeRow_);
+  }
+
+  // 9a'. why an enabled provider is idle (P008): one muted line directly under
+  // the provide mode row, the local reason or the server's (ApplyStatusLine),
+  // and a Change that opens the provide mode where the row does. It only
+  // navigates; the mode is changed there. Hidden while there is no reason.
+  {
+    statusLineRow_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    statusLineRow_->set_margin_start(12);
+    statusLineRow_->set_margin_end(12);
+    statusLineRow_->set_margin_bottom(8);
+    statusLineText_ = MakeWrappedNote({}, "ur-row-note");
+    statusLineText_->set_hexpand(true);
+    statusLineRow_->append(*statusLineText_);
+    auto* change = Gtk::make_managed<Gtk::Button>(T_("change", "Change"));
+    change->add_css_class("flat");
+    change->set_valign(Gtk::Align::CENTER);
+    change->signal_clicked().connect([this] {
+      if (on_open_provide_settings) on_open_provide_settings();
+    });
+    statusLineRow_->append(*change);
+    statusLineRow_->set_visible(false);
+    content->append(*statusLineRow_);
   }
 
   // 9b. the read-only extender row (N7): the connect page's row with the
@@ -1963,6 +2219,53 @@ void EarningsPage::BuildNetworkPane() {
   blockedChart_->set_content_height(kBlockedChartHeight - 1);
   blockedChartRow_ = MakeChartRow(kBlockedChartHeight, blockedChart_);
   content->append(*blockedChartRow_);
+
+  // 9f. how often the network offered this device to clients in each minute of
+  // the last hour (P008), next to the other provider plots and under their
+  // gate: the Demand histogram, with the loading or unavailable line in its
+  // place until there is one, so the layout does not jump. Its height follows
+  // the caption's wrap (DemandChart measures it).
+  demandChart_ = Gtk::make_managed<DemandChart>(
+      T_("provider_status_demand", "Demand"),
+      T_("provider_status_histogram_title",
+         "Times clients were offered this device, per minute, last hour"),
+      T_("provider_status_histogram_start", "60 min ago"),
+      T_("provider_status_histogram_end", "Now"));
+  demandChart_->set_margin_bottom(6);
+  demandChartRow_ = kit::MakePaneRow(-1);
+  if (auto* inner = dynamic_cast<Gtk::Box*>(demandChartRow_->get_first_child())) {
+    inner->append(*demandChart_);
+  }
+  content->append(*demandChartRow_);
+
+  // 9g. "Why?": a disclosure, collapsed by default; expanded, one row per number
+  // the network ranks this device by, in the server's order, then the country
+  // (RebuildWhyRows)
+  {
+    auto* rowBox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    auto* label = Gtk::make_managed<Gtk::Label>(T_("provider_status_why", "Why?"));
+    label->set_xalign(0);
+    label->set_hexpand(true);
+    rowBox->append(*label);
+    whyChevron_ = Gtk::make_managed<Gtk::Image>();
+    whyChevron_->set_from_icon_name("go-next-symbolic");
+    whyChevron_->add_css_class("dim-label");
+    kit::MarkDecorative(*whyChevron_);
+    rowBox->append(*whyChevron_);
+    whyRow_ = Gtk::make_managed<Gtk::Button>();
+    whyRow_->set_child(*rowBox);
+    whyRow_->add_css_class("flat");
+    whyRow_->set_has_frame(false);
+    kit::SetAccessibleLabel(*whyRow_, T_("provider_status_why", "Why?"));
+    gtk_accessible_update_state(GTK_ACCESSIBLE(whyRow_->gobj()), GTK_ACCESSIBLE_STATE_EXPANDED,
+                                FALSE, -1);
+    whyRow_->signal_clicked().connect(sigc::mem_fun(*this, &EarningsPage::OnWhyToggled));
+    whyRow_->set_visible(false);
+    content->append(*whyRow_);
+    whyRows_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+    whyRows_->set_visible(false);
+    content->append(*whyRows_);
+  }
 }
 
 // ---- loads -------------------------------------------------------------------
@@ -5175,11 +5478,17 @@ void EarningsPage::ApplyProvideState(const LiveStats& stats) {
   const auto visual = ProvideModeGlyphFor(stats.provideMode, stats.providePaused);
   provideModeDot_.set_markup("<span foreground='" + HexForMarkup(visual.color) + "'>" +
                              visual.glyph + "</span>");
-  if (provideModeValue_) provideModeValue_->set_text(ProvideModeValueText(host_.GetProvideControlMode()));
+  controlMode_ = host_.GetProvideControlMode();
+  if (provideModeValue_) provideModeValue_->set_text(ProvideModeValueText(controlMode_));
+  // the line under the row follows the live provide state on every push, so
+  // it is applied before the gate's early return below (P008)
+  liveProvideMode_ = stats.provideMode;
+  providePaused_ = stats.providePaused;
+  ApplyStatusLine();
   // the gate reads the same value the row shows: the provide mode the user
   // picked. Never hides every provider plot behind the disabled message,
   // whatever the device's live provide state says.
-  const bool enabled = host_.GetProvideControlMode() != "never";
+  const bool enabled = controlMode_ != "never";
   if (enabled == providingEnabled_) return;
   providingEnabled_ = enabled;
   ApplyReliability(lastReliability_, lastReliabilityState_);  // repaint under the new gate
@@ -5193,15 +5502,20 @@ void EarningsPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::DeviceLifecycle:
       // a device arriving or leaving, or the window coming back: the status
       // listener fires nothing on registration and the series controller is
-      // new, so both are re-read
+      // new, so both are re-read, and so is the provider status controller
+      // that opened (or closed) with the presentation
       ApplyExtenderProvideState();
       PullProviderThroughput(/*forced=*/true);
+      ApplyProviderStatus();
       break;
     case DrawerEvent::Throughput:
       PullProviderThroughput(/*forced=*/false);
       break;
     case DrawerEvent::ExtenderProvideStatus:
       ApplyExtenderProvideState();
+      break;
+    case DrawerEvent::ProviderStatus:
+      ApplyProviderStatus();
       break;
     case DrawerEvent::ProviderTransportSettings:
       // the enabled flags behind the provider bar's unused footer follow the
@@ -5260,6 +5574,13 @@ void EarningsPage::PullProviderThroughput(bool forced) {
       host_.ProviderTransportDistribution();
   providerDistributionKnown_ = distribution.has_value();
   if (providerTransportBar_) providerTransportBar_->SetDistribution(distribution);
+  // the provider bytes of the window, which tell the idle line that a public
+  // provider has carried no traffic yet (P008)
+  const int64_t recentBytes = distribution ? distribution->ByteCount : 0;
+  if (recentBytes != recentProviderBytes_) {
+    recentProviderBytes_ = recentBytes;
+    ApplyStatusLine();
+  }
   // A forced re-read follows a device arriving or the window coming back; either
   // way SdkHost has just opened a new contract view controller, whose provider
   // stats stay nil until its first sample and whose first throughput tick lands
@@ -5319,6 +5640,10 @@ void EarningsPage::ApplyStatsSections() {
   localChartRow_->set_visible(sections.providerVisible);
   providerTransportRow_->set_visible(sections.providerVisible);
   blockedChartRow_->set_visible(sections.providerVisible);
+  // the demand histogram and its "Why?" sit with the plots, under the same
+  // gate (P008, the owner's placement rule)
+  demandChartRow_->set_visible(sections.providerVisible);
+  ApplyWhyVisibility();
   // the bar's legend line is a skeleton while its row shows before the first
   // distribution, and settles when the row hides
   if (!sections.providerVisible) {
@@ -5338,6 +5663,132 @@ void EarningsPage::OpenProviderTransportSheet() {
   // always presentable: with no device the draft comes from the GUI's mirror
   // or the SDK default, and the edit applies at the next tunnel start
   providerTransportSheet_->Open();
+}
+
+// ---- the provider status (support part P008) ------------------------------------
+
+// The local reason comes from the live stats and the throughput window and is
+// immediate; the server's reason joins it once the controller has a status
+// for this device. The desktop has no Wi-Fi-only setting, and Linux provides
+// only while the tunnel is up (SessionIdleReasonFor).
+void EarningsPage::ApplyStatusLine() {
+  if (statusLineRow_ == nullptr) return;
+  const providerstatus::ProviderIdleReason idle =
+      providerstatus::SessionIdleReasonFor(host_.hasDevice(), controlMode_, liveProvideMode_,
+                                           providePaused_, recentProviderBytes_);
+  const providerstatus::StatusLine line =
+      providerstatus::StatusLineFor(idle, providerStatus_.reason, providerStatus_.reasonText);
+  const bool shown = controlMode_ != "never" && line.kind != providerstatus::LineKind::Hidden;
+  statusLineRow_->set_visible(shown);
+  if (!shown) return;
+  switch (line.kind) {
+    case providerstatus::LineKind::Hidden:
+      break;
+    case providerstatus::LineKind::Idle:
+      statusLineText_->set_text(IdleReasonText(line.idle));
+      break;
+    case providerstatus::LineKind::Server:
+      statusLineText_->set_text(ServerReasonText(line.server));
+      break;
+    case providerstatus::LineKind::ServerText:
+      // a code this app does not know yet: the server's English text
+      statusLineText_->set_text(line.text);
+      break;
+  }
+}
+
+void EarningsPage::ApplyProviderStatus() {
+  if (demandChart_ == nullptr) return;
+  providerStatus_ = ProviderStatusPollOf(host_.ProviderStatusNow());
+  providerStatusView_ = providerstatus::StatusViewFor(providerStatus_);
+  switch (providerStatusView_.chart) {
+    case providerstatus::ChartState::Loading:
+      demandChart_->ShowMessage(T_("loading", "Loading..."));
+      break;
+    case providerstatus::ChartState::Unavailable:
+      demandChart_->ShowMessage(
+          T_("provider_status_unavailable", "Provider status isn't available right now."));
+      break;
+    case providerstatus::ChartState::Empty:
+    case providerstatus::ChartState::Bars: {
+      providerstatus::Histogram histogram =
+          providerstatus::HistogramFor(providerStatus_.appearancesPerMinute);
+      const Glib::ustring total = Format(
+          TN_("provider_status_histogram_total", "{} time in the last hour",
+              "{} times in the last hour", static_cast<unsigned long>(histogram.total)),
+          histogram.total);
+      const Glib::ustring emptyLine =
+          histogram.empty ? Glib::ustring(T_("provider_status_histogram_empty",
+                                             "Not offered to clients in the last hour"))
+                          : Glib::ustring();
+      demandChart_->ShowBars(std::move(histogram.fractions), total, emptyLine);
+      break;
+    }
+  }
+  RebuildWhyRows();
+  ApplyWhyVisibility();
+  ApplyStatusLine();
+}
+
+void EarningsPage::RebuildWhyRows() {
+  if (whyRows_ == nullptr) return;
+  std::vector<providerstatus::NumberRow> rows;
+  if (providerStatusView_.showWhy) {
+    rows = providerstatus::NumberRowsFor(providerStatus_.ranking, providerStatus_.country,
+                                         ProviderStatusNumberWords());
+  }
+  // a poll a minute that repeats the numbers redraws nothing
+  if (whyRowsApplied_ && rows == whyRowsDrawn_) return;
+  whyRowsApplied_ = true;
+  whyRowsDrawn_ = rows;
+  RemoveAllChildren(*whyRows_);
+  for (const providerstatus::NumberRow& number : rows) {
+    auto row = MakePaddedRow(8);
+    row.content->set_spacing(2);
+    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    const Glib::ustring labelText = NumberLabelText(number.label);
+    auto* label = Gtk::make_managed<Gtk::Label>(labelText);
+    label->add_css_class("ur-key");
+    label->set_xalign(0);
+    label->set_hexpand(true);
+    label->set_wrap(true);
+    kit::MarkDecorative(*label);  // the value carries "Label, value"
+    line->append(*label);
+    auto* value = Gtk::make_managed<Gtk::Label>();
+    value->add_css_class("ur-value");
+    value->set_xalign(1.f);
+    value->set_wrap(true);
+    value->set_justify(Gtk::Justification::RIGHT);
+    if (number.passes) {
+      value->set_text(number.value);
+    } else {
+      // a number that holds this device back is tinted amber (a pango
+      // attribute, so it outranks the value class's own colour)
+      value->set_markup("<span foreground='" + HexForMarkup(kUrAmber) + "'>" +
+                        Glib::Markup::escape_text(number.value) + "</span>");
+    }
+    kit::SetAccessibleLabel(*value, labelText + ", " + number.value);
+    line->append(*value);
+    row.content->append(*line);
+    row.content->append(*MakeWrappedNote(NumberHelpText(number.label), "ur-row-note"));
+    whyRows_->append(*row.root);
+  }
+}
+
+void EarningsPage::ApplyWhyVisibility() {
+  if (whyRow_ == nullptr || whyRows_ == nullptr) return;
+  const bool shown = statsSectionsApplied_ && statsSections_.providerVisible &&
+                     providerStatusView_.showWhy && !whyRowsDrawn_.empty();
+  whyRow_->set_visible(shown);
+  whyRows_->set_visible(shown && whyExpanded_);
+}
+
+void EarningsPage::OnWhyToggled() {
+  whyExpanded_ = !whyExpanded_;
+  whyChevron_->set_from_icon_name(whyExpanded_ ? "go-down-symbolic" : "go-next-symbolic");
+  gtk_accessible_update_state(GTK_ACCESSIBLE(whyRow_->gobj()), GTK_ACCESSIBLE_STATE_EXPANDED,
+                              whyExpanded_ ? TRUE : FALSE, -1);
+  ApplyWhyVisibility();
 }
 
 }  // namespace urnw

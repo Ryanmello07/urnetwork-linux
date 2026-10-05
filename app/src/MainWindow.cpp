@@ -1684,9 +1684,12 @@ void MainWindow::BuildHome() {
   earningsPage_->sheet_open = [this] { return sheetOpen_; };
   earningsPage_->on_sheet_open_changed = [this](bool open) { sheetOpen_ = open; };
   // the provide mode is changed on the connect page (its provide row); the
-  // earnings row is a shortcut there
+  // earnings row is a shortcut there, and so is the idle line's Change. The
+  // picker sits in Simple mode's collapsed "More options" group, so it is
+  // opened too.
   earningsPage_->on_open_provide_settings = [this] {
     if (shell_) shell_->Navigate("connect");
+    if (connectPage_) connectPage_->RevealProvideControls();
   };
   shell_->SetPage("earnings", *earningsPage_);
   accountPage_ = Gtk::make_managed<AccountPage>(host_);

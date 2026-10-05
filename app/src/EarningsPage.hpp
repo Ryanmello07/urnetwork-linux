@@ -43,7 +43,10 @@
 // Pane C (network): own ranking, the public-leaderboard switch (echo-guarded),
 // the reliability window, and under it the extender statistics and the
 // provider statistics with the provide mode row and the read-only extender row
-// (EXTENDER.md N7, O5, O8).
+// (EXTENDER.md N7, O5, O8). Under the provide mode row, one line says why an
+// enabled provider is idle; after the provider plots, under their gate, the
+// Demand histogram and "Why?" show the network's provider status for this
+// device (support part P008, ProviderStatusPresentation.hpp).
 //
 // Every panel settles on exactly one of Loading / Ready-empty / Failed, and
 // every server write AND every server question is gated by CanCallApi(); the
@@ -64,9 +67,11 @@
 
 #include <urnetwork_sdk.hpp>
 
+#include "DemandChart.hpp"
 #include "ExtenderProvidePresentation.hpp"
 #include "LeaderboardIndicator.hpp"
 #include "PaneKit.hpp"
+#include "ProviderStatusPresentation.hpp"
 #include "SdkHost.hpp"
 #include "SnPayoutPresentation.hpp"
 #include "SolanaWalletPresentation.hpp"
@@ -359,6 +364,21 @@ class EarningsPage : public Gtk::Box {
   // The O8 rule over its three inputs, applied to the two groups' rows.
   void ApplyStatsSections();
   void OpenProviderTransportSheet();
+
+  // ---- the provider status (support part P008) -------------------------------
+  // The line under the provide mode row: the local idle reason merged with the
+  // server's reason (providerstatus::StatusLineFor), shown while providing is
+  // not never. Every input re-applies it: the live stats, the throughput
+  // tick's provider bytes and the controller.
+  void ApplyStatusLine();
+  // Re-reads the SDK's ProviderStatusViewController (SdkHost::ProviderStatusNow)
+  // into the demand chart, "Why?" and the line.
+  void ApplyProviderStatus();
+  // The rows under "Why?", rebuilt only when they change.
+  void RebuildWhyRows();
+  // "Why?" shows with the plots and a status; its rows while it is expanded.
+  void ApplyWhyVisibility();
+  void OnWhyToggled();
   void ApplyLedgerMeta();
   void OnLedgerTabChanged();
 
@@ -557,6 +577,16 @@ class EarningsPage : public Gtk::Box {
   TransportBar* providerTransportBar_ = nullptr;
   Gtk::Box* blockedChartRow_ = nullptr;
   TransferChart* blockedChart_ = nullptr;
+  // the provider status (P008): the line under the provide mode row with its
+  // Change, and after the plots, under their gate, the demand chart and "Why?"
+  Gtk::Box* statusLineRow_ = nullptr;
+  Gtk::Label* statusLineText_ = nullptr;
+  Gtk::Box* demandChartRow_ = nullptr;
+  DemandChart* demandChart_ = nullptr;
+  Gtk::Button* whyRow_ = nullptr;
+  Gtk::Image* whyChevron_ = nullptr;
+  Gtk::Box* whyRows_ = nullptr;
+  bool whyExpanded_ = false;  // collapsed by default
   std::unique_ptr<TransportSheet> providerTransportSheet_;
   // the reading the extender row last drew, so a push that changes nothing is
   // dropped
@@ -568,6 +598,17 @@ class EarningsPage : public Gtk::Box {
   bool providerDistributionKnown_ = false;
   extender::StatsSections statsSections_;
   bool statsSectionsApplied_ = false;
+  // the provider status's inputs: the control mode the row shows, the live
+  // provide state, the provider bytes of the throughput window and the
+  // controller's last reading, with the view and the "Why?" rows last drawn
+  std::string controlMode_;
+  int64_t liveProvideMode_ = 0;
+  bool providePaused_ = false;
+  int64_t recentProviderBytes_ = 0;
+  providerstatus::Poll providerStatus_;
+  providerstatus::StatusView providerStatusView_;
+  std::vector<providerstatus::NumberRow> whyRowsDrawn_;
+  bool whyRowsApplied_ = false;
 
   // ---- state -----------------------------------------------------------------
   urnet::AccountPointsList points_;
