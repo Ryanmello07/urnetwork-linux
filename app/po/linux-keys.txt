@@ -108,9 +108,15 @@ best_value
 bittensor
 bittensor_choose_wallet
 bittensor_continue_in_browser
+bittensor_error_address_not_in_wallet
 bittensor_error_challenge_expired
 bittensor_error_invalid_signature
 bittensor_error_message_mismatch
+bittensor_error_no_account
+bittensor_error_signature_mismatch
+bittensor_error_user_rejected
+bittensor_error_walletconnect_expired
+bittensor_error_walletconnect_unavailable
 bittensor_manual_sign_instructions
 bittensor_message_to_sign
 bittensor_signature_label
@@ -134,6 +140,8 @@ change
 change_network_api
 change_network_api_title
 checking_wallet_address
+checkout_error_payment_form_unavailable
+checkout_error_unavailable
 checkout_interrupted_confirming
 checkout_opened_in_browser
 choose_image_file
@@ -942,6 +950,7 @@ sn_payout_schedule_times
 solana
 solana_sign_in
 solana_wallet
+solana_wallet_error_session_not_found
 solflare
 something_went_wrong
 something_went_wrong_please_try_again_later

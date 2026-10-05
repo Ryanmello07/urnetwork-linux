@@ -49,10 +49,15 @@ msgctxt "account_auth_verified"
 msgid "{} (verified)"
 msgstr "{}（已驗證）"
 
-#. Sign-in error shown when the account exists but has not been verified yet.
-msgctxt "account_needs_verification"
-msgid "This account needs verification. Check your email."
-msgstr "此帳戶需要驗證。請查看您的電郵。"
+#. Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.
+msgctxt "account_isn_t_ready_for_purchases"
+msgid "Your account isn't ready for purchases. Please restart the app and try again."
+msgstr "你的帳戶暫時未能進行購買。請重新啟動應用程式後再試。"
+
+#. Accessibility label of the row of rings, one per extender carrying a live connection.
+msgctxt "active_extenders"
+msgid "Active extenders"
+msgstr "活躍的擴展器"
 
 #. A heading for the list of current block actions.
 msgctxt "activity"
@@ -84,6 +89,11 @@ msgctxt "add_emoji"
 msgid "Add emoji"
 msgstr "新增表情"
 
+#. Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.
+msgctxt "add_local_split_rule"
+msgid "Route locally"
+msgstr "本地路由"
+
 #. Call to action
 msgctxt "add_referral_code"
 msgid "Add referral code"
@@ -97,6 +107,11 @@ msgstr "添加登入方式"
 msgctxt "add_sign_in_method_2"
 msgid "Add Sign-In Method"
 msgstr "添加登入方式"
+
+#. State when the gas key has no TAO.
+msgctxt "add_tao_for_gas"
+msgid "Add TAO for gas"
+msgstr "加入 TAO 以支付 Gas 費"
 
 #. A description of the user's ability to provide bandwidth.
 msgctxt "adjust_setting_always_fill_data_faster"
@@ -278,6 +293,16 @@ msgctxt "adv_matched"
 msgid "Matched"
 msgstr "匹配"
 
+#. Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.
+msgctxt "adv_mode_rpc_only"
+msgid "rpc-only"
+msgstr "僅 RPC"
+
+#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+msgctxt "adv_mode_tunnel"
+msgid "tunnel"
+msgstr "隧道"
+
 #. Connection inspector: placeholder dash for a value that is not available.
 msgctxt "adv_na"
 msgid "—"
@@ -318,7 +343,7 @@ msgctxt "adv_providers_load_failed"
 msgid "Could not load the provider list."
 msgstr "無法載入提供者清單。"
 
-#. Connection inspector: label of the raw status row.
+#. Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.
 msgctxt "adv_raw_status"
 msgid "Raw status"
 msgstr "原始狀態"
@@ -348,6 +373,31 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "路由覆寫"
 
+#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+msgctxt "adv_routes"
+msgid "Routes"
+msgstr "路由"
+
+#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+msgctxt "adv_routes_dns_degraded"
+msgid "on, dns not applied"
+msgstr "開啟，DNS 未套用"
+
+#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+msgctxt "adv_routes_kill_switch_armed"
+msgid "off, kill switch armed"
+msgstr "關閉，斷線開關已待命"
+
+#. Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.
+msgctxt "adv_routes_no_firewall"
+msgid "on, no leak guard"
+msgstr "開啟，沒有防洩漏保護"
+
+#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+msgctxt "adv_rpc"
+msgid "RPC"
+msgstr "RPC"
+
 #. Connection inspector: hint to select a row in the Activity list.
 msgctxt "adv_select_a_row"
 msgid "Select a row in Activity to inspect it"
@@ -367,6 +417,11 @@ msgstr "該連線已不在清單中"
 msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "工作階段出口國家"
+
+#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+msgctxt "adv_session_mode"
+msgid "Session"
+msgstr "工作階段"
 
 #. Connection inspector: exit value when the destination is not in the routing table.
 msgctxt "adv_unknown_exit"
@@ -514,6 +569,11 @@ msgstr "此應用程式比已安裝的 URnetwork 系統服務舊。請更新應�
 msgctxt "app_version"
 msgid "App version"
 msgstr "應用程式版本"
+
+#. A method of adding a sign-in method.
+msgctxt "apple"
+msgid "Apple"
+msgstr "Apple"
 
 #. Snackbar message displayed when an Apple sign-in method is added.
 msgctxt "apple_sign_in_method_added"
@@ -671,10 +731,30 @@ msgctxt "balance_code"
 msgid "Balance code"
 msgstr "餘額碼"
 
+#. Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.
+msgctxt "balance_code_already_redeemed_message"
+msgid "This balance code has already been redeemed. If you redeemed it earlier, the data is already on your balance."
+msgstr "此餘額碼已被兌換。如果你之前已兌換，數據已計入你的餘額。"
+
+#. Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.
+msgctxt "balance_code_data_added"
+msgid "{} of data added to your balance."
+msgstr "已將 {} 數據加入你的餘額。"
+
+#. Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.
+msgctxt "balance_code_invalid_message"
+msgid "That balance code isn't valid. Check the code and try again."
+msgstr "此餘額碼無效。請檢查後再試。"
+
 #. Confirmation shown after a balance code is redeemed.
 msgctxt "balance_code_redeemed"
 msgid "Balance code redeemed."
 msgstr "餘額碼已兌換。"
+
+#. Redeem balance code: the request never got a server answer (network failure). Must NOT be worded as 'bad code' -- the redeem may have committed server-side, so tell the user to check their balance before retrying.
+msgctxt "balance_code_transport_error"
+msgid "We couldn't reach the server — check your connection. If you were charged, the code may already be applied; check your balance before trying again."
+msgstr "無法連接伺服器，請檢查網絡連線。如果你已被扣款，餘額碼可能已經生效；請先查看餘額再試。"
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "balance_code_where_to_buy"
@@ -685,6 +765,11 @@ msgstr "沒有餘額碼？可在 ur.io 購買，購買後會透過電郵發送�
 msgctxt "balance_codes_link"
 msgid "Balance codes"
 msgstr "餘額碼"
+
+#. Linux redeem-code sheet: shown in place of the redeemed-codes history when getNetworkRedeemedBalanceCodes FAILS (transport error, no response, or a server-side error) — distinct from the empty state's "No balance codes found", which is only for a successful fetch with no codes.
+msgctxt "balance_codes_load_error"
+msgid "Couldn't load your balance codes. Check your connection and try again."
+msgstr "無法載入你的餘額碼。請檢查網絡連線後再試。"
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "balance_codes_title"
@@ -706,25 +791,60 @@ msgctxt "best_matches"
 msgid "Best matches"
 msgstr "最佳匹配"
 
+#. Gold pill on the recommended (annual) plan card.
+msgctxt "best_value"
+msgid "Best value"
+msgstr "最超值"
+
 #. Used in Main/Account/Wallet/WalletView.swift.
 msgctxt "bittensor"
 msgid "Bittensor"
 msgstr "Bittensor"
+
+#. Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.
+msgctxt "bittensor_choose_wallet"
+msgid "Choose your Bittensor wallet"
+msgstr "選擇你的 Bittensor 錢包"
+
+#. Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).
+msgctxt "bittensor_continue_in_browser"
+msgid "Continue in your browser and approve the request in the {} extension."
+msgstr "請在瀏覽器中繼續，並在 {} 擴充功能中批准請求。"
 
 #. Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
 msgctxt "bittensor_error_address_not_in_wallet"
 msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
 msgstr "你的 {} 錢包中沒有你輸入的地址。請在錢包中新增或連接該帳戶，或輸入錢包中已有的地址。"
 
+#. Error: the single-use wallet challenge expired (5 minutes) before it was signed.
+msgctxt "bittensor_error_challenge_expired"
+msgid "This request expired. Start again to get a new message to sign."
+msgstr "此請求已過期。請重新開始以取得新的待簽署訊息。"
+
 #. Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when a ur.io wallet bridge page returns extension_not_found). The argument is the wallet product name (Talisman on the Bittensor page, Phantom or Solflare on the Solana page).
 msgctxt "bittensor_error_extension_not_found"
 msgid "The {} extension was not found in this browser. Install it, then try again."
 msgstr "在此瀏覽器中找不到 {} 擴充功能。請安裝後再試一次。"
 
+#. Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.
+msgctxt "bittensor_error_invalid_signature"
+msgid "That is not a valid signature. Paste the full 0x signature from your wallet."
+msgstr "這不是有效的簽名。請貼上錢包中完整的 0x 簽名。"
+
+#. Error: the wallet returned a signature over a different challenge than the one issued.
+msgctxt "bittensor_error_message_mismatch"
+msgid "The wallet signed a different request. Start again."
+msgstr "錢包簽署了另一個請求。請重新開始。"
+
 #. Wallet error in the apps, when a ur.io wallet bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect on the Bittensor page, Phantom or Solflare on the Solana page).
 msgctxt "bittensor_error_no_account"
 msgid "Your {} wallet has no account to sign with. Add or connect an account in the wallet, then try again."
 msgstr "你的 {} 錢包中沒有可用於簽名的帳戶。請在錢包中新增或連接一個帳戶，然後再試一次。"
+
+#. Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).
+msgctxt "bittensor_error_signature_mismatch"
+msgid "This signature isn't from the address you entered. In {}, sign the message with that address, then paste the signature again."
+msgstr "此簽署並非來自你輸入的地址。請在 {} 中使用該地址簽署訊息，然後重新貼上簽署。"
 
 #. Wallet error in the apps, when a ur.io wallet bridge page returns user_rejected: the user declined the connection or the signature request in the wallet, so nothing was signed. The Bittensor page (Talisman, or a WalletConnect wallet) and the Solana page of the desktop apps (Phantom or Solflare) both return it; on iOS, Phantom and Solflare decline with 4001, which reads the same.
 msgctxt "bittensor_error_user_rejected"
@@ -741,10 +861,45 @@ msgctxt "bittensor_error_walletconnect_unavailable"
 msgid "WalletConnect is not available right now. Try again later, or enter your address manually."
 msgstr "WalletConnect 目前無法使用。請稍後再試，或手動輸入你的地址。"
 
+#. Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).
+msgctxt "bittensor_manual_sign_instructions"
+msgid "Sign this message with the {} wallet that holds your coldkey, then paste the address and the signature below."
+msgstr "請使用存有你 coldkey 的 {} 錢包簽署此訊息，然後在下方貼上地址和簽名。"
+
+#. Label above the challenge message the user signs in their Bittensor wallet.
+msgctxt "bittensor_message_to_sign"
+msgid "Message to sign"
+msgstr "待簽署訊息"
+
 #. Call to action
 msgctxt "bittensor_sign_in"
 msgid "Sign in with Bittensor"
 msgstr "使用 Bittensor 登入"
+
+#. Label of the field where the user pastes the Bittensor wallet signature.
+msgctxt "bittensor_signature_label"
+msgid "Signature"
+msgstr "簽名"
+
+#. Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).
+msgctxt "bittensor_signature_placeholder"
+msgid "Paste the 0x… signature"
+msgstr "貼上 0x… 簽名"
+
+#. Label of the connected wallet block.
+msgctxt "bittensor_wallet"
+msgid "Bittensor wallet"
+msgstr "Bittensor 錢包"
+
+#. Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.
+msgctxt "bittensor_walletconnect_continue"
+msgid "Continue in your browser: scan the code with your wallet app, or open the wallet on this device."
+msgstr "請在瀏覽器中繼續：用錢包應用程式掃描 QR 碼，或在此裝置上開啟錢包。"
+
+#. Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.
+msgctxt "bittensor_walletconnect_hint"
+msgid "Nova, Nightly and other WalletConnect wallets"
+msgstr "Nova、Nightly 及其他 WalletConnect 錢包"
 
 #. dns settings
 msgctxt "block_ads_and_trackers"
@@ -756,6 +911,11 @@ msgctxt "blocked"
 msgid "Blocked"
 msgstr "已攔截"
 
+#. Blocked locations: blocking a location failed. The argument is the location name.
+msgctxt "blocked_location_block_failed"
+msgid "Couldn't block {}. Please try again."
+msgstr "無法封鎖 {}。請再試一次。"
+
 #. Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.
 msgctxt "blocked_location_could_not_be_added_please_try"
 msgid "Blocked location could not be added. Please try again later."
@@ -765,6 +925,11 @@ msgstr "無法添加屏蔽位置。請稍後再試。"
 msgctxt "blocked_location_could_not_be_removed_please_try"
 msgid "Blocked location could not be removed. Please try again later."
 msgstr "無法移除屏蔽位置。請稍後再試。"
+
+#. Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.
+msgctxt "blocked_location_unblock_failed"
+msgid "Couldn't unblock {}. Please try again."
+msgstr "無法解除封鎖 {}。請再試一次。"
 
 #. Call to action
 msgctxt "blocked_locations"
@@ -780,6 +945,16 @@ msgstr "被屏蔽的位置"
 msgctxt "blocked_locations_could_not_be_loaded"
 msgid "Blocked locations could not be loaded."
 msgstr "無法載入已封鎖的位置。"
+
+#. Blocked locations: the list could not be loaded.
+msgctxt "blocked_locations_load_failed"
+msgid "Couldn't load your blocked locations. Pull down to try again."
+msgstr "無法載入你已封鎖的位置。請向下拉以重試。"
+
+#. macOS Blocked locations screen: placeholder of the country search field.
+msgctxt "blocked_locations_search_placeholder"
+msgid "Search countries"
+msgstr "搜尋國家/地區"
 
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
@@ -836,10 +1011,20 @@ msgctxt "bypass_vpn"
 msgid "Bypass VPN"
 msgstr "繞過 VPN"
 
+#. Shown when the camera permission was denied on the scan screen.
+msgctxt "camera_permission_needed"
+msgid "Camera access is needed to scan a code."
+msgstr "需要相機權限才能掃描代碼。"
+
 #. Call to action
 msgctxt "cancel"
 msgid "Cancel"
 msgstr "取消"
+
+#. Error when the subnet RPC cannot be reached.
+msgctxt "chain_rpc_unreachable"
+msgid "The chain RPC is unreachable. Try again."
+msgstr "無法連接鏈的 RPC。請再試一次。"
 
 #. Call to action
 msgctxt "change"
@@ -891,6 +1076,21 @@ msgctxt "checking_solana_transactions"
 msgid "Checking for Solana Transactions"
 msgstr "正在檢查 Solana 交易"
 
+#. Progress text while the address is validated.
+msgctxt "checking_wallet_address"
+msgid "Checking address…"
+msgstr "正在檢查地址…"
+
+#. Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.
+msgctxt "checkout_browser_launch_failed"
+msgid "We couldn't open your browser. Copy this link into a browser to finish checkout:"
+msgstr "無法開啟你的瀏覽器。請將此連結複製到瀏覽器以完成付款："
+
+#. Purchase confirmation message while the app waits for the payment to be confirmed.
+msgctxt "checkout_confirming_purchase"
+msgid "We're confirming your purchase. Your plan will update automatically."
+msgstr "我們正在確認你的購買。你的計劃會自動更新。"
+
 #. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back stripe_unavailable: Stripe's payment form could not be loaded in the checkout page (usually no internet connection, or a network that blocks it). Nothing was charged.
 msgctxt "checkout_error_payment_form_unavailable"
 msgid "The payment form couldn't load. Check your internet connection, then try again."
@@ -901,10 +1101,40 @@ msgctxt "checkout_error_unavailable"
 msgid "Checkout isn't available right now. Please try again later."
 msgstr "結帳功能目前無法使用。請稍後再試。"
 
+#. Purchase confirmation title after the app opened Stripe's checkout page in the browser.
+msgctxt "checkout_finish_in_browser"
+msgid "Finish in your browser."
+msgstr "請在瀏覽器中完成。"
+
+#. Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.
+msgctxt "checkout_interrupted_confirming"
+msgid "The checkout view closed unexpectedly. If your payment went through, your plan updates here automatically — there's no need to buy again."
+msgstr "付款頁面意外關閉。如果你的付款已完成，你的計劃會在此自動更新，無需再次購買。"
+
 #. Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.
 msgctxt "checkout_opened_in_browser"
 msgid "Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed."
 msgstr "請在瀏覽器中完成購買。付款確認後，您的計劃將在此處自動更新。"
+
+#. Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.
+msgctxt "checkout_restore_checking"
+msgid "Checking your plan again."
+msgstr "正在重新檢查你的計劃。"
+
+#. Button on desktop: pick a file that contains a QR code image.
+msgctxt "choose_file"
+msgid "Choose file"
+msgstr "選擇檔案"
+
+#. Button on desktop: pick an image file that contains a QR code.
+msgctxt "choose_image_file"
+msgid "Choose image file"
+msgstr "選擇圖片檔案"
+
+#. Button: pick a photo that contains a QR code.
+msgctxt "choose_photo"
+msgid "Choose photo"
+msgstr "選擇相片"
 
 #. Provider list group title for cities
 msgctxt "cities"
@@ -916,6 +1146,36 @@ msgctxt "claim"
 msgid "Claim"
 msgstr "領取"
 
+#. Subtitle of the claim dialog.
+msgctxt "claim_across_epochs"
+msgid "Across {} finalized epochs"
+msgstr "涵蓋 {} 個已確認的週期"
+
+#. Title of the claim dialog.
+msgctxt "claim_alpha_title"
+msgid "Claim SN25α"
+msgstr "領取 SN25α"
+
+#. Claim button with the amount.
+msgctxt "claim_amount_button"
+msgid "Claim {}"
+msgstr "領取 {}"
+
+#. Claim state: confirmed on chain.
+msgctxt "claim_confirmed"
+msgid "Claimed"
+msgstr "已領取"
+
+#. Claim state: past the vault's expiry block.
+msgctxt "claim_expired"
+msgid "Expired"
+msgstr "已過期"
+
+#. Claim state: failed.
+msgctxt "claim_failed"
+msgid "Failed"
+msgstr "失敗"
+
 #. Call to action
 msgctxt "claim_multiplier"
 msgid "Claim Multiplier"
@@ -925,6 +1185,41 @@ msgstr "申領倍數"
 msgctxt "claim_network_name_hint"
 msgid "Claim a custom network name to replace your auto-generated one"
 msgstr "領取自訂網絡名稱，取代自動產生的名稱"
+
+#. Per-epoch status while the claim transaction is being sent.
+msgctxt "claim_sending_linux"
+msgid "Sending…"
+msgstr "正在傳送…"
+
+#. Explainer under the claim button.
+msgctxt "claim_sends_from_device"
+msgid "Your device sends the claim to the vault contract. Gas is paid in TAO from your gas key. Alpha lands on your coldkey."
+msgstr "你的裝置會將領取請求傳送至金庫合約。Gas 費以 TAO 從你的 Gas 密鑰支付。Alpha 會存入你的 coldkey。"
+
+#. Claim state: transaction sent.
+msgctxt "claim_sent"
+msgid "Sent"
+msgstr "已傳送"
+
+#. Destination line on the claim dialog: the coldkey the alpha lands on.
+msgctxt "claim_to_address_linux"
+msgid "To {}"
+msgstr "傳送至 {}"
+
+#. Shown when the device cannot send claims (no gas key on this host).
+msgctxt "claim_unavailable_linux"
+msgid "Claiming is not available on this device yet."
+msgstr "此裝置暫時未支援領取。"
+
+#. Button on the Top 200 tile.
+msgctxt "claim_your_spot"
+msgid "Claim your spot"
+msgstr "取得你的席位"
+
+#. Error when an epoch can no longer be claimed.
+msgctxt "claims_for_epoch_expired"
+msgid "Claims for epoch {} have expired."
+msgstr "週期 {} 的領取已過期。"
 
 #. Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.
 msgctxt "claims_open_after_finalization"
@@ -1001,6 +1296,11 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "對端"
 
+#. Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.
+msgctxt "conn_blocked_kill_switch"
+msgid "Blocked — kill switch on"
+msgstr "已封鎖 — 斷線開關已開啟"
+
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"
@@ -1011,15 +1311,115 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "預設關閉。開啟後，URnetwork 會在你開啟應用程式時立即連線至所選提供者。這會影響下次啟動 - 現在不會連線。"
 
+#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+msgctxt "conn_degraded"
+msgid "Connection degraded — reconnecting"
+msgstr "連線質素下降 — 正在重新連線"
+
+#. Windows Connect page status while the tunnel is being stopped but its routes are still installed.
+msgctxt "conn_disconnecting"
+msgid "Disconnecting — your traffic is still going through the tunnel"
+msgstr "正在中斷連線 — 你的流量仍經隧道傳送"
+
 #. Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.
 msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "無法連接"
 
+#. Windows Connect page reason line when connecting failed.
+msgctxt "conn_failed_detail"
+msgid "No providers could be reached. Retry rebuilds the connection from scratch."
+msgstr "無法連接任何供應商。重試會從頭重建連線。"
+
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+msgctxt "conn_failsafe_armed"
+msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
+msgstr "如果很快仍沒有任何流量通過，URnetwork 會自動關閉隧道，讓你保持上網。"
+
+#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+msgctxt "conn_failsafe_blocked"
+msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
+msgstr "隧道無法傳輸流量，因此 URnetwork 已將其關閉。斷線開關已開啟，因此在你重新連線或關閉斷線開關之前，任何流量都不會離開這部電腦 — 沒有任何洩漏。"
+
+#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+msgctxt "conn_failsafe_restored"
+msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
+msgstr "為了讓你保持在線，URnetwork 已中斷你的連線：隧道處於開啟狀態，但沒有任何流量通過。你的流量現在正常發出，而且不受保護。按「連接」再試一次。"
+
+#. Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).
+msgctxt "conn_finding_providers"
+msgid "Finding providers…"
+msgstr "正在尋找供應商…"
+
 #. Connect page: warning that the internet traffic is not protected.
 msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "你的互聯網流量未受保護。"
+
+#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+msgctxt "conn_reason_auth"
+msgid "Signing in to the platform is failing…"
+msgstr "登入平台一直失敗…"
+
+#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+msgctxt "conn_reason_platform"
+msgid "Contacting the platform…"
+msgstr "正在聯絡平台…"
+
+#. Windows Connect page reason line while the selected providers do not answer.
+msgctxt "conn_reason_providers"
+msgid "Providers not responding — retrying…"
+msgstr "供應商沒有回應 — 正在重試…"
+
+#. Windows Connect page reason line while the platform asks the app to slow down.
+msgctxt "conn_reason_rate_limited"
+msgid "Rate limited — waiting…"
+msgstr "請求受限 — 正在等候…"
+
+#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+msgctxt "conn_traffic_blocked"
+msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
+msgstr "目前沒有可用的供應商 — 你的流量已被封鎖，而不是外洩。中斷連線即可回到正常網絡。"
+
+#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+msgctxt "conn_traffic_blocked_unprotected"
+msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
+msgstr "目前沒有可用的供應商 — 傳送到隧道的流量無處可去，而且防洩漏保護已關閉，因此部分流量可能會繞過它。中斷連線即可回到正常網絡。"
+
+#. Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.
+msgctxt "conn_tray_blocked_kill_switch"
+msgid "Blocked (kill switch on)"
+msgstr "已封鎖（斷線開關已開啟）"
+
+#. Windows tray tooltip when leak protection blocks traffic while no tunnel is up.
+msgctxt "conn_tray_blocked_no_tunnel"
+msgid "Blocked — leak protection is still in force with no tunnel up"
+msgstr "已封鎖 — 沒有開啟隧道，但防洩漏保護仍然生效"
+
+#. Windows tray tooltip while the tunnel is being stopped but its routes are still installed.
+msgctxt "conn_tray_disconnecting"
+msgid "Disconnecting — traffic is still going through the tunnel"
+msgstr "正在中斷連線 — 流量仍經隧道傳送"
+
+#. Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.
+msgctxt "conn_tray_failsafe_blocked"
+msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so this machine stays blocked and nothing is leaking. Reconnect, or turn off the kill switch from this menu."
+msgstr "隧道無法傳輸流量，因此 URnetwork 已將其關閉。斷線開關已開啟，因此這部電腦仍然被封鎖，沒有任何洩漏。請重新連線，或在此選單中關閉斷線開關。"
+
+#. Windows tray tooltip after the service stopped a tunnel that carried nothing.
+msgctxt "conn_tray_failsafe_stopped"
+msgid "Disconnected (the tunnel failed)"
+msgstr "已中斷連線（隧道故障）"
+
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+msgctxt "conn_tray_force_tunnel_off"
+msgid "Force the tunnel off (recovery)"
+msgstr "強制關閉隧道（復原）"
+
+#. Windows tray menu item that lifts the kill switch's block on this computer.
+msgctxt "conn_tray_lift_kill_switch"
+msgid "Turn off the kill switch (unblock this machine)"
+msgstr "關閉斷線開關（解除這部電腦的封鎖）"
 
 #. Button text to connect to URnetwork VPN
 msgctxt "connect"
@@ -1041,6 +1441,11 @@ msgctxt "connect_and_open"
 msgid "Connect and open link"
 msgstr "連接並開啟連結"
 
+#. Button to connect a Bittensor coldkey.
+msgctxt "connect_bittensor_wallet"
+msgid "Connect Bittensor wallet"
+msgstr "連接 Bittensor 錢包"
+
 #. Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).
 msgctxt "connect_bittensor_wallet_to_add_sign_in_method"
 msgid "Connect a Bittensor wallet to add it as a sign-in method."
@@ -1055,6 +1460,16 @@ msgstr "連接選項"
 msgctxt "connect_seeker_wallet"
 msgid "Connect a wallet with the Saga Genesis or Seeker Pre-Order Token"
 msgstr "連接帶有 Saga Genesis 或 Seeker 預購代幣的錢包"
+
+#. Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.
+msgctxt "connect_solana_wallet"
+msgid "Connect Solana wallet"
+msgstr "連接 Solana 錢包"
+
+#. Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.
+msgctxt "connect_solana_wallet_note"
+msgid "Connect a Solana wallet app, or enter a Solana USDC address manually."
+msgstr "連接 Solana 錢包應用程式，或手動輸入 Solana USDC 地址。"
 
 #. Add sign-in method sheet (android): the wallet option's explanation.
 msgctxt "connect_solana_wallet_to_add_sign_in_method"
@@ -1075,6 +1490,11 @@ msgstr "連接 URnetwork VPN"
 msgctxt "connect_wallet"
 msgid "Connect Wallet"
 msgstr "連接錢包"
+
+#. Error when claiming without a wallet.
+msgctxt "connect_wallet_first"
+msgid "Connect a Bittensor wallet first."
+msgstr "請先連接 Bittensor 錢包。"
 
 #. Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.
 msgctxt "connected"
@@ -1158,9 +1578,9 @@ msgctxt "contracts_appear_providing"
 msgid "Contracts appear here while providing."
 msgstr "提供數據時，合約會在此顯示。"
 
-#. Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.
+#. Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).
 msgctxt "contribute_bandwidth"
-msgid "Contribute Bandwidth"
+msgid "Contribute bandwidth"
 msgstr "貢獻頻寬"
 
 #. Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.
@@ -1243,6 +1663,11 @@ msgctxt "copy_client_id"
 msgid "Copy client ID"
 msgstr "複製客戶端 ID"
 
+#. Button on the share screen: copy the text form of the code.
+msgctxt "copy_share_text"
+msgid "Copy share text"
+msgstr "複製分享文字"
+
 #. Button text to copy the seedphrase to the clipboard.
 msgctxt "copy_to_clipboard"
 msgid "Copy to Clipboard"
@@ -1252,6 +1677,16 @@ msgstr "複製到剪貼簿"
 msgctxt "could_not_get_google_id_token"
 msgid "Could not get Google ID token"
 msgstr "無法取得 Google ID 權杖"
+
+#. Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).
+msgctxt "couldn_t_load_subscription_options"
+msgid "Couldn't load subscription options. Check your connection and retry."
+msgstr "無法載入訂閱選項。請檢查網絡連線後再試。"
+
+#. Restore-purchases outcome: the App Store sync failed (e.g. the user cancelled the credentials prompt or the store was unreachable) and no entitlement was found locally (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "couldn_t_restore_purchases"
+msgid "Couldn't restore purchases. Please try again."
+msgstr "無法恢復購買。請再試一次。"
 
 #. Snackbar shown when the external wallet app could not be opened. Used in Shared/Views/SolanaSignMessageSheet.swift and Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "couldnt_open_wallet"
@@ -1373,15 +1808,30 @@ msgctxt "daemon_auth_unavailable"
 msgid "This device has no polkit authorization service, so the URnetwork system service falls back to the 'urnetwork' group. Add your user to it and sign out and back in."
 msgstr "此裝置沒有 polkit 授權服務，因此 URnetwork 系統服務改用 'urnetwork' 使用者群組。將你的使用者加入該群組，然後登出並重新登入。"
 
+#. Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.
+msgctxt "daemon_legacy_group_auth"
+msgid "The URnetwork system service on this device is an older version that still requires group membership. Update the service, or add your user to the 'urnetwork' group and sign out and back in."
+msgstr "此裝置上的 URnetwork 系統服務是舊版本，仍然要求加入群組。請更新服務，或將你的用戶加入 'urnetwork' 群組，然後登出再重新登入。"
+
 #. Error: the system service did not answer.
 msgctxt "daemon_no_answer"
 msgid "The URnetwork system service did not answer."
 msgstr "URnetwork 系統服務沒有回應。"
 
+#. Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.
+msgctxt "daemon_not_reachable"
+msgid "The URnetwork system service could not be reached."
+msgstr "無法連接 URnetwork 系統服務。"
+
 #. Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.
 msgctxt "daemon_sdk_mismatch"
 msgid "The app and the URnetwork system service are different builds. Update both to the same version."
 msgstr "應用程式與 URnetwork 系統服務的組建版本不同。請將兩者更新至同一版本。"
+
+#. Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.
+msgctxt "daemon_stale_sandbox_mount"
+msgid "The URnetwork system service restarted while this app was open. Close the app and open it again to reconnect to it."
+msgstr "此應用程式開啟期間，URnetwork 系統服務已重新啟動。請關閉應用程式並重新開啟，以重新連接該服務。"
 
 #. Shown on the linux home screen when the installed urnetworkd system service speaks an older control protocol than this app supports. Distinct from daemon_unreachable by contract; the fix is updating the service, not the app.
 msgctxt "daemon_too_old"
@@ -1458,6 +1908,11 @@ msgctxt "date_payout"
 msgid "{} Payout"
 msgstr "{} 支付"
 
+#. Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).
+msgctxt "default_daily_data"
+msgid "By default, you get {} every day."
+msgstr "預設情況下，你每天可獲得 {}。"
+
 #. Generic default choice label, e.g. the app split rule combo state meaning no rule.
 msgctxt "default_option"
 msgid "Default"
@@ -1491,39 +1946,164 @@ msgstr "輸入 {} 以確認。"
 #. Developer page: report line when the SDK refused a requested action.
 msgctxt "dev_action_declined"
 msgid "No change: the SDK declined that action."
-msgstr "No change: the SDK declined that action."
+msgstr "沒有變更：SDK 拒絕了該操作。"
 
 #. Developer page: note that the action buttons only request changes.
 msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
-msgstr "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
+msgstr "操作只是請求：請在下方會更新的量度和出口行中確認其效果。"
+
+#. Developer tools screen (reliability surface): performance-aware affinity control label.
+msgctxt "dev_affinity_performance"
+msgid "Performance-aware affinity"
+msgstr "效能感知親和性"
+
+#. Developer tools screen: explanatory subtext under the performance-aware affinity control.
+msgctxt "dev_affinity_performance_detail"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "按各供應商的峰值已確認位元組速率相對其聲稱頻寬的比例，為新的 TLS 競速加權。啟用強親和性時，量度值低的供應商會讓位於競速。現有連線和明確固定保持不變"
+
+#. Developer tools screen (reliability surface): affinity sticky control label.
+msgctxt "dev_affinity_sticky"
+msgid "Sticky site affinity"
+msgstr "網站黏性親和性"
+
+#. Developer tools screen: explanatory subtext under the 'affinity sticky' control.
+msgctxt "dev_affinity_sticky_detail"
+msgid "A site's new connections stay on the exit its earlier ones already use, even past the flow cap, so a busy site keeps one egress IP. The cap still limits which exits collect new sites. Off restores the strict cap"
+msgstr "網站的新連線會留在其較早連線已使用的出口上，即使超過流上限亦然，讓繁忙的網站保持同一個出口 IP。上限仍決定哪些出口可接收新網站。關閉時恢復嚴格上限"
+
+#. Developer page: what a setting's 0 means when it probes every host ('Probe hosts per pass').
+msgctxt "dev_all"
+msgid "All"
+msgstr "全部"
 
 #. Developer page: label of the app version row.
 msgctxt "dev_app_version"
 msgid "App version"
-msgstr "App version"
+msgstr "應用程式版本"
+
+#. Developer tools screen (reliability surface): behaviour control label.
+msgctxt "dev_behaviour"
+msgid "Behaviour"
+msgstr "行為"
+
+#. Developer tools screen (reliability surface): blackhole receive control label.
+msgctxt "dev_blackhole_receive"
+msgid "Keep quiet providers longer"
+msgstr "更長時間保留靜默的供應商"
+
+#. Developer tools screen: explanatory subtext under the 'blackhole receive' control.
+msgctxt "dev_blackhole_receive_detail"
+msgid "How long a provider still acknowledging traffic may return nothing before it is dropped. Off keeps them until they stop acknowledging"
+msgstr "仍在確認流量的供應商在被捨棄前可以不傳回任何數據的時長。關閉時會保留它們，直到它們停止確認"
+
+#. Developer tools screen (reliability surface): blast radius control label.
+msgctxt "dev_blast_radius"
+msgid "Blast radius"
+msgstr "影響範圍"
+
+#. Developer tools screen: explanatory subtext under the 'blast radius' control.
+msgctxt "dev_blast_radius_detail"
+msgid "Connections lost per provider failure. Lower is better"
+msgstr "每次供應商故障失去的連線數。越低越好"
+
+#. Developer tools screen: formatted value readout for 'blast radius'.
+msgctxt "dev_blast_radius_value"
+msgid "{} per failure"
+msgstr "每次故障 {}"
+
+#. Developer tools screen (reliability surface): busy probe control label.
+msgctxt "dev_busy_probe"
+msgid "Probe stalled exits before dropping"
+msgstr "捨棄前探測停滯的出口"
+
+#. Developer tools screen (reliability surface): busy probe budget control label.
+msgctxt "dev_busy_probe_budget"
+msgid "Busy probe wait"
+msgstr "繁忙探測等待時間"
+
+#. Developer tools screen: explanatory subtext under the 'busy probe budget' control.
+msgctxt "dev_busy_probe_budget_detail"
+msgid "How long the stall probe waits for an answer before convicting. Off derives half the stall bar"
+msgstr "停滯探測在判罪前等待回應的時長。關閉時取停滯門檻的一半"
+
+#. Developer tools screen: explanatory subtext under the 'busy probe' control.
+msgctxt "dev_busy_probe_detail"
+msgid "When an exit stalls, ping it once before convicting. A congested but alive exit answers and keeps its flows; a dead one is still dropped. Off convicts on the stall bar"
+msgstr "出口停滯時，先 ping 一次再判罪。擠塞但仍運作的出口會回應並保留其流；已失效的出口仍會被捨棄。關閉時按停滯門檻直接判罪"
+
+#. Developer page: label of the 'Busy probe wait' setting.
+msgctxt "dev_busy_probe_wait"
+msgid "Busy probe wait"
+msgstr "繁忙探測等待時間"
+
+#. Developer page: the explanation under the 'Busy probe wait' setting.
+msgctxt "dev_busy_probe_wait_detail"
+msgid "How long the stall probe waits for an answer before convicting, in ms. Off derives half the stall bar"
+msgstr "停滯探測在判罪前等待回應的時長（毫秒）。關閉時取停滯門檻的一半"
+
+#. Developer tools screen (reliability surface): busy probes control label.
+msgctxt "dev_busy_probes"
+msgid "Busy probes"
+msgstr "繁忙探測"
+
+#. Developer tools screen: explanatory subtext under the 'busy probes' control.
+msgctxt "dev_busy_probes_detail"
+msgid "Liveness pings fired at stalled exits; acquitted ones answered and were kept, the removals the probe prevented"
+msgstr "向停滯出口發出的存活 ping；判為無罪的出口已回應並被保留，即探測避免了的移除"
+
+#. Developer tools screen: formatted value readout for 'busy probes'.
+msgctxt "dev_busy_probes_value"
+msgid "{0} sent / {1} acquitted"
+msgstr "已發出 {0} / 判為無罪 {1}"
 
 #. Developer page: button that checks for a new release now.
 msgctxt "dev_check_updates"
 msgid "Check for updates"
-msgstr "Check for updates"
+msgstr "檢查更新"
+
+#. Developer tools screen: action for choosing individual log files to export.
+msgctxt "dev_choose_logs"
+msgid "Choose logs…"
+msgstr "選擇日誌…"
+
+#. Developer tools screen: action that deletes the diagnostics log files without touching local state, preferences or rules.
+msgctxt "dev_clear_logs"
+msgid "Clear logs"
+msgstr "清除日誌"
+
+#. Developer tools screen: the clear-logs action's label while it runs.
+msgctxt "dev_clearing_logs"
+msgid "Clearing logs…"
+msgstr "正在清除日誌…"
+
+#. Developer tools screen (reliability surface): cluster affinity control label.
+msgctxt "dev_cluster_affinity"
+msgid "Group IPs by site"
+msgstr "按網站分組 IP"
+
+#. Developer tools screen: explanatory subtext under the 'cluster affinity' control.
+msgctxt "dev_cluster_affinity_detail"
+msgid "Keeps a site on one exit when its hostname is not visible"
+msgstr "當網站的主機名稱不可見時，讓其保持在同一出口上"
 
 #. Developer page: table column header for the per-row action buttons.
 msgctxt "dev_col_actions"
 msgid "Actions"
-msgstr "Actions"
+msgstr "操作"
 
 #. Developer page: table column header for the connect timing.
 msgctxt "dev_col_connect"
 msgid "Connect"
-msgstr "Connect"
+msgstr "連線"
 
 #. Developer page: table column header for a destination host.
 msgctxt "dev_col_destination"
 msgid "Destination"
-msgstr "Destination"
+msgstr "目的地"
 
-#. Developer page: table column header for the DNS timing.
+#. Developer page: table column header for the DNS timing. A protocol name; never translated.
 msgctxt "dev_col_dns"
 msgid "DNS"
 msgstr "DNS"
@@ -1531,49 +2111,49 @@ msgstr "DNS"
 #. Developer page: table column header for the exit a flow uses.
 msgctxt "dev_col_exit"
 msgid "Exit"
-msgstr "Exit"
+msgstr "出口"
 
 #. Developer page: table column header for the number of failed dials.
 msgctxt "dev_col_failed_dials"
 msgid "Failed dials"
-msgstr "Failed dials"
+msgstr "撥號失敗"
 
 #. Developer page: table column header for the number of flows.
 msgctxt "dev_col_flows"
 msgid "Flows"
-msgstr "Flows"
+msgstr "流"
 
 #. Developer page: table column header for the probe kind.
 msgctxt "dev_col_kind"
 msgid "Kind"
-msgstr "Kind"
+msgstr "類型"
 
 #. Developer page: table column header for a probe outcome.
 msgctxt "dev_col_outcome"
 msgid "Outcome"
-msgstr "Outcome"
+msgstr "結果"
 
 #. Developer page: table column header for an exit state.
 msgctxt "dev_col_state"
 msgid "State"
-msgstr "State"
+msgstr "狀態"
 
 #. Developer page: table column header for a probe target.
 msgctxt "dev_col_target"
 msgid "Target"
-msgstr "Target"
+msgstr "目標"
 
 #. Developer page: table column header for an exit tier.
 msgctxt "dev_col_tier"
 msgid "Tier"
-msgstr "Tier"
+msgstr "層級"
 
 #. Developer page: table column header for the total timing.
 msgctxt "dev_col_total"
 msgid "Total"
-msgstr "Total"
+msgstr "總計"
 
-#. Developer page: table column header for time to first byte.
+#. Developer page: table column header for time to first byte. The metric's standard abbreviation; never translated.
 msgctxt "dev_col_ttfb"
 msgid "TTFB"
 msgstr "TTFB"
@@ -1581,274 +2161,1035 @@ msgstr "TTFB"
 #. Developer page: table column header for the measurement window.
 msgctxt "dev_col_window"
 msgid "Window"
-msgstr "Window"
+msgstr "視窗"
+
+#. Developer tools screen (reliability surface): comparative connect control label.
+msgctxt "dev_comparative_connect"
+msgid "Cut dead connects early"
+msgstr "提早中止無效連線"
+
+#. Developer tools screen: explanatory subtext under the 'comparative connect' control.
+msgctxt "dev_comparative_connect_detail"
+msgid "Drop an exit that has established nothing sooner when two sibling exits are receiving. Off waits the full 30s connect bar"
+msgstr "當兩個同級出口正在接收數據時，更早捨棄尚未建立任何連線的出口。關閉時等待完整的 30 秒連線門檻"
+
+#. Developer page (Apple): note shown while disconnected.
+msgctxt "dev_connect_for_live_tools"
+msgid "Connect to use the live connection tools. Diagnostics below work either way."
+msgstr "連接後即可使用即時連線工具。下方的診斷功能在任何情況下都可用。"
+
+#. Developer page: label of the 'Corroborate silent exits' setting.
+msgctxt "dev_corroborate_silent_exits"
+msgid "Corroborate silent exits"
+msgstr "佐證靜默出口"
+
+#. Developer page: the explanation under the 'Corroborate silent exits' setting.
+msgctxt "dev_corroborate_silent_exits_detail"
+msgid "How many distinct destinations must be silent before an exit is convicted on no-receive, so one dead site cannot remove a working exit"
+msgstr "在因沒有接收而將出口判罪之前，必須有多少個不同的目標保持靜默，以免單一失效網站令正常出口被移除"
 
 #. Developer page: suffix after a count of affected flows.
 msgctxt "dev_count_affected"
 msgid "affected"
-msgstr "affected"
+msgstr "受影響"
+
+#. Developer page: label of the 'Cut dead connects early' setting.
+msgctxt "dev_cut_dead_connects_early"
+msgid "Cut dead connects early"
+msgstr "提早中止無效連線"
+
+#. Developer page: the explanation under the 'Cut dead connects early' setting.
+msgctxt "dev_cut_dead_connects_early_detail"
+msgid "Drop an exit that has established nothing sooner when two sibling exits are receiving, in ms. Off waits the full 30s connect bar"
+msgstr "當兩個同級出口正在接收數據時，更早捨棄尚未建立任何連線的出口（毫秒）。關閉時等待完整的 30 秒連線門檻"
 
 #. Developer page: report line when the SDK refused an exit action.
 msgctxt "dev_declined_exit"
 msgid "No change: the SDK declined that exit"
-msgstr "No change: the SDK declined that exit"
+msgstr "沒有變更：SDK 拒絕了該出口"
 
 #. Developer page: heading of the destinations table.
 msgctxt "dev_destinations"
 msgid "Destinations"
-msgstr "Destinations"
+msgstr "目的地"
 
 #. Developer page: explanation under the destinations table.
 msgctxt "dev_destinations_detail"
 msgid "Which exit each destination's flows are landing on. A site spread over several rows is a site that lost its single egress IP."
-msgstr "Which exit each destination's flows are landing on. A site spread over several rows is a site that lost its single egress IP."
+msgstr "每個目的地的流落在哪個出口上。分散在多行的網站，就是失去了其唯一出口 IP 的網站。"
 
 #. Developer page: page title.
 msgctxt "dev_developer"
 msgid "Developer"
-msgstr "Developer"
+msgstr "開發者"
+
+#. Developer tools screen (reliability surface): dial failure rerace control label.
+msgctxt "dev_dial_failure_rerace"
+msgid "Retry refused connects elsewhere"
+msgstr "在其他出口重試被拒絕的連線"
+
+#. Developer tools screen: explanatory subtext under the 'dial failure rerace' control.
+msgctxt "dev_dial_failure_rerace_detail"
+msgid "When a provider can't reach a site, move the connection to another exit instead of letting it hang"
+msgstr "當供應商無法連上某個網站時，將連線轉移到其他出口，而不是讓它停在那裡"
+
+#. Developer tools screen (reliability surface): dial failures control label.
+msgctxt "dev_dial_failures"
+msgid "Provider connect failures"
+msgstr "供應商連線失敗"
+
+#. Developer tools screen: explanatory subtext under the 'dial failures' control.
+msgctxt "dev_dial_failures_detail"
+msgid "Times a provider reported it could not open the upstream connection"
+msgstr "供應商報告無法建立上游連線的次數"
+
+#. Developer tools screen (reliability surface): drop exit control label.
+msgctxt "dev_drop_exit"
+msgid "Drop"
+msgstr "捨棄"
+
+#. Developer page: label of the 'Drop stalled exits fast' setting.
+msgctxt "dev_drop_stalled_exits_fast"
+msgid "Drop stalled exits fast"
+msgstr "快速捨棄停滯的出口"
+
+#. Developer page: the explanation under the 'Drop stalled exits fast' setting.
+msgctxt "dev_drop_stalled_exits_fast_detail"
+msgid "How long an exit may stop delivering before it is dropped, in ms. Off waits 30s"
+msgstr "出口停止傳送多久後會被捨棄（毫秒）。關閉時等待 30 秒"
 
 #. Developer page: report line after an exit was dropped.
 msgctxt "dev_dropped_exit"
 msgid "Dropped exit"
-msgstr "Dropped exit"
+msgstr "已捨棄出口"
+
+#. Developer tools screen (reliability surface): effective tier control label.
+msgctxt "dev_effective_tier"
+msgid "Live tier demotion"
+msgstr "即時層級降級"
+
+#. Developer tools screen: explanatory subtext under the 'effective tier' control.
+msgctxt "dev_effective_tier_detail"
+msgid "Failing dials and survived verdicts push a provider down the ranking within a second; promotion back needs clean minutes and a proven connect"
+msgstr "撥號失敗和經得起的判定會在一秒內降低供應商的排名；要回升需要數分鐘無故障運作以及一次經驗證的連線"
+
+#. Developer tools screen (reliability surface): evaluation pool control label.
+msgctxt "dev_evaluation_pool"
+msgid "Candidates evaluated per slot"
+msgstr "每個空位評估的候選數"
+
+#. Developer tools screen: explanatory subtext under the 'evaluation pool' control.
+msgctxt "dev_evaluation_pool_detail"
+msgid "How many providers a window expansion pings and ranks per slot it needs, keeping the best. 1 evaluates exactly what it needs"
+msgstr "視窗擴展時為每個所需空位 ping 並排名的供應商數量，保留最佳者。1 表示只評估剛好所需的數量"
+
+#. Developer tools screen (reliability surface): exit dial failures control label.
+msgctxt "dev_exit_dial_failures"
+msgid "{} failed dials"
+msgstr "{} 次撥號失敗"
+
+#. Developer tools screen (reliability surface): exit flows control label.
+msgctxt "dev_exit_flows"
+msgid "{} flows"
+msgstr "{} 個流"
+
+#. Developer tools screen (reliability surface): exits control label.
+msgctxt "dev_exits"
+msgid "Exits"
+msgstr "出口"
 
 #. Developer page: explanation of the drop, stall and shuffle actions.
 msgctxt "dev_exits_actions_detail"
 msgid "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
-msgstr "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
+msgstr "「捨棄」、「令其停滯」和「隨機打亂」會刻意並即時降低目前連線的質素。這裡不會排隊或重試任何操作——未成功的操作只會報告，不會重做。"
+
+#. Developer tools screen: action for exporting all diagnostic logs without redaction.
+msgctxt "dev_export_all_logs"
+msgid "Export all logs (raw)"
+msgstr "匯出所有日誌（原始）"
+
+#. Developer tools screen: error shown when diagnostic log export fails.
+msgctxt "dev_export_failed"
+msgid "Export failed: {}"
+msgstr "匯出失敗：{}"
+
+#. Developer tools screen: explanation that a requested diagnostic item was omitted from an export.
+msgctxt "dev_export_not_included"
+msgid "Not included: {}"
+msgstr "未包含：{}"
+
+#. Developer tools screen: action for exporting diagnostic logs with sensitive traffic details redacted.
+msgctxt "dev_export_redacted_logs"
+msgid "Export redacted logs"
+msgstr "匯出已遮蔽的日誌"
+
+#. Developer tools screen: action for exporting the selected diagnostic log files.
+msgctxt "dev_export_selected"
+msgid "Export selected"
+msgstr "匯出所選項目"
+
+#. Developer tools screen: action for sharing a diagnostic bundle.
+msgctxt "dev_export_share"
+msgid "Share diagnostic bundle"
+msgstr "分享診斷套件"
+
+#. Developer tools screen: summary of the number and total size of diagnostic log files exported.
+msgctxt "dev_export_summary"
+msgid "Exported {0} log file ({1})"
+msgid_plural "Exported {0} log files ({1})"
+msgstr[0] "已匯出 {0} 個日誌檔案（{1}）"
+
+#. Developer tools screen: explanation that a diagnostic export option is unavailable.
+msgctxt "dev_export_unavailable"
+msgid "Not available: {}"
+msgstr "不可用：{}"
+
+#. Developer tools screen: progress label shown while a diagnostic bundle is being exported.
+msgctxt "dev_exporting"
+msgid "Exporting…"
+msgstr "正在匯出…"
+
+#. Developer page: label of the 'Fast first-exit poll' setting.
+msgctxt "dev_fast_first_exit_poll"
+msgid "Fast first-exit poll"
+msgstr "快速輪詢首個出口"
+
+#. Developer page: the explanation under the 'Fast first-exit poll' setting.
+msgctxt "dev_fast_first_exit_poll_detail"
+msgid "How often a connecting flow re-checks an empty window, in ms, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
+msgstr "正在連接的流重新檢查空視窗的頻率（毫秒），讓第一個請求在首個出口就緒後立即發出。關閉時按 2 秒的重試節奏等待"
+
+#. Developer tools screen (reliability surface): flows opened control label.
+msgctxt "dev_flows_opened"
+msgid "Flows opened"
+msgstr "已開啟的流"
+
+#. Developer tools screen: explanatory subtext under the 'flows opened' control.
+msgctxt "dev_flows_opened_detail"
+msgid "Total since reset, so runs of different lengths compare"
+msgstr "自重設以來的總數，方便比較不同時長的執行"
+
+#. Developer tools screen (reliability surface): flows rebound control label.
+msgctxt "dev_flows_rebound"
+msgid "QUIC flows rebound"
+msgstr "重新綁定的 QUIC 流"
+
+#. Developer tools screen: explanatory subtext under the 'flows rebound' control.
+msgctxt "dev_flows_rebound_detail"
+msgid "Flows moved to a warm exit inside a removal; accepted means the server took the path change without a re-dial"
+msgstr "在移除過程中轉移到預熱出口的流；「已接受」表示伺服器在沒有重新撥號的情況下接受了路徑變更"
+
+#. Developer tools screen: formatted value readout for 'flows rebound'.
+msgctxt "dev_flows_rebound_value"
+msgid "{0} ({1} accepted / {2} re-dialed)"
+msgstr "{0}（已接受 {1} / 重新撥號 {2}）"
+
+#. Developer tools screen (reliability surface): flows reraced control label.
+msgctxt "dev_flows_reraced"
+msgid "Moved to another exit"
+msgstr "已轉移到其他出口"
+
+#. Developer tools screen: explanatory subtext under the 'flows reraced' control.
+msgctxt "dev_flows_reraced_detail"
+msgid "How many of those failures were quietly moved instead of hanging"
+msgstr "這些故障中有多少被靜默轉移，而沒有停住"
+
+#. Developer page: label of the 'Follow benched exits' setting.
+msgctxt "dev_follow_benched_exits"
+msgid "Follow benched exits"
+msgstr "跟隨被隔離的出口"
+
+#. Developer page: the explanation under the 'Follow benched exits' setting.
+msgctxt "dev_follow_benched_exits_detail"
+msgid "A quarantined exit keeps its own sites' new connections through the early bench, when the verdict is least proven. New sites still avoid it"
+msgstr "被隔離的出口在隔離初期（此時判定最不可靠）仍會承接其自身網站的新連線。新網站仍會避開它"
+
+#. Developer page: label of the 'Follow window' setting.
+msgctxt "dev_follow_window"
+msgid "Follow window"
+msgstr "跟隨視窗"
+
+#. Developer page: the explanation under the 'Follow window' setting.
+msgctxt "dev_follow_window_detail"
+msgid "How long into a bench a site's new connections keep following their exit, in ms. Off scatters immediately"
+msgstr "隔離開始後，網站的新連線繼續跟隨其出口的時長（毫秒）。關閉時立即分散"
+
+#. Developer tools screen (reliability surface): formation poll control label.
+msgctxt "dev_formation_poll"
+msgid "Fast first-exit poll"
+msgstr "快速輪詢首個出口"
+
+#. Developer tools screen: explanatory subtext under the 'formation poll' control.
+msgctxt "dev_formation_poll_detail"
+msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
+msgstr "正在連接的流重新檢查空視窗的頻率，讓第一個請求在首個出口就緒後立即發出。關閉時按 2 秒的重試節奏等待"
+
+#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
+msgctxt "dev_fresh_flow_affinity"
+msgid "Hard fresh-flow affinity"
+msgstr "新流強親和性"
+
+#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
+msgctxt "dev_fresh_flow_affinity_detail"
+msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
+msgstr "將每個新連線分配給其 IP 或網域已在使用的出口。預設關閉：每個一般的新連線都會進入供應商競速。現有連線和明確固定一律保持不變"
+
+#. Developer tools screen (reliability surface): group follow control label.
+msgctxt "dev_group_follow"
+msgid "Follow benched exits"
+msgstr "跟隨被隔離的出口"
+
+#. Developer tools screen: explanatory subtext under the 'group follow' control.
+msgctxt "dev_group_follow_detail"
+msgid "A quarantined exit keeps its own sites' new connections through the early bench, when the verdict is least proven, so a bench does not split the site's egress IP. New sites still avoid it. Off scatters them"
+msgstr "被隔離的出口在隔離初期（此時判定最不可靠）仍會承接其自身網站的新連線，以免隔離令網站的出口 IP 分散。新網站仍會避開它。關閉時將這些連線分散出去"
+
+#. Developer tools screen (reliability surface): group follow window control label.
+msgctxt "dev_group_follow_window"
+msgid "Follow window"
+msgstr "跟隨視窗"
+
+#. Developer tools screen: explanatory subtext under the 'group follow window' control.
+msgctxt "dev_group_follow_window_detail"
+msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
+msgstr "隔離開始後，網站的新連線繼續跟隨其出口的時長——早期隔離通常是誤報；持續的隔離則趨向移除，並停止接收新流。關閉時立即分散"
+
+#. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
+msgctxt "dev_group_follow_window_ms_detail"
+msgid "How long into a bench a site's new connections keep following their exit, in ms — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
+msgstr "隔離開始後，網站的新連線繼續跟隨其出口的時長（毫秒）——早期隔離通常是誤報；持續的隔離則趨向移除，並停止接收新流。關閉時立即分散"
+
+#. Developer tools screen (reliability surface): heartbeat control label.
+msgctxt "dev_heartbeat"
+msgid "State heartbeat"
+msgstr "狀態心跳"
+
+#. Developer tools screen: explanatory subtext under the 'heartbeat' control.
+msgctxt "dev_heartbeat_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics. Off silences it; shorter spots a transition, longer keeps more buffer"
+msgstr "將一行即時狀態摘要寫入日誌以供事後排查的頻率。關閉時不寫入；間隔越短越容易發現狀態轉換，越長則保留越多緩衝"
+
+#. Developer page (Apple): the explanation under the 'State heartbeat' setting, with its unit.
+msgctxt "dev_heartbeat_ms_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it; shorter spots a transition, longer keeps more buffer"
+msgstr "將一行即時狀態摘要寫入日誌以供事後排查的頻率（毫秒）。關閉時不寫入；間隔越短越容易發現狀態轉換，越長則保留越多緩衝"
 
 #. Developer page: intro line under the title.
 msgctxt "dev_intro"
 msgid "Tools for diagnosing connection freezes. These act on the live connection."
-msgstr "Tools for diagnosing connection freezes. These act on the live connection."
+msgstr "用於診斷連線凍結的工具。這些工具會作用於目前的連線。"
 
 #. Developer screen: title of the control-plane IP family setting.
 msgctxt "dev_ip_family"
 msgid "Control connections"
-msgstr "Control connections"
+msgstr "控制連線"
 
 #. Developer screen: the automatic IP family option.
 msgctxt "dev_ip_family_auto"
 msgid "Automatic"
-msgstr "Automatic"
+msgstr "自動"
 
 #. Developer screen: the automatic option's detail when one family was demoted; {reason} is the demotion reason.
 msgctxt "dev_ip_family_auto_demoted_detail"
 msgid "Automatic. {}."
-msgstr "Automatic. {}."
+msgstr "自動。{}。"
 
 #. Developer screen: detail line of the automatic IP family option.
 msgctxt "dev_ip_family_auto_detail"
 msgid "Uses whichever family connects first, and routes around one that fails after connecting."
-msgstr "Uses whichever family connects first, and routes around one that fails after connecting."
+msgstr "使用最先連上的地址族，並繞過連線後出現故障的地址族。"
 
 #. Developer screen: the IPv4-only option.
 msgctxt "dev_ip_family_force4"
 msgid "Force IPv4"
-msgstr "Force IPv4"
+msgstr "強制使用 IPv4"
 
 #. Developer screen: detail line of the IPv4-only option.
 msgctxt "dev_ip_family_force4_detail"
 msgid "Control-plane connections use IPv4 only. Turn this off on an IPv6-only network."
-msgstr "Control-plane connections use IPv4 only. Turn this off on an IPv6-only network."
+msgstr "控制連線只使用 IPv4。在只支援 IPv6 的網絡上請關閉此項。"
 
 #. Developer screen: the IPv6-only option.
 msgctxt "dev_ip_family_force6"
 msgid "Force IPv6"
-msgstr "Force IPv6"
+msgstr "強制使用 IPv6"
 
 #. Developer screen: detail line of the IPv6-only option.
 msgctxt "dev_ip_family_force6_detail"
 msgid "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
-msgstr "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
+msgstr "控制連線只使用 IPv6。如果應用程式無法連接伺服器，請關閉此項。"
+
+#. Developer page: label of the 'Keep quiet providers longer' setting.
+msgctxt "dev_keep_quiet_providers_longer"
+msgid "Keep quiet providers longer"
+msgstr "更長時間保留靜默的供應商"
+
+#. Developer page: the explanation under the 'Keep quiet providers longer' setting.
+msgctxt "dev_keep_quiet_providers_longer_detail"
+msgid "How long a provider still acknowledging traffic may return nothing before it is dropped, in ms. Off keeps them until they stop acknowledging"
+msgstr "仍在確認流量的供應商在被捨棄前可以不傳回任何數據的時長（毫秒）。關閉時會保留它們，直到它們停止確認"
+
+#. Developer tools screen (reliability surface): load corroboration control label.
+msgctxt "dev_load_corroboration"
+msgid "Load corroboration"
+msgstr "負載佐證"
+
+#. Developer tools screen: explanatory subtext under the 'load corroboration' control.
+msgctxt "dev_load_corroboration_detail"
+msgid "Extra silent destinations required per this many flows before a busy exit can be benched on soft evidence: a 24-flow exit at 8 needs 3 silent sites, not 2. Off keeps the flat minimum"
+msgstr "在只憑弱證據隔離繁忙出口之前，每達到此數量的流須額外增加的靜默目標數：值為 8 時，有 24 個流的出口需要 3 個靜默網站，而不是 2 個。關閉時保持固定的最小值"
+
+#. Developer tools screen: control label for diagnostic log detail.
+msgctxt "dev_log_verbosity"
+msgid "Log detail"
+msgstr "日誌詳細程度"
+
+#. Developer tools screen: default diagnostic log detail level.
+msgctxt "dev_log_verbosity_default"
+msgid "Default"
+msgstr "預設"
+
+#. Developer tools screen: explanation of the default diagnostic log detail level.
+msgctxt "dev_log_verbosity_default_detail"
+msgid "Connection errors and contract pings"
+msgstr "連線錯誤和合約 ping"
+
+#. Developer tools screen: trace diagnostic log detail level.
+msgctxt "dev_log_verbosity_trace"
+msgid "Trace"
+msgstr "追蹤"
+
+#. Developer tools screen: explanation of the trace diagnostic log detail level.
+msgctxt "dev_log_verbosity_trace_detail"
+msgid "Transport and window internals. Very large logs"
+msgstr "傳輸方式和視窗的內部細節。日誌非常大"
+
+#. Developer tools screen: label used when the diagnostic log detail level cannot be read.
+msgctxt "dev_log_verbosity_unavailable"
+msgid "Unavailable"
+msgstr "不可用"
+
+#. Developer tools screen: explanation shown when the diagnostic log detail level cannot be read.
+msgctxt "dev_log_verbosity_unavailable_detail"
+msgid "There is no device to read the log level from yet. Sign in first"
+msgstr "尚未有可讀取日誌級別的裝置。請先登入"
+
+#. Developer tools screen: verbose diagnostic log detail level.
+msgctxt "dev_log_verbosity_verbose"
+msgid "Verbose"
+msgstr "詳細"
+
+#. Developer tools screen: explanation of the verbose diagnostic log detail level.
+msgctxt "dev_log_verbosity_verbose_detail"
+msgid "Contract accounting and per-packet block decisions. Includes destination IP addresses"
+msgstr "合約計量和逐個封包的封鎖決定。包含目標 IP 地址"
+
+#. Developer tools screen: privacy warning shown when detailed traffic logging is enabled.
+msgctxt "dev_log_verbosity_warning"
+msgid "At Verbose and above the logs contain the destination IP addresses and ports of the traffic you send. Use “Export redacted logs” to share them; the raw bundle should not leave this device."
+msgstr "在「詳細」或以上級別，日誌會包含你所傳送流量的目標 IP 地址和連接埠。如需分享，請使用「匯出已遮蔽的日誌」；原始套件不應離開此裝置。"
+
+#. Developer tools screen: title for the detailed traffic logging privacy warning.
+msgctxt "dev_log_verbosity_warning_title"
+msgid "Logs are recording your real traffic"
+msgstr "日誌正在記錄你的真實流量"
+
+#. Developer page: label of the 'Longer TCP idle timeout' setting.
+msgctxt "dev_longer_tcp_idle_timeout"
+msgid "Longer TCP idle timeout"
+msgstr "更長的 TCP 閒置逾時"
+
+#. Developer page: the explanation under the 'Longer TCP idle timeout' setting.
+msgctxt "dev_longer_tcp_idle_timeout_detail"
+msgid "How long a TCP connection may sit idle, in ms. Off uses the UDP bound"
+msgstr "TCP 連線可以閒置的時長（毫秒）。關閉時使用 UDP 的上限"
+
+#. Developer tools screen (reliability surface): max flows per exit control label.
+msgctxt "dev_max_flows_per_exit"
+msgid "Max connections per exit"
+msgstr "每個出口的最大連線數"
+
+#. Developer tools screen: explanatory subtext under the 'max flows per exit' control.
+msgctxt "dev_max_flows_per_exit_detail"
+msgid "Losing an exit kills every connection on it. Lower spreads the damage; a site may then use more than one exit IP"
+msgstr "失去一個出口會中斷其上的所有連線。數值越低，損失越分散；但網站可能因此使用多於一個出口 IP"
+
+#. Developer tools screen (reliability surface): measure none control label.
+msgctxt "dev_measure_none"
+msgid "No provider failures yet. Stall an exit below to cause one."
+msgstr "暫時未有供應商故障。在下方讓某個出口停滯即可製造一次。"
+
+#. Developer tools screen (reliability surface): measurements control label.
+msgctxt "dev_measurements"
+msgid "Measurements"
+msgstr "量度"
+
+#. Developer tools screen: explanatory subtext under the 'measurements' control.
+msgctxt "dev_measurements_detail"
+msgid "What a provider failure costs. Reset, run a test, read back."
+msgstr "供應商故障的代價。重設、執行測試、讀取結果。"
 
 #. Developer page: button that migrates the live connection.
 msgctxt "dev_migrate"
 msgid "Migrate"
-msgstr "Migrate"
+msgstr "遷移"
+
+#. Developer tools screen (reliability surface): migrate exit control label.
+msgctxt "dev_migrate_exit"
+msgid "Migrate"
+msgstr "遷移"
+
+#. Developer page: last-action report after moving an exit's flows to another exit; the exit's short id follows.
+msgctxt "dev_migrated_exit"
+msgid "Migrated exit"
+msgstr "已遷移出口"
+
+#. Developer tools screen (reliability surface): min blackhole destinations control label.
+msgctxt "dev_min_blackhole_destinations"
+msgid "Corroborate silent exits"
+msgstr "佐證靜默出口"
+
+#. Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.
+msgctxt "dev_min_blackhole_destinations_detail"
+msgid "How many distinct destinations must be silent before an exit is convicted on no-receive, so one dead site cannot remove a working exit. Off lets a single destination convict"
+msgstr "在因沒有接收而將出口判罪之前，必須有多少個不同的目標保持靜默，以免單一失效網站令正常出口被移除。關閉時單一目標即可判罪"
 
 #. Developer page: value of the flows that never came back, {done} of {total}.
 msgctxt "dev_never_came_back_value"
 msgid "{0} of {1}"
-msgstr "{0} of {1}"
+msgstr "{0} / {1}"
 
 #. Developer page: empty state of the destinations table.
 msgctxt "dev_no_destinations"
 msgid "No destinations yet."
-msgstr "No destinations yet."
+msgstr "暫時未有目的地。"
 
 #. Developer page: shown when there is no session to act on.
 msgctxt "dev_no_device"
 msgid "No session. Sign in and connect to use these tools."
-msgstr "No session. Sign in and connect to use these tools."
+msgstr "沒有工作階段。請登入並連線以使用這些工具。"
+
+#. Developer tools screen (reliability surface): no exits control label.
+msgctxt "dev_no_exits"
+msgid "No exits. Connect first."
+msgstr "沒有出口。請先連接。"
 
 #. Developer page: empty state of the probe results table.
 msgctxt "dev_no_probe_results"
 msgid "No probe results yet. Start the suite."
-msgstr "No probe results yet. Start the suite."
+msgstr "暫時未有探測結果。請啟動探測套件。"
 
 #. Developer page: empty state of the provider failures table.
 msgctxt "dev_no_provider_failures"
 msgid "No provider failures yet."
-msgstr "No provider failures yet."
+msgstr "暫時未有提供者故障。"
 
 #. Developer page: report line when no reliability override is in force.
 msgctxt "dev_not_applied"
 msgid "Not applied: there is no reliability override in force to change."
-msgstr "Not applied: there is no reliability override in force to change."
+msgstr "未套用：目前沒有可更改的可靠性覆寫。"
 
 #. Developer page: report line when there is no live session to act on.
 msgctxt "dev_not_issued"
 msgid "Not issued: there is no live session to act on."
-msgstr "Not issued: there is no live session to act on."
+msgstr "未發出：沒有可操作的使用中工作階段。"
 
 #. Developer page: note shown when no reliability override is in force.
 msgctxt "dev_nothing_in_force"
 msgid "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
-msgstr "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
+msgstr "目前沒有生效的可靠性覆寫，因此設定部分會隱藏，而不是顯示為零。下方的量度和出口讀數是即時的。"
+
+#. Developer page: what a setting's 0 means when it falls back to the minimum of 1 ('Candidates evaluated per slot').
+msgctxt "dev_one_min"
+msgid "1 (min)"
+msgstr "1（最小值）"
+
+#. Developer tools screen (reliability surface): open tools control label.
+msgctxt "dev_open_tools"
+msgid "Open developer tools"
+msgstr "開啟開發者工具"
+
+#. Developer tools screen (reliability surface): probe all control label.
+msgctxt "dev_probe_all"
+msgid "Probe all exits now"
+msgstr "立即探測所有出口"
 
 #. Developer page: button that probes every exit now.
 msgctxt "dev_probe_all_exits_now"
 msgid "Probe all exits now"
-msgstr "Probe all exits now"
+msgstr "立即探測所有出口"
 
 #. Developer page: probe outcome, failed.
 msgctxt "dev_probe_failed"
 msgid "failed"
-msgstr "failed"
+msgstr "失敗"
 
 #. Developer page: probe outcome, ok.
 msgctxt "dev_probe_ok"
 msgid "ok"
-msgstr "ok"
+msgstr "成功"
+
+#. Developer tools screen (reliability surface): probe providers control label.
+msgctxt "dev_probe_providers"
+msgid "Probe providers"
+msgstr "探測供應商"
+
+#. Developer tools screen: explanatory subtext under the 'probe providers' control.
+msgctxt "dev_probe_providers_detail"
+msgid "Qualify exits by dialing real sites through them. An answer proves the exit; silence never counts against it"
+msgstr "透過出口撥號連上真實網站來驗證出口。收到回應即證明該出口可用；沒有回應絕不會被計為不利"
+
+#. Developer tools screen (reliability surface): probe sample hosts control label.
+msgctxt "dev_probe_sample_hosts"
+msgid "Probe hosts per pass"
+msgstr "每輪探測的主機數"
+
+#. Developer tools screen: explanatory subtext under the 'probe sample hosts' control.
+msgctxt "dev_probe_sample_hosts_detail"
+msgid "How many health sites one qualification pass dials through an exit. 0 probes the entire embedded list; a smaller number rotates through it in blocks"
+msgstr "一輪驗證透過某個出口撥號連上的健康檢查網站數量。0 表示探測整個內置列表；較小的數值則分批輪流探測"
+
+#. Developer page: label of the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak"
+msgid "Probe silence streak"
+msgstr "探測靜默次數"
+
+#. Developer page: the explanation under the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak_detail"
+msgid "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement. Placement only"
+msgstr "出口可以連續多少輪探測都完全沒有回應，之後會被警告並排除在新流分配之外。只影響分配"
+
+#. Developer page (Apple): the explanation under the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak_long_detail"
+msgid "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement — the compensation for providers that leave the network mid-session. Placement only: removal stays traffic-based, and any sign of life clears the streak"
+msgstr "出口可以連續多少輪探測都完全沒有回應，之後會被警告並排除在新流分配之外——這是對在工作階段中途離開網絡的供應商的補償。只影響分配：移除仍以流量為依據，任何存活跡象都會將計數歸零"
+
+#. Developer page: label of the 'Probe stalled exits before dropping' setting.
+msgctxt "dev_probe_stalled_exits"
+msgid "Probe stalled exits before dropping"
+msgstr "捨棄前探測停滯的出口"
+
+#. Developer page: the explanation under the 'Probe stalled exits before dropping' setting.
+msgctxt "dev_probe_stalled_exits_detail"
+msgid "When an exit stalls, ping it once before convicting. A congested but alive exit answers and keeps its flows; a dead one is still dropped"
+msgstr "出口停滯時，先 ping 一次再判罪。擠塞但仍運作的出口會回應並保留其流；已失效的出口仍會被捨棄"
 
 #. Developer page: heading of the probe suite section.
 msgctxt "dev_probe_suite"
 msgid "Probe suite"
-msgstr "Probe suite"
+msgstr "探測套件"
 
 #. Developer page: explanation of the probe suite.
 msgctxt "dev_probe_suite_detail"
 msgid "Dials real targets through the live connection and times each stage. Runs with the SDK's own default configuration."
-msgstr "Dials real targets through the live connection and times each stage. Runs with the SDK's own default configuration."
+msgstr "透過目前的連線撥號到真實目標，並為每個階段計時。使用 SDK 本身的預設設定執行。"
 
 #. Developer page: probe suite status when it is not running.
 msgctxt "dev_probe_suite_idle"
 msgid "Not running."
-msgstr "Not running."
+msgstr "未執行。"
 
 #. Developer page: report line when the probe suite could not start.
 msgctxt "dev_probe_suite_not_started"
 msgid "Probe suite did not start: no live session, or one is already running."
-msgstr "Probe suite did not start: no live session, or one is already running."
+msgstr "探測套件未啟動：沒有使用中的工作階段，或已有一個正在執行。"
 
 #. Developer page: probe suite status while it runs.
 msgctxt "dev_probe_suite_running"
 msgid "Running."
-msgstr "Running."
+msgstr "正在執行。"
 
 #. Developer page: button that starts the probe suite.
 msgctxt "dev_probe_suite_start"
 msgid "Start probe suite"
-msgstr "Start probe suite"
+msgstr "啟動探測套件"
 
 #. Developer page: report line after the probe suite started.
 msgctxt "dev_probe_suite_started"
 msgid "Probe suite started"
-msgstr "Probe suite started"
+msgstr "探測套件已啟動"
 
 #. Developer page: button that stops the probe suite.
 msgctxt "dev_probe_suite_stop"
 msgid "Stop"
-msgstr "Stop"
+msgstr "停止"
 
 #. Developer page: report line after the probe suite stopped.
 msgctxt "dev_probe_suite_stopped"
 msgid "Probe suite stopped"
-msgstr "Probe suite stopped"
+msgstr "探測套件已停止"
+
+#. Developer tools screen (reliability surface): probe timeout control label.
+msgctxt "dev_probe_timeout"
+msgid "Probe wait"
+msgstr "探測等待時間"
+
+#. Developer tools screen: explanatory subtext under the 'probe timeout' control.
+msgctxt "dev_probe_timeout_detail"
+msgid "How long a qualification probe waits for an answer. Off uses the built-in 4s. It only bounds waiting for proof, it never convicts"
+msgstr "驗證探測等待回應的時長。關閉時使用內置的 4 秒。它只限制等待證明的時間，絕不判罪"
+
+#. Developer page: label of the 'Probe wait' setting.
+msgctxt "dev_probe_wait"
+msgid "Probe wait"
+msgstr "探測等待時間"
+
+#. Developer page: the explanation under the 'Probe wait' setting.
+msgctxt "dev_probe_wait_detail"
+msgid "How long a qualification probe waits for an answer, in ms. Off uses the built-in 4s. It only bounds waiting for proof, it never convicts"
+msgstr "驗證探測等待回應的時長（毫秒）。關閉時使用內置的 4 秒。它只限制等待證明的時間，絕不判罪"
 
 #. Developer page: heading of the probed exits table.
 msgctxt "dev_probed_exits"
 msgid "Probed exits"
-msgstr "Probed exits"
+msgstr "已探測的出口"
+
+#. Developer tools screen (reliability surface): probes control label.
+msgctxt "dev_probes"
+msgid "Probes"
+msgstr "探測"
+
+#. Developer tools screen: explanatory subtext under the 'probes' control.
+msgctxt "dev_probes_detail"
+msgid "Qualification probes this session"
+msgstr "本次工作階段的驗證探測"
+
+#. Developer tools screen: formatted value readout for 'probes'.
+msgctxt "dev_probes_value"
+msgid "{0} sent / {1} answered"
+msgstr "已發出 {0} / 已回應 {1}"
 
 #. Developer page: value of the QUIC flows that rebound: {count} total, {accepted} accepted, {redialed} re-dialed.
 msgctxt "dev_quic_flows_rebound_value"
 msgid "{0} ({1} accepted / {2} re-dialed)"
-msgstr "{0} ({1} accepted / {2} re-dialed)"
+msgstr "{0}（已接受 {1} / 重新撥號 {2}）"
+
+#. Developer tools screen (reliability surface): quic rebind control label.
+msgctxt "dev_quic_rebind"
+msgid "Rebind QUIC on exit loss"
+msgstr "出口失去時重新綁定 QUIC"
+
+#. Developer tools screen: explanatory subtext under the 'quic rebind' control.
+msgctxt "dev_quic_rebind_detail"
+msgid "Re-pin established QUIC flows to a live exit inside the removal instead of tearing them down"
+msgstr "在移除過程中將已建立的 QUIC 流重新固定到仍運作的出口，而不是將其中斷"
+
+#. Developer tools screen (reliability surface): recovery control label.
+msgctxt "dev_recovery"
+msgid "Recovery time"
+msgstr "恢復時間"
+
+#. Developer tools screen: explanatory subtext under the 'recovery' control.
+msgctxt "dev_recovery_detail"
+msgid "From an exit dying to that site answering again"
+msgstr "由出口失效到該網站再次回應的時間"
+
+#. Developer tools screen (reliability surface): recovery missed control label.
+msgctxt "dev_recovery_missed"
+msgid "Never came back"
+msgstr "未有恢復"
+
+#. Developer tools screen: explanatory subtext under the 'recovery missed' control.
+msgctxt "dev_recovery_missed_detail"
+msgid "Sites abandoned rather than recovered"
+msgstr "被放棄而非恢復的網站"
+
+#. Developer tools screen: formatted value readout for 'recovery missed'.
+msgctxt "dev_recovery_missed_value"
+msgid "{0} of {1}"
+msgstr "{0} / {1}"
 
 #. Developer page: value of the recovery time, {average} and {worst} are durations.
 msgctxt "dev_recovery_time_value"
 msgid "avg {0}, worst {1}"
-msgstr "avg {0}, worst {1}"
+msgstr "平均 {0}，最差 {1}"
+
+#. Developer tools screen: formatted value readout for 'recovery'.
+msgctxt "dev_recovery_value"
+msgid "avg {0}, worst {1}"
+msgstr "平均 {0}，最差 {1}"
+
+#. Developer tools screen (reliability surface): refresh control label.
+msgctxt "dev_refresh"
+msgid "Refresh"
+msgstr "重新整理"
+
+#. Developer page: label of the 'Release stuck retransmits' setting.
+msgctxt "dev_release_stuck_retransmits"
+msgid "Release stuck retransmits"
+msgstr "釋放卡住的重傳"
+
+#. Developer page: the explanation under the 'Release stuck retransmits' setting.
+msgctxt "dev_release_stuck_retransmits_detail"
+msgid "How long retransmits are held before one is released, in ms. Off waits 30s"
+msgstr "重傳在釋放其中一個之前被保留的時長（毫秒）。關閉時等待 30 秒"
+
+#. Developer tools screen (reliability surface): removal budget count control label.
+msgctxt "dev_removal_budget_count"
+msgid "Removal storm limit"
+msgstr "移除風暴上限"
+
+#. Developer tools screen: explanatory subtext under the 'removal budget count' control.
+msgctxt "dev_removal_budget_count_detail"
+msgid "How many verdict removals are allowed per window before the rest are deferred; a burst is more likely one local cause than many failures. Off removes without limit"
+msgstr "每個視窗內容許按判定執行的移除次數，超出部分會被押後；突發的大量移除較可能源於單一本地原因，而非許多故障。關閉時不限制移除"
+
+#. Developer tools screen (reliability surface): removal budget window control label.
+msgctxt "dev_removal_budget_window"
+msgid "Removal storm window"
+msgstr "移除風暴視窗"
+
+#. Developer tools screen: explanatory subtext under the 'removal budget window' control.
+msgctxt "dev_removal_budget_window_detail"
+msgid "The window the removal limit is counted over. Off (like a limit of 0) turns the breaker off"
+msgstr "計算移除上限所用的視窗。關閉（與上限為 0 相同）會停用斷路器"
+
+#. Developer page: label of the 'Removal storm limit' setting.
+msgctxt "dev_removal_storm_limit"
+msgid "Removal storm limit"
+msgstr "移除風暴上限"
+
+#. Developer page: the explanation under the 'Removal storm limit' setting.
+msgctxt "dev_removal_storm_limit_detail"
+msgid "How many verdict removals are allowed per window before the rest are deferred; a burst is more likely one local cause than many failures"
+msgstr "每個視窗內容許按判定執行的移除次數，超出部分會被押後；突發的大量移除較可能源於單一本地原因，而非許多故障"
+
+#. Developer page: label of the 'Removal storm window' setting.
+msgctxt "dev_removal_storm_window"
+msgid "Removal storm window"
+msgstr "移除風暴視窗"
+
+#. Developer page: the explanation under the 'Removal storm window' setting.
+msgctxt "dev_removal_storm_window_detail"
+msgid "The window the removal limit is counted over, in ms. Off (like a limit of 0) turns the breaker off"
+msgstr "計算移除上限所用的視窗（毫秒）。關閉（與上限為 0 相同）會停用斷路器"
+
+#. Developer tools screen (reliability surface): removals deferred control label.
+msgctxt "dev_removals_deferred"
+msgid "Removals deferred"
+msgstr "押後的移除"
+
+#. Developer tools screen: explanatory subtext under the 'removals deferred' control.
+msgctxt "dev_removals_deferred_detail"
+msgid "Removals the storm breaker held back after a correlated burst"
+msgstr "風暴斷路器在關聯性突發後暫緩執行的移除"
 
 #. Developer page: label before the requested value of an override.
 msgctxt "dev_requested"
 msgid "Requested:"
-msgstr "Requested:"
+msgstr "已要求："
+
+#. Developer tools screen (reliability surface): reset defaults control label.
+msgctxt "dev_reset_defaults"
+msgid "Reset to shipped defaults"
+msgstr "還原為原廠預設值"
+
+#. Developer tools screen (reliability surface): reset measurements control label.
+msgctxt "dev_reset_measurements"
+msgid "Reset measurements"
+msgstr "重設量度"
 
 #. Developer page: button that resets the reliability settings.
 msgctxt "dev_reset_to_shipped_defaults"
 msgid "Reset to shipped defaults"
-msgstr "Reset to shipped defaults"
+msgstr "還原為原廠預設值"
+
+#. Developer tools screen (reliability surface): scheduler pause recovery control label.
+msgctxt "dev_scheduler_pause_recovery"
+msgid "Suspend recovery window"
+msgstr "休眠後恢復視窗"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pause recovery' control.
+msgctxt "dev_scheduler_pause_recovery_detail"
+msgid "How long verdicts stay held after a detected suspend, giving transports time to re-register. Off uses the built-in 5s"
+msgstr "偵測到休眠後判定保持暫緩的時長，讓傳輸方式有時間重新登記。關閉時使用內置的 5 秒"
+
+#. Developer tools screen (reliability surface): scheduler pause tolerance control label.
+msgctxt "dev_scheduler_pause_tolerance"
+msgid "Suspend detector"
+msgstr "休眠偵測器"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.
+msgctxt "dev_scheduler_pause_tolerance_detail"
+msgid "How much timer overshoot reads as the phone being suspended rather than an exit stalling, so a resumed phone does not convict every exit at once. Off disables it"
+msgstr "計時器超時多少會被視為手機進入休眠，而不是出口停滯，以免手機恢復後一次過將所有出口判罪。關閉時停用"
+
+#. Developer page (Apple): the explanation under the 'Suspend detector' setting, with its unit.
+msgctxt "dev_scheduler_pause_tolerance_ms_detail"
+msgid "How much timer overshoot reads as the phone being suspended rather than an exit stalling, in ms, so a resumed phone does not convict every exit at once. Off disables it"
+msgstr "計時器超時多少（毫秒）會被視為手機進入休眠，而不是出口停滯，以免手機恢復後一次過將所有出口判罪。關閉時停用"
+
+#. Developer tools screen (reliability surface): scheduler pauses control label.
+msgctxt "dev_scheduler_pauses"
+msgid "Suspends caught"
+msgstr "捕獲的休眠"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pauses' control.
+msgctxt "dev_scheduler_pauses_detail"
+msgid "Host suspends the detector caught, each one a batch of verdicts held instead of executed on a just-resumed phone"
+msgstr "偵測器捕獲的主機休眠次數，每次都代表在剛恢復的手機上暫緩而非執行一批判定"
+
+#. Developer tools screen: section heading for the detection controls.
+msgctxt "dev_section_detection"
+msgid "Detection"
+msgstr "偵測"
+
+#. Developer tools screen: section heading for diagnostic log controls.
+msgctxt "dev_section_diagnostics"
+msgid "Diagnostics"
+msgstr "診斷"
+
+#. Developer tools screen: section heading for the observability controls.
+msgctxt "dev_section_observability"
+msgid "Observability"
+msgstr "可觀察性"
+
+#. Developer tools screen: section heading for the placement controls.
+msgctxt "dev_section_placement"
+msgid "Placement"
+msgstr "分配"
+
+#. Developer tools screen: section heading for the probing controls.
+msgctxt "dev_section_probing"
+msgid "Probing"
+msgstr "探測"
+
+#. Developer tools screen: section heading for the recovery controls.
+msgctxt "dev_section_recovery"
+msgid "Recovery"
+msgstr "恢復"
+
+#. Developer tools screen (reliability surface): send stall control label.
+msgctxt "dev_send_stall"
+msgid "Drop stalled exits fast"
+msgstr "快速捨棄停滯的出口"
+
+#. Developer tools screen: explanatory subtext under the 'send stall' control.
+msgctxt "dev_send_stall_detail"
+msgid "How long an exit may stop delivering before it is dropped. Off waits 30s"
+msgstr "出口停止傳送多久後會被捨棄。關閉時等待 30 秒"
+
+#. Developer tools screen (reliability surface): server name bridge control label.
+msgctxt "dev_server_name_bridge"
+msgid "Converge late-named flows"
+msgstr "合併較遲取得名稱的流"
+
+#. Developer tools screen: explanatory subtext under the 'server name bridge' control.
+msgctxt "dev_server_name_bridge_detail"
+msgid "Moves later connections onto the exit the first one already uses"
+msgstr "將後續連線轉移到第一個連線已使用的出口"
 
 #. Developer page: shown when the system service is not attached.
 msgctxt "dev_service_detached"
 msgid "The URnetwork service is not attached, so the live connection cannot be read."
-msgstr "The URnetwork service is not attached, so the live connection cannot be read."
+msgstr "URnetwork 服務未連接，因此無法讀取目前的連線。"
 
 #. Developer page: heading of the daemon session log.
 msgctxt "dev_session_log"
 msgid "Session log"
-msgstr "Session log"
+msgstr "工作階段日誌"
 
 #. Developer page: shown when this account may not read the daemon log.
 msgctxt "dev_session_log_denied"
 msgid "This account may drive the daemon but may not read its log."
-msgstr "This account may drive the daemon but may not read its log."
+msgstr "此帳戶可以控制服務，但不能讀取其日誌。"
 
 #. Developer page: explanation of the session log.
 msgctxt "dev_session_log_detail"
 msgid "What the daemon has written since it started. The reliability lines ([rel] event=...) are how a knob below proves it changed something."
-msgstr "What the daemon has written since it started. The reliability lines ([rel] event=...) are how a knob below proves it changed something."
+msgstr "服務自啟動以來寫入的內容。可靠性行（[rel] event=...）可證明下方的某項設定確實改變了什麼。"
 
 #. Developer page: line in the session log when {count} earlier lines were dropped.
 msgctxt "dev_session_log_dropped"
 msgid "{} lines were dropped before this point"
-msgstr "{} lines were dropped before this point"
+msgstr "此處之前已捨棄 {} 行"
 
 #. Developer page: empty state of the session log.
 msgctxt "dev_session_log_empty"
 msgid "The daemon has not written anything yet."
-msgstr "The daemon has not written anything yet."
+msgstr "服務尚未寫入任何內容。"
 
 #. Developer page: toggle that follows the session log tail.
 msgctxt "dev_session_log_follow"
 msgid "Follow"
-msgstr "Follow"
+msgstr "跟隨"
 
 #. Developer page: note when the daemon restarted and the log began again.
 msgctxt "dev_session_log_restarted"
 msgid "The daemon restarted. This is a new log; the previous run's lines are gone."
-msgstr "The daemon restarted. This is a new log; the previous run's lines are gone."
+msgstr "服務已重新啟動。這是新的日誌；上一次執行的行已不存在。"
+
+#. Developer page (Apple): button that applies a typed value.
+msgctxt "dev_set"
+msgid "Set"
+msgstr "套用"
+
+#. Developer page (Apple): button that shares an exported log file. {name} is the file name.
+msgctxt "dev_share_file"
+msgid "Share {}"
+msgstr "分享 {}"
+
+#. Developer tools screen (reliability surface): shuffle exits control label.
+msgctxt "dev_shuffle_exits"
+msgid "Shuffle all exits"
+msgstr "隨機打亂所有出口"
+
+#. Developer tools screen (reliability surface): simulate network change control label.
+msgctxt "dev_simulate_network_change"
+msgid "Simulate network change"
+msgstr "模擬網絡切換"
+
+#. Developer tools screen (reliability surface): soft verdict control label.
+msgctxt "dev_soft_verdict"
+msgid "Demote before removing"
+msgstr "移除前先降級"
+
+#. Developer tools screen: explanatory subtext under the 'soft verdict' control.
+msgctxt "dev_soft_verdict_detail"
+msgid "Ambiguous verdicts bench an exit instead of tearing down its flows; removal needs sustained evidence or an empty exit"
+msgstr "不明確的判定會隔離出口，而不是中斷其流；移除需要持續的證據或出口已空"
+
+#. Developer tools screen (reliability surface): stall exit control label.
+msgctxt "dev_stall_exit"
+msgid "Stall"
+msgstr "令其停滯"
 
 #. Developer page: report line after an exit was stalled.
 msgctxt "dev_stalled_exit"
 msgid "Stalled exit"
-msgstr "Stalled exit"
+msgstr "已停滯出口"
+
+#. Developer tools screen (reliability surface): standing reserve control label.
+msgctxt "dev_standing_reserve"
+msgid "Keep a spare exit warm"
+msgstr "保持一個後備出口預熱"
+
+#. Developer tools screen: explanatory subtext under the 'standing reserve' control.
+msgctxt "dev_standing_reserve_detail"
+msgid "Size each window one exit beyond its target so a replacement is already connected. Off waits until a loss to backfill"
+msgstr "讓每個視窗比目標多一個出口，以便替補已預先連接。關閉時等到出現損失後才補充"
 
 #. Developer page: exit state, benched.
 msgctxt "dev_state_benched"
 msgid "benched"
-msgstr "benched"
+msgstr "被隔離"
 
 #. Developer page: exit state, done.
 msgctxt "dev_state_done"
 msgid "done"
-msgstr "done"
+msgstr "已完成"
 
-#. Developer page: exit state, p2p.
+#. Developer page: label of the 'State heartbeat' setting.
+msgctxt "dev_state_heartbeat"
+msgid "State heartbeat"
+msgstr "狀態心跳"
+
+#. Developer page: the explanation under the 'State heartbeat' setting.
+msgctxt "dev_state_heartbeat_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it"
+msgstr "將一行即時狀態摘要寫入日誌以供事後排查的頻率（毫秒）。關閉時不寫入"
+
+#. Developer page: exit state of an exit that carries only the P2P transport. A transport name; never translated.
 msgctxt "dev_state_p2p"
 msgid "p2p"
 msgstr "p2p"
@@ -1856,32 +3197,262 @@ msgstr "p2p"
 #. Developer page: exit state, proven.
 msgctxt "dev_state_proven"
 msgid "proven"
-msgstr "proven"
+msgstr "已驗證"
 
 #. Developer page: exit state, warned.
 msgctxt "dev_state_warned"
 msgid "warned"
-msgstr "warned"
+msgstr "已警告"
+
+#. Developer page: label of the 'Sticky site affinity' setting.
+msgctxt "dev_sticky_site_affinity"
+msgid "Sticky site affinity"
+msgstr "網站黏性親和性"
+
+#. Developer page: the explanation under the 'Sticky site affinity' setting.
+msgctxt "dev_sticky_site_affinity_detail"
+msgid "A site's new connections stay on the exit its earlier ones already use, even past the flow cap, so a busy site keeps one egress IP"
+msgstr "網站的新連線會留在其較早連線已使用的出口上，即使超過流上限亦然，讓繁忙的網站保持同一個出口 IP"
+
+#. Developer page: label of the 'Suspend detector' setting.
+msgctxt "dev_suspend_detector"
+msgid "Suspend detector"
+msgstr "休眠偵測器"
+
+#. Developer page: the explanation under the 'Suspend detector' setting.
+msgctxt "dev_suspend_detector_detail"
+msgid "How much timer overshoot reads as the machine being suspended rather than an exit stalling, in ms, so a resumed machine does not convict every exit at once. Off disables it"
+msgstr "計時器超時多少（毫秒）會被視為電腦進入休眠，而不是出口停滯，以免電腦恢復後一次過將所有出口判罪。關閉時停用"
+
+#. Developer page: label of the 'Suspend recovery window' setting.
+msgctxt "dev_suspend_recovery_window"
+msgid "Suspend recovery window"
+msgstr "休眠後恢復視窗"
+
+#. Developer page: the explanation under the 'Suspend recovery window' setting.
+msgctxt "dev_suspend_recovery_window_detail"
+msgid "How long verdicts stay held after a detected suspend, in ms, giving transports time to re-register. Off uses the built-in 5s"
+msgstr "偵測到休眠後判定保持暫緩的時長（毫秒），讓傳輸方式有時間重新登記。關閉時使用內置的 5 秒"
+
+#. Developer page: label of the 'Suspends caught' setting.
+msgctxt "dev_suspends_caught"
+msgid "Suspends caught"
+msgstr "捕獲的休眠"
+
+#. Developer page: the explanation under the 'Suspends caught' setting.
+msgctxt "dev_suspends_caught_detail"
+msgid "Host suspends the detector caught, each one a batch of verdicts held instead of executed on a just-resumed machine"
+msgstr "偵測器捕獲的主機休眠次數，每次都代表在剛恢復的電腦上暫緩而非執行一批判定"
 
 #. Developer page: button that syncs the reliability settings.
 msgctxt "dev_sync"
 msgid "Sync"
-msgstr "Sync"
+msgstr "同步"
+
+#. Developer tools screen (reliability surface): tcp collapse hold control label.
+msgctxt "dev_tcp_collapse_hold"
+msgid "Release stuck retransmits"
+msgstr "釋放卡住的重傳"
+
+#. Developer tools screen: explanatory subtext under the 'tcp collapse hold' control.
+msgctxt "dev_tcp_collapse_hold_detail"
+msgid "How long retransmits are held before one is released. Off waits 30s"
+msgstr "重傳在釋放其中一個之前被保留的時長。關閉時等待 30 秒"
+
+#. Developer tools screen (reliability surface): tcp idle timeout control label.
+msgctxt "dev_tcp_idle_timeout"
+msgid "Longer TCP idle timeout"
+msgstr "更長的 TCP 閒置逾時"
+
+#. Developer tools screen: explanatory subtext under the 'tcp idle timeout' control.
+msgctxt "dev_tcp_idle_timeout_detail"
+msgid "How long a TCP connection may sit idle. Off uses the UDP bound"
+msgstr "TCP 連線可以閒置的時長。關閉時使用 UDP 的上限"
+
+#. Developer tools screen (reliability surface): timing control label.
+msgctxt "dev_timing"
+msgid "Timing"
+msgstr "時序"
+
+#. Developer tools screen (reliability surface): udp idle timeout control label.
+msgctxt "dev_udp_idle_timeout"
+msgid "UDP idle timeout"
+msgstr "UDP 閒置逾時"
+
+#. Developer page: label of the 'UDP idle timeout' setting (desktop wording of dev_udp_idle_timeout).
+msgctxt "dev_udp_idle_timeout_desktop"
+msgid "UDP idle timeout"
+msgstr "UDP 閒置逾時"
+
+#. Developer page: the explanation under the 'UDP idle timeout' setting, with the unit the number box takes.
+msgctxt "dev_udp_idle_timeout_desktop_detail"
+msgid "How long a non-TCP flow may sit idle before it is reaped, in ms"
+msgstr "非 TCP 流在被回收前可以閒置的時長（毫秒）"
+
+#. Developer tools screen: explanatory subtext under the 'udp idle timeout' control.
+msgctxt "dev_udp_idle_timeout_detail"
+msgid "How long a non-TCP flow may sit idle before it is reaped"
+msgstr "非 TCP 流在被回收前可以閒置的時長"
+
+#. Developer tools screen (reliability surface): udp teardown control label.
+msgctxt "dev_udp_teardown"
+msgid "Signal UDP teardown"
+msgstr "通知 UDP 拆除"
+
+#. Developer tools screen: explanatory subtext under the 'udp teardown' control.
+msgctxt "dev_udp_teardown_detail"
+msgid "Tells DNS and QUIC the path is gone instead of going silent"
+msgstr "告知 DNS 和 QUIC 路徑已失效，而不是保持靜默"
+
+#. Developer page: what a setting's 0 means when it removes the cap ('Max connections per exit').
+msgctxt "dev_unlimited"
+msgid "Unlimited"
+msgstr "不設上限"
+
+#. Developer page: per-exit button that releases an exit stalled with Stall.
+msgctxt "dev_unstall"
+msgid "Unstall"
+msgstr "解除停滯"
 
 #. Developer page: report line after a stall was cleared on an exit.
 msgctxt "dev_unstalled_exit"
 msgid "Cleared stall on exit"
-msgstr "Cleared stall on exit"
+msgstr "已解除停滯的出口"
 
 #. Developer page: report line when the update check failed.
 msgctxt "dev_update_check_failed"
 msgid "The update check failed — see the app log."
-msgstr "The update check failed — see the app log."
+msgstr "檢查更新失敗——請查看應用程式日誌。"
+
+#. Developer page: update check status while checking.
+msgctxt "dev_update_checking"
+msgid "Checking for updates…"
+msgstr "正在檢查更新…"
+
+#. Developer page: update check result on a development build. {version} is the newest release version.
+msgctxt "dev_update_dev_build"
+msgid "Development build: the newest release is v{}, and a development build is never updated automatically."
+msgstr "開發版本：最新版本為 v{}，開發版本永遠不會自動更新。"
+
+#. Developer page (Windows): the rest of the development build line, after the version.
+msgctxt "dev_update_dev_build_note"
+msgid "this is a dev build (code 0), which never self-updates"
+msgstr "這是開發版本（代碼 0），永遠不會自行更新"
+
+#. Developer page: update check result when a newer release exists; Settings shows the update. {version} is the release version.
+msgctxt "dev_update_found"
+msgid "Update available: v{} — see Settings."
+msgstr "有可用更新：v{}——請查看「設定」。"
+
+#. Developer page (Windows): prefix of the update check result when a newer release exists; the version follows.
+msgctxt "dev_update_found_label"
+msgid "Update found:"
+msgstr "找到更新："
+
+#. Developer page (Windows): prefix of the update check result on a development build; the version follows.
+msgctxt "dev_update_newest_release_is"
+msgid "Newest release is"
+msgstr "最新版本為"
+
+#. Developer page (Windows): inside the parentheses after 'No update', before the newest release's version.
+msgctxt "dev_update_newest_seen"
+msgid "newest release seen:"
+msgstr "所見最新版本："
+
+#. Developer page: update check result when there is no stable release.
+msgctxt "dev_update_no_releases"
+msgid "No stable release has been published yet."
+msgstr "尚未發佈任何穩定版本。"
+
+#. Developer page (Windows): update check result on the newest release; the version details follow in parentheses.
+msgctxt "dev_update_none"
+msgid "No update: this build is current"
+msgstr "沒有更新：此版本已是最新"
+
+#. Developer page: update check result on the newest release. {version} is the release version.
+msgctxt "dev_update_up_to_date"
+msgid "Up to date. Newest release: v{}"
+msgstr "已是最新。最新版本：v{}"
+
+#. Developer tools screen (reliability surface): uplink gate control label.
+msgctxt "dev_uplink_gate"
+msgid "Uplink silence gate"
+msgstr "上行靜默門檻"
+
+#. Developer tools screen: explanatory subtext under the 'uplink gate' control.
+msgctxt "dev_uplink_gate_detail"
+msgid "How long the whole tunnel may be silent before provider verdicts are held as inadmissible. 0 convicts as before"
+msgstr "整個隧道靜默多久後，針對供應商的判定會被視為不可採信而暫緩。0 表示照舊判罪"
+
+#. Developer page: label of the 'Uplink silence gate' setting.
+msgctxt "dev_uplink_silence_gate"
+msgid "Uplink silence gate"
+msgstr "上行靜默門檻"
+
+#. Developer page: the explanation under the 'Uplink silence gate' setting.
+msgctxt "dev_uplink_silence_gate_detail"
+msgid "How long the whole tunnel may be silent before provider verdicts are held as inadmissible, in ms. 0 convicts as before"
+msgstr "整個隧道靜默多久（毫秒）後，針對供應商的判定會被視為不可採信而暫緩。0 表示照舊判罪"
+
+#. Developer tools screen (reliability surface): verdicts held control label.
+msgctxt "dev_verdicts_held"
+msgid "Verdicts held"
+msgstr "暫緩的判定"
+
+#. Developer page: label of the 'Verdicts held' measurement (desktop wording of dev_verdicts_held).
+msgctxt "dev_verdicts_held_desktop"
+msgid "Verdicts held"
+msgstr "暫緩的判定"
+
+#. Developer page: the explanation under the 'Verdicts held' measurement (desktop wording).
+msgctxt "dev_verdicts_held_desktop_detail"
+msgid "Convictions withheld because this machine's own uplink, not the provider, was silent (uplink / transport)"
+msgstr "因本機本身的上行（而非供應商）靜默而暫緩的判罪（上行 / 傳輸方式）"
+
+#. Developer tools screen: explanatory subtext under the 'verdicts held' control.
+msgctxt "dev_verdicts_held_detail"
+msgid "Convictions withheld because the phone's own uplink, not the provider, was silent (uplink / transport)"
+msgstr "因手機本身的上行（而非供應商）靜默而暫緩的判罪（上行 / 傳輸方式）"
+
+#. Developer tools screen: formatted value readout for 'verdicts held'.
+msgctxt "dev_verdicts_held_value"
+msgid "{0} / {1}"
+msgstr "{0} / {1}"
+
+#. Developer tools screen (reliability surface): worst loss control label.
+msgctxt "dev_worst_loss"
+msgid "Worst single failure"
+msgstr "最嚴重的單次故障"
+
+#. Developer tools screen: explanatory subtext under the 'worst loss' control.
+msgctxt "dev_worst_loss_detail"
+msgid "The one the user actually feels"
+msgstr "用戶真正感受到的那一次"
+
+#. Developer tools screen: formatted value readout for 'worst loss'.
+msgctxt "dev_worst_loss_value"
+msgid "{} connections"
+msgstr "{} 個連線"
 
 #. Developer page: value of the worst single failure, {count} connections.
 msgctxt "dev_worst_single_failure_value"
 msgid "{} connections"
-msgstr "{} connections"
+msgstr "{} 個連線"
+
+#. Developer tools screen: developer.
+msgctxt "developer"
+msgid "Developer"
+msgstr "開發者"
+
+#. Developer tools screen: developer description.
+msgctxt "developer_description"
+msgid "Tools for diagnosing connection freezes. These act on the live connection."
+msgstr "用於診斷連線凍結的工具。這些工具會作用於目前的連線。"
+
+#. Developer tools screen: developer disconnected.
+msgctxt "developer_disconnected"
+msgid "Connect to use these tools."
+msgstr "連接後即可使用這些工具。"
 
 #. device
 msgctxt "device"
@@ -1927,6 +3498,121 @@ msgstr "規格"
 msgctxt "devices"
 msgid "Devices"
 msgstr "裝置"
+
+#. macOS folder-access panel button that grants the app access to the Applications folder for the update.
+msgctxt "direct_update_allow"
+msgid "Allow"
+msgstr "允許"
+
+#. macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.
+msgctxt "direct_update_allow_applications"
+msgid "To install the update, allow URnetwork to replace itself in the Applications folder. Select Applications and click Allow."
+msgstr "如要安裝更新，請允許 URnetwork 在「應用程式」資料夾中取代自身。選擇「應用程式」，然後按一下「允許」。"
+
+#. macOS Settings > Software update status when a newer release exists. {version} is its version.
+msgctxt "direct_update_available"
+msgid "Update available: {}"
+msgstr "有可用更新：{}"
+
+#. macOS Settings > Software update button that checks now.
+msgctxt "direct_update_check"
+msgid "Check for updates"
+msgstr "檢查更新"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason (often English, from the system).
+msgctxt "direct_update_check_failed"
+msgid "Could not check for updates: {}"
+msgstr "無法檢查更新：{}"
+
+#. macOS Settings > Software update status while checking.
+msgctxt "direct_update_checking"
+msgid "Checking for updates…"
+msgstr "正在檢查更新…"
+
+#. macOS Settings > Software update error: the downloaded file failed its integrity check and was deleted.
+msgctxt "direct_update_checksum_failed"
+msgid "The download did not match the release checksum and was discarded."
+msgstr "下載的檔案與該版本的校驗碼不符，已被捨棄。"
+
+#. macOS Settings > Software update status on a development build, which never updates itself. {version} is the newest release version.
+msgctxt "direct_update_development_build"
+msgid "Development build; the newest release is {}."
+msgstr "開發版本；最新版本為 {}。"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_download_failed"
+msgid "The download failed: {}"
+msgstr "下載失敗：{}"
+
+#. macOS Settings > Software update status while the release downloads. {version} is its version.
+msgctxt "direct_update_downloading_version"
+msgid "Downloading {}…"
+msgstr "正在下載 {}…"
+
+#. macOS Settings > Software update button that downloads, verifies and installs the update.
+msgctxt "direct_update_install"
+msgid "Install update"
+msgstr "安裝更新"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_install_failed"
+msgid "The update could not be installed: {}"
+msgstr "無法安裝更新：{}"
+
+#. macOS Settings > Software update status while the verified update is installed.
+msgctxt "direct_update_installing"
+msgid "Installing the update…"
+msgstr "正在安裝更新…"
+
+#. macOS Settings > Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".
+msgctxt "direct_update_last_checked"
+msgid "Last checked {}"
+msgstr "上次檢查：{}"
+
+#. macOS Settings > Software update status when the app could not replace itself. {version} is the downloaded release's version.
+msgctxt "direct_update_manual_install"
+msgid "{} was downloaded and verified. Drag the new URnetwork into the Applications folder, then open it from there."
+msgstr "{} 已下載並驗證。請將新的 URnetwork 拖到「應用程式」資料夾，然後從那裡開啟。"
+
+#. macOS Settings > Software update status before the first check.
+msgctxt "direct_update_not_checked"
+msgid "Updates have not been checked yet."
+msgstr "尚未檢查更新。"
+
+#. macOS Settings > Software update status while the app restarts on the new version.
+msgctxt "direct_update_relaunching"
+msgid "Relaunching URnetwork…"
+msgstr "正在重新啟動 URnetwork…"
+
+#. macOS Settings: title of the section that checks for and installs app updates (direct-download app).
+msgctxt "direct_update_section_title"
+msgid "Software update"
+msgstr "軟件更新"
+
+#. macOS Settings > Software update button that reveals the downloaded update in Finder (the macOS file manager).
+msgctxt "direct_update_show_in_finder"
+msgid "Show in Finder"
+msgstr "在 Finder 中顯示"
+
+#. macOS Settings > Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.
+msgctxt "direct_update_signature_rejected"
+msgid "The update was rejected: {}"
+msgstr "更新被拒絕：{}"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_unpack_failed"
+msgid "The download could not be unpacked: {}"
+msgstr "無法解壓下載的檔案：{}"
+
+#. macOS Settings > Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.
+msgctxt "direct_update_unusable_release"
+msgid "Release {0} cannot be installed by the app ({1})."
+msgstr "應用程式無法安裝版本 {0}（{1}）。"
+
+#. macOS Settings > Software update status when no newer release exists.
+msgctxt "direct_update_up_to_date"
+msgid "URnetwork is up to date."
+msgstr "URnetwork 已是最新版本。"
 
 #. Call to action
 msgctxt "disable_ignore_battery_hint"
@@ -2053,6 +3739,76 @@ msgctxt "earnings"
 msgid "Earnings"
 msgstr "收益"
 
+#. Placeholder of the manual Bittensor address field on the Earnings page.
+msgctxt "earnings_address_placeholder"
+msgid "Enter a Bittensor address"
+msgstr "輸入 Bittensor 地址"
+
+#. Button on the Earnings page that starts connecting a different Bittensor wallet.
+msgctxt "earnings_change_wallet"
+msgid "Change wallet"
+msgstr "更換錢包"
+
+#. Progress text while a claim transaction is being sent.
+msgctxt "earnings_claim_sending"
+msgid "Sending…"
+msgstr "正在傳送…"
+
+#. Shown in place of the unclaimed figure when the app has no device session to read the chain with.
+msgctxt "earnings_claims_need_session"
+msgid "Claims load from the chain once the app has a session. Press Connect first."
+msgstr "應用程式建立工作階段後，才會從鏈上載入領取資料。請先按「連接」。"
+
+#. Button that copies an address to the clipboard.
+msgctxt "earnings_copy_address"
+msgid "Copy address"
+msgstr "複製地址"
+
+#. Column header of the per-epoch history table: the date the epoch ended.
+msgctxt "earnings_date_column"
+msgid "Date"
+msgstr "日期"
+
+#. Column header of the per-epoch history table.
+msgctxt "earnings_epoch_column"
+msgid "Epoch"
+msgstr "週期"
+
+#. Label of the gas key's TAO balance in the claim dialog.
+msgctxt "earnings_gas_balance"
+msgid "Gas balance"
+msgstr "Gas 餘額"
+
+#. Title of the Earnings destination's third pane: own rank, multipliers and reliability.
+msgctxt "earnings_network_pane_title"
+msgid "Your network"
+msgstr "你的網絡"
+
+#. Column header of the per-epoch history table: points earned in the epoch.
+msgctxt "earnings_points_column"
+msgid "Points"
+msgstr "積分"
+
+#. Column header of the per-epoch history table: the network's share of the block.
+msgctxt "earnings_share_column"
+msgid "Share"
+msgstr "份額"
+
+#. Column header of the per-epoch history table: the claim status of the epoch's alpha.
+msgctxt "earnings_status_column"
+msgid "Status"
+msgstr "狀態"
+
+#. Link that opens a claim transaction in the block explorer.
+msgctxt "earnings_view_transaction"
+msgid "View transaction"
+msgstr "查看交易"
+
+#. Error when the wallet that signed the connect challenge is not the address the user entered.
+msgctxt "earnings_wallet_mismatch"
+msgid "The wallet that signed is not the address you entered."
+msgstr "簽名的錢包與你輸入的地址不一致。"
+
 #. device
 msgctxt "edit_device_name"
 msgid "Edit device name"
@@ -2097,6 +3853,11 @@ msgstr "其他原因"
 msgctxt "email_e4_reason_trust"
 msgid "I'm not sure I trust a VPN"
 msgstr "不確定能不能信任 VPN"
+
+#. Settings: label before the support email address link.
+msgctxt "email_support_at"
+msgid "Email support at"
+msgstr "電郵支援團隊："
 
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
@@ -2173,6 +3934,16 @@ msgctxt "emoji_tag_shuffle"
 msgid "Suggest another"
 msgstr "換一個"
 
+#. Section header of the per-transport enable toggles shown when the transport mode is Auto.
+msgctxt "enabled_under_auto"
+msgid "Enabled under Auto"
+msgstr "「自動」模式下啟用"
+
+#. Footer of the Auto transports section explaining the fixed preference order.
+msgctxt "enabled_under_auto_footer"
+msgid "Listed in preference order: H1 first, then H3, whodis, and whodis pump. The order is fixed. At least one transport stays enabled."
+msgstr "按優先次序列出：先是 H1，然後是 H3、whodis 和 whodis pump。次序固定。至少會有一種傳輸方式保持啟用。"
+
 #. Call to action
 msgctxt "enjoying_urnetwork"
 msgid "Enjoying URnetwork?"
@@ -2202,6 +3973,11 @@ msgctxt "enter_a_solana_usdc_wallet_address"
 msgid "Enter a Solana USDC wallet address"
 msgstr "請輸入 Solana USDC 錢包地址"
 
+#. Fallback link to paste an ss58 address.
+msgctxt "enter_address_manually"
+msgid "Enter address manually"
+msgstr "手動輸入地址"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "enter_balance_code"
 msgid "Enter balance code"
@@ -2221,6 +3997,46 @@ msgstr "輸入網絡推薦碼"
 msgctxt "enter_urnetwork"
 msgid "Enter URnetwork"
 msgstr "進入 URnetwork"
+
+#. Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.
+msgctxt "enter_wallet_address"
+msgid "Enter wallet address"
+msgstr "輸入錢包地址"
+
+#. History table column: the epoch number.
+msgctxt "epoch_column_epoch_linux"
+msgid "Epoch"
+msgstr "週期"
+
+#. History table column: points earned.
+msgctxt "epoch_column_points_linux"
+msgid "Points"
+msgstr "積分"
+
+#. History table column: the network's share of the block.
+msgctxt "epoch_column_share_linux"
+msgid "Share of block"
+msgstr "區塊份額"
+
+#. History table column: the claim status of the epoch's alpha.
+msgctxt "epoch_column_status_linux"
+msgid "Status"
+msgstr "狀態"
+
+#. Label of the per-epoch history list.
+msgctxt "epoch_history"
+msgid "History"
+msgstr "記錄"
+
+#. History row title.
+msgctxt "epoch_row_title"
+msgid "Epoch {}"
+msgstr "週期 {}"
+
+#. History row: the network's share of the block.
+msgctxt "epoch_share_of_block"
+msgid "{} of block"
+msgstr "區塊的 {}"
 
 #. Error message displayed in a snackbar when there was an error changing the network name.
 msgctxt "error_changing_network_name"
@@ -2362,6 +4178,111 @@ msgctxt "export_logs"
 msgid "Export Logs"
 msgstr "匯出日誌"
 
+#. Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.
+msgctxt "extender"
+msgid "Extender"
+msgstr "擴展器"
+
+#. Extender status when the last activation failed and no family is active. The argument is the error.
+msgctxt "extender_activation_failed"
+msgid "Activation failed: {}"
+msgstr "啟用失敗：{}"
+
+#. Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.
+msgctxt "extender_activation_refused"
+msgid "Activation refused: {}"
+msgstr "啟用被拒絕：{}"
+
+#. Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.
+msgctxt "extender_active"
+msgid "Active · {}"
+msgstr "已啟用 · {}"
+
+#. Placeholder shown in an empty extender settings field, naming the default value that applies.
+msgctxt "extender_default_value"
+msgid "Default: {}"
+msgstr "預設：{}"
+
+#. Label of the extender DNS name field. Empty means the network space default.
+msgctxt "extender_dns_name"
+msgid "Extender DNS name"
+msgstr "擴展器 DNS 名稱"
+
+#. Label of the manual extender list field: hostnames or IP addresses, one per line.
+msgctxt "extender_hosts"
+msgid "Extender hosts"
+msgstr "擴展器主機"
+
+#. Help text under the manual extender list field.
+msgctxt "extender_hosts_hint"
+msgid "One hostname or IP address per line. These are added to the discovered extenders."
+msgstr "每行一個主機名稱或 IP 地址。這些會加入已發現的擴展器。"
+
+#. Extender status when no carrier could bind. The argument is the carrier errors.
+msgctxt "extender_listen_failed"
+msgid "Could not listen: {}"
+msgstr "無法監聽：{}"
+
+#. Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.
+msgctxt "extender_not_providing"
+msgid "Not providing"
+msgstr "未提供"
+
+#. Extender status when the operator revoked this device's extender key.
+msgctxt "extender_revoked"
+msgid "Revoked by the operator"
+msgstr "已被營運方撤銷"
+
+#. Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.
+msgctxt "extender_setting_description"
+msgid "While you are providing, this device also relays for people whose access to the network is blocked, on TCP and UDP 443 and UDP 4053."
+msgstr "在你提供期間，此裝置亦會透過 TCP 和 UDP 443 以及 UDP 4053，為網絡存取被封鎖的人提供中繼。"
+
+#. Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.
+msgctxt "extender_setting_up"
+msgid "Setting up"
+msgstr "正在設定"
+
+#. Title of the extender settings form under account > Extenders.
+msgctxt "extender_settings"
+msgid "Extender settings"
+msgstr "擴展器設定"
+
+#. Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.
+msgctxt "extender_settings_next_connect"
+msgid "The tunnel uses new extender settings the next time it connects."
+msgstr "隧道會在下次連接時使用新的擴展器設定。"
+
+#. Confirmation after the extender settings are saved.
+msgctxt "extender_settings_saved"
+msgid "Extender settings saved"
+msgstr "擴展器設定已儲存"
+
+#. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
+msgctxt "extender_start_failed"
+msgid "Could not start: {}"
+msgstr "無法啟動：{}"
+
+#. Title of the section that shows statistics about the extender, directly above the provider statistics section.
+msgctxt "extender_statistics"
+msgid "Extender statistics"
+msgstr "擴展器統計"
+
+#. Title of the extenders panel in the connect drawer and of the Extenders section under account.
+msgctxt "extenders"
+msgid "Extenders"
+msgstr "擴展器"
+
+#. The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.
+msgctxt "extenders_active_of_reserve"
+msgid "{0} of {1}"
+msgstr "{0} / {1}"
+
+#. Shown in the account Extenders section when there is no signed-in device to manage extenders with.
+msgctxt "extenders_no_session"
+msgid "Sign in and connect to manage extenders."
+msgstr "登入並連接後即可管理擴展器。"
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -2417,6 +4338,11 @@ msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "告訴我們您的真實感受"
 
+#. Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.
+msgctxt "feedback_send_failed"
+msgid "Your feedback wasn't sent. Check your connection and try again."
+msgstr "你的意見未能傳送。請檢查網絡連線後再試。"
+
 #. Feedback screen: label of the Send button while the feedback is being sent.
 msgctxt "feedback_sending"
 msgid "Sending…"
@@ -2451,6 +4377,11 @@ msgstr "免費"
 msgctxt "friends_save_too"
 msgid "Your friends save too -- everyone wins."
 msgstr "你的朋友也能節省——人人受益。"
+
+#. Label of the gas key row.
+msgctxt "gas_key"
+msgid "Gas key"
+msgstr "Gas 密鑰"
 
 #. Call to action
 msgctxt "general"
@@ -2494,6 +4425,11 @@ msgctxt "go_back"
 msgid "Go Back"
 msgstr "返回"
 
+#. A label for Google sign-in.
+msgctxt "google"
+msgid "Google"
+msgstr "Google"
+
 #. Login initial
 msgctxt "google_auth_btn_text"
 msgid "Log in with Google"
@@ -2504,6 +4440,27 @@ msgctxt "google_sign_in_method_added"
 msgid "Google sign-in method added"
 msgstr "已添加 Google 登入方式"
 
+#. Gossip network status: a dial or reconnect is in progress (yellow).
+msgctxt "gossip_connecting"
+msgid "Connecting"
+msgstr "正在連接"
+
+#. The count of extender records and revocations applied from the gossip network or the feed in the last minute.
+msgctxt "gossip_events_per_minute"
+msgid "{} event/min"
+msgid_plural "{} events/min"
+msgstr[0] "{} 個事件/分鐘"
+
+#. Label of the gossip network status dot in the extender panel.
+msgctxt "gossip_network"
+msgid "Gossip network"
+msgstr "Gossip 網絡"
+
+#. Label of the gossip URL field. Empty means the network space default.
+msgctxt "gossip_url"
+msgid "Gossip URL"
+msgstr "Gossip URL"
+
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "got_it"
 msgid "Got it"
@@ -2513,6 +4470,19 @@ msgstr "知道了"
 msgctxt "guest"
 msgid "Guest"
 msgstr "訪客"
+
+#. Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).
+msgctxt "guest_convert_explanation"
+msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
+msgstr "加入電郵地址和密碼即可登入此網絡。其計劃和餘額都會保留。"
+
+msgctxt "hash_count"
+msgid "#{}"
+msgstr "#{}"
+
+msgctxt "hash_value"
+msgid "#{}"
+msgstr "#{}"
 
 #. Used in Main/Connect/ConnectView-macOS.swift.
 msgctxt "hide_provider_list"
@@ -2560,10 +4530,36 @@ msgctxt "ignore_battery_optimizations"
 msgid "Ignore battery optimizations"
 msgstr "忽略電池優化"
 
+#. Button and screen title: import extenders from a QR code, a photo, or pasted text.
+msgctxt "import_extenders"
+msgid "Import extenders"
+msgstr "匯入擴展器"
+
+#. Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.
+msgctxt "import_extenders_confirm_settings"
+msgid "Use the extender settings from this code? Extender lookups will use {}."
+msgstr "要使用此代碼中的擴展器設定嗎？擴展器查找會使用 {}。"
+
 #. Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.
 msgctxt "import_extenders_control_doh_urls"
 msgid "This code also sets bootstrap DNS-over-HTTPS servers. They will see URnetwork's server lookups: {}"
 msgstr "此代碼亦會設定引導 DNS-over-HTTPS 伺服器。它們將能看到 URnetwork 對其伺服器的查詢：{}"
+
+#. Error when a share code belongs to another network. The argument is that network's host.
+msgctxt "import_extenders_foreign_host"
+msgid "This code is for {}, not this network. Use extender settings to switch networks."
+msgstr "此代碼適用於 {}，而不是目前的網絡。請在擴展器設定中切換網絡。"
+
+#. Confirmation after an import, with the number of extenders added.
+msgctxt "import_extenders_imported"
+msgid "Imported {} extender"
+msgid_plural "Imported {} extenders"
+msgstr[0] "已匯入 {} 個擴展器"
+
+#. Error when the scanned or pasted text is not an extender share code.
+msgctxt "import_extenders_invalid"
+msgid "This code is not an extender share."
+msgstr "此代碼不是擴展器分享碼。"
 
 #. Guest mode overlay
 msgctxt "in_guest_mode"
@@ -2580,6 +4576,11 @@ msgctxt "include_app_description"
 msgid "Only included apps use the tunnel."
 msgstr "只有已包含的應用程式使用隧道。"
 
+#. Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.
+msgctxt "include_extender_settings"
+msgid "Include extender settings"
+msgstr "包含擴展器設定"
+
 #. App split rules: rule choice routing the app through the VPN.
 msgctxt "include_in_vpn"
 msgid "Include in VPN"
@@ -2589,6 +4590,11 @@ msgstr "納入 VPN"
 msgctxt "included"
 msgid "Included"
 msgstr "已包含"
+
+#. Line under the annual plan card. The number of days is the free trial length.
+msgctxt "includes_free_trial_days"
+msgid "Includes {} day free trial"
+msgstr "包含 {} 日免費試用"
 
 #. Instant account: explains that no email, phone or password is needed.
 msgctxt "instant_account_explainer"
@@ -2655,6 +4661,66 @@ msgctxt "insufficient_funds"
 msgid "Insufficient funds"
 msgstr "資金不足"
 
+#. How to add the quick connect control on iOS (no add-control API).
+msgctxt "intro_control_manual_ios"
+msgid "Open Control Center, tap +, then Add a Control, and pick URnetwork."
+msgstr "開啟控制中心，點按 +，然後點按「加入控制項目」，並選擇 URnetwork。"
+
+#. How to add the quick connect control on macOS.
+msgctxt "intro_control_manual_macos"
+msgid "Open Control Center, choose Edit Controls, and add URnetwork."
+msgstr "開啟控制中心，選擇「編輯控制項目」，然後加入 URnetwork。"
+
+#. Detail line of the last onboarding page.
+msgctxt "intro_quick_connect_details"
+msgid "Turn URnetwork on and off from Quick Settings, and keep an eye on it from your home screen."
+msgstr "在快速設定中開關 URnetwork，並在主畫面上隨時查看其狀態。"
+
+#. Detail line of the last onboarding page on iOS/macOS (Control Center instead of Quick Settings).
+msgctxt "intro_quick_connect_details_apple"
+msgid "Turn URnetwork on and off from Control Center, and keep an eye on it from your Home Screen."
+msgstr "在控制中心開關 URnetwork，並在主畫面上隨時查看其狀態。"
+
+#. Title of the last onboarding page: the quick connect tile and the home screen widgets.
+msgctxt "intro_quick_connect_title"
+msgid "Connect in one tap"
+msgstr "一按即連接"
+
+#. Label shown on the last onboarding page once the quick connect tile is in Quick Settings.
+msgctxt "intro_quick_tile_added"
+msgid "Added to Quick Settings"
+msgstr "已加入快速設定"
+
+#. Manual steps for adding the quick connect tile on Android versions without the system add-tile request (before Android 13).
+msgctxt "intro_quick_tile_manual"
+msgid "Open Quick Settings, tap the pencil, and drag URnetwork into place."
+msgstr "開啟快速設定，點按鉛筆圖示，然後將 URnetwork 拖到所需位置。"
+
+#. Tagline under 'Welcome to URnetwork' on the first onboarding page. Replaces 'URnetwork is the most local and most private network on the planet.'
+msgctxt "intro_verifiable_encryption"
+msgid "Encryption for everyday use."
+msgstr "日常使用的加密保護。"
+
+#. Manual steps for adding widgets on launchers without the pin dialog.
+msgctxt "intro_widgets_manual"
+msgid "Long-press your home screen, choose Widgets, and pick URnetwork."
+msgstr "長按主畫面，選擇「小工具」，然後選擇 URnetwork。"
+
+#. How to add a Home Screen widget on iOS (no pin-widget API).
+msgctxt "intro_widgets_manual_ios"
+msgid "Long-press the Home Screen, tap +, search URnetwork, and add a widget."
+msgstr "長按主畫面，點按 +，搜尋 URnetwork，然後加入小工具。"
+
+#. How to add a desktop widget on macOS.
+msgctxt "intro_widgets_manual_macos"
+msgid "Open the widget gallery from Notification Center, search URnetwork, and drag a widget to the desktop."
+msgstr "從通知中心開啟小工具庫，搜尋 URnetwork，然後將小工具拖到桌面。"
+
+#. Hint under the widget previews on the last onboarding page: tapping a preview asks the launcher to add that widget.
+msgctxt "intro_widgets_tap_to_add"
+msgid "Tap a widget to add it to your home screen."
+msgstr "點按小工具即可將其加入主畫面。"
+
 #. Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
@@ -2670,6 +4736,16 @@ msgctxt "invalid_referral_code_please_try_again"
 msgid "Invalid referral code. Please try again."
 msgstr "推薦碼無效。請再試一次。"
 
+#. Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).
+msgctxt "invalid_solana_address"
+msgid "That is not a valid Solana address."
+msgstr "這不是有效的 Solana 地址。"
+
+#. Validation error for a coldkey address.
+msgctxt "invalid_ss58_address"
+msgid "That is not a valid Bittensor address."
+msgstr "這不是有效的 Bittensor 地址。"
+
 #. dns settings
 msgctxt "ip_address"
 msgid "IP address"
@@ -2681,10 +4757,57 @@ msgid "{} IP"
 msgid_plural "{} IPs"
 msgstr[0] "{} 個 IP"
 
+#. IP versions: the tooltip of the address-family tag column in the provider locations sheet (windows, linux). It also titled the connect drawer's IP version histogram before that became the Dualstack / IPv4 / IPv6 status row.
+msgctxt "ip_families"
+msgid "IP versions"
+msgstr "IP 版本"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.
+msgctxt "ip_family_both"
+msgid "Both"
+msgstr "兩者"
+
+#. Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.
+msgctxt "ip_family_connected_count"
+msgid "{} connected"
+msgid_plural "{} connected"
+msgstr[0] "已連接 {} 個"
+
+#. Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.
+msgctxt "ip_family_connecting_count"
+msgid "{} connecting"
+msgid_plural "{} connecting"
+msgstr[0] "正在連接 {} 個"
+
+#. Status line of one column of the IP version status row in the connect drawer, when no provider of that family (dualstack, IPv4 or IPv6) is connected or connecting. Lowercase, under the family label.
+msgctxt "ip_family_disconnected"
+msgid "disconnected"
+msgstr "未連接"
+
+#. Column label of the IP version status row in the connect drawer, for providers that carry both IPv4 and IPv6. Set in the pixel display face beside the IPv4 and IPv6 labels, so keep it short.
+msgctxt "ip_family_dualstack"
+msgid "Dualstack"
+msgstr "雙棧"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.
+msgctxt "ip_family_v4"
+msgid "v4"
+msgstr "v4"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.
+msgctxt "ip_family_v6"
+msgid "v6"
+msgstr "v6"
+
 #. Label for a list of IPv4 addresses.
 msgctxt "ipv4"
 msgid "IPv4"
 msgstr "IPv4"
+
+#. Accessibility label for a provider that carries both IPv4 and IPv6 traffic.
+msgctxt "ipv4_and_ipv6"
+msgid "IPv4 and IPv6"
+msgstr "IPv4 和 IPv6"
 
 #. Label for the IPv6 list of DNS servers.
 msgctxt "ipv6"
@@ -2735,6 +4858,21 @@ msgstr "圖例"
 msgctxt "kill_switch"
 msgid "Kill switch"
 msgstr "斷線開關 (Kill switch)"
+
+#. Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.
+msgctxt "kill_switch_exception"
+msgid "Kill switch exception"
+msgstr "斷線開關 (Kill switch) 例外"
+
+#. Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.
+msgctxt "kill_switch_exception_smtp_detail"
+msgid "While the VPN is connected, IPv6 is routed through URnetwork like IPv4. Outbound SMTP on TCP port 25 bypasses the VPN, even when the kill switch is on, which may expose your local public IP to those mail servers. SMTP on ports 465 and 587 stays in the VPN and must establish TLS."
+msgstr "VPN 連接期間，IPv6 與 IPv4 一樣經由 URnetwork 路由。即使已開啟斷線開關 (Kill switch)，經 TCP 連接埠 25 外送的 SMTP 亦會繞過 VPN，可能向相關郵件伺服器暴露你本地的公共 IP。連接埠 465 和 587 上的 SMTP 會留在 VPN 內，而且必須建立 TLS。"
+
+#. Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.
+msgctxt "kill_switch_exception_unrecognized_encrypted"
+msgid "When the kill switch is off, traffic that URnetwork safety rules keep off the network, such as unrecognized encrypted protocols, bypasses the VPN and uses your local public IP. With the kill switch on, that traffic is blocked."
+msgstr "關閉斷線開關 (Kill switch) 時，被 URnetwork 安全規則擋在網絡之外的流量（例如無法識別的加密協定）會繞過 VPN 並使用你本地的公共 IP。開啟斷線開關時，這些流量會被封鎖。"
 
 #. Button text for entering the one-time authentication code and entering the app
 msgctxt "launch"
@@ -2815,6 +4953,11 @@ msgstr "開源軟件"
 msgctxt "link_another_way_to_sign_in_to"
 msgid "Link another way to sign in to your account."
 msgstr "連結另一種登入帳戶的方式。"
+
+#. A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.
+msgctxt "load_failed"
+msgid "Couldn't load. Check your connection and try again."
+msgstr "無法載入。請檢查網絡連線後再試。"
 
 #. Used in ContentView.swift.
 msgctxt "loading"
@@ -3125,6 +5268,11 @@ msgctxt "multiplier"
 msgid "Multiplier"
 msgstr "乘數"
 
+#. A progress bar that shows how many friends you've invited. The first argument is the number of friends you've invited. The second argument is the maximum number of friends you can invite.
+msgctxt "n_20"
+msgid "{}/20"
+msgstr "{}/20"
+
 #. A label that shows the daily data usage from referrals. The argument is the number of referrals.
 msgctxt "n_gib_day"
 msgid "+{} GiB/Day"
@@ -3144,6 +5292,11 @@ msgstr "您的姓名"
 msgctxt "need_more_data_faster"
 msgid "Need more data, faster?"
 msgstr "需要更多數據、更快速度？"
+
+#. Earnings page: lowercase caption under the net points total.
+msgctxt "net_points_earned"
+msgid "net points earned"
+msgstr "淨賺積分"
 
 #. Call to action
 msgctxt "net_provided"
@@ -3239,6 +5392,11 @@ msgstr "使用預設網絡"
 msgctxt "network_create_bonus_message"
 msgid "Someone invited you to join 🥳 \nClaim your bonus by creating a network!"
 msgstr "有人邀請你加入 🥳 \n創建網絡即可領取你的獎勵！"
+
+#. Used in Main/Account/AccountRootView.swift.
+msgctxt "network_earnings"
+msgid "Network earnings"
+msgstr "網絡收益"
 
 #. A message that is displayed in a snackbar when the user changes the network name. The argument is the new network name.
 msgctxt "network_name_changed_to_n"
@@ -3357,6 +5515,11 @@ msgctxt "no_blocked_locations"
 msgid "No blocked locations"
 msgstr "沒有被屏蔽的位置"
 
+#. Empty state of the unclaimed tile once a wallet is connected.
+msgctxt "no_claims_yet_linux"
+msgid "Nothing to claim yet. Alpha accrues from the next finalized epoch."
+msgstr "暫時沒有可領取的內容。Alpha 會由下一個已確認的週期開始累積。"
+
 #. Add sign-in method sheet (android): no installed wallet app can sign the challenge.
 msgctxt "no_compatible_wallet_app_found"
 msgid "No compatible wallet app found on this device."
@@ -3397,6 +5560,16 @@ msgctxt "no_open_contracts"
 msgid "No open contracts"
 msgstr "沒有進行中的合約"
 
+#. Empty state of the points history.
+msgctxt "no_points_yet"
+msgid "No epochs yet. Points appear after your first finalized epoch."
+msgstr "暫時沒有週期。積分會在你的第一個週期確認後顯示。"
+
+#. Restore-purchases outcome: the sync succeeded and there is genuinely nothing to restore (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "no_previous_purchases_were_found"
+msgid "No previous purchases were found."
+msgstr "找不到以往的購買記錄。"
+
 #. Locations List
 msgctxt "no_providers_found"
 msgid "We could not find any providers."
@@ -3426,6 +5599,11 @@ msgstr "在此裝置上找不到已安裝的 Solana 錢包。請安裝錢包後�
 msgctxt "none"
 msgid "None"
 msgstr "無"
+
+#. macOS button that dismisses the prompt to enable the VPN system extension for now.
+msgctxt "not_now"
+msgid "Not now"
+msgstr "稍後再說"
 
 #. Settings
 msgctxt "notifications_label"
@@ -3515,6 +5693,11 @@ msgctxt "on"
 msgid "On"
 msgstr "開"
 
+#. Accessibility description of the onboarding step bubbles: the current step and the total.
+msgctxt "onboarding_step_of"
+msgid "Step {0} of {1}"
+msgstr "第 {0} 步，共 {1} 步"
+
 #. Call to action
 msgctxt "one_gib_per_day"
 msgid "1 GiB/Day"
@@ -3555,6 +5738,11 @@ msgctxt "other"
 msgid "Other"
 msgstr "其他"
 
+#. The one USDC mention: the Solana subscription payment note.
+msgctxt "paid_in_usdc_on_solana"
+msgid "Paid in USDC on Solana."
+msgstr "使用 Solana 上的 USDC 付款。"
+
 #. Call to action
 msgctxt "participate"
 msgid "Participate"
@@ -3590,6 +5778,11 @@ msgctxt "password_support_txt"
 msgid "Password must be at least 12 characters"
 msgstr "密碼長度必須至少為 12 個字元"
 
+#. Button and field label: paste the text form of a share code.
+msgctxt "paste_share_text"
+msgid "Paste share text"
+msgstr "貼上分享文字"
+
 #. A placeholder text for the seedphrase field.
 msgctxt "paste_your_24_word_seedphrase_here"
 msgid "Paste your 24-word seedphrase here"
@@ -3605,10 +5798,35 @@ msgctxt "pay_with_stripe"
 msgid "Join with Stripe"
 msgstr "使用 Stripe 加入"
 
+#. Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.
+msgctxt "payment_confirmation_delayed"
+msgid "Confirmation is taking longer than expected. Your plan will update automatically once it's confirmed — there's no need to buy again."
+msgstr "確認時間比預期長。確認後，你的計劃會自動更新，無需再次購買。"
+
+#. Body of the post-purchase overlay while the server has not yet confirmed the subscription. Replaces the optimistic 'You're premium.' claim until currentSubscription actually confirms.
+msgctxt "payment_confirmation_processing"
+msgid "We're confirming your payment now. Your plan will update automatically — you don't need to do anything."
+msgstr "我們正在確認你的付款。你的計劃會自動更新，你無需進行任何操作。"
+
+#. Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.
+msgctxt "payment_not_completed"
+msgid "Your payment could not be completed."
+msgstr "無法完成你的付款。"
+
 #. Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.
 msgctxt "payment_problem"
 msgid "Payment problem"
 msgstr "付款問題"
+
+#. Title of the post-purchase screen while the server has not yet confirmed the entitlement (Shared/Views/PurchaseSuccessView.swift). StoreKit took the payment; the confirmation poll is still running — the copy must not claim premium yet.
+msgctxt "payment_received"
+msgid "Payment received."
+msgstr "已收到付款。"
+
+#. Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.
+msgctxt "payment_received_title"
+msgid "Payment received"
+msgstr "已收到付款"
 
 #. Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.
 msgctxt "payout_wallet_updated"
@@ -3695,15 +5913,25 @@ msgctxt "plan_monthly_equivalent_line"
 msgid "≈ {}/month · billed once a year"
 msgstr "≈ {}/月 · 每年扣款一次"
 
-#. The monthly plan card's price on the Linux onboarding page.
-msgctxt "plan_monthly_price"
-msgid "$5/month"
-msgstr "$5/month"
+#. Monthly plan card label: the store-formatted price per month.
+msgctxt "plan_price_per_month"
+msgid "{}/month"
+msgstr "{}/月"
+
+#. Yearly plan card label: the store-formatted price per year.
+msgctxt "plan_price_per_year"
+msgid "{}/year"
+msgstr "{}/年"
 
 #. Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.
 msgctxt "plan_save_percent"
 msgid "Save {}%"
 msgstr "慳 {}%"
+
+#. Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.
+msgctxt "plan_terms_first_year_price"
+msgid "{0} for your first year, then {1}/year. Cancel anytime."
+msgstr "首年 {0}，之後 {1}/年。可隨時取消。"
 
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
@@ -3711,10 +5939,10 @@ msgid "{0} day free, then {1}/year. Cancel anytime."
 msgid_plural "{0} days free, then {1}/year. Cancel anytime."
 msgstr[0] "免費 {0} 天，之後 {1}/年。可隨時取消。"
 
-#. The yearly plan card's price on the Linux onboarding page.
-msgctxt "plan_yearly_price"
-msgid "$40/year"
-msgstr "$40/year"
+#. Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.
+msgctxt "plan_terms_yearly_billed_today"
+msgid "{} billed today, then every year. Cancel anytime."
+msgstr "今天收取 {}，之後每年收取。可隨時取消。"
 
 #. Used in Shared/Views/SolanaSignMessageSheet.swift.
 msgctxt "please_install_phantom_or_solflare_to_use_this"
@@ -3756,6 +5984,11 @@ msgctxt "points"
 msgid "Points"
 msgstr "積分"
 
+#. Headline label of the earnings screen.
+msgctxt "points_earned"
+msgid "Points earned"
+msgstr "已獲得積分"
+
 #. Points leaderboard: the explanation under the list header.
 msgctxt "points_leaderboard_description"
 msgid "All-time points. A block is one finalized epoch; the streak counts consecutive blocks with points, ending at the latest one."
@@ -3770,6 +6003,11 @@ msgstr "積分排行榜上還沒有人。"
 msgctxt "points_leaderboard_private_hint"
 msgid "Your network appears as Anonymous until you turn this on."
 msgstr "在你開啟此項之前，你的網絡顯示為匿名。"
+
+#. Points count with unit for history rows.
+msgctxt "points_short"
+msgid "{} pts"
+msgstr "{} 積分"
 
 #. Connect drawer: post quantum encryption toggle label.
 msgctxt "post_quantum_encryption"
@@ -3800,6 +6038,26 @@ msgstr "打開網絡設定"
 msgctxt "private_dns_strict_notice"
 msgid "Private DNS is set to {}. Android sends lookups there directly instead of through URnetwork. If sites stop loading, set Private DNS to Automatic."
 msgstr "私人 DNS 已設定為 {}。Android 會直接向其傳送查詢，而不經過 URnetwork。如果網站無法載入，請將私人 DNS 設定為「自動」。"
+
+#. Title of the advanced private extender fields: one extender with a secret that replaces discovery.
+msgctxt "private_extender"
+msgid "Private extender"
+msgstr "私人擴展器"
+
+#. Help text under the private extender fields.
+msgctxt "private_extender_hint"
+msgid "A private extender replaces every discovered extender. Leave it empty to use discovery."
+msgstr "私人擴展器會取代所有已發現的擴展器。留空則使用自動發現。"
+
+#. Label of the private extender IP address field.
+msgctxt "private_extender_ip"
+msgid "IP address"
+msgstr "IP 地址"
+
+#. Label of the private extender secret field.
+msgctxt "private_extender_secret"
+msgid "Secret"
+msgstr "密鑰"
 
 #. Network name when privacy is enabled
 msgctxt "private_network"
@@ -3841,10 +6099,40 @@ msgctxt "provide"
 msgid "Provide"
 msgstr "提供"
 
+#. First bullet on the onboarding Contribute bandwidth page.
+msgctxt "provide_intro_bullet_devices"
+msgid "Allow your devices to share internet with each other"
+msgstr "允許你的裝置彼此分享網絡"
+
+#. Second bullet on the onboarding Contribute bandwidth page, with a heart.
+msgctxt "provide_intro_bullet_people"
+msgid "Share your internet with other people ❤️"
+msgstr "與他人分享你的網絡 ❤️"
+
+#. Lead line above the two bullets on the onboarding Contribute bandwidth page.
+msgctxt "provide_intro_lead"
+msgid "Your choice, completely optional:"
+msgstr "由你決定，完全可選："
+
 #. Call to action
 msgctxt "provide_mode"
 msgid "Provide mode"
 msgstr "提供模式"
+
+#. One-line explanation of the Always provide mode in the onboarding Contribute bandwidth picker.
+msgctxt "provide_mode_always_description"
+msgid "Provides to everyone whenever the app is running."
+msgstr "只要應用程式在運作，就向所有人提供。"
+
+#. One-line explanation of the Auto provide mode in the onboarding Contribute bandwidth picker: public providing only while connected, same-network peers otherwise.
+msgctxt "provide_mode_auto_description"
+msgid "Provides to everyone while you're connected, otherwise only to your own devices."
+msgstr "連接期間向所有人提供，否則只向你自己的裝置提供。"
+
+#. One-line explanation of the Network provide mode in the onboarding Contribute bandwidth picker: the private provider for the network's own devices.
+msgctxt "provide_mode_network_description"
+msgid "Provides only to your own network's devices."
+msgstr "只向你自己網絡中的裝置提供。"
 
 #. Settings, under the cellular provide toggle: the label of the choice of what providing does while the device runs on battery.
 msgctxt "provide_power_mode"
@@ -4198,6 +6486,11 @@ msgctxt "provider_status_why"
 msgid "Why?"
 msgstr "為甚麼？"
 
+#. Title of the transport settings editor for the provider transport policy.
+msgctxt "provider_transports"
+msgid "Provider transports"
+msgstr "供應商傳輸方式"
+
 #. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "providing"
 msgid "Providing"
@@ -4224,6 +6517,21 @@ msgctxt "purchase_confirmation_timeout"
 msgid "We couldn't confirm your purchase yet. If you completed checkout, your plan will update automatically in a few minutes — there's no need to buy again."
 msgstr "我們尚未能確認您的購買。如果您已完成結帳，您的計劃將在幾分鐘內自動更新——無需再次購買。"
 
+#. Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).
+msgctxt "purchase_could_not_be_verified"
+msgid "This purchase could not be verified with Google Play, so it can't be applied to your account. If you were charged and your plan doesn't update, please contact support."
+msgstr "無法透過 Google Play 驗證此次購買，因此無法套用到你的帳戶。如果你已被扣款但計劃沒有更新，請聯絡支援團隊。"
+
+#. Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "purchase_found_confirming_your_plan"
+msgid "Purchase found. Confirming your plan — it will update automatically."
+msgstr "已找到購買記錄。正在確認你的計劃，計劃會自動更新。"
+
+#. Error when a chosen photo or image file holds no QR code.
+msgctxt "qr_code_not_found"
+msgid "No QR code was found in the image."
+msgstr "圖片中找不到 QR 碼。"
+
 #. Tray menu item that exits the app (tears the tunnel down).
 msgctxt "quit"
 msgid "Quit"
@@ -4238,6 +6546,11 @@ msgstr "退出 URnetwork"
 msgctxt "ranked_networks_count"
 msgid "{} ranked networks"
 msgstr "{} 個已排名網絡"
+
+#. Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.
+msgctxt "reads_per_second"
+msgid "reads/s"
+msgstr "次讀取/秒"
 
 #. Call to action
 msgctxt "ready_to_connect"
@@ -4401,6 +6714,21 @@ msgctxt "referral_network_updated"
 msgid "Referral network updated"
 msgstr "推薦網絡已更新"
 
+#. Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).
+msgctxt "referral_panel_detail"
+msgid "Every verified referral gives each of you {} GiB/day for free, for life."
+msgstr "每一次通過驗證的推薦，都會讓你們雙方各獲得每日 {} GiB 免費流量，終身有效。"
+
+#. Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.
+msgctxt "referral_panel_heading"
+msgid "Refer a friend and you both get free data"
+msgstr "推薦朋友，雙方都獲得免費流量"
+
+#. Status line of the gold referral panel while the network has no referral yet.
+msgctxt "referral_panel_none"
+msgid "No friends yet. Share your code and watch the crown appear. 👑"
+msgstr "還沒有朋友——分享你的推薦碼，皇冠即將出現。👑"
+
 #. Referrals screen: label of the points a network earned from its referrals (the payout_linked_account points), shown next to the total referral count.
 msgctxt "referral_points"
 msgid "Referral points"
@@ -4430,11 +6758,6 @@ msgstr "你是推薦王者！"
 msgctxt "referral_share_message"
 msgid "Join me on URnetwork! Get the app and enter referral code {} when you sign up."
 msgstr "快來 URnetwork 與我一起！下載應用程式，註冊時輸入推薦碼 {}。"
-
-#. One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.
-msgctxt "referral_summary"
-msgid "Code: {0} · Referrals: {1} · Friends enter the code when they sign up"
-msgstr "推薦碼：{0} · 推薦人數：{1} · 好友註冊時輸入該碼"
 
 #. Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).
 msgctxt "referral_toast_joined"
@@ -4576,10 +6899,20 @@ msgctxt "resolvers"
 msgid "Resolvers"
 msgstr "解析器"
 
+#. Button that resets the transport settings draft to the SDK default policy.
+msgctxt "restore_default_transports"
+msgid "Restore default transports"
+msgstr "還原預設傳輸方式"
+
 #. dns settings
 msgctxt "restore_most_secure_settings"
 msgid "Restore to most secure settings"
 msgstr "還原最安全設定"
+
+#. Action label that resyncs App Store purchases (AppStore.sync + entitlement scan). Shown in Settings and in the upgrade flow's failure states (Main/Account/Settings/SettingsForm-iOS.swift, SettingsForm-macOS.swift, Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/PurchaseSuccessView.swift, Shared/Views/Introduction/IntroductionView.swift).
+msgctxt "restore_purchases"
+msgid "Restore purchases"
+msgstr "恢復購買"
 
 #. Retry action label
 msgctxt "retry"
@@ -4596,15 +6929,35 @@ msgctxt "review_urnetwork"
 msgid "Review URnetwork"
 msgstr "評價 URnetwork"
 
+#. Right stop label of the onboarding route line the anonymized member travels along.
+msgctxt "route_internet"
+msgid "Internet"
+msgstr "互聯網"
+
 #. Call to action
 msgctxt "route_local"
 msgid "Allow local traffic when disconnected"
 msgstr "斷開連接時允許本地流量"
 
+#. Left stop label of the onboarding route line the anonymized member travels along (you -> URnetwork -> internet).
+msgctxt "route_you"
+msgid "You"
+msgstr "你"
+
 #. A heading for the pinned split rules.
 msgctxt "rules"
 msgid "Rules"
 msgstr "規則"
+
+#. A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.
+msgctxt "safety_rule"
+msgid "Safety rule"
+msgstr "安全規則"
+
+#. Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.
+msgctxt "safety_rule_detail"
+msgid "URnetwork safety rules keep this traffic off the network, for example an encrypted protocol it cannot recognize. A local split rule sends it outside the VPN from your own IP."
+msgstr "URnetwork 安全規則會將此流量擋在網絡之外，例如它無法識別的加密協定。本地分流規則會透過你自己的 IP 在 VPN 以外傳送它。"
 
 #. Profile
 msgctxt "save"
@@ -4625,6 +6978,11 @@ msgstr "儲存日誌"
 msgctxt "saved_as"
 msgid "Saved as {}"
 msgstr "已儲存為 {}"
+
+#. Button: open the camera to scan a QR code.
+msgctxt "scan_qr_code"
+msgid "Scan QR code"
+msgstr "掃描 QR 碼"
 
 #. App split rules: placeholder in the search field that filters the installed apps by name or package id.
 msgctxt "search_apps_placeholder"
@@ -4696,7 +7054,7 @@ msgctxt "seedphrase_only_time"
 msgid "⚠️ This is the ONLY time you'll see this."
 msgstr "⚠️ 這是你唯一一次看到它。"
 
-#. Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).
+#. Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).
 msgctxt "seedphrase_paste_hint"
 msgid "Paste your 12 or 24-word seedphrase here"
 msgstr "在此貼上你的 12 或 24 個單字的助記詞"
@@ -4767,6 +7125,11 @@ msgctxt "send"
 msgid "Send"
 msgstr "發送"
 
+#. Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.
+msgctxt "send_feedback_contact"
+msgid "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
+msgstr "直接向我們發送意見、發電郵至 {0}，或加入我們的 {1} 以獲得直接支援。"
+
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"
@@ -4781,6 +7144,11 @@ msgstr "發送重設連結"
 msgctxt "send_reset_link_2"
 msgid "Send reset link"
 msgstr "發送重設連結"
+
+#. Instruction to fund the gas key.
+msgctxt "send_tao_to_mirror"
+msgid "Send about {0} TAO to {1} to cover gas."
+msgstr "向 {1} 傳送約 {0} TAO 以支付 Gas 費。"
 
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "send_us_your_feedback_directly_or_join_our"
@@ -4812,10 +7180,51 @@ msgctxt "settings"
 msgid "Settings"
 msgstr "設定"
 
+#. Settings row that asks the system to add the Quick Settings tile (Android 13+).
+msgctxt "settings_add_quick_tile"
+msgid "Add quick connect tile"
+msgstr "加入快速連接圖塊"
+
+#. Description under the add-tile settings row.
+msgctxt "settings_add_quick_tile_description"
+msgid "Connect and disconnect from the Quick Settings panel and the lock screen."
+msgstr "從快速設定面板和鎖定畫面連接或中斷連接。"
+
+#. Settings row that opens the widget picker to pin the app's widgets.
+msgctxt "settings_add_widgets"
+msgid "Add Home Screen widgets"
+msgstr "加入主畫面小工具"
+
+#. Description under the add-widgets settings row.
+msgctxt "settings_add_widgets_description"
+msgid "Quick connect, transfer balance, providers on the globe and your top contracts."
+msgstr "快速連接、流量餘額、地球上的供應商以及你的主要合約。"
+
 #. Call to action
 msgctxt "share"
 msgid "Share"
 msgstr "分享"
+
+#. Button and screen title: share the known extenders as a QR code.
+msgctxt "share_extenders"
+msgid "Share extenders"
+msgstr "分享擴展器"
+
+#. How many extenders the share code carries.
+msgctxt "share_extenders_count"
+msgid "{} extender"
+msgid_plural "{} extenders"
+msgstr[0] "{} 個擴展器"
+
+#. Help text on the share screen under the QR code.
+msgctxt "share_extenders_hint"
+msgid "Scan this code with another URnetwork app to share these extenders."
+msgstr "使用另一個 URnetwork 應用程式掃描此代碼，即可分享這些擴展器。"
+
+#. Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.
+msgctxt "share_extenders_too_large"
+msgid "The share code is too large for a QR code. Copy the share text instead."
+msgstr "分享碼太大，無法產生 QR 碼。請改為複製分享文字。"
 
 #. Call to action
 msgctxt "share_logs"
@@ -4827,10 +7236,25 @@ msgctxt "share_logs_2"
 msgid "Share Logs"
 msgstr "分享日誌"
 
+#. Confirmation after the share text of an extender code was copied to the clipboard.
+msgctxt "share_text_copied"
+msgid "Share text copied"
+msgstr "已複製分享文字"
+
 #. Used in Shared/Views/AccountMenu.swift.
 msgctxt "share_urnetwork"
 msgid "Share URnetwork"
 msgstr "分享 URnetwork"
+
+#. Long label of the launcher shortcut that connects the VPN.
+msgctxt "shortcut_connect_long"
+msgid "Connect to URnetwork"
+msgstr "連接 URnetwork"
+
+#. Long label of the launcher shortcut that disconnects the VPN.
+msgctxt "shortcut_disconnect_long"
+msgid "Disconnect from URnetwork"
+msgstr "中斷 URnetwork 連接"
 
 #. Used in Main/Connect/ConnectView-macOS.swift.
 msgctxt "show"
@@ -4841,6 +7265,11 @@ msgstr "顯示"
 msgctxt "show_icon_when_connected"
 msgid "Show UR icon when connected"
 msgstr "連接時顯示 UR 圖示"
+
+#. Accessibility label for the kill switch exception information button.
+msgctxt "show_kill_switch_exception"
+msgid "Show kill switch exception"
+msgstr "顯示斷線開關 (Kill switch) 例外"
 
 #. Points leaderboard: the switch that reveals this network's name on the list. Every ranked network is listed; off = shown as Anonymous.
 msgctxt "show_on_points_leaderboard"
@@ -4886,10 +7315,10 @@ msgctxt "sign_in_methods"
 msgid "Sign-In Methods"
 msgstr "登入方式"
 
-#. Button that signs in with a pasted auth code instead of a password.
-msgctxt "sign_in_with_code"
-msgid "Sign in with code"
-msgstr "使用認證碼登入"
+#. Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge
+msgctxt "sign_in_with_apple"
+msgid "Sign in with Apple"
+msgstr "使用 Apple 登入"
 
 #. Used in Authenticate/LoginInitial/UrGoogleSignInButton.swift.
 msgctxt "sign_in_with_google"
@@ -4925,6 +7354,11 @@ msgctxt "signed_in"
 msgid "Signed in"
 msgstr "已登入"
 
+#. App settings: auth code limit error
+msgctxt "site_app_auth_code_limit"
+msgid "Auth code limit reached. Try again later."
+msgstr "已達認證碼上限。請稍後再試。"
+
 #. Reliability: average label
 msgctxt "site_app_average_reliability"
 msgid "Average reliability"
@@ -4945,6 +7379,21 @@ msgctxt "site_app_connect_to_view"
 msgid "Connect to view live activity"
 msgstr "連接後可查看即時活動"
 
+#. App settings: connections section
+msgctxt "site_app_connections"
+msgid "Connections"
+msgstr "連線"
+
+#. App connect screen: contract details section title
+msgctxt "site_app_contracts"
+msgid "Contracts"
+msgstr "合約"
+
+#. App: copied flash. Also the linux share-dialog toast after copying the identity payload.
+msgctxt "site_app_copied"
+msgid "Copied"
+msgstr "已複製"
+
 #. Reliability: country column
 msgctxt "site_app_country"
 msgid "Country"
@@ -4955,6 +7404,31 @@ msgctxt "site_app_country_multipliers"
 msgid "Country multipliers"
 msgstr "國家乘數"
 
+#. App settings: create auth code button
+msgctxt "site_app_create_auth_code"
+msgid "Create auth code"
+msgstr "建立認證碼"
+
+#. App settings: delete confirm prompt
+msgctxt "site_app_delete_confirm"
+msgid "Type your network name to confirm"
+msgstr "輸入你的網絡名稱以確認"
+
+#. App settings: delete warning
+msgctxt "site_app_delete_warning"
+msgid "This permanently deletes your network, its data, and its earnings. This cannot be undone."
+msgstr "此操作會永久刪除你的網絡、其數據及收益，且無法復原。"
+
+#. App connect screen: device rpc attaching hint
+msgctxt "site_app_device_attaching"
+msgid "Attaching device controls…"
+msgstr "正在連接裝置控制項…"
+
+#. App connect screen: disconnecting state
+msgctxt "site_app_disconnecting"
+msgid "Disconnecting…"
+msgstr "正在中斷連線…"
+
 #. App profile: email label
 msgctxt "site_app_email"
 msgid "Email"
@@ -4964,6 +7438,16 @@ msgstr "電郵"
 msgctxt "site_app_fixed_ip"
 msgid "Fixed IP"
 msgstr "固定 IP"
+
+#. App leaderboard: empty state
+msgctxt "site_app_leaderboard_empty"
+msgid "No networks on the leaderboard yet."
+msgstr "排行榜上暫時未有網絡。"
+
+#. App profile: login methods section
+msgctxt "site_app_login_methods"
+msgid "Login methods"
+msgstr "登入方式"
 
 #. App sidebar and account panel: opens Manage Subscription (every billing store, renewal date, auto-renew, cancel)
 msgctxt "site_app_manage_subscription"
@@ -4990,6 +7474,16 @@ msgctxt "site_app_multiplier"
 msgid "Multiplier"
 msgstr "乘數"
 
+#. App provider: reliability section
+msgctxt "site_app_network_reliability"
+msgid "Network reliability"
+msgstr "網絡可靠性"
+
+#. App provider: no reliability data
+msgctxt "site_app_no_reliability"
+msgid "No reliability data yet."
+msgstr "暫時未有可靠性數據。"
+
 #. Connect drawer: throughput empty state
 msgctxt "site_app_no_traffic"
 msgid "No traffic yet"
@@ -4999,6 +7493,11 @@ msgstr "暫無流量"
 msgctxt "site_app_plan"
 msgid "Plan"
 msgstr "計劃"
+
+#. App connect screen: provider grid section title
+msgctxt "site_app_providers"
+msgid "Providers"
+msgstr "供應商"
 
 #. App account: proxies row/screen title
 msgctxt "site_app_proxies"
@@ -5020,10 +7519,20 @@ msgctxt "site_app_strong_anon_note"
 msgid "Always on in the browser, which never connects to providers directly."
 msgstr "在瀏覽器中始終開啟，瀏覽器從不直接連接供應商。"
 
+#. App support: intro line
+msgctxt "site_app_support_intro"
+msgid "Send us your feedback directly, or join the community for direct support."
+msgstr "直接向我們發送意見，或加入社群獲取直接支援。"
+
 #. Connect drawer: live transfer timeseries section
 msgctxt "site_app_throughput"
 msgid "Transfer"
 msgstr "傳輸"
+
+#. Account panel: billing portal failed to open
+msgctxt "site_billing_portal_error"
+msgid "Could not open the billing portal."
+msgstr "無法開啟帳單入口網站。"
 
 #. Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.
 msgctxt "site_connect_code_hint"
@@ -5069,6 +7578,11 @@ msgstr "準備連接"
 msgctxt "site_copy_seedphrase"
 msgid "Copy Seedphrase"
 msgstr "複製助記詞"
+
+#. Extension status: setup in flight
+msgctxt "site_ext_setting_up"
+msgid "Setting up…"
+msgstr "正在設定…"
 
 #. Mobile app panel: install-the-native-app CTA
 msgctxt "site_install_app"
@@ -5255,6 +7769,11 @@ msgctxt "site_sub_stripe_body"
 msgid "Your Pro subscription is billed through Stripe. Update your payment details or cancel anytime below."
 msgstr "您的 Pro 訂閱透過 Stripe 計費。您可以在下方隨時更新付款資料或取消訂閱。"
 
+#. Small muted button at the top of the post-login onboarding flow that leaves the whole flow.
+msgctxt "skip"
+msgid "Skip"
+msgstr "略過"
+
 #. The subnet alpha token symbol.
 msgctxt "sn_alpha_symbol"
 msgid "SN25α"
@@ -5270,15 +7789,45 @@ msgctxt "sn_payout_schedule_times"
 msgid "This epoch ends {0}. Claim your share from {1} until {2}."
 msgstr "本週期於 {0} 結束。請在 {1} 至 {2} 之間領取你的份額。"
 
+#. Claim status of an epoch whose alpha can be claimed now.
+msgctxt "sn_status_claimable"
+msgid "Claimable"
+msgstr "可領取"
+
+#. Claim status of an epoch the vault has not finalized yet.
+msgctxt "sn_status_not_finalized"
+msgid "Not finalized"
+msgstr "未確認"
+
+#. Claim status of an epoch that is still open (not yet finalized on chain).
+msgctxt "sn_status_open"
+msgid "Open"
+msgstr "進行中"
+
 #. Blockchain name. A product name: never translated.
 msgctxt "solana"
 msgid "Solana"
 msgstr "Solana"
 
+#. Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.
+msgctxt "solana_one_time_payment"
+msgid "Paying with USDC on Solana is a one-time yearly payment, with no free trial."
+msgstr "使用 Solana 上的 USDC 付款為一次性年付，不設免費試用。"
+
+#. Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.
+msgctxt "solana_payment_still_checking"
+msgid "Still checking for your Solana payment. Confirmation on the network can take a minute or two."
+msgstr "仍在檢查你的 Solana 付款。網絡確認可能需要一兩分鐘。"
+
 #. Call to action
 msgctxt "solana_sign_in"
 msgid "Sign in with Solana"
 msgstr "使用 Solana 登入"
+
+#. Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).
+msgctxt "solana_wallet"
+msgid "Solana wallet"
+msgstr "Solana 錢包"
 
 #. Solana wallet error in the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns session_not_found: the browser no longer has the wallet connection made in the connect step (another browser or a private window, or its site data was cleared), so nothing was signed. Starting again reconnects the wallet (Phantom or Solflare).
 msgctxt "solana_wallet_error_session_not_found"
@@ -5356,6 +7905,26 @@ msgctxt "split_rule_host_placeholder"
 msgid "example.com, *.example.com, 10.0.0.0/8"
 msgstr "example.com, *.example.com, 10.0.0.0/8"
 
+#. Split rule editor: description of the Route locally mode.
+msgctxt "split_rule_mode_excluded_description"
+msgid "Selected hosts bypass the tunnel."
+msgstr "已選主機繞過隧道。"
+
+#. Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.
+msgctxt "split_rule_mode_included_description"
+msgid "The default: selected hosts use the tunnel with no pin."
+msgstr "預設：已選主機使用隧道，不固定供應商。"
+
+#. Split rule editor: description of the Keep on one provider mode.
+msgctxt "split_rule_mode_pinned_description"
+msgid "Selected hosts hold their provider longer instead of being moved at the first sign of trouble, so the site changes IP addresses less often mid-session."
+msgstr "已選主機會更長時間保留其供應商，而不是一出現問題跡象就被轉移，因此網站在工作階段中更換 IP 位址的次數會較少。"
+
+#. Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.
+msgctxt "split_rule_mode_pinned_title"
+msgid "Keep on one provider"
+msgstr "保持使用單一供應商"
+
 #. Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.
 msgctxt "split_rule_preset_google_meet_calls"
 msgid "Google Meet calls"
@@ -5376,6 +7945,11 @@ msgctxt "split_rules_activity_hint"
 msgid "Routing activity appears here while connected."
 msgstr "連接後，路由活動會在此顯示。"
 
+#. Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.
+msgctxt "split_rules_connect_to_load"
+msgid "Connect once to load the rules you already have."
+msgstr "請連線一次，以載入你已有的規則。"
+
 #. A description of how to route traffic locally.
 msgctxt "split_rules_hint"
 msgid "Tap traffic below to route it locally, bypassing the tunnel."
@@ -5386,10 +7960,20 @@ msgctxt "split_rules_host_hint"
 msgid "Add a host above, or tap traffic below to route it locally, bypassing the tunnel."
 msgstr "在上方新增主機，或點擊下方流量，將其改走本地路由，繞過隧道。"
 
+#. Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.
+msgctxt "split_rules_host_hint_modes"
+msgid "Add a host above, or tap traffic below to route it locally or hold it to one provider."
+msgstr "在上方新增主機，或輕按下方的流量，將其改走本地路由或固定到單一供應商。"
+
 #. transfer stats and split rules
 msgctxt "split_rules_info_note"
 msgid "Exclusions apply to the whole co-associated network cluster, so related traffic is caught together."
 msgstr "排除會套用至整個關聯網絡叢集，因此相關流量會一併排除。"
+
+#. Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.
+msgctxt "split_rules_info_note_modes"
+msgid "Rules apply to the whole co-associated network cluster, so related traffic is caught together."
+msgstr "規則會套用至整個關聯網絡叢集，因此相關流量會一併處理。"
 
 #. Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.
 msgctxt "split_rules_match_sites_not_apps"
@@ -5406,10 +7990,25 @@ msgctxt "split_rules_start_from_preset"
 msgid "Start from a preset"
 msgstr "從預設開始"
 
+#. macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.
+msgctxt "sso_browser_open_failed"
+msgid "Could not open the browser. Please try again."
+msgstr "無法開啟瀏覽器。請再試一次。"
+
+#. Error when a browser sign-in (Google or Apple through the browser) took too long and expired.
+msgctxt "sso_sign_in_timed_out"
+msgid "Sign-in timed out. Please try again."
+msgstr "登入逾時。請再試一次。"
+
 #. Guest mode overlay
 msgctxt "start_earning_join"
 msgid "To start earning, join the network"
 msgstr "要開始賺取收益，請加入網絡"
+
+#. Primary button of the plan picker (onboarding and upgrade): starts the paid plan's free trial. Replaces 'Join the movement'.
+msgctxt "start_free_trial"
+msgid "Start free trial"
+msgstr "開始免費試用"
 
 #. Confirmation button that keeps the user on the seedphrase screen after the warning.
 msgctxt "stay"
@@ -5481,6 +8080,21 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "強匿名化"
 
+#. Button on the plan picker for the monthly plan, which has no free trial.
+msgctxt "subscribe"
+msgid "Subscribe"
+msgstr "訂閱"
+
+#. Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.
+msgctxt "subscription_portal_open_failed"
+msgid "Couldn't open the subscription portal. Please try again."
+msgstr "無法開啟訂閱入口網站。請再試一次。"
+
+#. The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.
+msgctxt "subscription_purchased_under_different_account"
+msgid "Your subscription was purchased under a different account. Log in to that account to use it."
+msgstr "你的訂閱是透過另一個帳戶購買的。請登入該帳戶以使用訂閱。"
+
 #. Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "successfully_claimed_multiplier"
 msgid "Successfully claimed multiplier!"
@@ -5511,10 +8125,50 @@ msgctxt "supporter"
 msgid "Pro"
 msgstr "Pro"
 
+#. Windows banner text when installing, starting or updating the VPN service failed.
+msgctxt "svc_action_failed"
+msgid "That didn't finish — the service is unchanged. Details are in the app log."
+msgstr "操作未完成 — 服務沒有變更。詳細資料見應用程式記錄。"
+
 #. Settings: label of the VPN service row.
 msgctxt "svc_service_label"
 msgid "VPN service"
 msgstr "VPN 服務"
+
+#. Windows banner button that installs the VPN service (Windows asks for administrator permission).
+msgctxt "svc_setup_action"
+msgid "Set up"
+msgstr "設定"
+
+#. Windows banner text under 'Set up the VPN service'.
+msgctxt "svc_setup_message"
+msgid "URnetwork uses a Windows service to carry traffic. One click — Windows will ask for administrator permission."
+msgstr "URnetwork 使用一項 Windows 服務來傳輸流量。只需按一下 — Windows 會要求管理員權限。"
+
+#. Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.
+msgctxt "svc_setup_title"
+msgid "Set up the VPN service"
+msgstr "設定 VPN 服務"
+
+#. Windows banner button that starts the stopped VPN service.
+msgctxt "svc_start_action"
+msgid "Start"
+msgstr "啟動"
+
+#. Windows banner text under 'Start the VPN service'.
+msgctxt "svc_start_message"
+msgid "The service is installed but not running."
+msgstr "服務已安裝，但沒有執行。"
+
+#. Windows banner title when the VPN service is installed but stopped.
+msgctxt "svc_start_title"
+msgid "Start the VPN service"
+msgstr "啟動 VPN 服務"
+
+#. Windows banner text after the user closed the administrator permission (UAC) prompt without approving.
+msgctxt "svc_uac_declined"
+msgid "Windows asked for permission and the prompt was closed. Click again whenever you're ready."
+msgstr "Windows 要求了權限，但提示已被關閉。準備好後請再按一下。"
 
 #. Settings: button that uninstalls the VPN service.
 msgctxt "svc_uninstall_action"
@@ -5526,10 +8180,30 @@ msgctxt "svc_uninstall_confirm"
 msgid "This stops the URnetwork service and removes its systemd unit. The app can't connect until it is set up again. You will be asked for administrator permission."
 msgstr "這會停止 URnetwork 服務並移除其 systemd 單元。在重新設定之前應用程式無法連線。系統將要求管理員權限。"
 
+#. Windows Settings: confirmation dialog before uninstalling the VPN service.
+msgctxt "svc_uninstall_confirm_windows"
+msgid "This stops the URnetwork service and removes it from Windows. The app can't connect until it is set up again. Windows will ask for administrator permission."
+msgstr "這會停止 URnetwork 服務並將其從 Windows 中移除。在重新設定之前應用程式無法連線。Windows 會要求管理員權限。"
+
 #. Settings: explanation under the uninstall service button.
 msgctxt "svc_uninstall_note"
 msgid "Remove the systemd service URnetwork uses to carry traffic."
 msgstr "移除 URnetwork 用於傳輸流量的 systemd 服務。"
+
+#. Windows Settings > VPN service row: what the Uninstall button removes.
+msgctxt "svc_uninstall_note_windows"
+msgid "Remove the Windows service URnetwork uses to carry traffic."
+msgstr "移除 URnetwork 用於傳輸流量的 Windows 服務。"
+
+#. Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.
+msgctxt "svc_update_message"
+msgid "The installed service is a different version than this app."
+msgstr "已安裝服務的版本與此應用程式不同。"
+
+#. Windows banner title when the installed VPN service is a different version than the app.
+msgctxt "svc_update_title"
+msgid "Update the VPN service"
+msgstr "更新 VPN 服務"
 
 #. Call to action
 msgctxt "switch_account"
@@ -5544,6 +8218,11 @@ msgstr "您要斷開與 {} 的連接並切換帳戶嗎？"
 msgctxt "symbol_dash"
 msgid "-"
 msgstr "-"
+
+#. An ellipsis character used to indicate ongoing processing.
+msgctxt "symbol_ellipsis"
+msgid "..."
+msgstr "..."
 
 msgctxt "symbol_empty"
 msgid ""
@@ -5576,6 +8255,11 @@ msgstr "將裝置位置與供應商同步"
 msgctxt "system"
 msgid "System"
 msgstr "系統"
+
+#. A TAO amount with its unit (the gas key balance).
+msgctxt "tao_amount_linux"
+msgid "{} TAO"
+msgstr "{} TAO"
 
 #. Connect
 msgctxt "tap_to_connect"
@@ -5617,6 +8301,11 @@ msgctxt "thanks_for_the_feedback"
 msgid "Thanks for the feedback!"
 msgstr "感謝您的反饋！"
 
+#. Shown inline in the upgrade flow when a StoreKit purchase attempt throws (Shared/ViewModels/AppStoreSubscriptionManager.swift). Every purchase failure is shown to the user — a payment error they cannot see is one they will hit again. User cancellation is not an error and never shows this.
+msgctxt "the_purchase_could_not_be_completed"
+msgid "The purchase could not be completed. Please try again."
+msgstr "無法完成購買。請再試一次。"
+
 #. Used in Authenticate/CreateNetwork/CreateNetworkViewModel.swift.
 msgctxt "there_was_an_error_checking_the_network_name"
 msgid "There was an error checking the network name"
@@ -5637,6 +8326,11 @@ msgctxt "this_is_the_only_time_you_ll"
 msgid "⚠️ This is the ONLY time you'll see this."
 msgstr "⚠️ 這是你唯一一次看到它的機會。"
 
+#. Shown inline in the upgrade flow when the server's verify answer for a purchase's transaction JWS is terminal `invalid` — the proof will never verify. The transaction is still finished so StoreKit stops redelivering it; this message is how the failure reaches the user instead of a silent success (Shared/ViewModels/AppStoreSubscriptionManager.swift). Apple sibling of purchase_could_not_be_verified (android).
+msgctxt "this_purchase_couldn_t_be_verified"
+msgid "This purchase couldn't be verified with the App Store, so it can't be applied to your account. If you were charged and your plan doesn't update, please contact support."
+msgstr "無法透過 App Store 驗證此次購買，因此無法套用到你的帳戶。如果你已被扣款但計劃沒有更新，請聯絡支援團隊。"
+
 #. dns settings
 msgctxt "this_region"
 msgid "this region"
@@ -5655,6 +8349,36 @@ msgstr "已斷開連接"
 msgctxt "title_login"
 msgid "Login"
 msgstr "登入"
+
+#. Badge text for the head mining spot.
+msgctxt "top200"
+msgid "Top 200"
+msgstr "前 200 名"
+
+#. Detail under the bound status.
+msgctxt "top200_bound_detail"
+msgid "Emission is paid to your coldkey directly. Bindings renew per epoch."
+msgstr "發放的獎勵會直接支付到你的 coldkey。綁定每個週期續期一次。"
+
+#. Status row once bound.
+msgctxt "top200_bound_status"
+msgid "UID {0} · rank #{1}"
+msgstr "UID {0} · 第 {1} 名"
+
+#. Warning when the score nears the floor.
+msgctxt "top200_demotion_warning"
+msgid "Your score is close to the eviction floor. Add routable IPs to keep the spot."
+msgstr "你的分數接近淘汰線。請加入可路由的 IP 以保住席位。"
+
+#. Detail of the Top 200 tile when eligible.
+msgctxt "top200_detail"
+msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
+msgstr "按可路由 IP 廣度計算，你的網絡在 {1} 個頭部席位中約排第 {0} 名。頭部礦工在每個 tempo 原生賺取 SN25α。"
+
+#. Headline of the Top 200 tile when eligible.
+msgctxt "top200_you_qualify"
+msgid "You qualify"
+msgstr "你符合資格"
 
 #. Locations List
 msgctxt "top_matches"
@@ -5712,6 +8436,101 @@ msgctxt "transfer_submitted_details"
 msgid "Your transfer has been initiated and will complete once the transaction is processed on chain."
 msgstr "您的轉帳已開始，交易在鏈上處理完成後即會完成。"
 
+#. Section header of the transport mode selection (Auto or a single transport).
+msgctxt "transport"
+msgid "Transport"
+msgstr "傳輸方式"
+
+#. Generic warning banner in the transport settings editor when the Auto policy is degraded for a constraint this app version does not recognize (the SDK may report new constraint kinds; "memory" has its own banner).
+msgctxt "transport_auto_degraded"
+msgid "Auto is degraded because system constraints prevent some enabled transports from running."
+msgstr "「自動」模式已降級，因為系統限制令部分已啟用的傳輸方式無法運作。"
+
+#. Warning banner in the transport settings editor when the Auto policy is degraded because the platform memory budget cannot admit every enabled transport.
+msgctxt "transport_auto_degraded_memory"
+msgid "Auto is degraded because system memory limits prevent some enabled transports from running."
+msgstr "「自動」模式已降級，因為系統記憶體限制令部分已啟用的傳輸方式無法運作。"
+
+#. Subtitle of the Auto transport mode row.
+msgctxt "transport_auto_description"
+msgid "Recommended. Uses the enabled transports below."
+msgstr "建議使用。使用下方已啟用的傳輸方式。"
+
+#. Footer of the client transport mode section.
+msgctxt "transport_client_footer"
+msgid "The transport this device uses to reach providers. Auto tries the enabled transports in preference order and keeps every healthy transport of the same tier connected in parallel."
+msgstr "此裝置用來連接供應商的傳輸方式。「自動」模式會按優先次序嘗試已啟用的傳輸方式，並讓同一層級中所有正常的傳輸方式保持並行連接。"
+
+#. Transport name: the DNS-disguised transport. A product name; never translated.
+msgctxt "transport_dns"
+msgid "whodis"
+msgstr "whodis"
+
+#. One line description of the whodis (DNS) transport in the transport settings editor.
+msgctxt "transport_dns_description"
+msgid "Disguised as DNS traffic. For networks that filter direct connections."
+msgstr "偽裝成 DNS 流量。適用於會過濾直接連線的網絡。"
+
+#. Transport name: the DNS-disguised transport with a reply pump. A product name; never translated.
+msgctxt "transport_dnspump"
+msgid "whodis pump"
+msgstr "whodis pump"
+
+#. One line description of the whodis pump (DNS pump) transport in the transport settings editor.
+msgctxt "transport_dnspump_description"
+msgid "Disguised as DNS traffic with a constant reply pump. Lowest bandwidth, highest availability."
+msgstr "偽裝成 DNS 流量，並持續泵送回應。頻寬最低，可用性最高。"
+
+#. Transport name: HTTP/1.1 over TLS. A protocol name; never translated.
+msgctxt "transport_h1"
+msgid "H1"
+msgstr "H1"
+
+#. One line description of the H1 transport in the transport settings editor.
+msgctxt "transport_h1_description"
+msgid "Direct over TLS. Works on most networks."
+msgstr "透過 TLS 直接連接。適用於大部分網絡。"
+
+#. Transport name: HTTP/3 over QUIC. A protocol name; never translated.
+msgctxt "transport_h3"
+msgid "H3"
+msgstr "H3"
+
+#. One line description of the H3 transport in the transport settings editor.
+msgctxt "transport_h3_description"
+msgid "Direct over QUIC. Fastest where it is not filtered."
+msgstr "透過 QUIC 直接連接。在未被過濾的網絡中速度最快。"
+
+#. Transport name: peer to peer. A protocol name; never translated.
+msgctxt "transport_p2p"
+msgid "P2P"
+msgstr "P2P"
+
+#. Footer of the provider transport mode section.
+msgctxt "transport_provider_footer"
+msgid "The transport this device uses while providing for others. Auto tries the enabled transports in preference order and keeps every healthy transport of the same tier connected in parallel."
+msgstr "此裝置為他人提供服務時使用的傳輸方式。「自動」模式會按優先次序嘗試已啟用的傳輸方式，並讓同一層級中所有正常的傳輸方式保持並行連接。"
+
+#. Transport bar label for traffic admitted for sending but not yet attributed to a physical transport.
+msgctxt "transport_queued"
+msgid "queued"
+msgstr "排隊中"
+
+#. Accessibility label / tooltip on the warning icon next to a transport that is enabled under Auto but not currently eligible under a system constraint (for example the platform memory budget). A runtime warning, not a settings restriction: the toggle stays editable.
+msgctxt "transport_unavailable_system_constraints"
+msgid "Unavailable due to system constraints"
+msgstr "因系統限制不可用"
+
+#. Prefix of the transport bar footer listing the enabled transports that carried no traffic in the stats window.
+msgctxt "transport_unused"
+msgid "unused"
+msgstr "未使用"
+
+#. Title of the transport distribution bar under the client statistics chart and of the transport settings editor.
+msgctxt "transports"
+msgid "Transports"
+msgstr "傳輸方式"
+
 #. Used in Shared/Views/Introduction/IntroductionView.swift.
 msgctxt "trusted_by_over_100_000_private_networks"
 msgid "Trusted by over 100,000 private networks"
@@ -5741,6 +8560,11 @@ msgstr "無法啟動連接"
 msgctxt "tunnel_stopped_unexpectedly"
 msgid "The connection stopped."
 msgstr "連線已停止。"
+
+#. Label of the unclaimed alpha tile.
+msgctxt "unclaimed"
+msgid "Unclaimed"
+msgstr "未領取"
 
 #. A label displayed in the custom dns settings section.
 msgctxt "unencrypted_dns"
@@ -5791,6 +8615,101 @@ msgstr "自動檢查更新"
 msgctxt "upd_auto_check_note"
 msgid "Look for new releases shortly after launch and every six hours. Nothing is ever installed without a click."
 msgstr "啟動後不久及每六小時尋找新版本。未經點擊絕不會安裝任何內容。"
+
+#. Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.
+msgctxt "upd_available_appimage_message"
+msgid "One click downloads the release, verifies it against the release's checksum and replaces this AppImage. The VPN service updates separately."
+msgstr "按一下即可下載該版本，以該版本的校驗碼驗證，並取代此 AppImage。VPN 服務會另外更新。"
+
+#. Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).
+msgctxt "upd_available_msi_message"
+msgid "One click downloads the release, verifies it and runs its installer, which updates the app and the VPN service. The app closes while it installs."
+msgstr "按一下即可下載並驗證該版本，然後執行其安裝程式，更新應用程式和 VPN 服務。安裝期間應用程式會關閉。"
+
+#. Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.
+msgctxt "upd_available_package_message"
+msgid "Download {} from the release page, then run the command below."
+msgstr "從版本頁面下載 {}，然後執行下面的指令。"
+
+#. Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.
+msgctxt "upd_available_title_version"
+msgid "Update available: v{}"
+msgstr "有可用更新：v{}"
+
+#. Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.
+msgctxt "upd_downloaded_message"
+msgid "This AppImage's folder is not writable, so the verified download was saved below. Replace the AppImage with it by hand."
+msgstr "此 AppImage 所在的資料夾無法寫入，因此已將驗證過的下載檔案儲存在下方。請手動用它取代 AppImage。"
+
+#. Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.
+msgctxt "upd_failed_checksum"
+msgid "The download didn't match the release's checksums, so it was discarded. Click to try again."
+msgstr "下載的檔案與該版本的校驗碼不符，已被捨棄。按一下再試一次。"
+
+#. Update notice error (Linux Settings, Windows update banner): the release download failed.
+msgctxt "upd_failed_download"
+msgid "The download didn't finish. Check the connection and click to try again."
+msgstr "下載未完成。請檢查網絡連線，然後按一下再試一次。"
+
+#. Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.
+msgctxt "upd_failed_install"
+msgid "The AppImage couldn't be replaced. Check the folder's permissions and click to try again."
+msgstr "無法取代 AppImage。請檢查資料夾權限，然後按一下再試一次。"
+
+#. Linux Settings update notice: button that downloads, verifies and installs the update.
+msgctxt "upd_install"
+msgid "Install"
+msgstr "安裝"
+
+#. Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.
+msgctxt "upd_manual_install_message"
+msgid "The installer didn't start (it needs administrator approval). The verified download was shown in Explorer — quit the app and run it."
+msgstr "安裝程式未能啟動（需要管理員批准）。已在檔案總管中顯示驗證過的下載檔案 — 請結束應用程式後執行它。"
+
+#. Linux Settings update notice once the update is installed and waiting for a relaunch.
+msgctxt "upd_ready_message"
+msgid "The new AppImage is in place and verified. Relaunch to start using it; the previous file is kept beside it until then."
+msgstr "新的 AppImage 已就位並通過驗證。重新啟動即可開始使用；在此之前，舊檔案會保留在旁邊。"
+
+#. Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.
+msgctxt "upd_ready_title"
+msgid "Ready to relaunch: v{}"
+msgstr "可以重新啟動：v{}"
+
+#. Linux Settings update notice: button that restarts the app on the newly installed version.
+msgctxt "upd_relaunch"
+msgid "Relaunch"
+msgstr "重新啟動"
+
+#. Linux Settings update notice: button that opens the release's download page in the browser.
+msgctxt "upd_release_page"
+msgid "Release page"
+msgstr "版本頁面"
+
+#. Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.
+msgctxt "upd_show_file"
+msgid "Show file"
+msgstr "顯示檔案"
+
+#. Update notice progress line (Linux Settings, Windows update banner) while the release downloads.
+msgctxt "upd_stage_downloading"
+msgid "Downloading the update…"
+msgstr "正在下載更新…"
+
+#. Windows update banner progress line while the verified installer is being launched.
+msgctxt "upd_stage_installing"
+msgid "Starting the installer…"
+msgstr "正在啟動安裝程式…"
+
+#. Linux Settings update notice progress line while the verified download replaces the running AppImage file.
+msgctxt "upd_stage_replacing"
+msgid "Replacing the AppImage…"
+msgstr "正在取代 AppImage…"
+
+#. Update progress line (Linux Settings, Windows update banner, macOS Settings > Software update) while the downloaded release is checked against its published checksum.
+msgctxt "upd_stage_verifying"
+msgid "Verifying the download…"
+msgstr "正在驗證下載…"
 
 #. Call to action
 msgctxt "update"
@@ -5872,6 +8791,11 @@ msgctxt "urnetwork_vpn_started"
 msgid "URnetwork VPN started"
 msgstr "URnetwork VPN 已啟動"
 
+#. Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.
+msgctxt "usdc_payouts_until_migration"
+msgid "USDC payouts continue to this wallet until the migration to Bittensor is complete."
+msgstr "在遷移到 Bittensor 完成之前，USDC 款項會繼續發送到此錢包。"
+
 #. Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.
 msgctxt "usdc_solana_network_only"
 msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
@@ -5895,6 +8819,11 @@ msgstr "改為用作代理（無 VPN）"
 msgctxt "use_as_proxy_no_vpn_detail"
 msgid "Opens ur.io to run URnetwork as an HTTPS proxy without the VPN. SOCKS and WireGuard are available on Pro."
 msgstr "打開 ur.io，在不使用 VPN 的情況下將 URnetwork 用作 HTTPS 代理。SOCKS 和 WireGuard 需要 Pro。"
+
+#. Toggle on the import screen: also apply the extender settings carried by the code.
+msgctxt "use_extender_settings"
+msgid "Use extender settings"
+msgstr "使用擴展器設定"
 
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"
@@ -5954,6 +8883,10 @@ msgctxt "value_int"
 msgid "{}"
 msgstr "{}"
 
+msgctxt "value_string"
+msgid "{}"
+msgstr "{}"
+
 msgctxt "value_with_unit"
 msgid "{0} {1}"
 msgstr "{0} {1}"
@@ -6008,6 +8941,11 @@ msgstr "驗證您的驗證碼時出現問題。"
 msgctxt "verify_input_label"
 msgid "Verification code"
 msgstr "驗證碼"
+
+#. Standalone Seeker verification action (points multiplier only).
+msgctxt "verify_seeker"
+msgid "Verify Seeker"
+msgstr "驗證 Seeker"
 
 #. Call to action
 msgctxt "verify_seeker_token_btn"
@@ -6259,20 +9197,50 @@ msgctxt "wallet"
 msgid "Wallet"
 msgstr "錢包"
 
+#. Error when a wallet address is on the operator's ban list; the user cannot continue.
+msgctxt "wallet_blocked"
+msgid "This wallet can't be used with URnetwork."
+msgstr "此錢包不能用於 URnetwork。"
+
 #. Error shown when connecting an external wallet to the account fails.
 msgctxt "wallet_connect_failed"
 msgid "Failed to connect the wallet."
 msgstr "無法連接錢包。"
+
+#. Note under the manual address entry: the wallet only signs a proof of ownership.
+msgctxt "wallet_connect_signed_note_linux"
+msgid "Your wallet signs a message to prove it is yours. Nothing is sent on chain."
+msgstr "你的錢包會簽署一則訊息以證明它屬於你。不會在鏈上傳送任何內容。"
 
 #. Confirmation shown after an external wallet is connected to the account.
 msgctxt "wallet_connected"
 msgid "Wallet connected."
 msgstr "錢包已連接。"
 
+#. Line under the connected coldkey.
+msgctxt "wallet_connected_to_protocol"
+msgid "Connected to the UR protocol. Claims land here. Alpha accrues from the next epoch after connecting."
+msgstr "已連接 UR 協定。領取的收益會存入此處。Alpha 由連接後的下一個週期開始累積。"
+
+#. Warning when a wallet address has no activity on the Bittensor chain yet; the user may continue.
+msgctxt "wallet_looks_new_warning"
+msgid "This address has no activity on the Bittensor chain yet. It looks like a new wallet. Make sure it is yours before continuing."
+msgstr "此地址在 Bittensor 鏈上尚未有任何活動，看來是一個新錢包。繼續之前，請確認它屬於你。"
+
 #. Shown on the create-network step after a wallet sign-in when the wallet isn't linked to any network yet. The user picks a network name and accepts the terms to create one; the wallet signature carries over.
 msgctxt "wallet_needs_network"
 msgid "This wallet isn't linked to a network yet. Pick a network name to create one."
 msgstr "此錢包尚未連結任何網絡。請選擇一個網絡名稱來建立。"
+
+#. Line on the wallet block before a wallet is connected.
+msgctxt "wallet_not_retroactive"
+msgid "Connect a wallet to earn SN25α from the next epoch. Earlier epochs are not settled retroactively."
+msgstr "連接錢包，即可由下一個週期開始賺取 SN25α。之前的週期不會追溯結算。"
+
+#. Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.
+msgctxt "wallet_options"
+msgid "Wallet options"
+msgstr "錢包選項"
 
 #. Error shown when signing in with a wallet fails.
 msgctxt "wallet_sign_in_failed"
@@ -6283,6 +9251,16 @@ msgstr "錢包登入失敗"
 msgctxt "wallet_sign_in_method_added"
 msgid "Wallet sign-in method added"
 msgstr "已添加錢包登入方式"
+
+#. Error when the bridge signed with a different wallet than the address the user typed.
+msgctxt "wallet_signature_mismatch_linux"
+msgid "The wallet that signed is not the address you entered."
+msgstr "簽名的錢包與你輸入的地址不一致。"
+
+#. Body of the post-purchase screen while the confirmation poll runs (Shared/Views/PurchaseSuccessView.swift). Processing-shaped, not premium-shaped: the server learns of the purchase by webhook and has not confirmed yet.
+msgctxt "we_re_confirming_your_purchase_with_the_app_store"
+msgid "We're confirming your purchase with the App Store. Your plan will update automatically."
+msgstr "我們正在透過 App Store 確認你的購買。你的計劃會自動更新。"
 
 #. Onboarding offer screen: the small uppercase eyebrow above the headline.
 msgctxt "welcome_offer_eyebrow"
@@ -6303,6 +9281,155 @@ msgstr "取消連結推薦網絡後，您將無法再從{}獲得積分。"
 msgctxt "when_you_refer_a_friend"
 msgid "When you refer a friend:"
 msgstr "當你推薦朋友時："
+
+#. Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".
+msgctxt "widget_chart_peak"
+msgid "peak"
+msgstr "峰值"
+
+#. Dashboard widget chart title: this device's own traffic.
+msgctxt "widget_client"
+msgid "Client"
+msgstr "客戶端"
+
+#. Dashboard widget footer before the tunnel has ever written data.
+msgctxt "widget_connect_once"
+msgid "Connect once to see your traffic here"
+msgstr "連接一次即可在此查看你的流量"
+
+#. Contracts widget empty state while the tunnel is down.
+msgctxt "widget_connect_to_see_contracts"
+msgid "Connect to see your contracts"
+msgstr "連接後即可查看你的合約"
+
+#. Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.
+msgctxt "widget_contract_stack_accessibility"
+msgid "{0} contract, {1}"
+msgid_plural "{0} contracts, {1}"
+msgstr[0] "{0} 個合約，{1}"
+
+#. Description of the contracts widget in the widget gallery.
+msgctxt "widget_contracts_description"
+msgid "Your top client contracts, flowing as they come and go."
+msgstr "你的主要客戶端合約，隨其建立與結束即時流動。"
+
+#. Description of the quick connect control in the Control Center gallery.
+msgctxt "widget_control_description"
+msgid "Connect or disconnect the URnetwork VPN."
+msgstr "連接或中斷 URnetwork VPN。"
+
+#. Description of the dashboard widget in the widget gallery.
+msgctxt "widget_dashboard_description"
+msgid "Transfer balance, connected location and traffic, with quick connect."
+msgstr "流量餘額、已連接位置和流量，並支援快速連接。"
+
+#. Description of the provider globe widget in the widget gallery.
+msgctxt "widget_globe_description"
+msgid "Your connected providers on the globe."
+msgstr "在地球上顯示你已連接的供應商。"
+
+#. Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.
+msgctxt "widget_intent_source_parameter"
+msgid "Source"
+msgstr "來源"
+
+#. Provider globe widget: providers not shown in the list. The argument is a count.
+msgctxt "widget_more_providers"
+msgid "+{} more"
+msgstr "另有 {} 個"
+
+#. Contracts widget empty state while connected with no open client contracts.
+msgctxt "widget_no_contracts"
+msgid "No contracts"
+msgstr "沒有合約"
+
+#. Badge on the small provider globe widget when no providers are connected.
+msgctxt "widget_no_providers"
+msgid "No providers"
+msgstr "沒有供應商"
+
+#. Dashboard widget provider chart label when providing is off.
+msgctxt "widget_not_providing"
+msgid "Not providing"
+msgstr "未提供"
+
+#. Quick connect control / widget value when the app has no tunnel configuration yet (fresh install or logged out).
+msgctxt "widget_not_signed_in"
+msgid "Not signed in"
+msgstr "未登入"
+
+#. Button on the Home Screen widget that opens the app when the tunnel is not configured yet.
+msgctxt "widget_open"
+msgid "Open"
+msgstr "開啟"
+
+#. Widget subtitle when the app has no tunnel configuration yet.
+msgctxt "widget_open_to_set_up"
+msgid "Open URnetwork to set up"
+msgstr "開啟 URnetwork 進行設定"
+
+#. Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.
+msgctxt "widget_peak_rate"
+msgid "{} peak"
+msgstr "峰值 {}"
+
+#. Contracts widget header: number of peers with open contracts.
+msgctxt "widget_peer_count"
+msgid "{} peer"
+msgid_plural "{} peers"
+msgstr[0] "{} 個對等節點"
+
+#. Dashboard widget chart title: traffic relayed for others while providing.
+msgctxt "widget_provider"
+msgid "Provider"
+msgstr "供應商"
+
+#. Widget subtitle: number of connected providers.
+msgctxt "widget_provider_count"
+msgid "{} provider"
+msgid_plural "{} providers"
+msgstr[0] "{} 個供應商"
+
+#. Widget subtitle: number of connected providers while this device is also providing.
+msgctxt "widget_provider_count_providing"
+msgid "{} provider · providing"
+msgid_plural "{} providers · providing"
+msgstr[0] "{} 個供應商 · 提供中"
+
+#. Title above the provider traffic chart in the dashboard widget: the chart name with the current provide mode (Auto, Always, Network, Never).
+msgctxt "widget_provider_mode_title"
+msgid "Provider · {}"
+msgstr "供應商 · {}"
+
+#. Shown in the dashboard widget in place of the provider traffic chart while providing is off.
+msgctxt "widget_provider_stats_when_enabled"
+msgid "Provider stats will appear when the provider is enabled."
+msgstr "啟用供應商後，會顯示供應商統計資料。"
+
+#. Toast after the system added the Quick Settings tile.
+msgctxt "widget_quick_tile_added"
+msgid "Quick connect tile added"
+msgstr "已加入快速連接圖塊"
+
+#. Title of the action that refreshes the app's Home Screen widgets.
+msgctxt "widget_refresh_intent_title"
+msgid "Refresh URnetwork widgets"
+msgstr "重新整理 URnetwork 小工具"
+
+#. Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).
+msgctxt "widget_toggle_intent_title"
+msgid "Toggle URnetwork VPN"
+msgstr "切換 URnetwork VPN"
+
+#. Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.
+msgctxt "widget_updated_ago"
+msgid "Updated {}"
+msgstr "更新於 {}"
+
+#. Dashboard widget footer in the widget gallery preview.
+msgctxt "widget_updated_just_now"
+msgid "Updated just now"
+msgstr "剛剛更新"
 
 #. Account: the Widgets section (quick connect control and Home Screen widgets, with how to add them).
 msgctxt "widgets"
@@ -6354,6 +9481,11 @@ msgctxt "you_get_3_gib_day_for_life"
 msgid "You get 3 GiB/day for life"
 msgstr "你終身獲得 3 GiB/日"
 
+#. Detail line under the onboarding data page title.
+msgctxt "you_get_free_data_every_day"
+msgid "You get free data every day."
+msgstr "你每天都能獲得免費流量。"
+
 msgctxt "you_have_n_other_devices_online"
 msgid "You have {} other device online"
 msgid_plural "You have {} other devices online"
@@ -6379,6 +9511,11 @@ msgctxt "you_re_premium"
 msgid "You're premium."
 msgstr "您已是高級會員。"
 
+#. Title of the onboarding data page (was 'Boost your bandwidth').
+msgctxt "your_bandwidth"
+msgid "Your bandwidth"
+msgstr "你的頻寬"
+
 #. Label for the empty text field.
 msgctxt "your_email"
 msgid "Your email"
@@ -6403,6 +9540,11 @@ msgstr "你的朋友終身獲得 3 GiB/日"
 msgctxt "your_purchase_needs_to_be_approved_before_it_can"
 msgid "Your purchase needs to be approved before it can complete. UR Pro will turn on by itself once it goes through — there's no need to buy again."
 msgstr "你的購買需要獲得批准才能完成。一旦通過，UR Pro 會自動開啟 — 無需重新購買。"
+
+#. Label above the referral code pill in the gold referral panel.
+msgctxt "your_referral_code"
+msgid "Your referral code"
+msgstr "你的推薦碼"
 
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "your_referral_link"

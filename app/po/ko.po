@@ -49,10 +49,15 @@ msgctxt "account_auth_verified"
 msgid "{} (verified)"
 msgstr "{}(인증됨)"
 
-#. Sign-in error shown when the account exists but has not been verified yet.
-msgctxt "account_needs_verification"
-msgid "This account needs verification. Check your email."
-msgstr "이 계정은 확인이 필요합니다. 이메일을 확인하세요."
+#. Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.
+msgctxt "account_isn_t_ready_for_purchases"
+msgid "Your account isn't ready for purchases. Please restart the app and try again."
+msgstr "계정이 아직 구매할 준비가 되지 않았습니다. 앱을 다시 시작한 후 다시 시도하세요."
+
+#. Accessibility label of the row of rings, one per extender carrying a live connection.
+msgctxt "active_extenders"
+msgid "Active extenders"
+msgstr "활성 익스텐더"
 
 #. A heading for the list of current block actions.
 msgctxt "activity"
@@ -84,6 +89,11 @@ msgctxt "add_emoji"
 msgid "Add emoji"
 msgstr "이모지 추가"
 
+#. Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.
+msgctxt "add_local_split_rule"
+msgid "Route locally"
+msgstr "로컬로 라우팅"
+
 #. Call to action
 msgctxt "add_referral_code"
 msgid "Add referral code"
@@ -97,6 +107,11 @@ msgstr "로그인 방법 추가"
 msgctxt "add_sign_in_method_2"
 msgid "Add Sign-In Method"
 msgstr "로그인 방법 추가"
+
+#. State when the gas key has no TAO.
+msgctxt "add_tao_for_gas"
+msgid "Add TAO for gas"
+msgstr "가스용 TAO 추가"
 
 #. A description of the user's ability to provide bandwidth.
 msgctxt "adjust_setting_always_fill_data_faster"
@@ -278,6 +293,16 @@ msgctxt "adv_matched"
 msgid "Matched"
 msgstr "일치"
 
+#. Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.
+msgctxt "adv_mode_rpc_only"
+msgid "rpc-only"
+msgstr "RPC 전용"
+
+#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+msgctxt "adv_mode_tunnel"
+msgid "tunnel"
+msgstr "터널"
+
 #. Connection inspector: placeholder dash for a value that is not available.
 msgctxt "adv_na"
 msgid "—"
@@ -318,7 +343,7 @@ msgctxt "adv_providers_load_failed"
 msgid "Could not load the provider list."
 msgstr "제공자 목록을 불러올 수 없습니다."
 
-#. Connection inspector: label of the raw status row.
+#. Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.
 msgctxt "adv_raw_status"
 msgid "Raw status"
 msgstr "원시 상태"
@@ -348,6 +373,31 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "경로 재정의"
 
+#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+msgctxt "adv_routes"
+msgid "Routes"
+msgstr "경로"
+
+#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+msgctxt "adv_routes_dns_degraded"
+msgid "on, dns not applied"
+msgstr "켜짐, DNS 미적용"
+
+#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+msgctxt "adv_routes_kill_switch_armed"
+msgid "off, kill switch armed"
+msgstr "꺼짐, 킬 스위치 대기"
+
+#. Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.
+msgctxt "adv_routes_no_firewall"
+msgid "on, no leak guard"
+msgstr "켜짐, 유출 방지 없음"
+
+#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+msgctxt "adv_rpc"
+msgid "RPC"
+msgstr "RPC"
+
 #. Connection inspector: hint to select a row in the Activity list.
 msgctxt "adv_select_a_row"
 msgid "Select a row in Activity to inspect it"
@@ -367,6 +417,11 @@ msgstr "해당 연결이 더 이상 목록에 없습니다"
 msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "세션 출구 국가"
+
+#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+msgctxt "adv_session_mode"
+msgid "Session"
+msgstr "세션"
 
 #. Connection inspector: exit value when the destination is not in the routing table.
 msgctxt "adv_unknown_exit"
@@ -514,6 +569,11 @@ msgstr "이 앱이 설치된 URnetwork 시스템 서비스보다 오래된 버�
 msgctxt "app_version"
 msgid "App version"
 msgstr "앱 버전"
+
+#. A method of adding a sign-in method.
+msgctxt "apple"
+msgid "Apple"
+msgstr "Apple"
 
 #. Snackbar message displayed when an Apple sign-in method is added.
 msgctxt "apple_sign_in_method_added"
@@ -671,10 +731,30 @@ msgctxt "balance_code"
 msgid "Balance code"
 msgstr "잔액 코드"
 
+#. Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.
+msgctxt "balance_code_already_redeemed_message"
+msgid "This balance code has already been redeemed. If you redeemed it earlier, the data is already on your balance."
+msgstr "이 잔액 코드는 이미 사용되었습니다. 이전에 사용했다면 데이터가 이미 잔액에 들어 있습니다."
+
+#. Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.
+msgctxt "balance_code_data_added"
+msgid "{} of data added to your balance."
+msgstr "잔액에 {}의 데이터가 추가되었습니다."
+
+#. Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.
+msgctxt "balance_code_invalid_message"
+msgid "That balance code isn't valid. Check the code and try again."
+msgstr "유효하지 않은 잔액 코드입니다. 코드를 확인한 후 다시 시도하세요."
+
 #. Confirmation shown after a balance code is redeemed.
 msgctxt "balance_code_redeemed"
 msgid "Balance code redeemed."
 msgstr "잔액 코드를 사용했습니다."
+
+#. Redeem balance code: the request never got a server answer (network failure). Must NOT be worded as 'bad code' -- the redeem may have committed server-side, so tell the user to check their balance before retrying.
+msgctxt "balance_code_transport_error"
+msgid "We couldn't reach the server — check your connection. If you were charged, the code may already be applied; check your balance before trying again."
+msgstr "서버에 연결할 수 없습니다. 연결을 확인하세요. 요금이 청구되었다면 코드가 이미 적용되었을 수 있으니 다시 시도하기 전에 잔액을 확인하세요."
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "balance_code_where_to_buy"
@@ -685,6 +765,11 @@ msgstr "코드가 없으신가요? 데이터 코드는 ur.io에서 구매할 수
 msgctxt "balance_codes_link"
 msgid "Balance codes"
 msgstr "잔액 코드"
+
+#. Linux redeem-code sheet: shown in place of the redeemed-codes history when getNetworkRedeemedBalanceCodes FAILS (transport error, no response, or a server-side error) — distinct from the empty state's "No balance codes found", which is only for a successful fetch with no codes.
+msgctxt "balance_codes_load_error"
+msgid "Couldn't load your balance codes. Check your connection and try again."
+msgstr "잔액 코드를 불러올 수 없습니다. 연결을 확인한 후 다시 시도하세요."
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "balance_codes_title"
@@ -706,25 +791,60 @@ msgctxt "best_matches"
 msgid "Best matches"
 msgstr "최고의 일치"
 
+#. Gold pill on the recommended (annual) plan card.
+msgctxt "best_value"
+msgid "Best value"
+msgstr "최고의 혜택"
+
 #. Used in Main/Account/Wallet/WalletView.swift.
 msgctxt "bittensor"
 msgid "Bittensor"
 msgstr "Bittensor"
+
+#. Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.
+msgctxt "bittensor_choose_wallet"
+msgid "Choose your Bittensor wallet"
+msgstr "Bittensor 지갑 선택"
+
+#. Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).
+msgctxt "bittensor_continue_in_browser"
+msgid "Continue in your browser and approve the request in the {} extension."
+msgstr "브라우저에서 계속하고 {} 확장 프로그램에서 요청을 승인하세요."
 
 #. Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
 msgctxt "bittensor_error_address_not_in_wallet"
 msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
 msgstr "{} 지갑에 입력한 주소가 없습니다. 지갑에서 해당 계정을 추가 또는 연결하거나, 지갑에 있는 주소를 입력하세요."
 
+#. Error: the single-use wallet challenge expired (5 minutes) before it was signed.
+msgctxt "bittensor_error_challenge_expired"
+msgid "This request expired. Start again to get a new message to sign."
+msgstr "이 요청이 만료되었습니다. 처음부터 다시 시작해 서명할 새 메시지를 받으세요."
+
 #. Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when a ur.io wallet bridge page returns extension_not_found). The argument is the wallet product name (Talisman on the Bittensor page, Phantom or Solflare on the Solana page).
 msgctxt "bittensor_error_extension_not_found"
 msgid "The {} extension was not found in this browser. Install it, then try again."
 msgstr "이 브라우저에서 {} 확장 프로그램을 찾을 수 없습니다. 설치한 후 다시 시도하세요."
 
+#. Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.
+msgctxt "bittensor_error_invalid_signature"
+msgid "That is not a valid signature. Paste the full 0x signature from your wallet."
+msgstr "유효한 서명이 아닙니다. 지갑의 0x 서명 전체를 붙여 넣으세요."
+
+#. Error: the wallet returned a signature over a different challenge than the one issued.
+msgctxt "bittensor_error_message_mismatch"
+msgid "The wallet signed a different request. Start again."
+msgstr "지갑이 다른 요청에 서명했습니다. 처음부터 다시 시작하세요."
+
 #. Wallet error in the apps, when a ur.io wallet bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect on the Bittensor page, Phantom or Solflare on the Solana page).
 msgctxt "bittensor_error_no_account"
 msgid "Your {} wallet has no account to sign with. Add or connect an account in the wallet, then try again."
 msgstr "{} 지갑에 서명할 계정이 없습니다. 지갑에서 계정을 추가하거나 연결한 후 다시 시도하세요."
+
+#. Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).
+msgctxt "bittensor_error_signature_mismatch"
+msgid "This signature isn't from the address you entered. In {}, sign the message with that address, then paste the signature again."
+msgstr "이 서명은 입력한 주소의 서명이 아닙니다. {}에서 해당 주소로 메시지에 서명한 다음 서명을 다시 붙여 넣으세요."
 
 #. Wallet error in the apps, when a ur.io wallet bridge page returns user_rejected: the user declined the connection or the signature request in the wallet, so nothing was signed. The Bittensor page (Talisman, or a WalletConnect wallet) and the Solana page of the desktop apps (Phantom or Solflare) both return it; on iOS, Phantom and Solflare decline with 4001, which reads the same.
 msgctxt "bittensor_error_user_rejected"
@@ -741,10 +861,45 @@ msgctxt "bittensor_error_walletconnect_unavailable"
 msgid "WalletConnect is not available right now. Try again later, or enter your address manually."
 msgstr "지금은 WalletConnect를 사용할 수 없습니다. 나중에 다시 시도하거나 주소를 직접 입력하세요."
 
+#. Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).
+msgctxt "bittensor_manual_sign_instructions"
+msgid "Sign this message with the {} wallet that holds your coldkey, then paste the address and the signature below."
+msgstr "coldkey가 있는 {} 지갑으로 이 메시지에 서명한 다음, 아래에 주소와 서명을 붙여 넣으세요."
+
+#. Label above the challenge message the user signs in their Bittensor wallet.
+msgctxt "bittensor_message_to_sign"
+msgid "Message to sign"
+msgstr "서명할 메시지"
+
 #. Call to action
 msgctxt "bittensor_sign_in"
 msgid "Sign in with Bittensor"
 msgstr "Bittensor로 로그인"
+
+#. Label of the field where the user pastes the Bittensor wallet signature.
+msgctxt "bittensor_signature_label"
+msgid "Signature"
+msgstr "서명"
+
+#. Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).
+msgctxt "bittensor_signature_placeholder"
+msgid "Paste the 0x… signature"
+msgstr "0x… 서명 붙여 넣기"
+
+#. Label of the connected wallet block.
+msgctxt "bittensor_wallet"
+msgid "Bittensor wallet"
+msgstr "Bittensor 지갑"
+
+#. Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.
+msgctxt "bittensor_walletconnect_continue"
+msgid "Continue in your browser: scan the code with your wallet app, or open the wallet on this device."
+msgstr "브라우저에서 계속하세요. 지갑 앱으로 코드를 스캔하거나 이 기기에서 지갑을 여세요."
+
+#. Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.
+msgctxt "bittensor_walletconnect_hint"
+msgid "Nova, Nightly and other WalletConnect wallets"
+msgstr "Nova, Nightly 및 기타 WalletConnect 지갑"
 
 #. dns settings
 msgctxt "block_ads_and_trackers"
@@ -756,6 +911,11 @@ msgctxt "blocked"
 msgid "Blocked"
 msgstr "차단"
 
+#. Blocked locations: blocking a location failed. The argument is the location name.
+msgctxt "blocked_location_block_failed"
+msgid "Couldn't block {}. Please try again."
+msgstr "{}을(를) 차단할 수 없습니다. 다시 시도하세요."
+
 #. Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.
 msgctxt "blocked_location_could_not_be_added_please_try"
 msgid "Blocked location could not be added. Please try again later."
@@ -765,6 +925,11 @@ msgstr "차단된 위치를 추가할 수 없습니다. 나중에 다시 시도�
 msgctxt "blocked_location_could_not_be_removed_please_try"
 msgid "Blocked location could not be removed. Please try again later."
 msgstr "차단된 위치를 제거할 수 없습니다. 나중에 다시 시도해 주세요."
+
+#. Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.
+msgctxt "blocked_location_unblock_failed"
+msgid "Couldn't unblock {}. Please try again."
+msgstr "{}의 차단을 해제할 수 없습니다. 다시 시도하세요."
 
 #. Call to action
 msgctxt "blocked_locations"
@@ -780,6 +945,16 @@ msgstr "차단된 위치"
 msgctxt "blocked_locations_could_not_be_loaded"
 msgid "Blocked locations could not be loaded."
 msgstr "차단된 위치를 불러올 수 없습니다."
+
+#. Blocked locations: the list could not be loaded.
+msgctxt "blocked_locations_load_failed"
+msgid "Couldn't load your blocked locations. Pull down to try again."
+msgstr "차단한 위치를 불러올 수 없습니다. 아래로 당겨 다시 시도하세요."
+
+#. macOS Blocked locations screen: placeholder of the country search field.
+msgctxt "blocked_locations_search_placeholder"
+msgid "Search countries"
+msgstr "국가 검색"
 
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
@@ -836,10 +1011,20 @@ msgctxt "bypass_vpn"
 msgid "Bypass VPN"
 msgstr "VPN 우회"
 
+#. Shown when the camera permission was denied on the scan screen.
+msgctxt "camera_permission_needed"
+msgid "Camera access is needed to scan a code."
+msgstr "코드를 스캔하려면 카메라 접근 권한이 필요합니다."
+
 #. Call to action
 msgctxt "cancel"
 msgid "Cancel"
 msgstr "취소"
+
+#. Error when the subnet RPC cannot be reached.
+msgctxt "chain_rpc_unreachable"
+msgid "The chain RPC is unreachable. Try again."
+msgstr "체인 RPC에 연결할 수 없습니다. 다시 시도하세요."
 
 #. Call to action
 msgctxt "change"
@@ -891,6 +1076,21 @@ msgctxt "checking_solana_transactions"
 msgid "Checking for Solana Transactions"
 msgstr "Solana 거래 확인 중"
 
+#. Progress text while the address is validated.
+msgctxt "checking_wallet_address"
+msgid "Checking address…"
+msgstr "주소 확인 중…"
+
+#. Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.
+msgctxt "checkout_browser_launch_failed"
+msgid "We couldn't open your browser. Copy this link into a browser to finish checkout:"
+msgstr "브라우저를 열 수 없습니다. 결제를 완료하려면 이 링크를 브라우저에 복사하세요:"
+
+#. Purchase confirmation message while the app waits for the payment to be confirmed.
+msgctxt "checkout_confirming_purchase"
+msgid "We're confirming your purchase. Your plan will update automatically."
+msgstr "구매를 확인하고 있습니다. 플랜이 자동으로 업데이트됩니다."
+
 #. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back stripe_unavailable: Stripe's payment form could not be loaded in the checkout page (usually no internet connection, or a network that blocks it). Nothing was charged.
 msgctxt "checkout_error_payment_form_unavailable"
 msgid "The payment form couldn't load. Check your internet connection, then try again."
@@ -901,10 +1101,40 @@ msgctxt "checkout_error_unavailable"
 msgid "Checkout isn't available right now. Please try again later."
 msgstr "지금은 결제를 이용할 수 없습니다. 나중에 다시 시도해 주세요."
 
+#. Purchase confirmation title after the app opened Stripe's checkout page in the browser.
+msgctxt "checkout_finish_in_browser"
+msgid "Finish in your browser."
+msgstr "브라우저에서 완료하세요."
+
+#. Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.
+msgctxt "checkout_interrupted_confirming"
+msgid "The checkout view closed unexpectedly. If your payment went through, your plan updates here automatically — there's no need to buy again."
+msgstr "결제 화면이 예기치 않게 닫혔습니다. 결제가 완료되었다면 요금제가 여기서 자동으로 업데이트됩니다. 다시 구매할 필요는 없습니다."
+
 #. Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.
 msgctxt "checkout_opened_in_browser"
 msgid "Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed."
 msgstr "브라우저에서 구매를 완료하세요. 결제가 확인되면 플랜이 여기에서 자동으로 업데이트됩니다."
+
+#. Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.
+msgctxt "checkout_restore_checking"
+msgid "Checking your plan again."
+msgstr "플랜을 다시 확인하고 있습니다."
+
+#. Button on desktop: pick a file that contains a QR code image.
+msgctxt "choose_file"
+msgid "Choose file"
+msgstr "파일 선택"
+
+#. Button on desktop: pick an image file that contains a QR code.
+msgctxt "choose_image_file"
+msgid "Choose image file"
+msgstr "이미지 파일 선택"
+
+#. Button: pick a photo that contains a QR code.
+msgctxt "choose_photo"
+msgid "Choose photo"
+msgstr "사진 선택"
 
 #. Provider list group title for cities
 msgctxt "cities"
@@ -916,6 +1146,36 @@ msgctxt "claim"
 msgid "Claim"
 msgstr "받기"
 
+#. Subtitle of the claim dialog.
+msgctxt "claim_across_epochs"
+msgid "Across {} finalized epochs"
+msgstr "확정된 에포크 {}개에 걸쳐"
+
+#. Title of the claim dialog.
+msgctxt "claim_alpha_title"
+msgid "Claim SN25α"
+msgstr "SN25α 받기"
+
+#. Claim button with the amount.
+msgctxt "claim_amount_button"
+msgid "Claim {}"
+msgstr "{} 받기"
+
+#. Claim state: confirmed on chain.
+msgctxt "claim_confirmed"
+msgid "Claimed"
+msgstr "받음"
+
+#. Claim state: past the vault's expiry block.
+msgctxt "claim_expired"
+msgid "Expired"
+msgstr "만료됨"
+
+#. Claim state: failed.
+msgctxt "claim_failed"
+msgid "Failed"
+msgstr "실패"
+
 #. Call to action
 msgctxt "claim_multiplier"
 msgid "Claim Multiplier"
@@ -925,6 +1185,41 @@ msgstr "배율 받기"
 msgctxt "claim_network_name_hint"
 msgid "Claim a custom network name to replace your auto-generated one"
 msgstr "자동 생성된 이름을 대체할 사용자 지정 네트워크 이름을 만드세요"
+
+#. Per-epoch status while the claim transaction is being sent.
+msgctxt "claim_sending_linux"
+msgid "Sending…"
+msgstr "보내는 중…"
+
+#. Explainer under the claim button.
+msgctxt "claim_sends_from_device"
+msgid "Your device sends the claim to the vault contract. Gas is paid in TAO from your gas key. Alpha lands on your coldkey."
+msgstr "기기가 받기 요청을 볼트 컨트랙트로 보냅니다. 가스는 가스 키에서 TAO로 지불됩니다. Alpha는 coldkey로 들어옵니다."
+
+#. Claim state: transaction sent.
+msgctxt "claim_sent"
+msgid "Sent"
+msgstr "보냄"
+
+#. Destination line on the claim dialog: the coldkey the alpha lands on.
+msgctxt "claim_to_address_linux"
+msgid "To {}"
+msgstr "받는 곳: {}"
+
+#. Shown when the device cannot send claims (no gas key on this host).
+msgctxt "claim_unavailable_linux"
+msgid "Claiming is not available on this device yet."
+msgstr "이 기기에서는 아직 받기를 사용할 수 없습니다."
+
+#. Button on the Top 200 tile.
+msgctxt "claim_your_spot"
+msgid "Claim your spot"
+msgstr "자리 확보하기"
+
+#. Error when an epoch can no longer be claimed.
+msgctxt "claims_for_epoch_expired"
+msgid "Claims for epoch {} have expired."
+msgstr "에포크 {}의 받기 기간이 만료되었습니다."
 
 #. Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.
 msgctxt "claims_open_after_finalization"
@@ -1001,6 +1296,11 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "상대방"
 
+#. Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.
+msgctxt "conn_blocked_kill_switch"
+msgid "Blocked — kill switch on"
+msgstr "차단됨 — 킬 스위치 켜짐"
+
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"
@@ -1011,15 +1311,115 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "기본값은 꺼짐입니다. 켜면 앱을 열자마자 URnetwork가 선택한 제공자에 연결합니다. 다음 실행부터 적용되며 지금 연결하지는 않습니다."
 
+#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+msgctxt "conn_degraded"
+msgid "Connection degraded — reconnecting"
+msgstr "연결 품질 저하 — 다시 연결 중"
+
+#. Windows Connect page status while the tunnel is being stopped but its routes are still installed.
+msgctxt "conn_disconnecting"
+msgid "Disconnecting — your traffic is still going through the tunnel"
+msgstr "연결 해제 중 — 트래픽이 아직 터널을 통과하고 있습니다"
+
 #. Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.
 msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "연결할 수 없습니다"
 
+#. Windows Connect page reason line when connecting failed.
+msgctxt "conn_failed_detail"
+msgid "No providers could be reached. Retry rebuilds the connection from scratch."
+msgstr "어떤 제공업체에도 연결할 수 없었습니다. 다시 시도하면 연결을 처음부터 다시 구성합니다."
+
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+msgctxt "conn_failsafe_armed"
+msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
+msgstr "곧 아무것도 통과하지 못하면 인터넷을 계속 사용할 수 있도록 URnetwork가 터널을 자동으로 끕니다."
+
+#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+msgctxt "conn_failsafe_blocked"
+msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
+msgstr "터널이 트래픽을 전달하지 못해 URnetwork가 터널을 종료했습니다. 킬 스위치가 켜져 있어 다시 연결하거나 킬 스위치를 끌 때까지 이 컴퓨터에서 아무것도 나가지 않습니다 — 유출은 없습니다."
+
+#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+msgctxt "conn_failsafe_restored"
+msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
+msgstr "온라인 상태를 유지하도록 URnetwork가 연결을 해제했습니다: 터널은 켜져 있었지만 아무것도 통과하지 못했습니다. 이제 트래픽이 평소처럼 나가며 보호되지 않습니다. 다시 시도하려면 연결을 누르세요."
+
+#. Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).
+msgctxt "conn_finding_providers"
+msgid "Finding providers…"
+msgstr "제공업체를 찾는 중…"
+
 #. Connect page: warning that the internet traffic is not protected.
 msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "인터넷 트래픽이 보호되지 않습니다."
+
+#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+msgctxt "conn_reason_auth"
+msgid "Signing in to the platform is failing…"
+msgstr "플랫폼 로그인이 계속 실패하고 있습니다…"
+
+#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+msgctxt "conn_reason_platform"
+msgid "Contacting the platform…"
+msgstr "플랫폼에 연결하는 중…"
+
+#. Windows Connect page reason line while the selected providers do not answer.
+msgctxt "conn_reason_providers"
+msgid "Providers not responding — retrying…"
+msgstr "제공업체가 응답하지 않음 — 다시 시도 중…"
+
+#. Windows Connect page reason line while the platform asks the app to slow down.
+msgctxt "conn_reason_rate_limited"
+msgid "Rate limited — waiting…"
+msgstr "요청 한도 도달 — 대기 중…"
+
+#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+msgctxt "conn_traffic_blocked"
+msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
+msgstr "지금은 작동하는 제공업체가 없습니다 — 트래픽은 노출되지 않고 차단되어 있습니다. 평소 연결로 돌아가려면 연결을 해제하세요."
+
+#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+msgctxt "conn_traffic_blocked_unprotected"
+msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
+msgstr "지금은 작동하는 제공업체가 없습니다 — 터널로 보낸 트래픽은 어디에도 도달하지 못하고 유출 방지도 꺼져 있어 일부 트래픽이 터널을 우회할 수 있습니다. 평소 연결로 돌아가려면 연결을 해제하세요."
+
+#. Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.
+msgctxt "conn_tray_blocked_kill_switch"
+msgid "Blocked (kill switch on)"
+msgstr "차단됨(킬 스위치 켜짐)"
+
+#. Windows tray tooltip when leak protection blocks traffic while no tunnel is up.
+msgctxt "conn_tray_blocked_no_tunnel"
+msgid "Blocked — leak protection is still in force with no tunnel up"
+msgstr "차단됨 — 터널 없이 유출 방지가 여전히 적용 중"
+
+#. Windows tray tooltip while the tunnel is being stopped but its routes are still installed.
+msgctxt "conn_tray_disconnecting"
+msgid "Disconnecting — traffic is still going through the tunnel"
+msgstr "연결 해제 중 — 트래픽이 아직 터널을 통과하고 있습니다"
+
+#. Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.
+msgctxt "conn_tray_failsafe_blocked"
+msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so this machine stays blocked and nothing is leaking. Reconnect, or turn off the kill switch from this menu."
+msgstr "터널이 트래픽을 전달하지 못해 URnetwork가 터널을 종료했습니다. 킬 스위치가 켜져 있어 이 컴퓨터는 계속 차단되며 유출은 없습니다. 다시 연결하거나 이 메뉴에서 킬 스위치를 끄세요."
+
+#. Windows tray tooltip after the service stopped a tunnel that carried nothing.
+msgctxt "conn_tray_failsafe_stopped"
+msgid "Disconnected (the tunnel failed)"
+msgstr "연결 해제됨(터널 실패)"
+
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+msgctxt "conn_tray_force_tunnel_off"
+msgid "Force the tunnel off (recovery)"
+msgstr "터널 강제 종료(복구)"
+
+#. Windows tray menu item that lifts the kill switch's block on this computer.
+msgctxt "conn_tray_lift_kill_switch"
+msgid "Turn off the kill switch (unblock this machine)"
+msgstr "킬 스위치 끄기(이 컴퓨터 차단 해제)"
 
 #. Button text to connect to URnetwork VPN
 msgctxt "connect"
@@ -1041,6 +1441,11 @@ msgctxt "connect_and_open"
 msgid "Connect and open link"
 msgstr "연결하고 링크를 엽니다"
 
+#. Button to connect a Bittensor coldkey.
+msgctxt "connect_bittensor_wallet"
+msgid "Connect Bittensor wallet"
+msgstr "Bittensor 지갑 연결"
+
 #. Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).
 msgctxt "connect_bittensor_wallet_to_add_sign_in_method"
 msgid "Connect a Bittensor wallet to add it as a sign-in method."
@@ -1055,6 +1460,16 @@ msgstr "연결 옵션"
 msgctxt "connect_seeker_wallet"
 msgid "Connect a wallet with the Saga Genesis or Seeker Pre-Order Token"
 msgstr "Saga Genesis 또는 Seeker 선주문 토큰으로 지갑을 연결하세요"
+
+#. Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.
+msgctxt "connect_solana_wallet"
+msgid "Connect Solana wallet"
+msgstr "Solana 지갑 연결"
+
+#. Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.
+msgctxt "connect_solana_wallet_note"
+msgid "Connect a Solana wallet app, or enter a Solana USDC address manually."
+msgstr "Solana 지갑 앱을 연결하거나 Solana USDC 주소를 직접 입력하세요."
 
 #. Add sign-in method sheet (android): the wallet option's explanation.
 msgctxt "connect_solana_wallet_to_add_sign_in_method"
@@ -1075,6 +1490,11 @@ msgstr "URnetwork VPN 연결"
 msgctxt "connect_wallet"
 msgid "Connect Wallet"
 msgstr "지갑 연결"
+
+#. Error when claiming without a wallet.
+msgctxt "connect_wallet_first"
+msgid "Connect a Bittensor wallet first."
+msgstr "먼저 Bittensor 지갑을 연결하세요."
 
 #. Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.
 msgctxt "connected"
@@ -1158,9 +1578,9 @@ msgctxt "contracts_appear_providing"
 msgid "Contracts appear here while providing."
 msgstr "제공 중에 계약이 여기에 표시됩니다."
 
-#. Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.
+#. Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).
 msgctxt "contribute_bandwidth"
-msgid "Contribute Bandwidth"
+msgid "Contribute bandwidth"
 msgstr "대역폭 제공"
 
 #. Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.
@@ -1243,6 +1663,11 @@ msgctxt "copy_client_id"
 msgid "Copy client ID"
 msgstr "클라이언트 ID 복사"
 
+#. Button on the share screen: copy the text form of the code.
+msgctxt "copy_share_text"
+msgid "Copy share text"
+msgstr "공유 텍스트 복사"
+
 #. Button text to copy the seedphrase to the clipboard.
 msgctxt "copy_to_clipboard"
 msgid "Copy to Clipboard"
@@ -1252,6 +1677,16 @@ msgstr "클립보드에 복사"
 msgctxt "could_not_get_google_id_token"
 msgid "Could not get Google ID token"
 msgstr "Google ID 토큰을 가져올 수 없습니다"
+
+#. Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).
+msgctxt "couldn_t_load_subscription_options"
+msgid "Couldn't load subscription options. Check your connection and retry."
+msgstr "구독 옵션을 불러올 수 없습니다. 연결을 확인한 후 다시 시도하세요."
+
+#. Restore-purchases outcome: the App Store sync failed (e.g. the user cancelled the credentials prompt or the store was unreachable) and no entitlement was found locally (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "couldn_t_restore_purchases"
+msgid "Couldn't restore purchases. Please try again."
+msgstr "구매 항목을 복원할 수 없습니다. 다시 시도하세요."
 
 #. Snackbar shown when the external wallet app could not be opened. Used in Shared/Views/SolanaSignMessageSheet.swift and Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.
 msgctxt "couldnt_open_wallet"
@@ -1373,15 +1808,30 @@ msgctxt "daemon_auth_unavailable"
 msgid "This device has no polkit authorization service, so the URnetwork system service falls back to the 'urnetwork' group. Add your user to it and sign out and back in."
 msgstr "이 기기에는 polkit 인증 서비스가 없어 URnetwork 시스템 서비스가 'urnetwork' 그룹으로 대체합니다. 사용자를 그 그룹에 추가한 뒤 로그아웃했다가 다시 로그인하세요."
 
+#. Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.
+msgctxt "daemon_legacy_group_auth"
+msgid "The URnetwork system service on this device is an older version that still requires group membership. Update the service, or add your user to the 'urnetwork' group and sign out and back in."
+msgstr "이 기기의 URnetwork 시스템 서비스는 아직 그룹 멤버십이 필요한 이전 버전입니다. 서비스를 업데이트하거나, 사용자를 'urnetwork' 그룹에 추가한 뒤 로그아웃했다가 다시 로그인하세요."
+
 #. Error: the system service did not answer.
 msgctxt "daemon_no_answer"
 msgid "The URnetwork system service did not answer."
 msgstr "URnetwork 시스템 서비스가 응답하지 않았습니다."
 
+#. Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.
+msgctxt "daemon_not_reachable"
+msgid "The URnetwork system service could not be reached."
+msgstr "URnetwork 시스템 서비스에 연결할 수 없습니다."
+
 #. Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.
 msgctxt "daemon_sdk_mismatch"
 msgid "The app and the URnetwork system service are different builds. Update both to the same version."
 msgstr "앱과 URnetwork 시스템 서비스의 빌드가 다릅니다. 둘 다 같은 버전으로 업데이트하세요."
+
+#. Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.
+msgctxt "daemon_stale_sandbox_mount"
+msgid "The URnetwork system service restarted while this app was open. Close the app and open it again to reconnect to it."
+msgstr "이 앱이 열려 있는 동안 URnetwork 시스템 서비스가 다시 시작되었습니다. 서비스에 다시 연결하려면 앱을 닫았다가 다시 여세요."
 
 #. Shown on the linux home screen when the installed urnetworkd system service speaks an older control protocol than this app supports. Distinct from daemon_unreachable by contract; the fix is updating the service, not the app.
 msgctxt "daemon_too_old"
@@ -1458,6 +1908,11 @@ msgctxt "date_payout"
 msgid "{} Payout"
 msgstr "{} 지급"
 
+#. Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).
+msgctxt "default_daily_data"
+msgid "By default, you get {} every day."
+msgstr "기본적으로 매일 {}를 받습니다."
+
 #. Generic default choice label, e.g. the app split rule combo state meaning no rule.
 msgctxt "default_option"
 msgid "Default"
@@ -1491,39 +1946,164 @@ msgstr "확인하려면 {}을(를) 입력하세요."
 #. Developer page: report line when the SDK refused a requested action.
 msgctxt "dev_action_declined"
 msgid "No change: the SDK declined that action."
-msgstr "No change: the SDK declined that action."
+msgstr "변경 없음: SDK가 해당 작업을 거부했습니다."
 
 #. Developer page: note that the action buttons only request changes.
 msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
-msgstr "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
+msgstr "작업은 요청일 뿐입니다. 결과는 아래에서 새로 고쳐지는 측정값과 출구 행에서 확인하세요."
+
+#. Developer tools screen (reliability surface): performance-aware affinity control label.
+msgctxt "dev_affinity_performance"
+msgid "Performance-aware affinity"
+msgstr "성능 기반 선호도"
+
+#. Developer tools screen: explanatory subtext under the performance-aware affinity control.
+msgctxt "dev_affinity_performance_detail"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "새 TLS 경쟁에 각 제공자의 확인된 바이트 최대 속도를 공시 대역폭에 대비해 가중치로 반영합니다. 강제 선호도가 켜져 있으면 측정값이 낮은 제공자는 경쟁에서 양보합니다. 기존 연결과 명시적 고정은 그대로 유지됩니다"
+
+#. Developer tools screen (reliability surface): affinity sticky control label.
+msgctxt "dev_affinity_sticky"
+msgid "Sticky site affinity"
+msgstr "사이트 고정 선호도"
+
+#. Developer tools screen: explanatory subtext under the 'affinity sticky' control.
+msgctxt "dev_affinity_sticky_detail"
+msgid "A site's new connections stay on the exit its earlier ones already use, even past the flow cap, so a busy site keeps one egress IP. The cap still limits which exits collect new sites. Off restores the strict cap"
+msgstr "사이트의 새 연결은 플로우 한도를 넘더라도 이전 연결이 이미 쓰는 출구에 머물러, 바쁜 사이트가 하나의 송신 IP를 유지합니다. 어떤 출구가 새 사이트를 받을지는 여전히 한도가 정합니다. 끄면 엄격한 한도로 돌아갑니다"
+
+#. Developer page: what a setting's 0 means when it probes every host ('Probe hosts per pass').
+msgctxt "dev_all"
+msgid "All"
+msgstr "전체"
 
 #. Developer page: label of the app version row.
 msgctxt "dev_app_version"
 msgid "App version"
-msgstr "App version"
+msgstr "앱 버전"
+
+#. Developer tools screen (reliability surface): behaviour control label.
+msgctxt "dev_behaviour"
+msgid "Behaviour"
+msgstr "동작"
+
+#. Developer tools screen (reliability surface): blackhole receive control label.
+msgctxt "dev_blackhole_receive"
+msgid "Keep quiet providers longer"
+msgstr "응답 없는 제공자를 더 오래 유지"
+
+#. Developer tools screen: explanatory subtext under the 'blackhole receive' control.
+msgctxt "dev_blackhole_receive_detail"
+msgid "How long a provider still acknowledging traffic may return nothing before it is dropped. Off keeps them until they stop acknowledging"
+msgstr "트래픽을 계속 확인 응답하는 제공자가 아무것도 돌려주지 않은 채 제외되기 전까지 허용되는 시간입니다. 끄면 확인 응답을 멈출 때까지 유지합니다"
+
+#. Developer tools screen (reliability surface): blast radius control label.
+msgctxt "dev_blast_radius"
+msgid "Blast radius"
+msgstr "영향 범위"
+
+#. Developer tools screen: explanatory subtext under the 'blast radius' control.
+msgctxt "dev_blast_radius_detail"
+msgid "Connections lost per provider failure. Lower is better"
+msgstr "제공자 장애 한 번당 끊기는 연결 수입니다. 적을수록 좋습니다"
+
+#. Developer tools screen: formatted value readout for 'blast radius'.
+msgctxt "dev_blast_radius_value"
+msgid "{} per failure"
+msgstr "장애당 {}"
+
+#. Developer tools screen (reliability surface): busy probe control label.
+msgctxt "dev_busy_probe"
+msgid "Probe stalled exits before dropping"
+msgstr "멈춘 출구를 제외하기 전에 점검"
+
+#. Developer tools screen (reliability surface): busy probe budget control label.
+msgctxt "dev_busy_probe_budget"
+msgid "Busy probe wait"
+msgstr "혼잡 점검 대기 시간"
+
+#. Developer tools screen: explanatory subtext under the 'busy probe budget' control.
+msgctxt "dev_busy_probe_budget_detail"
+msgid "How long the stall probe waits for an answer before convicting. Off derives half the stall bar"
+msgstr "멈춤 점검이 판정하기 전에 응답을 기다리는 시간입니다. 끄면 멈춤 기준의 절반을 사용합니다"
+
+#. Developer tools screen: explanatory subtext under the 'busy probe' control.
+msgctxt "dev_busy_probe_detail"
+msgid "When an exit stalls, ping it once before convicting. A congested but alive exit answers and keeps its flows; a dead one is still dropped. Off convicts on the stall bar"
+msgstr "출구가 멈추면 판정 전에 한 번 ping을 보냅니다. 혼잡하지만 살아 있는 출구는 응답하고 플로우를 유지하며, 죽은 출구는 그대로 제외됩니다. 끄면 멈춤 기준에서 판정합니다"
+
+#. Developer page: label of the 'Busy probe wait' setting.
+msgctxt "dev_busy_probe_wait"
+msgid "Busy probe wait"
+msgstr "혼잡 점검 대기 시간"
+
+#. Developer page: the explanation under the 'Busy probe wait' setting.
+msgctxt "dev_busy_probe_wait_detail"
+msgid "How long the stall probe waits for an answer before convicting, in ms. Off derives half the stall bar"
+msgstr "멈춤 점검이 판정하기 전에 응답을 기다리는 시간(밀리초)입니다. 끄면 멈춤 기준의 절반을 사용합니다"
+
+#. Developer tools screen (reliability surface): busy probes control label.
+msgctxt "dev_busy_probes"
+msgid "Busy probes"
+msgstr "혼잡 점검"
+
+#. Developer tools screen: explanatory subtext under the 'busy probes' control.
+msgctxt "dev_busy_probes_detail"
+msgid "Liveness pings fired at stalled exits; acquitted ones answered and were kept, the removals the probe prevented"
+msgstr "멈춘 출구에 보낸 생존 확인 ping입니다. 무혐의 처리된 출구는 응답해 유지되었으며, 점검이 막은 제외 횟수입니다"
+
+#. Developer tools screen: formatted value readout for 'busy probes'.
+msgctxt "dev_busy_probes_value"
+msgid "{0} sent / {1} acquitted"
+msgstr "{0}회 전송 / {1}회 무혐의"
 
 #. Developer page: button that checks for a new release now.
 msgctxt "dev_check_updates"
 msgid "Check for updates"
-msgstr "Check for updates"
+msgstr "업데이트 확인"
+
+#. Developer tools screen: action for choosing individual log files to export.
+msgctxt "dev_choose_logs"
+msgid "Choose logs…"
+msgstr "로그 선택…"
+
+#. Developer tools screen: action that deletes the diagnostics log files without touching local state, preferences or rules.
+msgctxt "dev_clear_logs"
+msgid "Clear logs"
+msgstr "로그 지우기"
+
+#. Developer tools screen: the clear-logs action's label while it runs.
+msgctxt "dev_clearing_logs"
+msgid "Clearing logs…"
+msgstr "로그 지우는 중…"
+
+#. Developer tools screen (reliability surface): cluster affinity control label.
+msgctxt "dev_cluster_affinity"
+msgid "Group IPs by site"
+msgstr "사이트별로 IP 묶기"
+
+#. Developer tools screen: explanatory subtext under the 'cluster affinity' control.
+msgctxt "dev_cluster_affinity_detail"
+msgid "Keeps a site on one exit when its hostname is not visible"
+msgstr "호스트 이름이 보이지 않을 때도 사이트를 하나의 출구에 유지합니다"
 
 #. Developer page: table column header for the per-row action buttons.
 msgctxt "dev_col_actions"
 msgid "Actions"
-msgstr "Actions"
+msgstr "작업"
 
 #. Developer page: table column header for the connect timing.
 msgctxt "dev_col_connect"
 msgid "Connect"
-msgstr "Connect"
+msgstr "연결"
 
 #. Developer page: table column header for a destination host.
 msgctxt "dev_col_destination"
 msgid "Destination"
-msgstr "Destination"
+msgstr "대상"
 
-#. Developer page: table column header for the DNS timing.
+#. Developer page: table column header for the DNS timing. A protocol name; never translated.
 msgctxt "dev_col_dns"
 msgid "DNS"
 msgstr "DNS"
@@ -1531,49 +2111,49 @@ msgstr "DNS"
 #. Developer page: table column header for the exit a flow uses.
 msgctxt "dev_col_exit"
 msgid "Exit"
-msgstr "Exit"
+msgstr "출구"
 
 #. Developer page: table column header for the number of failed dials.
 msgctxt "dev_col_failed_dials"
 msgid "Failed dials"
-msgstr "Failed dials"
+msgstr "다이얼 실패"
 
 #. Developer page: table column header for the number of flows.
 msgctxt "dev_col_flows"
 msgid "Flows"
-msgstr "Flows"
+msgstr "플로우"
 
 #. Developer page: table column header for the probe kind.
 msgctxt "dev_col_kind"
 msgid "Kind"
-msgstr "Kind"
+msgstr "종류"
 
 #. Developer page: table column header for a probe outcome.
 msgctxt "dev_col_outcome"
 msgid "Outcome"
-msgstr "Outcome"
+msgstr "결과"
 
 #. Developer page: table column header for an exit state.
 msgctxt "dev_col_state"
 msgid "State"
-msgstr "State"
+msgstr "상태"
 
 #. Developer page: table column header for a probe target.
 msgctxt "dev_col_target"
 msgid "Target"
-msgstr "Target"
+msgstr "목표"
 
 #. Developer page: table column header for an exit tier.
 msgctxt "dev_col_tier"
 msgid "Tier"
-msgstr "Tier"
+msgstr "등급"
 
 #. Developer page: table column header for the total timing.
 msgctxt "dev_col_total"
 msgid "Total"
-msgstr "Total"
+msgstr "합계"
 
-#. Developer page: table column header for time to first byte.
+#. Developer page: table column header for time to first byte. The metric's standard abbreviation; never translated.
 msgctxt "dev_col_ttfb"
 msgid "TTFB"
 msgstr "TTFB"
@@ -1581,274 +2161,1035 @@ msgstr "TTFB"
 #. Developer page: table column header for the measurement window.
 msgctxt "dev_col_window"
 msgid "Window"
-msgstr "Window"
+msgstr "기간"
+
+#. Developer tools screen (reliability surface): comparative connect control label.
+msgctxt "dev_comparative_connect"
+msgid "Cut dead connects early"
+msgstr "죽은 연결 빨리 끊기"
+
+#. Developer tools screen: explanatory subtext under the 'comparative connect' control.
+msgctxt "dev_comparative_connect_detail"
+msgid "Drop an exit that has established nothing sooner when two sibling exits are receiving. Off waits the full 30s connect bar"
+msgstr "형제 출구 두 개가 수신 중일 때 아무것도 연결하지 못한 출구를 더 일찍 제외합니다. 끄면 30초 연결 기준을 끝까지 기다립니다"
+
+#. Developer page (Apple): note shown while disconnected.
+msgctxt "dev_connect_for_live_tools"
+msgid "Connect to use the live connection tools. Diagnostics below work either way."
+msgstr "활성 연결 도구를 사용하려면 연결하세요. 아래 진단은 연결 여부와 관계없이 작동합니다."
+
+#. Developer page: label of the 'Corroborate silent exits' setting.
+msgctxt "dev_corroborate_silent_exits"
+msgid "Corroborate silent exits"
+msgstr "무응답 출구 확인"
+
+#. Developer page: the explanation under the 'Corroborate silent exits' setting.
+msgctxt "dev_corroborate_silent_exits_detail"
+msgid "How many distinct destinations must be silent before an exit is convicted on no-receive, so one dead site cannot remove a working exit"
+msgstr "수신 없음으로 출구를 판정하기 전에 무응답이어야 하는 서로 다른 대상 수로, 죽은 사이트 하나 때문에 정상 출구가 제외되지 않게 합니다"
 
 #. Developer page: suffix after a count of affected flows.
 msgctxt "dev_count_affected"
 msgid "affected"
-msgstr "affected"
+msgstr "영향받음"
+
+#. Developer page: label of the 'Cut dead connects early' setting.
+msgctxt "dev_cut_dead_connects_early"
+msgid "Cut dead connects early"
+msgstr "죽은 연결 빨리 끊기"
+
+#. Developer page: the explanation under the 'Cut dead connects early' setting.
+msgctxt "dev_cut_dead_connects_early_detail"
+msgid "Drop an exit that has established nothing sooner when two sibling exits are receiving, in ms. Off waits the full 30s connect bar"
+msgstr "형제 출구 두 개가 수신 중일 때 아무것도 연결하지 못한 출구를 더 일찍 제외하기까지의 시간(밀리초)입니다. 끄면 30초 연결 기준을 끝까지 기다립니다"
 
 #. Developer page: report line when the SDK refused an exit action.
 msgctxt "dev_declined_exit"
 msgid "No change: the SDK declined that exit"
-msgstr "No change: the SDK declined that exit"
+msgstr "변경 없음: SDK가 해당 출구를 거부했습니다"
 
 #. Developer page: heading of the destinations table.
 msgctxt "dev_destinations"
 msgid "Destinations"
-msgstr "Destinations"
+msgstr "대상"
 
 #. Developer page: explanation under the destinations table.
 msgctxt "dev_destinations_detail"
 msgid "Which exit each destination's flows are landing on. A site spread over several rows is a site that lost its single egress IP."
-msgstr "Which exit each destination's flows are landing on. A site spread over several rows is a site that lost its single egress IP."
+msgstr "각 대상의 플로우가 어느 출구에 도착하는지 보여 줍니다. 여러 행에 걸쳐 있는 사이트는 하나뿐인 송신 IP를 잃은 사이트입니다."
 
 #. Developer page: page title.
 msgctxt "dev_developer"
 msgid "Developer"
-msgstr "Developer"
+msgstr "개발자"
+
+#. Developer tools screen (reliability surface): dial failure rerace control label.
+msgctxt "dev_dial_failure_rerace"
+msgid "Retry refused connects elsewhere"
+msgstr "거부된 연결을 다른 곳에서 재시도"
+
+#. Developer tools screen: explanatory subtext under the 'dial failure rerace' control.
+msgctxt "dev_dial_failure_rerace_detail"
+msgid "When a provider can't reach a site, move the connection to another exit instead of letting it hang"
+msgstr "제공자가 사이트에 연결하지 못하면 연결을 멈춰 두지 않고 다른 출구로 옮깁니다"
+
+#. Developer tools screen (reliability surface): dial failures control label.
+msgctxt "dev_dial_failures"
+msgid "Provider connect failures"
+msgstr "제공자 연결 실패"
+
+#. Developer tools screen: explanatory subtext under the 'dial failures' control.
+msgctxt "dev_dial_failures_detail"
+msgid "Times a provider reported it could not open the upstream connection"
+msgstr "제공자가 업스트림 연결을 열 수 없다고 보고한 횟수"
+
+#. Developer tools screen (reliability surface): drop exit control label.
+msgctxt "dev_drop_exit"
+msgid "Drop"
+msgstr "제외"
+
+#. Developer page: label of the 'Drop stalled exits fast' setting.
+msgctxt "dev_drop_stalled_exits_fast"
+msgid "Drop stalled exits fast"
+msgstr "멈춘 출구 빨리 제외"
+
+#. Developer page: the explanation under the 'Drop stalled exits fast' setting.
+msgctxt "dev_drop_stalled_exits_fast_detail"
+msgid "How long an exit may stop delivering before it is dropped, in ms. Off waits 30s"
+msgstr "출구가 전달을 멈춘 뒤 제외되기까지 허용되는 시간(밀리초)입니다. 끄면 30초를 기다립니다"
 
 #. Developer page: report line after an exit was dropped.
 msgctxt "dev_dropped_exit"
 msgid "Dropped exit"
-msgstr "Dropped exit"
+msgstr "제외한 출구"
+
+#. Developer tools screen (reliability surface): effective tier control label.
+msgctxt "dev_effective_tier"
+msgid "Live tier demotion"
+msgstr "실시간 등급 하향"
+
+#. Developer tools screen: explanatory subtext under the 'effective tier' control.
+msgctxt "dev_effective_tier_detail"
+msgid "Failing dials and survived verdicts push a provider down the ranking within a second; promotion back needs clean minutes and a proven connect"
+msgstr "연결 실패와 버텨 낸 판정은 1초 안에 제공자의 순위를 낮춥니다. 다시 올라가려면 문제없는 몇 분과 검증된 연결이 필요합니다"
+
+#. Developer tools screen (reliability surface): evaluation pool control label.
+msgctxt "dev_evaluation_pool"
+msgid "Candidates evaluated per slot"
+msgstr "슬롯당 평가 후보 수"
+
+#. Developer tools screen: explanatory subtext under the 'evaluation pool' control.
+msgctxt "dev_evaluation_pool_detail"
+msgid "How many providers a window expansion pings and ranks per slot it needs, keeping the best. 1 evaluates exactly what it needs"
+msgstr "창 확장 시 필요한 슬롯마다 ping으로 확인하고 순위를 매기는 제공자 수이며, 가장 좋은 제공자를 남깁니다. 1은 필요한 만큼만 평가합니다"
+
+#. Developer tools screen (reliability surface): exit dial failures control label.
+msgctxt "dev_exit_dial_failures"
+msgid "{} failed dials"
+msgstr "연결 실패 {}회"
+
+#. Developer tools screen (reliability surface): exit flows control label.
+msgctxt "dev_exit_flows"
+msgid "{} flows"
+msgstr "플로우 {}개"
+
+#. Developer tools screen (reliability surface): exits control label.
+msgctxt "dev_exits"
+msgid "Exits"
+msgstr "출구"
 
 #. Developer page: explanation of the drop, stall and shuffle actions.
 msgctxt "dev_exits_actions_detail"
 msgid "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
-msgstr "Drop, Stall and Shuffle degrade the live connection on purpose, immediately. Nothing here is queued or retried — an action that misses is reported, not replayed."
+msgstr "제외, 멈추기, 섞기는 활성 연결을 의도적으로 즉시 저하시킵니다. 여기서는 아무것도 대기열에 넣거나 재시도하지 않으며, 실패한 작업은 다시 실행하지 않고 보고만 합니다."
+
+#. Developer tools screen: action for exporting all diagnostic logs without redaction.
+msgctxt "dev_export_all_logs"
+msgid "Export all logs (raw)"
+msgstr "모든 로그 내보내기(원본)"
+
+#. Developer tools screen: error shown when diagnostic log export fails.
+msgctxt "dev_export_failed"
+msgid "Export failed: {}"
+msgstr "내보내기 실패: {}"
+
+#. Developer tools screen: explanation that a requested diagnostic item was omitted from an export.
+msgctxt "dev_export_not_included"
+msgid "Not included: {}"
+msgstr "포함되지 않음: {}"
+
+#. Developer tools screen: action for exporting diagnostic logs with sensitive traffic details redacted.
+msgctxt "dev_export_redacted_logs"
+msgid "Export redacted logs"
+msgstr "가린 로그 내보내기"
+
+#. Developer tools screen: action for exporting the selected diagnostic log files.
+msgctxt "dev_export_selected"
+msgid "Export selected"
+msgstr "선택 항목 내보내기"
+
+#. Developer tools screen: action for sharing a diagnostic bundle.
+msgctxt "dev_export_share"
+msgid "Share diagnostic bundle"
+msgstr "진단 번들 공유"
+
+#. Developer tools screen: summary of the number and total size of diagnostic log files exported.
+msgctxt "dev_export_summary"
+msgid "Exported {0} log file ({1})"
+msgid_plural "Exported {0} log files ({1})"
+msgstr[0] "로그 파일 {0}개를 내보냈습니다({1})"
+
+#. Developer tools screen: explanation that a diagnostic export option is unavailable.
+msgctxt "dev_export_unavailable"
+msgid "Not available: {}"
+msgstr "사용할 수 없음: {}"
+
+#. Developer tools screen: progress label shown while a diagnostic bundle is being exported.
+msgctxt "dev_exporting"
+msgid "Exporting…"
+msgstr "내보내는 중…"
+
+#. Developer page: label of the 'Fast first-exit poll' setting.
+msgctxt "dev_fast_first_exit_poll"
+msgid "Fast first-exit poll"
+msgstr "첫 출구 빠른 확인"
+
+#. Developer page: the explanation under the 'Fast first-exit poll' setting.
+msgctxt "dev_fast_first_exit_poll_detail"
+msgid "How often a connecting flow re-checks an empty window, in ms, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
+msgstr "연결 중인 플로우가 빈 창을 다시 확인하는 간격(밀리초)으로, 첫 출구가 들어오자마자 첫 요청이 나갈 수 있게 합니다. 끄면 2초 재시도 간격을 기다립니다"
+
+#. Developer tools screen (reliability surface): flows opened control label.
+msgctxt "dev_flows_opened"
+msgid "Flows opened"
+msgstr "열린 플로우"
+
+#. Developer tools screen: explanatory subtext under the 'flows opened' control.
+msgctxt "dev_flows_opened_detail"
+msgid "Total since reset, so runs of different lengths compare"
+msgstr "재설정 이후 합계로, 길이가 다른 실행끼리 비교할 수 있습니다"
+
+#. Developer tools screen (reliability surface): flows rebound control label.
+msgctxt "dev_flows_rebound"
+msgid "QUIC flows rebound"
+msgstr "다시 바인딩된 QUIC 플로우"
+
+#. Developer tools screen: explanatory subtext under the 'flows rebound' control.
+msgctxt "dev_flows_rebound_detail"
+msgid "Flows moved to a warm exit inside a removal; accepted means the server took the path change without a re-dial"
+msgstr "제외 중에 준비된 출구로 옮겨진 플로우입니다. 수락됨은 서버가 다시 연결하지 않고 경로 변경을 받아들였다는 뜻입니다"
+
+#. Developer tools screen: formatted value readout for 'flows rebound'.
+msgctxt "dev_flows_rebound_value"
+msgid "{0} ({1} accepted / {2} re-dialed)"
+msgstr "{0}(수락 {1} / 재연결 {2})"
+
+#. Developer tools screen (reliability surface): flows reraced control label.
+msgctxt "dev_flows_reraced"
+msgid "Moved to another exit"
+msgstr "다른 출구로 옮김"
+
+#. Developer tools screen: explanatory subtext under the 'flows reraced' control.
+msgctxt "dev_flows_reraced_detail"
+msgid "How many of those failures were quietly moved instead of hanging"
+msgstr "그 장애 중 멈춰 있지 않고 조용히 옮겨진 수"
+
+#. Developer page: label of the 'Follow benched exits' setting.
+msgctxt "dev_follow_benched_exits"
+msgid "Follow benched exits"
+msgstr "대기 중인 출구 따라가기"
+
+#. Developer page: the explanation under the 'Follow benched exits' setting.
+msgctxt "dev_follow_benched_exits_detail"
+msgid "A quarantined exit keeps its own sites' new connections through the early bench, when the verdict is least proven. New sites still avoid it"
+msgstr "격리된 출구는 판정의 근거가 가장 약한 대기 초기에 자기 사이트의 새 연결을 유지합니다. 새 사이트는 여전히 그 출구를 피합니다"
+
+#. Developer page: label of the 'Follow window' setting.
+msgctxt "dev_follow_window"
+msgid "Follow window"
+msgstr "따라가기 기간"
+
+#. Developer page: the explanation under the 'Follow window' setting.
+msgctxt "dev_follow_window_detail"
+msgid "How long into a bench a site's new connections keep following their exit, in ms. Off scatters immediately"
+msgstr "대기가 시작된 뒤 사이트의 새 연결이 출구를 계속 따라가는 시간(밀리초)입니다. 끄면 바로 흩어지게 합니다"
+
+#. Developer tools screen (reliability surface): formation poll control label.
+msgctxt "dev_formation_poll"
+msgid "Fast first-exit poll"
+msgstr "첫 출구 빠른 확인"
+
+#. Developer tools screen: explanatory subtext under the 'formation poll' control.
+msgctxt "dev_formation_poll_detail"
+msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
+msgstr "연결 중인 플로우가 빈 창을 다시 확인하는 빈도로, 첫 출구가 들어오자마자 첫 요청이 나갈 수 있게 합니다. 끄면 2초 재시도 간격을 기다립니다"
+
+#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
+msgctxt "dev_fresh_flow_affinity"
+msgid "Hard fresh-flow affinity"
+msgstr "새 플로우 강제 선호도"
+
+#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
+msgctxt "dev_fresh_flow_affinity_detail"
+msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
+msgstr "각 새 연결을 그 IP나 도메인이 이미 쓰는 출구에 배정합니다. 기본값은 끔이며, 일반적인 새 연결은 모두 제공자 경쟁으로 갑니다. 기존 연결과 명시적 고정은 항상 그대로 유지됩니다"
+
+#. Developer tools screen (reliability surface): group follow control label.
+msgctxt "dev_group_follow"
+msgid "Follow benched exits"
+msgstr "대기 중인 출구 따라가기"
+
+#. Developer tools screen: explanatory subtext under the 'group follow' control.
+msgctxt "dev_group_follow_detail"
+msgid "A quarantined exit keeps its own sites' new connections through the early bench, when the verdict is least proven, so a bench does not split the site's egress IP. New sites still avoid it. Off scatters them"
+msgstr "격리된 출구는 판정의 근거가 가장 약한 대기 초기에 자기 사이트의 새 연결을 유지해, 대기 때문에 사이트의 송신 IP가 나뉘지 않게 합니다. 새 사이트는 여전히 그 출구를 피합니다. 끄면 흩어지게 합니다"
+
+#. Developer tools screen (reliability surface): group follow window control label.
+msgctxt "dev_group_follow_window"
+msgid "Follow window"
+msgstr "따라가기 기간"
+
+#. Developer tools screen: explanatory subtext under the 'group follow window' control.
+msgctxt "dev_group_follow_window_detail"
+msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
+msgstr "대기가 시작된 뒤 사이트의 새 연결이 출구를 계속 따라가는 시간입니다. 초기 대기는 대개 오경보이며, 오래 이어지는 대기는 제외로 향하고 플로우를 더 받지 않습니다. 끄면 바로 흩어지게 합니다"
+
+#. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
+msgctxt "dev_group_follow_window_ms_detail"
+msgid "How long into a bench a site's new connections keep following their exit, in ms — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
+msgstr "대기가 시작된 뒤 사이트의 새 연결이 출구를 계속 따라가는 시간(밀리초)입니다. 초기 대기는 대개 오경보이며, 오래 이어지는 대기는 제외로 향하고 플로우를 더 받지 않습니다. 끄면 바로 흩어지게 합니다"
+
+#. Developer tools screen (reliability surface): heartbeat control label.
+msgctxt "dev_heartbeat"
+msgid "State heartbeat"
+msgstr "상태 하트비트"
+
+#. Developer tools screen: explanatory subtext under the 'heartbeat' control.
+msgctxt "dev_heartbeat_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics. Off silences it; shorter spots a transition, longer keeps more buffer"
+msgstr "나중에 분석할 수 있도록 현재 상태를 요약한 한 줄을 로그에 기록하는 빈도입니다. 끄면 기록하지 않습니다. 짧을수록 상태 변화를 잘 잡고, 길수록 버퍼를 더 많이 보관합니다"
+
+#. Developer page (Apple): the explanation under the 'State heartbeat' setting, with its unit.
+msgctxt "dev_heartbeat_ms_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it; shorter spots a transition, longer keeps more buffer"
+msgstr "나중에 분석할 수 있도록 현재 상태를 요약한 한 줄을 로그에 기록하는 간격(밀리초)입니다. 끄면 기록하지 않습니다. 짧을수록 상태 변화를 잘 잡고, 길수록 버퍼를 더 많이 보관합니다"
 
 #. Developer page: intro line under the title.
 msgctxt "dev_intro"
 msgid "Tools for diagnosing connection freezes. These act on the live connection."
-msgstr "Tools for diagnosing connection freezes. These act on the live connection."
+msgstr "연결 멈춤을 진단하는 도구입니다. 현재 연결에 바로 적용됩니다."
 
 #. Developer screen: title of the control-plane IP family setting.
 msgctxt "dev_ip_family"
 msgid "Control connections"
-msgstr "Control connections"
+msgstr "제어 연결"
 
 #. Developer screen: the automatic IP family option.
 msgctxt "dev_ip_family_auto"
 msgid "Automatic"
-msgstr "Automatic"
+msgstr "자동"
 
 #. Developer screen: the automatic option's detail when one family was demoted; {reason} is the demotion reason.
 msgctxt "dev_ip_family_auto_demoted_detail"
 msgid "Automatic. {}."
-msgstr "Automatic. {}."
+msgstr "자동. {}."
 
 #. Developer screen: detail line of the automatic IP family option.
 msgctxt "dev_ip_family_auto_detail"
 msgid "Uses whichever family connects first, and routes around one that fails after connecting."
-msgstr "Uses whichever family connects first, and routes around one that fails after connecting."
+msgstr "먼저 연결되는 주소 체계를 사용하고, 연결 후 실패하는 체계는 우회합니다."
 
 #. Developer screen: the IPv4-only option.
 msgctxt "dev_ip_family_force4"
 msgid "Force IPv4"
-msgstr "Force IPv4"
+msgstr "IPv4 강제"
 
 #. Developer screen: detail line of the IPv4-only option.
 msgctxt "dev_ip_family_force4_detail"
 msgid "Control-plane connections use IPv4 only. Turn this off on an IPv6-only network."
-msgstr "Control-plane connections use IPv4 only. Turn this off on an IPv6-only network."
+msgstr "제어 연결은 IPv4만 사용합니다. IPv6 전용 네트워크에서는 이 옵션을 끄세요."
 
 #. Developer screen: the IPv6-only option.
 msgctxt "dev_ip_family_force6"
 msgid "Force IPv6"
-msgstr "Force IPv6"
+msgstr "IPv6 강제"
 
 #. Developer screen: detail line of the IPv6-only option.
 msgctxt "dev_ip_family_force6_detail"
 msgid "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
-msgstr "Control-plane connections use IPv6 only. Turn this off if the app cannot reach the server."
+msgstr "제어 연결은 IPv6만 사용합니다. 앱이 서버에 연결되지 않으면 이 옵션을 끄세요."
+
+#. Developer page: label of the 'Keep quiet providers longer' setting.
+msgctxt "dev_keep_quiet_providers_longer"
+msgid "Keep quiet providers longer"
+msgstr "응답 없는 제공자를 더 오래 유지"
+
+#. Developer page: the explanation under the 'Keep quiet providers longer' setting.
+msgctxt "dev_keep_quiet_providers_longer_detail"
+msgid "How long a provider still acknowledging traffic may return nothing before it is dropped, in ms. Off keeps them until they stop acknowledging"
+msgstr "트래픽을 계속 확인 응답하는 제공자가 아무것도 돌려주지 않은 채 제외되기 전까지 허용되는 시간(밀리초)입니다. 끄면 확인 응답을 멈출 때까지 유지합니다"
+
+#. Developer tools screen (reliability surface): load corroboration control label.
+msgctxt "dev_load_corroboration"
+msgid "Load corroboration"
+msgstr "부하 기반 확인"
+
+#. Developer tools screen: explanatory subtext under the 'load corroboration' control.
+msgctxt "dev_load_corroboration_detail"
+msgid "Extra silent destinations required per this many flows before a busy exit can be benched on soft evidence: a 24-flow exit at 8 needs 3 silent sites, not 2. Off keeps the flat minimum"
+msgstr "약한 근거로 바쁜 출구를 대기시키기 전에 이 플로우 수마다 필요한 추가 무응답 대상입니다. 값이 8일 때 플로우 24개인 출구는 무응답 사이트가 2개가 아니라 3개 필요합니다. 끄면 고정 최솟값을 유지합니다"
+
+#. Developer tools screen: control label for diagnostic log detail.
+msgctxt "dev_log_verbosity"
+msgid "Log detail"
+msgstr "로그 상세 수준"
+
+#. Developer tools screen: default diagnostic log detail level.
+msgctxt "dev_log_verbosity_default"
+msgid "Default"
+msgstr "기본"
+
+#. Developer tools screen: explanation of the default diagnostic log detail level.
+msgctxt "dev_log_verbosity_default_detail"
+msgid "Connection errors and contract pings"
+msgstr "연결 오류와 계약 ping"
+
+#. Developer tools screen: trace diagnostic log detail level.
+msgctxt "dev_log_verbosity_trace"
+msgid "Trace"
+msgstr "추적"
+
+#. Developer tools screen: explanation of the trace diagnostic log detail level.
+msgctxt "dev_log_verbosity_trace_detail"
+msgid "Transport and window internals. Very large logs"
+msgstr "전송과 창 내부 정보입니다. 로그가 매우 커집니다"
+
+#. Developer tools screen: label used when the diagnostic log detail level cannot be read.
+msgctxt "dev_log_verbosity_unavailable"
+msgid "Unavailable"
+msgstr "사용할 수 없음"
+
+#. Developer tools screen: explanation shown when the diagnostic log detail level cannot be read.
+msgctxt "dev_log_verbosity_unavailable_detail"
+msgid "There is no device to read the log level from yet. Sign in first"
+msgstr "로그 수준을 읽을 기기가 아직 없습니다. 먼저 로그인하세요"
+
+#. Developer tools screen: verbose diagnostic log detail level.
+msgctxt "dev_log_verbosity_verbose"
+msgid "Verbose"
+msgstr "상세"
+
+#. Developer tools screen: explanation of the verbose diagnostic log detail level.
+msgctxt "dev_log_verbosity_verbose_detail"
+msgid "Contract accounting and per-packet block decisions. Includes destination IP addresses"
+msgstr "계약 정산과 패킷별 차단 결정입니다. 대상 IP 주소가 포함됩니다"
+
+#. Developer tools screen: privacy warning shown when detailed traffic logging is enabled.
+msgctxt "dev_log_verbosity_warning"
+msgid "At Verbose and above the logs contain the destination IP addresses and ports of the traffic you send. Use “Export redacted logs” to share them; the raw bundle should not leave this device."
+msgstr "상세 이상에서는 보내는 트래픽의 대상 IP 주소와 포트가 로그에 포함됩니다. 공유하려면 '가린 로그 내보내기'를 사용하세요. 원본 번들은 이 기기 밖으로 내보내지 않는 것이 좋습니다."
+
+#. Developer tools screen: title for the detailed traffic logging privacy warning.
+msgctxt "dev_log_verbosity_warning_title"
+msgid "Logs are recording your real traffic"
+msgstr "로그에 실제 트래픽이 기록되고 있습니다"
+
+#. Developer page: label of the 'Longer TCP idle timeout' setting.
+msgctxt "dev_longer_tcp_idle_timeout"
+msgid "Longer TCP idle timeout"
+msgstr "더 긴 TCP 유휴 제한 시간"
+
+#. Developer page: the explanation under the 'Longer TCP idle timeout' setting.
+msgctxt "dev_longer_tcp_idle_timeout_detail"
+msgid "How long a TCP connection may sit idle, in ms. Off uses the UDP bound"
+msgstr "TCP 연결이 유휴 상태로 있을 수 있는 시간(밀리초)입니다. 끄면 UDP 한도를 사용합니다"
+
+#. Developer tools screen (reliability surface): max flows per exit control label.
+msgctxt "dev_max_flows_per_exit"
+msgid "Max connections per exit"
+msgstr "출구당 최대 연결 수"
+
+#. Developer tools screen: explanatory subtext under the 'max flows per exit' control.
+msgctxt "dev_max_flows_per_exit_detail"
+msgid "Losing an exit kills every connection on it. Lower spreads the damage; a site may then use more than one exit IP"
+msgstr "출구 하나를 잃으면 그 위의 모든 연결이 끊깁니다. 값이 낮을수록 피해가 분산되며, 이때 사이트가 출구 IP를 둘 이상 쓸 수 있습니다"
+
+#. Developer tools screen (reliability surface): measure none control label.
+msgctxt "dev_measure_none"
+msgid "No provider failures yet. Stall an exit below to cause one."
+msgstr "아직 제공자 장애가 없습니다. 아래에서 출구를 멈추게 해 장애를 일으켜 보세요."
+
+#. Developer tools screen (reliability surface): measurements control label.
+msgctxt "dev_measurements"
+msgid "Measurements"
+msgstr "측정"
+
+#. Developer tools screen: explanatory subtext under the 'measurements' control.
+msgctxt "dev_measurements_detail"
+msgid "What a provider failure costs. Reset, run a test, read back."
+msgstr "제공자 장애가 어떤 손실을 낳는지 확인합니다. 재설정하고, 테스트를 실행하고, 결과를 읽으세요."
 
 #. Developer page: button that migrates the live connection.
 msgctxt "dev_migrate"
 msgid "Migrate"
-msgstr "Migrate"
+msgstr "이전"
+
+#. Developer tools screen (reliability surface): migrate exit control label.
+msgctxt "dev_migrate_exit"
+msgid "Migrate"
+msgstr "이전"
+
+#. Developer page: last-action report after moving an exit's flows to another exit; the exit's short id follows.
+msgctxt "dev_migrated_exit"
+msgid "Migrated exit"
+msgstr "이전한 출구"
+
+#. Developer tools screen (reliability surface): min blackhole destinations control label.
+msgctxt "dev_min_blackhole_destinations"
+msgid "Corroborate silent exits"
+msgstr "무응답 출구 확인"
+
+#. Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.
+msgctxt "dev_min_blackhole_destinations_detail"
+msgid "How many distinct destinations must be silent before an exit is convicted on no-receive, so one dead site cannot remove a working exit. Off lets a single destination convict"
+msgstr "수신 없음으로 출구를 판정하기 전에 무응답이어야 하는 서로 다른 대상 수로, 죽은 사이트 하나 때문에 정상 출구가 제외되지 않게 합니다. 끄면 대상 하나만으로 판정합니다"
 
 #. Developer page: value of the flows that never came back, {done} of {total}.
 msgctxt "dev_never_came_back_value"
 msgid "{0} of {1}"
-msgstr "{0} of {1}"
+msgstr "{1}개 중 {0}개"
 
 #. Developer page: empty state of the destinations table.
 msgctxt "dev_no_destinations"
 msgid "No destinations yet."
-msgstr "No destinations yet."
+msgstr "아직 대상이 없습니다."
 
 #. Developer page: shown when there is no session to act on.
 msgctxt "dev_no_device"
 msgid "No session. Sign in and connect to use these tools."
-msgstr "No session. Sign in and connect to use these tools."
+msgstr "세션이 없습니다. 이 도구를 사용하려면 로그인하고 연결하세요."
+
+#. Developer tools screen (reliability surface): no exits control label.
+msgctxt "dev_no_exits"
+msgid "No exits. Connect first."
+msgstr "출구가 없습니다. 먼저 연결하세요."
 
 #. Developer page: empty state of the probe results table.
 msgctxt "dev_no_probe_results"
 msgid "No probe results yet. Start the suite."
-msgstr "No probe results yet. Start the suite."
+msgstr "아직 점검 결과가 없습니다. 점검 세트를 시작하세요."
 
 #. Developer page: empty state of the provider failures table.
 msgctxt "dev_no_provider_failures"
 msgid "No provider failures yet."
-msgstr "No provider failures yet."
+msgstr "아직 제공자 장애가 없습니다."
 
 #. Developer page: report line when no reliability override is in force.
 msgctxt "dev_not_applied"
 msgid "Not applied: there is no reliability override in force to change."
-msgstr "Not applied: there is no reliability override in force to change."
+msgstr "적용되지 않음: 변경할 수 있는 신뢰도 재정의가 적용되어 있지 않습니다."
 
 #. Developer page: report line when there is no live session to act on.
 msgctxt "dev_not_issued"
 msgid "Not issued: there is no live session to act on."
-msgstr "Not issued: there is no live session to act on."
+msgstr "보내지 않음: 작업할 활성 세션이 없습니다."
 
 #. Developer page: note shown when no reliability override is in force.
 msgctxt "dev_nothing_in_force"
 msgid "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
-msgstr "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live."
+msgstr "적용 중인 신뢰도 재정의가 없어 설정 섹션을 0으로 표시하지 않고 숨겼습니다. 아래 측정값과 출구 현황은 실시간입니다."
+
+#. Developer page: what a setting's 0 means when it falls back to the minimum of 1 ('Candidates evaluated per slot').
+msgctxt "dev_one_min"
+msgid "1 (min)"
+msgstr "1(최소)"
+
+#. Developer tools screen (reliability surface): open tools control label.
+msgctxt "dev_open_tools"
+msgid "Open developer tools"
+msgstr "개발자 도구 열기"
+
+#. Developer tools screen (reliability surface): probe all control label.
+msgctxt "dev_probe_all"
+msgid "Probe all exits now"
+msgstr "지금 모든 출구 점검"
 
 #. Developer page: button that probes every exit now.
 msgctxt "dev_probe_all_exits_now"
 msgid "Probe all exits now"
-msgstr "Probe all exits now"
+msgstr "지금 모든 출구 점검"
 
 #. Developer page: probe outcome, failed.
 msgctxt "dev_probe_failed"
 msgid "failed"
-msgstr "failed"
+msgstr "실패"
 
 #. Developer page: probe outcome, ok.
 msgctxt "dev_probe_ok"
 msgid "ok"
-msgstr "ok"
+msgstr "성공"
+
+#. Developer tools screen (reliability surface): probe providers control label.
+msgctxt "dev_probe_providers"
+msgid "Probe providers"
+msgstr "제공자 점검"
+
+#. Developer tools screen: explanatory subtext under the 'probe providers' control.
+msgctxt "dev_probe_providers_detail"
+msgid "Qualify exits by dialing real sites through them. An answer proves the exit; silence never counts against it"
+msgstr "출구를 통해 실제 사이트에 연결해 출구를 검증합니다. 응답이 있으면 출구가 입증되며, 무응답은 절대 불리하게 계산되지 않습니다"
+
+#. Developer tools screen (reliability surface): probe sample hosts control label.
+msgctxt "dev_probe_sample_hosts"
+msgid "Probe hosts per pass"
+msgstr "회차당 점검 호스트 수"
+
+#. Developer tools screen: explanatory subtext under the 'probe sample hosts' control.
+msgctxt "dev_probe_sample_hosts_detail"
+msgid "How many health sites one qualification pass dials through an exit. 0 probes the entire embedded list; a smaller number rotates through it in blocks"
+msgstr "검증 1회차에 출구를 통해 연결하는 상태 확인용 사이트 수입니다. 0이면 내장 목록 전체를 점검하고, 더 작은 수는 목록을 블록 단위로 돌아가며 사용합니다"
+
+#. Developer page: label of the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak"
+msgid "Probe silence streak"
+msgstr "점검 무응답 연속 횟수"
+
+#. Developer page: the explanation under the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak_detail"
+msgid "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement. Placement only"
+msgstr "출구가 완전한 무응답으로 넘길 수 있는 연속 점검 횟수입니다. 이를 넘으면 경고를 받고 새 플로우 배치에서 제외됩니다. 배치에만 적용"
+
+#. Developer page (Apple): the explanation under the 'Probe silence streak' setting.
+msgctxt "dev_probe_silence_streak_long_detail"
+msgid "How many consecutive probe passes an exit may answer with total silence before it is warned out of new-flow placement — the compensation for providers that leave the network mid-session. Placement only: removal stays traffic-based, and any sign of life clears the streak"
+msgstr "출구가 완전한 무응답으로 넘길 수 있는 연속 점검 횟수입니다. 이를 넘으면 경고를 받고 새 플로우 배치에서 제외됩니다. 세션 도중 네트워크를 떠나는 제공자에 대한 보완책입니다. 배치에만 적용: 제외는 계속 트래픽을 기준으로 하며, 살아 있다는 신호가 하나라도 있으면 연속 횟수가 초기화됩니다"
+
+#. Developer page: label of the 'Probe stalled exits before dropping' setting.
+msgctxt "dev_probe_stalled_exits"
+msgid "Probe stalled exits before dropping"
+msgstr "멈춘 출구를 제외하기 전에 점검"
+
+#. Developer page: the explanation under the 'Probe stalled exits before dropping' setting.
+msgctxt "dev_probe_stalled_exits_detail"
+msgid "When an exit stalls, ping it once before convicting. A congested but alive exit answers and keeps its flows; a dead one is still dropped"
+msgstr "출구가 멈추면 판정 전에 한 번 ping을 보냅니다. 혼잡하지만 살아 있는 출구는 응답하고 플로우를 유지하며, 죽은 출구는 그대로 제외됩니다"
 
 #. Developer page: heading of the probe suite section.
 msgctxt "dev_probe_suite"
 msgid "Probe suite"
-msgstr "Probe suite"
+msgstr "점검 세트"
 
 #. Developer page: explanation of the probe suite.
 msgctxt "dev_probe_suite_detail"
 msgid "Dials real targets through the live connection and times each stage. Runs with the SDK's own default configuration."
-msgstr "Dials real targets through the live connection and times each stage. Runs with the SDK's own default configuration."
+msgstr "활성 연결을 통해 실제 목표에 연결하고 각 단계의 시간을 잽니다. SDK 자체의 기본 구성으로 실행됩니다."
 
 #. Developer page: probe suite status when it is not running.
 msgctxt "dev_probe_suite_idle"
 msgid "Not running."
-msgstr "Not running."
+msgstr "실행 중이 아닙니다."
 
 #. Developer page: report line when the probe suite could not start.
 msgctxt "dev_probe_suite_not_started"
 msgid "Probe suite did not start: no live session, or one is already running."
-msgstr "Probe suite did not start: no live session, or one is already running."
+msgstr "점검 세트를 시작하지 못했습니다: 활성 세션이 없거나 이미 하나가 실행 중입니다."
 
 #. Developer page: probe suite status while it runs.
 msgctxt "dev_probe_suite_running"
 msgid "Running."
-msgstr "Running."
+msgstr "실행 중입니다."
 
 #. Developer page: button that starts the probe suite.
 msgctxt "dev_probe_suite_start"
 msgid "Start probe suite"
-msgstr "Start probe suite"
+msgstr "점검 세트 시작"
 
 #. Developer page: report line after the probe suite started.
 msgctxt "dev_probe_suite_started"
 msgid "Probe suite started"
-msgstr "Probe suite started"
+msgstr "점검 세트 시작됨"
 
 #. Developer page: button that stops the probe suite.
 msgctxt "dev_probe_suite_stop"
 msgid "Stop"
-msgstr "Stop"
+msgstr "중지"
 
 #. Developer page: report line after the probe suite stopped.
 msgctxt "dev_probe_suite_stopped"
 msgid "Probe suite stopped"
-msgstr "Probe suite stopped"
+msgstr "점검 세트 중지됨"
+
+#. Developer tools screen (reliability surface): probe timeout control label.
+msgctxt "dev_probe_timeout"
+msgid "Probe wait"
+msgstr "점검 대기 시간"
+
+#. Developer tools screen: explanatory subtext under the 'probe timeout' control.
+msgctxt "dev_probe_timeout_detail"
+msgid "How long a qualification probe waits for an answer. Off uses the built-in 4s. It only bounds waiting for proof, it never convicts"
+msgstr "검증 점검이 응답을 기다리는 시간입니다. 끄면 내장된 4초를 사용합니다. 증거를 기다리는 시간만 제한하며 판정하지는 않습니다"
+
+#. Developer page: label of the 'Probe wait' setting.
+msgctxt "dev_probe_wait"
+msgid "Probe wait"
+msgstr "점검 대기 시간"
+
+#. Developer page: the explanation under the 'Probe wait' setting.
+msgctxt "dev_probe_wait_detail"
+msgid "How long a qualification probe waits for an answer, in ms. Off uses the built-in 4s. It only bounds waiting for proof, it never convicts"
+msgstr "검증 점검이 응답을 기다리는 시간(밀리초)입니다. 끄면 내장된 4초를 사용합니다. 증거를 기다리는 시간만 제한하며 판정하지는 않습니다"
 
 #. Developer page: heading of the probed exits table.
 msgctxt "dev_probed_exits"
 msgid "Probed exits"
-msgstr "Probed exits"
+msgstr "점검한 출구"
+
+#. Developer tools screen (reliability surface): probes control label.
+msgctxt "dev_probes"
+msgid "Probes"
+msgstr "점검"
+
+#. Developer tools screen: explanatory subtext under the 'probes' control.
+msgctxt "dev_probes_detail"
+msgid "Qualification probes this session"
+msgstr "이 세션의 검증 점검"
+
+#. Developer tools screen: formatted value readout for 'probes'.
+msgctxt "dev_probes_value"
+msgid "{0} sent / {1} answered"
+msgstr "{0}회 전송 / {1}회 응답"
 
 #. Developer page: value of the QUIC flows that rebound: {count} total, {accepted} accepted, {redialed} re-dialed.
 msgctxt "dev_quic_flows_rebound_value"
 msgid "{0} ({1} accepted / {2} re-dialed)"
-msgstr "{0} ({1} accepted / {2} re-dialed)"
+msgstr "{0}(수락 {1} / 재연결 {2})"
+
+#. Developer tools screen (reliability surface): quic rebind control label.
+msgctxt "dev_quic_rebind"
+msgid "Rebind QUIC on exit loss"
+msgstr "출구를 잃으면 QUIC 다시 바인딩"
+
+#. Developer tools screen: explanatory subtext under the 'quic rebind' control.
+msgctxt "dev_quic_rebind_detail"
+msgid "Re-pin established QUIC flows to a live exit inside the removal instead of tearing them down"
+msgstr "제외 중에 이미 연결된 QUIC 플로우를 끊지 않고 살아 있는 출구에 다시 고정합니다"
+
+#. Developer tools screen (reliability surface): recovery control label.
+msgctxt "dev_recovery"
+msgid "Recovery time"
+msgstr "복구 시간"
+
+#. Developer tools screen: explanatory subtext under the 'recovery' control.
+msgctxt "dev_recovery_detail"
+msgid "From an exit dying to that site answering again"
+msgstr "출구가 죽은 순간부터 그 사이트가 다시 응답할 때까지"
+
+#. Developer tools screen (reliability surface): recovery missed control label.
+msgctxt "dev_recovery_missed"
+msgid "Never came back"
+msgstr "돌아오지 않음"
+
+#. Developer tools screen: explanatory subtext under the 'recovery missed' control.
+msgctxt "dev_recovery_missed_detail"
+msgid "Sites abandoned rather than recovered"
+msgstr "복구되지 않고 포기된 사이트"
+
+#. Developer tools screen: formatted value readout for 'recovery missed'.
+msgctxt "dev_recovery_missed_value"
+msgid "{0} of {1}"
+msgstr "{1}개 중 {0}개"
 
 #. Developer page: value of the recovery time, {average} and {worst} are durations.
 msgctxt "dev_recovery_time_value"
 msgid "avg {0}, worst {1}"
-msgstr "avg {0}, worst {1}"
+msgstr "평균 {0}, 최악 {1}"
+
+#. Developer tools screen: formatted value readout for 'recovery'.
+msgctxt "dev_recovery_value"
+msgid "avg {0}, worst {1}"
+msgstr "평균 {0}, 최악 {1}"
+
+#. Developer tools screen (reliability surface): refresh control label.
+msgctxt "dev_refresh"
+msgid "Refresh"
+msgstr "새로 고침"
+
+#. Developer page: label of the 'Release stuck retransmits' setting.
+msgctxt "dev_release_stuck_retransmits"
+msgid "Release stuck retransmits"
+msgstr "막힌 재전송 풀기"
+
+#. Developer page: the explanation under the 'Release stuck retransmits' setting.
+msgctxt "dev_release_stuck_retransmits_detail"
+msgid "How long retransmits are held before one is released, in ms. Off waits 30s"
+msgstr "재전송을 보류했다가 하나를 풀어 주기까지의 시간(밀리초)입니다. 끄면 30초를 기다립니다"
+
+#. Developer tools screen (reliability surface): removal budget count control label.
+msgctxt "dev_removal_budget_count"
+msgid "Removal storm limit"
+msgstr "제외 폭주 한도"
+
+#. Developer tools screen: explanatory subtext under the 'removal budget count' control.
+msgctxt "dev_removal_budget_count_detail"
+msgid "How many verdict removals are allowed per window before the rest are deferred; a burst is more likely one local cause than many failures. Off removes without limit"
+msgstr "나머지를 미루기 전에 창마다 허용되는 판정 기반 제외 횟수입니다. 한꺼번에 몰리는 경우는 여러 장애보다 하나의 로컬 원인일 가능성이 큽니다. 끄면 제한 없이 제외합니다"
+
+#. Developer tools screen (reliability surface): removal budget window control label.
+msgctxt "dev_removal_budget_window"
+msgid "Removal storm window"
+msgstr "제외 폭주 기간"
+
+#. Developer tools screen: explanatory subtext under the 'removal budget window' control.
+msgctxt "dev_removal_budget_window_detail"
+msgid "The window the removal limit is counted over. Off (like a limit of 0) turns the breaker off"
+msgstr "제외 한도를 세는 기간입니다. 끄면(한도 0과 같이) 차단기가 꺼집니다"
+
+#. Developer page: label of the 'Removal storm limit' setting.
+msgctxt "dev_removal_storm_limit"
+msgid "Removal storm limit"
+msgstr "제외 폭주 한도"
+
+#. Developer page: the explanation under the 'Removal storm limit' setting.
+msgctxt "dev_removal_storm_limit_detail"
+msgid "How many verdict removals are allowed per window before the rest are deferred; a burst is more likely one local cause than many failures"
+msgstr "나머지를 미루기 전에 기간마다 허용되는 판정 기반 제외 횟수입니다. 한꺼번에 몰리는 경우는 여러 장애보다 하나의 로컬 원인일 가능성이 큽니다"
+
+#. Developer page: label of the 'Removal storm window' setting.
+msgctxt "dev_removal_storm_window"
+msgid "Removal storm window"
+msgstr "제외 폭주 기간"
+
+#. Developer page: the explanation under the 'Removal storm window' setting.
+msgctxt "dev_removal_storm_window_detail"
+msgid "The window the removal limit is counted over, in ms. Off (like a limit of 0) turns the breaker off"
+msgstr "제외 한도를 세는 기간(밀리초)입니다. 끄면(한도 0과 같이) 차단기가 꺼집니다"
+
+#. Developer tools screen (reliability surface): removals deferred control label.
+msgctxt "dev_removals_deferred"
+msgid "Removals deferred"
+msgstr "미뤄진 제외"
+
+#. Developer tools screen: explanatory subtext under the 'removals deferred' control.
+msgctxt "dev_removals_deferred_detail"
+msgid "Removals the storm breaker held back after a correlated burst"
+msgstr "연관된 폭주 후 폭주 차단기가 보류한 제외"
 
 #. Developer page: label before the requested value of an override.
 msgctxt "dev_requested"
 msgid "Requested:"
-msgstr "Requested:"
+msgstr "요청됨:"
+
+#. Developer tools screen (reliability surface): reset defaults control label.
+msgctxt "dev_reset_defaults"
+msgid "Reset to shipped defaults"
+msgstr "출고 기본값으로 재설정"
+
+#. Developer tools screen (reliability surface): reset measurements control label.
+msgctxt "dev_reset_measurements"
+msgid "Reset measurements"
+msgstr "측정 재설정"
 
 #. Developer page: button that resets the reliability settings.
 msgctxt "dev_reset_to_shipped_defaults"
 msgid "Reset to shipped defaults"
-msgstr "Reset to shipped defaults"
+msgstr "출고 기본값으로 재설정"
+
+#. Developer tools screen (reliability surface): scheduler pause recovery control label.
+msgctxt "dev_scheduler_pause_recovery"
+msgid "Suspend recovery window"
+msgstr "절전 후 복구 기간"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pause recovery' control.
+msgctxt "dev_scheduler_pause_recovery_detail"
+msgid "How long verdicts stay held after a detected suspend, giving transports time to re-register. Off uses the built-in 5s"
+msgstr "절전이 감지된 뒤 판정을 보류하는 시간으로, 전송이 다시 등록될 시간을 줍니다. 끄면 내장된 5초를 사용합니다"
+
+#. Developer tools screen (reliability surface): scheduler pause tolerance control label.
+msgctxt "dev_scheduler_pause_tolerance"
+msgid "Suspend detector"
+msgstr "절전 감지기"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.
+msgctxt "dev_scheduler_pause_tolerance_detail"
+msgid "How much timer overshoot reads as the phone being suspended rather than an exit stalling, so a resumed phone does not convict every exit at once. Off disables it"
+msgstr "타이머 지연이 어느 정도일 때 출구 멈춤이 아니라 휴대폰 절전으로 볼지 정합니다. 절전에서 깨어난 휴대폰이 모든 출구를 한꺼번에 판정하지 않게 합니다. 끄면 사용하지 않습니다"
+
+#. Developer page (Apple): the explanation under the 'Suspend detector' setting, with its unit.
+msgctxt "dev_scheduler_pause_tolerance_ms_detail"
+msgid "How much timer overshoot reads as the phone being suspended rather than an exit stalling, in ms, so a resumed phone does not convict every exit at once. Off disables it"
+msgstr "타이머 지연이 어느 정도(밀리초)일 때 출구 멈춤이 아니라 휴대폰 절전으로 볼지 정합니다. 절전에서 깨어난 휴대폰이 모든 출구를 한꺼번에 판정하지 않게 합니다. 끄면 사용하지 않습니다"
+
+#. Developer tools screen (reliability surface): scheduler pauses control label.
+msgctxt "dev_scheduler_pauses"
+msgid "Suspends caught"
+msgstr "감지된 절전"
+
+#. Developer tools screen: explanatory subtext under the 'scheduler pauses' control.
+msgctxt "dev_scheduler_pauses_detail"
+msgid "Host suspends the detector caught, each one a batch of verdicts held instead of executed on a just-resumed phone"
+msgstr "감지기가 잡아낸 호스트 절전으로, 각각은 막 깨어난 휴대폰에서 실행하지 않고 보류한 판정 묶음입니다"
+
+#. Developer tools screen: section heading for the detection controls.
+msgctxt "dev_section_detection"
+msgid "Detection"
+msgstr "감지"
+
+#. Developer tools screen: section heading for diagnostic log controls.
+msgctxt "dev_section_diagnostics"
+msgid "Diagnostics"
+msgstr "진단"
+
+#. Developer tools screen: section heading for the observability controls.
+msgctxt "dev_section_observability"
+msgid "Observability"
+msgstr "관측성"
+
+#. Developer tools screen: section heading for the placement controls.
+msgctxt "dev_section_placement"
+msgid "Placement"
+msgstr "배치"
+
+#. Developer tools screen: section heading for the probing controls.
+msgctxt "dev_section_probing"
+msgid "Probing"
+msgstr "점검"
+
+#. Developer tools screen: section heading for the recovery controls.
+msgctxt "dev_section_recovery"
+msgid "Recovery"
+msgstr "복구"
+
+#. Developer tools screen (reliability surface): send stall control label.
+msgctxt "dev_send_stall"
+msgid "Drop stalled exits fast"
+msgstr "멈춘 출구 빨리 제외"
+
+#. Developer tools screen: explanatory subtext under the 'send stall' control.
+msgctxt "dev_send_stall_detail"
+msgid "How long an exit may stop delivering before it is dropped. Off waits 30s"
+msgstr "출구가 전달을 멈춘 뒤 제외되기까지 허용되는 시간입니다. 끄면 30초를 기다립니다"
+
+#. Developer tools screen (reliability surface): server name bridge control label.
+msgctxt "dev_server_name_bridge"
+msgid "Converge late-named flows"
+msgstr "늦게 이름이 붙은 플로우 합치기"
+
+#. Developer tools screen: explanatory subtext under the 'server name bridge' control.
+msgctxt "dev_server_name_bridge_detail"
+msgid "Moves later connections onto the exit the first one already uses"
+msgstr "이후 연결을 첫 연결이 이미 쓰는 출구로 옮깁니다"
 
 #. Developer page: shown when the system service is not attached.
 msgctxt "dev_service_detached"
 msgid "The URnetwork service is not attached, so the live connection cannot be read."
-msgstr "The URnetwork service is not attached, so the live connection cannot be read."
+msgstr "URnetwork 서비스가 연결되어 있지 않아 활성 연결을 읽을 수 없습니다."
 
 #. Developer page: heading of the daemon session log.
 msgctxt "dev_session_log"
 msgid "Session log"
-msgstr "Session log"
+msgstr "세션 로그"
 
 #. Developer page: shown when this account may not read the daemon log.
 msgctxt "dev_session_log_denied"
 msgid "This account may drive the daemon but may not read its log."
-msgstr "This account may drive the daemon but may not read its log."
+msgstr "이 계정은 서비스를 조작할 수 있지만 그 로그는 읽을 수 없습니다."
 
 #. Developer page: explanation of the session log.
 msgctxt "dev_session_log_detail"
 msgid "What the daemon has written since it started. The reliability lines ([rel] event=...) are how a knob below proves it changed something."
-msgstr "What the daemon has written since it started. The reliability lines ([rel] event=...) are how a knob below proves it changed something."
+msgstr "서비스가 시작된 뒤 기록한 내용입니다. 신뢰도 줄([rel] event=...)은 아래 설정이 실제로 무언가를 바꿨다는 증거입니다."
 
 #. Developer page: line in the session log when {count} earlier lines were dropped.
 msgctxt "dev_session_log_dropped"
 msgid "{} lines were dropped before this point"
-msgstr "{} lines were dropped before this point"
+msgstr "이 지점 이전에 {}줄이 삭제되었습니다"
 
 #. Developer page: empty state of the session log.
 msgctxt "dev_session_log_empty"
 msgid "The daemon has not written anything yet."
-msgstr "The daemon has not written anything yet."
+msgstr "서비스가 아직 아무것도 기록하지 않았습니다."
 
 #. Developer page: toggle that follows the session log tail.
 msgctxt "dev_session_log_follow"
 msgid "Follow"
-msgstr "Follow"
+msgstr "따라가기"
 
 #. Developer page: note when the daemon restarted and the log began again.
 msgctxt "dev_session_log_restarted"
 msgid "The daemon restarted. This is a new log; the previous run's lines are gone."
-msgstr "The daemon restarted. This is a new log; the previous run's lines are gone."
+msgstr "서비스가 다시 시작되었습니다. 새 로그이며, 이전 실행의 줄은 없어졌습니다."
+
+#. Developer page (Apple): button that applies a typed value.
+msgctxt "dev_set"
+msgid "Set"
+msgstr "적용"
+
+#. Developer page (Apple): button that shares an exported log file. {name} is the file name.
+msgctxt "dev_share_file"
+msgid "Share {}"
+msgstr "{} 공유"
+
+#. Developer tools screen (reliability surface): shuffle exits control label.
+msgctxt "dev_shuffle_exits"
+msgid "Shuffle all exits"
+msgstr "모든 출구 섞기"
+
+#. Developer tools screen (reliability surface): simulate network change control label.
+msgctxt "dev_simulate_network_change"
+msgid "Simulate network change"
+msgstr "네트워크 변경 시뮬레이션"
+
+#. Developer tools screen (reliability surface): soft verdict control label.
+msgctxt "dev_soft_verdict"
+msgid "Demote before removing"
+msgstr "제외 전에 강등"
+
+#. Developer tools screen: explanatory subtext under the 'soft verdict' control.
+msgctxt "dev_soft_verdict_detail"
+msgid "Ambiguous verdicts bench an exit instead of tearing down its flows; removal needs sustained evidence or an empty exit"
+msgstr "모호한 판정은 플로우를 끊지 않고 출구를 대기시킵니다. 제외하려면 지속적인 근거나 빈 출구가 필요합니다"
+
+#. Developer tools screen (reliability surface): stall exit control label.
+msgctxt "dev_stall_exit"
+msgid "Stall"
+msgstr "멈추기"
 
 #. Developer page: report line after an exit was stalled.
 msgctxt "dev_stalled_exit"
 msgid "Stalled exit"
-msgstr "Stalled exit"
+msgstr "멈추게 한 출구"
+
+#. Developer tools screen (reliability surface): standing reserve control label.
+msgctxt "dev_standing_reserve"
+msgid "Keep a spare exit warm"
+msgstr "예비 출구 대기시켜 두기"
+
+#. Developer tools screen: explanatory subtext under the 'standing reserve' control.
+msgctxt "dev_standing_reserve_detail"
+msgid "Size each window one exit beyond its target so a replacement is already connected. Off waits until a loss to backfill"
+msgstr "각 창을 목표보다 출구 하나만큼 크게 잡아 대체 출구가 이미 연결되어 있게 합니다. 끄면 손실이 생긴 뒤에 보충합니다"
 
 #. Developer page: exit state, benched.
 msgctxt "dev_state_benched"
 msgid "benched"
-msgstr "benched"
+msgstr "대기 중"
 
 #. Developer page: exit state, done.
 msgctxt "dev_state_done"
 msgid "done"
-msgstr "done"
+msgstr "완료"
 
-#. Developer page: exit state, p2p.
+#. Developer page: label of the 'State heartbeat' setting.
+msgctxt "dev_state_heartbeat"
+msgid "State heartbeat"
+msgstr "상태 하트비트"
+
+#. Developer page: the explanation under the 'State heartbeat' setting.
+msgctxt "dev_state_heartbeat_detail"
+msgid "How often one line summarizing live state is written to the log for later forensics, in ms. Off silences it"
+msgstr "나중에 분석할 수 있도록 현재 상태를 요약한 한 줄을 로그에 기록하는 간격(밀리초)입니다. 끄면 기록하지 않습니다"
+
+#. Developer page: exit state of an exit that carries only the P2P transport. A transport name; never translated.
 msgctxt "dev_state_p2p"
 msgid "p2p"
 msgstr "p2p"
@@ -1856,32 +3197,262 @@ msgstr "p2p"
 #. Developer page: exit state, proven.
 msgctxt "dev_state_proven"
 msgid "proven"
-msgstr "proven"
+msgstr "검증됨"
 
 #. Developer page: exit state, warned.
 msgctxt "dev_state_warned"
 msgid "warned"
-msgstr "warned"
+msgstr "경고됨"
+
+#. Developer page: label of the 'Sticky site affinity' setting.
+msgctxt "dev_sticky_site_affinity"
+msgid "Sticky site affinity"
+msgstr "사이트 고정 선호도"
+
+#. Developer page: the explanation under the 'Sticky site affinity' setting.
+msgctxt "dev_sticky_site_affinity_detail"
+msgid "A site's new connections stay on the exit its earlier ones already use, even past the flow cap, so a busy site keeps one egress IP"
+msgstr "사이트의 새 연결은 플로우 한도를 넘더라도 이전 연결이 이미 쓰는 출구에 머물러, 바쁜 사이트가 하나의 송신 IP를 유지합니다"
+
+#. Developer page: label of the 'Suspend detector' setting.
+msgctxt "dev_suspend_detector"
+msgid "Suspend detector"
+msgstr "절전 감지기"
+
+#. Developer page: the explanation under the 'Suspend detector' setting.
+msgctxt "dev_suspend_detector_detail"
+msgid "How much timer overshoot reads as the machine being suspended rather than an exit stalling, in ms, so a resumed machine does not convict every exit at once. Off disables it"
+msgstr "타이머 지연이 어느 정도(밀리초)일 때 출구 멈춤이 아니라 컴퓨터 절전으로 볼지 정합니다. 절전에서 깨어난 컴퓨터가 모든 출구를 한꺼번에 판정하지 않게 합니다. 끄면 사용하지 않습니다"
+
+#. Developer page: label of the 'Suspend recovery window' setting.
+msgctxt "dev_suspend_recovery_window"
+msgid "Suspend recovery window"
+msgstr "절전 후 복구 기간"
+
+#. Developer page: the explanation under the 'Suspend recovery window' setting.
+msgctxt "dev_suspend_recovery_window_detail"
+msgid "How long verdicts stay held after a detected suspend, in ms, giving transports time to re-register. Off uses the built-in 5s"
+msgstr "절전이 감지된 뒤 판정을 보류하는 시간(밀리초)으로, 전송이 다시 등록될 시간을 줍니다. 끄면 내장된 5초를 사용합니다"
+
+#. Developer page: label of the 'Suspends caught' setting.
+msgctxt "dev_suspends_caught"
+msgid "Suspends caught"
+msgstr "감지된 절전"
+
+#. Developer page: the explanation under the 'Suspends caught' setting.
+msgctxt "dev_suspends_caught_detail"
+msgid "Host suspends the detector caught, each one a batch of verdicts held instead of executed on a just-resumed machine"
+msgstr "감지기가 잡아낸 호스트 절전으로, 각각은 막 깨어난 컴퓨터에서 실행하지 않고 보류한 판정 묶음입니다"
 
 #. Developer page: button that syncs the reliability settings.
 msgctxt "dev_sync"
 msgid "Sync"
-msgstr "Sync"
+msgstr "동기화"
+
+#. Developer tools screen (reliability surface): tcp collapse hold control label.
+msgctxt "dev_tcp_collapse_hold"
+msgid "Release stuck retransmits"
+msgstr "막힌 재전송 풀기"
+
+#. Developer tools screen: explanatory subtext under the 'tcp collapse hold' control.
+msgctxt "dev_tcp_collapse_hold_detail"
+msgid "How long retransmits are held before one is released. Off waits 30s"
+msgstr "재전송을 보류했다가 하나를 풀어 주기까지의 시간입니다. 끄면 30초를 기다립니다"
+
+#. Developer tools screen (reliability surface): tcp idle timeout control label.
+msgctxt "dev_tcp_idle_timeout"
+msgid "Longer TCP idle timeout"
+msgstr "더 긴 TCP 유휴 제한 시간"
+
+#. Developer tools screen: explanatory subtext under the 'tcp idle timeout' control.
+msgctxt "dev_tcp_idle_timeout_detail"
+msgid "How long a TCP connection may sit idle. Off uses the UDP bound"
+msgstr "TCP 연결이 유휴 상태로 있을 수 있는 시간입니다. 끄면 UDP 한도를 사용합니다"
+
+#. Developer tools screen (reliability surface): timing control label.
+msgctxt "dev_timing"
+msgid "Timing"
+msgstr "타이밍"
+
+#. Developer tools screen (reliability surface): udp idle timeout control label.
+msgctxt "dev_udp_idle_timeout"
+msgid "UDP idle timeout"
+msgstr "UDP 유휴 제한 시간"
+
+#. Developer page: label of the 'UDP idle timeout' setting (desktop wording of dev_udp_idle_timeout).
+msgctxt "dev_udp_idle_timeout_desktop"
+msgid "UDP idle timeout"
+msgstr "UDP 유휴 제한 시간"
+
+#. Developer page: the explanation under the 'UDP idle timeout' setting, with the unit the number box takes.
+msgctxt "dev_udp_idle_timeout_desktop_detail"
+msgid "How long a non-TCP flow may sit idle before it is reaped, in ms"
+msgstr "TCP가 아닌 플로우가 정리되기 전까지 유휴 상태로 있을 수 있는 시간(밀리초)"
+
+#. Developer tools screen: explanatory subtext under the 'udp idle timeout' control.
+msgctxt "dev_udp_idle_timeout_detail"
+msgid "How long a non-TCP flow may sit idle before it is reaped"
+msgstr "TCP가 아닌 플로우가 정리되기 전까지 유휴 상태로 있을 수 있는 시간"
+
+#. Developer tools screen (reliability surface): udp teardown control label.
+msgctxt "dev_udp_teardown"
+msgid "Signal UDP teardown"
+msgstr "UDP 종료 알림"
+
+#. Developer tools screen: explanatory subtext under the 'udp teardown' control.
+msgctxt "dev_udp_teardown_detail"
+msgid "Tells DNS and QUIC the path is gone instead of going silent"
+msgstr "조용히 끊기지 않고 경로가 사라졌다고 DNS와 QUIC에 알립니다"
+
+#. Developer page: what a setting's 0 means when it removes the cap ('Max connections per exit').
+msgctxt "dev_unlimited"
+msgid "Unlimited"
+msgstr "무제한"
+
+#. Developer page: per-exit button that releases an exit stalled with Stall.
+msgctxt "dev_unstall"
+msgid "Unstall"
+msgstr "멈춤 해제"
 
 #. Developer page: report line after a stall was cleared on an exit.
 msgctxt "dev_unstalled_exit"
 msgid "Cleared stall on exit"
-msgstr "Cleared stall on exit"
+msgstr "멈춤을 해제한 출구"
 
 #. Developer page: report line when the update check failed.
 msgctxt "dev_update_check_failed"
 msgid "The update check failed — see the app log."
-msgstr "The update check failed — see the app log."
+msgstr "업데이트 확인에 실패했습니다 — 앱 로그를 확인하세요."
+
+#. Developer page: update check status while checking.
+msgctxt "dev_update_checking"
+msgid "Checking for updates…"
+msgstr "업데이트 확인 중…"
+
+#. Developer page: update check result on a development build. {version} is the newest release version.
+msgctxt "dev_update_dev_build"
+msgid "Development build: the newest release is v{}, and a development build is never updated automatically."
+msgstr "개발 빌드: 최신 릴리스는 v{}입니다. 개발 빌드는 자동으로 업데이트되지 않습니다."
+
+#. Developer page (Windows): the rest of the development build line, after the version.
+msgctxt "dev_update_dev_build_note"
+msgid "this is a dev build (code 0), which never self-updates"
+msgstr "이 빌드는 개발 빌드(코드 0)로, 스스로 업데이트되지 않습니다"
+
+#. Developer page: update check result when a newer release exists; Settings shows the update. {version} is the release version.
+msgctxt "dev_update_found"
+msgid "Update available: v{} — see Settings."
+msgstr "업데이트 가능: v{} — 설정을 확인하세요."
+
+#. Developer page (Windows): prefix of the update check result when a newer release exists; the version follows.
+msgctxt "dev_update_found_label"
+msgid "Update found:"
+msgstr "업데이트 발견:"
+
+#. Developer page (Windows): prefix of the update check result on a development build; the version follows.
+msgctxt "dev_update_newest_release_is"
+msgid "Newest release is"
+msgstr "최신 릴리스:"
+
+#. Developer page (Windows): inside the parentheses after 'No update', before the newest release's version.
+msgctxt "dev_update_newest_seen"
+msgid "newest release seen:"
+msgstr "확인된 최신 릴리스:"
+
+#. Developer page: update check result when there is no stable release.
+msgctxt "dev_update_no_releases"
+msgid "No stable release has been published yet."
+msgstr "아직 공개된 안정 릴리스가 없습니다."
+
+#. Developer page (Windows): update check result on the newest release; the version details follow in parentheses.
+msgctxt "dev_update_none"
+msgid "No update: this build is current"
+msgstr "업데이트 없음: 이 빌드가 최신입니다"
+
+#. Developer page: update check result on the newest release. {version} is the release version.
+msgctxt "dev_update_up_to_date"
+msgid "Up to date. Newest release: v{}"
+msgstr "최신 상태입니다. 최신 릴리스: v{}"
+
+#. Developer tools screen (reliability surface): uplink gate control label.
+msgctxt "dev_uplink_gate"
+msgid "Uplink silence gate"
+msgstr "업링크 무응답 게이트"
+
+#. Developer tools screen: explanatory subtext under the 'uplink gate' control.
+msgctxt "dev_uplink_gate_detail"
+msgid "How long the whole tunnel may be silent before provider verdicts are held as inadmissible. 0 convicts as before"
+msgstr "제공자에 대한 판정을 인정할 수 없는 것으로 보류하기 전까지 터널 전체가 무응답으로 있을 수 있는 시간입니다. 0은 이전처럼 판정합니다"
+
+#. Developer page: label of the 'Uplink silence gate' setting.
+msgctxt "dev_uplink_silence_gate"
+msgid "Uplink silence gate"
+msgstr "업링크 무응답 게이트"
+
+#. Developer page: the explanation under the 'Uplink silence gate' setting.
+msgctxt "dev_uplink_silence_gate_detail"
+msgid "How long the whole tunnel may be silent before provider verdicts are held as inadmissible, in ms. 0 convicts as before"
+msgstr "제공자에 대한 판정을 인정할 수 없는 것으로 보류하기 전까지 터널 전체가 무응답으로 있을 수 있는 시간(밀리초)입니다. 0은 이전처럼 판정합니다"
+
+#. Developer tools screen (reliability surface): verdicts held control label.
+msgctxt "dev_verdicts_held"
+msgid "Verdicts held"
+msgstr "보류된 판정"
+
+#. Developer page: label of the 'Verdicts held' measurement (desktop wording of dev_verdicts_held).
+msgctxt "dev_verdicts_held_desktop"
+msgid "Verdicts held"
+msgstr "보류된 판정"
+
+#. Developer page: the explanation under the 'Verdicts held' measurement (desktop wording).
+msgctxt "dev_verdicts_held_desktop_detail"
+msgid "Convictions withheld because this machine's own uplink, not the provider, was silent (uplink / transport)"
+msgstr "제공자가 아니라 이 컴퓨터 자체의 업링크가 무응답이어서 보류된 판정(업링크 / 전송)"
+
+#. Developer tools screen: explanatory subtext under the 'verdicts held' control.
+msgctxt "dev_verdicts_held_detail"
+msgid "Convictions withheld because the phone's own uplink, not the provider, was silent (uplink / transport)"
+msgstr "제공자가 아니라 휴대폰 자체의 업링크가 무응답이어서 보류된 판정(업링크 / 전송)"
+
+#. Developer tools screen: formatted value readout for 'verdicts held'.
+msgctxt "dev_verdicts_held_value"
+msgid "{0} / {1}"
+msgstr "{0} / {1}"
+
+#. Developer tools screen (reliability surface): worst loss control label.
+msgctxt "dev_worst_loss"
+msgid "Worst single failure"
+msgstr "최악의 단일 장애"
+
+#. Developer tools screen: explanatory subtext under the 'worst loss' control.
+msgctxt "dev_worst_loss_detail"
+msgid "The one the user actually feels"
+msgstr "사용자가 실제로 체감하는 장애"
+
+#. Developer tools screen: formatted value readout for 'worst loss'.
+msgctxt "dev_worst_loss_value"
+msgid "{} connections"
+msgstr "연결 {}개"
 
 #. Developer page: value of the worst single failure, {count} connections.
 msgctxt "dev_worst_single_failure_value"
 msgid "{} connections"
-msgstr "{} connections"
+msgstr "연결 {}개"
+
+#. Developer tools screen: developer.
+msgctxt "developer"
+msgid "Developer"
+msgstr "개발자"
+
+#. Developer tools screen: developer description.
+msgctxt "developer_description"
+msgid "Tools for diagnosing connection freezes. These act on the live connection."
+msgstr "연결 멈춤을 진단하는 도구입니다. 현재 연결에 바로 적용됩니다."
+
+#. Developer tools screen: developer disconnected.
+msgctxt "developer_disconnected"
+msgid "Connect to use these tools."
+msgstr "이 도구를 사용하려면 연결하세요."
 
 #. device
 msgctxt "device"
@@ -1927,6 +3498,121 @@ msgstr "사양"
 msgctxt "devices"
 msgid "Devices"
 msgstr "기기"
+
+#. macOS folder-access panel button that grants the app access to the Applications folder for the update.
+msgctxt "direct_update_allow"
+msgid "Allow"
+msgstr "허용"
+
+#. macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.
+msgctxt "direct_update_allow_applications"
+msgid "To install the update, allow URnetwork to replace itself in the Applications folder. Select Applications and click Allow."
+msgstr "업데이트를 설치하려면 URnetwork가 응용 프로그램 폴더에서 자신을 교체하도록 허용하세요. 응용 프로그램을 선택하고 허용을 클릭하세요."
+
+#. macOS Settings > Software update status when a newer release exists. {version} is its version.
+msgctxt "direct_update_available"
+msgid "Update available: {}"
+msgstr "업데이트 사용 가능: {}"
+
+#. macOS Settings > Software update button that checks now.
+msgctxt "direct_update_check"
+msgid "Check for updates"
+msgstr "업데이트 확인"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason (often English, from the system).
+msgctxt "direct_update_check_failed"
+msgid "Could not check for updates: {}"
+msgstr "업데이트를 확인할 수 없습니다: {}"
+
+#. macOS Settings > Software update status while checking.
+msgctxt "direct_update_checking"
+msgid "Checking for updates…"
+msgstr "업데이트 확인 중…"
+
+#. macOS Settings > Software update error: the downloaded file failed its integrity check and was deleted.
+msgctxt "direct_update_checksum_failed"
+msgid "The download did not match the release checksum and was discarded."
+msgstr "다운로드가 릴리스 체크섬과 일치하지 않아 삭제되었습니다."
+
+#. macOS Settings > Software update status on a development build, which never updates itself. {version} is the newest release version.
+msgctxt "direct_update_development_build"
+msgid "Development build; the newest release is {}."
+msgstr "개발 빌드입니다. 최신 릴리스는 {}입니다."
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_download_failed"
+msgid "The download failed: {}"
+msgstr "다운로드 실패: {}"
+
+#. macOS Settings > Software update status while the release downloads. {version} is its version.
+msgctxt "direct_update_downloading_version"
+msgid "Downloading {}…"
+msgstr "{} 다운로드 중…"
+
+#. macOS Settings > Software update button that downloads, verifies and installs the update.
+msgctxt "direct_update_install"
+msgid "Install update"
+msgstr "업데이트 설치"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_install_failed"
+msgid "The update could not be installed: {}"
+msgstr "업데이트를 설치할 수 없습니다: {}"
+
+#. macOS Settings > Software update status while the verified update is installed.
+msgctxt "direct_update_installing"
+msgid "Installing the update…"
+msgstr "업데이트 설치 중…"
+
+#. macOS Settings > Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".
+msgctxt "direct_update_last_checked"
+msgid "Last checked {}"
+msgstr "마지막 확인: {}"
+
+#. macOS Settings > Software update status when the app could not replace itself. {version} is the downloaded release's version.
+msgctxt "direct_update_manual_install"
+msgid "{} was downloaded and verified. Drag the new URnetwork into the Applications folder, then open it from there."
+msgstr "{}을(를) 다운로드하고 확인했습니다. 새 URnetwork를 응용 프로그램 폴더로 드래그한 다음 그곳에서 여세요."
+
+#. macOS Settings > Software update status before the first check.
+msgctxt "direct_update_not_checked"
+msgid "Updates have not been checked yet."
+msgstr "아직 업데이트를 확인하지 않았습니다."
+
+#. macOS Settings > Software update status while the app restarts on the new version.
+msgctxt "direct_update_relaunching"
+msgid "Relaunching URnetwork…"
+msgstr "URnetwork 다시 시작 중…"
+
+#. macOS Settings: title of the section that checks for and installs app updates (direct-download app).
+msgctxt "direct_update_section_title"
+msgid "Software update"
+msgstr "소프트웨어 업데이트"
+
+#. macOS Settings > Software update button that reveals the downloaded update in Finder (the macOS file manager).
+msgctxt "direct_update_show_in_finder"
+msgid "Show in Finder"
+msgstr "Finder에서 보기"
+
+#. macOS Settings > Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.
+msgctxt "direct_update_signature_rejected"
+msgid "The update was rejected: {}"
+msgstr "업데이트가 거부되었습니다: {}"
+
+#. macOS Settings > Software update error. {detail} is a short technical reason.
+msgctxt "direct_update_unpack_failed"
+msgid "The download could not be unpacked: {}"
+msgstr "다운로드의 압축을 풀 수 없습니다: {}"
+
+#. macOS Settings > Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.
+msgctxt "direct_update_unusable_release"
+msgid "Release {0} cannot be installed by the app ({1})."
+msgstr "앱에서 릴리스 {0}을(를) 설치할 수 없습니다({1})."
+
+#. macOS Settings > Software update status when no newer release exists.
+msgctxt "direct_update_up_to_date"
+msgid "URnetwork is up to date."
+msgstr "URnetwork가 최신 상태입니다."
 
 #. Call to action
 msgctxt "disable_ignore_battery_hint"
@@ -2053,6 +3739,76 @@ msgctxt "earnings"
 msgid "Earnings"
 msgstr "수익"
 
+#. Placeholder of the manual Bittensor address field on the Earnings page.
+msgctxt "earnings_address_placeholder"
+msgid "Enter a Bittensor address"
+msgstr "Bittensor 주소 입력"
+
+#. Button on the Earnings page that starts connecting a different Bittensor wallet.
+msgctxt "earnings_change_wallet"
+msgid "Change wallet"
+msgstr "지갑 변경"
+
+#. Progress text while a claim transaction is being sent.
+msgctxt "earnings_claim_sending"
+msgid "Sending…"
+msgstr "보내는 중…"
+
+#. Shown in place of the unclaimed figure when the app has no device session to read the chain with.
+msgctxt "earnings_claims_need_session"
+msgid "Claims load from the chain once the app has a session. Press Connect first."
+msgstr "앱에 세션이 생기면 받기 정보를 체인에서 불러옵니다. 먼저 연결을 누르세요."
+
+#. Button that copies an address to the clipboard.
+msgctxt "earnings_copy_address"
+msgid "Copy address"
+msgstr "주소 복사"
+
+#. Column header of the per-epoch history table: the date the epoch ended.
+msgctxt "earnings_date_column"
+msgid "Date"
+msgstr "날짜"
+
+#. Column header of the per-epoch history table.
+msgctxt "earnings_epoch_column"
+msgid "Epoch"
+msgstr "에포크"
+
+#. Label of the gas key's TAO balance in the claim dialog.
+msgctxt "earnings_gas_balance"
+msgid "Gas balance"
+msgstr "가스 잔액"
+
+#. Title of the Earnings destination's third pane: own rank, multipliers and reliability.
+msgctxt "earnings_network_pane_title"
+msgid "Your network"
+msgstr "내 네트워크"
+
+#. Column header of the per-epoch history table: points earned in the epoch.
+msgctxt "earnings_points_column"
+msgid "Points"
+msgstr "포인트"
+
+#. Column header of the per-epoch history table: the network's share of the block.
+msgctxt "earnings_share_column"
+msgid "Share"
+msgstr "몫"
+
+#. Column header of the per-epoch history table: the claim status of the epoch's alpha.
+msgctxt "earnings_status_column"
+msgid "Status"
+msgstr "상태"
+
+#. Link that opens a claim transaction in the block explorer.
+msgctxt "earnings_view_transaction"
+msgid "View transaction"
+msgstr "트랜잭션 보기"
+
+#. Error when the wallet that signed the connect challenge is not the address the user entered.
+msgctxt "earnings_wallet_mismatch"
+msgid "The wallet that signed is not the address you entered."
+msgstr "서명한 지갑이 입력한 주소와 다릅니다."
+
 #. device
 msgctxt "edit_device_name"
 msgid "Edit device name"
@@ -2097,6 +3853,11 @@ msgstr "다른 이유"
 msgctxt "email_e4_reason_trust"
 msgid "I'm not sure I trust a VPN"
 msgstr "VPN을 믿어도 될지 모르겠어요"
+
+#. Settings: label before the support email address link.
+msgctxt "email_support_at"
+msgid "Email support at"
+msgstr "지원팀 이메일:"
 
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
@@ -2173,6 +3934,16 @@ msgctxt "emoji_tag_shuffle"
 msgid "Suggest another"
 msgstr "다른 추천"
 
+#. Section header of the per-transport enable toggles shown when the transport mode is Auto.
+msgctxt "enabled_under_auto"
+msgid "Enabled under Auto"
+msgstr "자동 모드에서 사용"
+
+#. Footer of the Auto transports section explaining the fixed preference order.
+msgctxt "enabled_under_auto_footer"
+msgid "Listed in preference order: H1 first, then H3, whodis, and whodis pump. The order is fixed. At least one transport stays enabled."
+msgstr "우선순위 순서: 먼저 H1, 그다음 H3, whodis, whodis pump. 순서는 고정되어 있습니다. 하나 이상의 전송 방식은 항상 켜져 있습니다."
+
 #. Call to action
 msgctxt "enjoying_urnetwork"
 msgid "Enjoying URnetwork?"
@@ -2202,6 +3973,11 @@ msgctxt "enter_a_solana_usdc_wallet_address"
 msgid "Enter a Solana USDC wallet address"
 msgstr "Solana USDC 지갑 주소를 입력하세요"
 
+#. Fallback link to paste an ss58 address.
+msgctxt "enter_address_manually"
+msgid "Enter address manually"
+msgstr "주소 직접 입력"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "enter_balance_code"
 msgid "Enter balance code"
@@ -2221,6 +3997,46 @@ msgstr "네트워크 추천 코드를 입력하세요"
 msgctxt "enter_urnetwork"
 msgid "Enter URnetwork"
 msgstr "URnetwork에 들어가기"
+
+#. Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.
+msgctxt "enter_wallet_address"
+msgid "Enter wallet address"
+msgstr "지갑 주소 입력"
+
+#. History table column: the epoch number.
+msgctxt "epoch_column_epoch_linux"
+msgid "Epoch"
+msgstr "에포크"
+
+#. History table column: points earned.
+msgctxt "epoch_column_points_linux"
+msgid "Points"
+msgstr "포인트"
+
+#. History table column: the network's share of the block.
+msgctxt "epoch_column_share_linux"
+msgid "Share of block"
+msgstr "블록 내 몫"
+
+#. History table column: the claim status of the epoch's alpha.
+msgctxt "epoch_column_status_linux"
+msgid "Status"
+msgstr "상태"
+
+#. Label of the per-epoch history list.
+msgctxt "epoch_history"
+msgid "History"
+msgstr "기록"
+
+#. History row title.
+msgctxt "epoch_row_title"
+msgid "Epoch {}"
+msgstr "에포크 {}"
+
+#. History row: the network's share of the block.
+msgctxt "epoch_share_of_block"
+msgid "{} of block"
+msgstr "블록의 {}"
 
 #. Error message displayed in a snackbar when there was an error changing the network name.
 msgctxt "error_changing_network_name"
@@ -2362,6 +4178,111 @@ msgctxt "export_logs"
 msgid "Export Logs"
 msgstr "로그 내보내기"
 
+#. Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.
+msgctxt "extender"
+msgid "Extender"
+msgstr "익스텐더"
+
+#. Extender status when the last activation failed and no family is active. The argument is the error.
+msgctxt "extender_activation_failed"
+msgid "Activation failed: {}"
+msgstr "활성화 실패: {}"
+
+#. Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.
+msgctxt "extender_activation_refused"
+msgid "Activation refused: {}"
+msgstr "활성화 거부됨: {}"
+
+#. Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.
+msgctxt "extender_active"
+msgid "Active · {}"
+msgstr "활성 · {}"
+
+#. Placeholder shown in an empty extender settings field, naming the default value that applies.
+msgctxt "extender_default_value"
+msgid "Default: {}"
+msgstr "기본값: {}"
+
+#. Label of the extender DNS name field. Empty means the network space default.
+msgctxt "extender_dns_name"
+msgid "Extender DNS name"
+msgstr "익스텐더 DNS 이름"
+
+#. Label of the manual extender list field: hostnames or IP addresses, one per line.
+msgctxt "extender_hosts"
+msgid "Extender hosts"
+msgstr "익스텐더 호스트"
+
+#. Help text under the manual extender list field.
+msgctxt "extender_hosts_hint"
+msgid "One hostname or IP address per line. These are added to the discovered extenders."
+msgstr "한 줄에 호스트 이름 또는 IP 주소 하나씩 입력하세요. 발견된 익스텐더에 추가됩니다."
+
+#. Extender status when no carrier could bind. The argument is the carrier errors.
+msgctxt "extender_listen_failed"
+msgid "Could not listen: {}"
+msgstr "수신 대기할 수 없음: {}"
+
+#. Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.
+msgctxt "extender_not_providing"
+msgid "Not providing"
+msgstr "제공하지 않음"
+
+#. Extender status when the operator revoked this device's extender key.
+msgctxt "extender_revoked"
+msgid "Revoked by the operator"
+msgstr "운영자가 취소함"
+
+#. Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.
+msgctxt "extender_setting_description"
+msgid "While you are providing, this device also relays for people whose access to the network is blocked, on TCP and UDP 443 and UDP 4053."
+msgstr "제공하는 동안 이 기기는 네트워크 접근이 차단된 사람들을 위해 TCP 및 UDP 443, UDP 4053에서 중계도 합니다."
+
+#. Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.
+msgctxt "extender_setting_up"
+msgid "Setting up"
+msgstr "설정 중"
+
+#. Title of the extender settings form under account > Extenders.
+msgctxt "extender_settings"
+msgid "Extender settings"
+msgstr "익스텐더 설정"
+
+#. Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.
+msgctxt "extender_settings_next_connect"
+msgid "The tunnel uses new extender settings the next time it connects."
+msgstr "터널은 다음에 연결할 때 새 익스텐더 설정을 사용합니다."
+
+#. Confirmation after the extender settings are saved.
+msgctxt "extender_settings_saved"
+msgid "Extender settings saved"
+msgstr "익스텐더 설정을 저장했습니다"
+
+#. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
+msgctxt "extender_start_failed"
+msgid "Could not start: {}"
+msgstr "시작할 수 없음: {}"
+
+#. Title of the section that shows statistics about the extender, directly above the provider statistics section.
+msgctxt "extender_statistics"
+msgid "Extender statistics"
+msgstr "익스텐더 통계"
+
+#. Title of the extenders panel in the connect drawer and of the Extenders section under account.
+msgctxt "extenders"
+msgid "Extenders"
+msgstr "익스텐더"
+
+#. The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.
+msgctxt "extenders_active_of_reserve"
+msgid "{0} of {1}"
+msgstr "{1}개 중 {0}개"
+
+#. Shown in the account Extenders section when there is no signed-in device to manage extenders with.
+msgctxt "extenders_no_session"
+msgid "Sign in and connect to manage extenders."
+msgstr "익스텐더를 관리하려면 로그인하고 연결하세요."
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -2417,6 +4338,11 @@ msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "진심으로 말씀해 주세요"
 
+#. Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.
+msgctxt "feedback_send_failed"
+msgid "Your feedback wasn't sent. Check your connection and try again."
+msgstr "피드백을 보내지 못했습니다. 연결을 확인한 후 다시 시도하세요."
+
 #. Feedback screen: label of the Send button while the feedback is being sent.
 msgctxt "feedback_sending"
 msgid "Sending…"
@@ -2451,6 +4377,11 @@ msgstr "무료"
 msgctxt "friends_save_too"
 msgid "Your friends save too -- everyone wins."
 msgstr "친구들도 절약합니다 -- 모두가 이깁니다."
+
+#. Label of the gas key row.
+msgctxt "gas_key"
+msgid "Gas key"
+msgstr "가스 키"
 
 #. Call to action
 msgctxt "general"
@@ -2494,6 +4425,11 @@ msgctxt "go_back"
 msgid "Go Back"
 msgstr "돌아가기"
 
+#. A label for Google sign-in.
+msgctxt "google"
+msgid "Google"
+msgstr "Google"
+
 #. Login initial
 msgctxt "google_auth_btn_text"
 msgid "Log in with Google"
@@ -2504,6 +4440,27 @@ msgctxt "google_sign_in_method_added"
 msgid "Google sign-in method added"
 msgstr "Google 로그인 방법이 추가되었습니다"
 
+#. Gossip network status: a dial or reconnect is in progress (yellow).
+msgctxt "gossip_connecting"
+msgid "Connecting"
+msgstr "연결 중"
+
+#. The count of extender records and revocations applied from the gossip network or the feed in the last minute.
+msgctxt "gossip_events_per_minute"
+msgid "{} event/min"
+msgid_plural "{} events/min"
+msgstr[0] "분당 이벤트 {}개"
+
+#. Label of the gossip network status dot in the extender panel.
+msgctxt "gossip_network"
+msgid "Gossip network"
+msgstr "가십 네트워크"
+
+#. Label of the gossip URL field. Empty means the network space default.
+msgctxt "gossip_url"
+msgid "Gossip URL"
+msgstr "가십 URL"
+
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "got_it"
 msgid "Got it"
@@ -2513,6 +4470,19 @@ msgstr "확인"
 msgctxt "guest"
 msgid "Guest"
 msgstr "게스트"
+
+#. Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).
+msgctxt "guest_convert_explanation"
+msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
+msgstr "이 네트워크에 로그인할 이메일과 비밀번호를 추가하세요. 요금제와 잔액은 이 네트워크에 그대로 남습니다."
+
+msgctxt "hash_count"
+msgid "#{}"
+msgstr "#{}"
+
+msgctxt "hash_value"
+msgid "#{}"
+msgstr "#{}"
 
 #. Used in Main/Connect/ConnectView-macOS.swift.
 msgctxt "hide_provider_list"
@@ -2560,10 +4530,36 @@ msgctxt "ignore_battery_optimizations"
 msgid "Ignore battery optimizations"
 msgstr "배터리 최적화 무시"
 
+#. Button and screen title: import extenders from a QR code, a photo, or pasted text.
+msgctxt "import_extenders"
+msgid "Import extenders"
+msgstr "익스텐더 가져오기"
+
+#. Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.
+msgctxt "import_extenders_confirm_settings"
+msgid "Use the extender settings from this code? Extender lookups will use {}."
+msgstr "이 코드의 익스텐더 설정을 사용할까요? 익스텐더 조회에 {}을(를) 사용합니다."
+
 #. Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.
 msgctxt "import_extenders_control_doh_urls"
 msgid "This code also sets bootstrap DNS-over-HTTPS servers. They will see URnetwork's server lookups: {}"
 msgstr "이 코드는 부트스트랩 DNS-over-HTTPS 서버도 설정합니다. 이 서버는 URnetwork의 서버 조회를 볼 수 있습니다: {}"
+
+#. Error when a share code belongs to another network. The argument is that network's host.
+msgctxt "import_extenders_foreign_host"
+msgid "This code is for {}, not this network. Use extender settings to switch networks."
+msgstr "이 코드는 이 네트워크가 아니라 {}용입니다. 네트워크를 바꾸려면 익스텐더 설정을 사용하세요."
+
+#. Confirmation after an import, with the number of extenders added.
+msgctxt "import_extenders_imported"
+msgid "Imported {} extender"
+msgid_plural "Imported {} extenders"
+msgstr[0] "익스텐더 {}개를 가져왔습니다"
+
+#. Error when the scanned or pasted text is not an extender share code.
+msgctxt "import_extenders_invalid"
+msgid "This code is not an extender share."
+msgstr "이 코드는 익스텐더 공유 코드가 아닙니다."
 
 #. Guest mode overlay
 msgctxt "in_guest_mode"
@@ -2580,6 +4576,11 @@ msgctxt "include_app_description"
 msgid "Only included apps use the tunnel."
 msgstr "포함된 앱만 터널을 사용합니다."
 
+#. Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.
+msgctxt "include_extender_settings"
+msgid "Include extender settings"
+msgstr "익스텐더 설정 포함"
+
 #. App split rules: rule choice routing the app through the VPN.
 msgctxt "include_in_vpn"
 msgid "Include in VPN"
@@ -2589,6 +4590,11 @@ msgstr "VPN에 포함"
 msgctxt "included"
 msgid "Included"
 msgstr "포함"
+
+#. Line under the annual plan card. The number of days is the free trial length.
+msgctxt "includes_free_trial_days"
+msgid "Includes {} day free trial"
+msgstr "{}일 무료 체험 포함"
 
 #. Instant account: explains that no email, phone or password is needed.
 msgctxt "instant_account_explainer"
@@ -2655,6 +4661,66 @@ msgctxt "insufficient_funds"
 msgid "Insufficient funds"
 msgstr "잔액 부족"
 
+#. How to add the quick connect control on iOS (no add-control API).
+msgctxt "intro_control_manual_ios"
+msgid "Open Control Center, tap +, then Add a Control, and pick URnetwork."
+msgstr "제어 센터를 열고 +를 탭한 다음 제어 항목 추가를 탭하고 URnetwork를 선택하세요."
+
+#. How to add the quick connect control on macOS.
+msgctxt "intro_control_manual_macos"
+msgid "Open Control Center, choose Edit Controls, and add URnetwork."
+msgstr "제어 센터를 열고 제어 항목 편집을 선택한 다음 URnetwork를 추가하세요."
+
+#. Detail line of the last onboarding page.
+msgctxt "intro_quick_connect_details"
+msgid "Turn URnetwork on and off from Quick Settings, and keep an eye on it from your home screen."
+msgstr "빠른 설정에서 URnetwork를 켜고 끄고, 홈 화면에서 상태를 확인하세요."
+
+#. Detail line of the last onboarding page on iOS/macOS (Control Center instead of Quick Settings).
+msgctxt "intro_quick_connect_details_apple"
+msgid "Turn URnetwork on and off from Control Center, and keep an eye on it from your Home Screen."
+msgstr "제어 센터에서 URnetwork를 켜고 끄고, 홈 화면에서 상태를 확인하세요."
+
+#. Title of the last onboarding page: the quick connect tile and the home screen widgets.
+msgctxt "intro_quick_connect_title"
+msgid "Connect in one tap"
+msgstr "한 번 탭으로 연결"
+
+#. Label shown on the last onboarding page once the quick connect tile is in Quick Settings.
+msgctxt "intro_quick_tile_added"
+msgid "Added to Quick Settings"
+msgstr "빠른 설정에 추가됨"
+
+#. Manual steps for adding the quick connect tile on Android versions without the system add-tile request (before Android 13).
+msgctxt "intro_quick_tile_manual"
+msgid "Open Quick Settings, tap the pencil, and drag URnetwork into place."
+msgstr "빠른 설정을 열고 연필 아이콘을 탭한 다음 URnetwork를 원하는 위치로 끌어다 놓으세요."
+
+#. Tagline under 'Welcome to URnetwork' on the first onboarding page. Replaces 'URnetwork is the most local and most private network on the planet.'
+msgctxt "intro_verifiable_encryption"
+msgid "Encryption for everyday use."
+msgstr "일상을 위한 암호화."
+
+#. Manual steps for adding widgets on launchers without the pin dialog.
+msgctxt "intro_widgets_manual"
+msgid "Long-press your home screen, choose Widgets, and pick URnetwork."
+msgstr "홈 화면을 길게 누르고 위젯을 선택한 다음 URnetwork를 고르세요."
+
+#. How to add a Home Screen widget on iOS (no pin-widget API).
+msgctxt "intro_widgets_manual_ios"
+msgid "Long-press the Home Screen, tap +, search URnetwork, and add a widget."
+msgstr "홈 화면을 길게 누르고 +를 탭한 다음 URnetwork를 검색해 위젯을 추가하세요."
+
+#. How to add a desktop widget on macOS.
+msgctxt "intro_widgets_manual_macos"
+msgid "Open the widget gallery from Notification Center, search URnetwork, and drag a widget to the desktop."
+msgstr "알림 센터에서 위젯 갤러리를 열고 URnetwork를 검색한 다음 위젯을 데스크탑으로 끌어다 놓으세요."
+
+#. Hint under the widget previews on the last onboarding page: tapping a preview asks the launcher to add that widget.
+msgctxt "intro_widgets_tap_to_add"
+msgid "Tap a widget to add it to your home screen."
+msgstr "위젯을 탭하면 홈 화면에 추가됩니다."
+
 #. Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
@@ -2670,6 +4736,16 @@ msgctxt "invalid_referral_code_please_try_again"
 msgid "Invalid referral code. Please try again."
 msgstr "유효하지 않은 추천 코드입니다. 다시 시도해 주세요."
 
+#. Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).
+msgctxt "invalid_solana_address"
+msgid "That is not a valid Solana address."
+msgstr "유효한 Solana 주소가 아닙니다."
+
+#. Validation error for a coldkey address.
+msgctxt "invalid_ss58_address"
+msgid "That is not a valid Bittensor address."
+msgstr "유효한 Bittensor 주소가 아닙니다."
+
 #. dns settings
 msgctxt "ip_address"
 msgid "IP address"
@@ -2681,10 +4757,57 @@ msgid "{} IP"
 msgid_plural "{} IPs"
 msgstr[0] "IP {}개"
 
+#. IP versions: the tooltip of the address-family tag column in the provider locations sheet (windows, linux). It also titled the connect drawer's IP version histogram before that became the Dualstack / IPv4 / IPv6 status row.
+msgctxt "ip_families"
+msgid "IP versions"
+msgstr "IP 버전"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.
+msgctxt "ip_family_both"
+msgid "Both"
+msgstr "둘 다"
+
+#. Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.
+msgctxt "ip_family_connected_count"
+msgid "{} connected"
+msgid_plural "{} connected"
+msgstr[0] "{}개 연결됨"
+
+#. Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.
+msgctxt "ip_family_connecting_count"
+msgid "{} connecting"
+msgid_plural "{} connecting"
+msgstr[0] "{}개 연결 중"
+
+#. Status line of one column of the IP version status row in the connect drawer, when no provider of that family (dualstack, IPv4 or IPv6) is connected or connecting. Lowercase, under the family label.
+msgctxt "ip_family_disconnected"
+msgid "disconnected"
+msgstr "연결 끊김"
+
+#. Column label of the IP version status row in the connect drawer, for providers that carry both IPv4 and IPv6. Set in the pixel display face beside the IPv4 and IPv6 labels, so keep it short.
+msgctxt "ip_family_dualstack"
+msgid "Dualstack"
+msgstr "듀얼 스택"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.
+msgctxt "ip_family_v4"
+msgid "v4"
+msgstr "v4"
+
+#. Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.
+msgctxt "ip_family_v6"
+msgid "v6"
+msgstr "v6"
+
 #. Label for a list of IPv4 addresses.
 msgctxt "ipv4"
 msgid "IPv4"
 msgstr "IPv4"
+
+#. Accessibility label for a provider that carries both IPv4 and IPv6 traffic.
+msgctxt "ipv4_and_ipv6"
+msgid "IPv4 and IPv6"
+msgstr "IPv4 및 IPv6"
 
 #. Label for the IPv6 list of DNS servers.
 msgctxt "ipv6"
@@ -2735,6 +4858,21 @@ msgstr "범례"
 msgctxt "kill_switch"
 msgid "Kill switch"
 msgstr "킬 스위치"
+
+#. Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.
+msgctxt "kill_switch_exception"
+msgid "Kill switch exception"
+msgstr "킬 스위치 예외"
+
+#. Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.
+msgctxt "kill_switch_exception_smtp_detail"
+msgid "While the VPN is connected, IPv6 is routed through URnetwork like IPv4. Outbound SMTP on TCP port 25 bypasses the VPN, even when the kill switch is on, which may expose your local public IP to those mail servers. SMTP on ports 465 and 587 stays in the VPN and must establish TLS."
+msgstr "VPN이 연결되어 있는 동안 IPv6도 IPv4처럼 URnetwork를 통해 라우팅됩니다. TCP 포트 25의 발신 SMTP는 킬 스위치가 켜져 있어도 VPN을 우회하므로, 해당 메일 서버에 로컬 공인 IP가 노출될 수 있습니다. 포트 465와 587의 SMTP는 VPN 안에 머물며 TLS를 설정해야 합니다."
+
+#. Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.
+msgctxt "kill_switch_exception_unrecognized_encrypted"
+msgid "When the kill switch is off, traffic that URnetwork safety rules keep off the network, such as unrecognized encrypted protocols, bypasses the VPN and uses your local public IP. With the kill switch on, that traffic is blocked."
+msgstr "킬 스위치가 꺼져 있으면, 인식할 수 없는 암호화 프로토콜처럼 URnetwork 안전 규칙이 네트워크에서 차단하는 트래픽은 VPN을 우회해 로컬 공인 IP를 사용합니다. 킬 스위치가 켜져 있으면 그 트래픽은 차단됩니다."
 
 #. Button text for entering the one-time authentication code and entering the app
 msgctxt "launch"
@@ -2815,6 +4953,11 @@ msgstr "오픈 소스 소프트웨어"
 msgctxt "link_another_way_to_sign_in_to"
 msgid "Link another way to sign in to your account."
 msgstr "계정에 로그인할 다른 방법을 연결하세요."
+
+#. A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.
+msgctxt "load_failed"
+msgid "Couldn't load. Check your connection and try again."
+msgstr "불러올 수 없습니다. 연결을 확인한 후 다시 시도하세요."
 
 #. Used in ContentView.swift.
 msgctxt "loading"
@@ -3125,6 +5268,11 @@ msgctxt "multiplier"
 msgid "Multiplier"
 msgstr "배수"
 
+#. A progress bar that shows how many friends you've invited. The first argument is the number of friends you've invited. The second argument is the maximum number of friends you can invite.
+msgctxt "n_20"
+msgid "{}/20"
+msgstr "{}/20"
+
 #. A label that shows the daily data usage from referrals. The argument is the number of referrals.
 msgctxt "n_gib_day"
 msgid "+{} GiB/Day"
@@ -3144,6 +5292,11 @@ msgstr "당신의 이름"
 msgctxt "need_more_data_faster"
 msgid "Need more data, faster?"
 msgstr "더 많은 데이터를 더 빠르게 원하십니까?"
+
+#. Earnings page: lowercase caption under the net points total.
+msgctxt "net_points_earned"
+msgid "net points earned"
+msgstr "순 포인트 획득"
 
 #. Call to action
 msgctxt "net_provided"
@@ -3239,6 +5392,11 @@ msgstr "기본 네트워크 사용"
 msgctxt "network_create_bonus_message"
 msgid "Someone invited you to join 🥳 \nClaim your bonus by creating a network!"
 msgstr "누군가가 당신을 초대했어요 🥳\\n네트워크를 만들어 보너스를 받아보세요!"
+
+#. Used in Main/Account/AccountRootView.swift.
+msgctxt "network_earnings"
+msgid "Network earnings"
+msgstr "네트워크 수익"
 
 #. A message that is displayed in a snackbar when the user changes the network name. The argument is the new network name.
 msgctxt "network_name_changed_to_n"
@@ -3357,6 +5515,11 @@ msgctxt "no_blocked_locations"
 msgid "No blocked locations"
 msgstr "차단된 위치 없음"
 
+#. Empty state of the unclaimed tile once a wallet is connected.
+msgctxt "no_claims_yet_linux"
+msgid "Nothing to claim yet. Alpha accrues from the next finalized epoch."
+msgstr "아직 받을 것이 없습니다. Alpha는 다음에 확정되는 에포크부터 쌓입니다."
+
 #. Add sign-in method sheet (android): no installed wallet app can sign the challenge.
 msgctxt "no_compatible_wallet_app_found"
 msgid "No compatible wallet app found on this device."
@@ -3397,6 +5560,16 @@ msgctxt "no_open_contracts"
 msgid "No open contracts"
 msgstr "진행 중인 계약 없음"
 
+#. Empty state of the points history.
+msgctxt "no_points_yet"
+msgid "No epochs yet. Points appear after your first finalized epoch."
+msgstr "아직 에포크가 없습니다. 첫 에포크가 확정되면 포인트가 표시됩니다."
+
+#. Restore-purchases outcome: the sync succeeded and there is genuinely nothing to restore (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "no_previous_purchases_were_found"
+msgid "No previous purchases were found."
+msgstr "이전 구매 내역이 없습니다."
+
 #. Locations List
 msgctxt "no_providers_found"
 msgid "We could not find any providers."
@@ -3426,6 +5599,11 @@ msgstr "이 장치에 설치된 Solana 지갑이 없습니다. 지갑을 설치�
 msgctxt "none"
 msgid "None"
 msgstr "없음"
+
+#. macOS button that dismisses the prompt to enable the VPN system extension for now.
+msgctxt "not_now"
+msgid "Not now"
+msgstr "나중에"
 
 #. Settings
 msgctxt "notifications_label"
@@ -3515,6 +5693,11 @@ msgctxt "on"
 msgid "On"
 msgstr "켜짐"
 
+#. Accessibility description of the onboarding step bubbles: the current step and the total.
+msgctxt "onboarding_step_of"
+msgid "Step {0} of {1}"
+msgstr "{1}단계 중 {0}단계"
+
 #. Call to action
 msgctxt "one_gib_per_day"
 msgid "1 GiB/Day"
@@ -3555,6 +5738,11 @@ msgctxt "other"
 msgid "Other"
 msgstr "기타"
 
+#. The one USDC mention: the Solana subscription payment note.
+msgctxt "paid_in_usdc_on_solana"
+msgid "Paid in USDC on Solana."
+msgstr "Solana의 USDC로 결제."
+
 #. Call to action
 msgctxt "participate"
 msgid "Participate"
@@ -3590,6 +5778,11 @@ msgctxt "password_support_txt"
 msgid "Password must be at least 12 characters"
 msgstr "비밀번호는 최소 12자 이상이어야 합니다"
 
+#. Button and field label: paste the text form of a share code.
+msgctxt "paste_share_text"
+msgid "Paste share text"
+msgstr "공유 텍스트 붙여 넣기"
+
 #. A placeholder text for the seedphrase field.
 msgctxt "paste_your_24_word_seedphrase_here"
 msgid "Paste your 24-word seedphrase here"
@@ -3605,10 +5798,35 @@ msgctxt "pay_with_stripe"
 msgid "Join with Stripe"
 msgstr "Stripe로 가입하기"
 
+#. Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.
+msgctxt "payment_confirmation_delayed"
+msgid "Confirmation is taking longer than expected. Your plan will update automatically once it's confirmed — there's no need to buy again."
+msgstr "확인이 예상보다 오래 걸리고 있습니다. 확인되는 즉시 요금제가 자동으로 업데이트됩니다. 다시 구매할 필요는 없습니다."
+
+#. Body of the post-purchase overlay while the server has not yet confirmed the subscription. Replaces the optimistic 'You're premium.' claim until currentSubscription actually confirms.
+msgctxt "payment_confirmation_processing"
+msgid "We're confirming your payment now. Your plan will update automatically — you don't need to do anything."
+msgstr "지금 결제를 확인하고 있습니다. 요금제가 자동으로 업데이트되니 아무것도 하지 않으셔도 됩니다."
+
+#. Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.
+msgctxt "payment_not_completed"
+msgid "Your payment could not be completed."
+msgstr "결제를 완료할 수 없습니다."
+
 #. Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.
 msgctxt "payment_problem"
 msgid "Payment problem"
 msgstr "결제 문제"
+
+#. Title of the post-purchase screen while the server has not yet confirmed the entitlement (Shared/Views/PurchaseSuccessView.swift). StoreKit took the payment; the confirmation poll is still running — the copy must not claim premium yet.
+msgctxt "payment_received"
+msgid "Payment received."
+msgstr "결제가 완료되었습니다."
+
+#. Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.
+msgctxt "payment_received_title"
+msgid "Payment received"
+msgstr "결제 완료"
 
 #. Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.
 msgctxt "payout_wallet_updated"
@@ -3695,15 +5913,25 @@ msgctxt "plan_monthly_equivalent_line"
 msgid "≈ {}/month · billed once a year"
 msgstr "≈ {}/월 · 연 1회 청구"
 
-#. The monthly plan card's price on the Linux onboarding page.
-msgctxt "plan_monthly_price"
-msgid "$5/month"
-msgstr "$5/month"
+#. Monthly plan card label: the store-formatted price per month.
+msgctxt "plan_price_per_month"
+msgid "{}/month"
+msgstr "{}/월"
+
+#. Yearly plan card label: the store-formatted price per year.
+msgctxt "plan_price_per_year"
+msgid "{}/year"
+msgstr "{}/년"
 
 #. Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.
 msgctxt "plan_save_percent"
 msgid "Save {}%"
 msgstr "{}% 절약"
+
+#. Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.
+msgctxt "plan_terms_first_year_price"
+msgid "{0} for your first year, then {1}/year. Cancel anytime."
+msgstr "첫해 {0}, 이후 {1}/년. 언제든지 취소할 수 있습니다."
 
 #. Plan picker: the terms line under the button for the yearly plan with its trial.
 msgctxt "plan_terms_yearly"
@@ -3711,10 +5939,10 @@ msgid "{0} day free, then {1}/year. Cancel anytime."
 msgid_plural "{0} days free, then {1}/year. Cancel anytime."
 msgstr[0] "{0}일 무료, 이후 {1}/년. 언제든 취소 가능."
 
-#. The yearly plan card's price on the Linux onboarding page.
-msgctxt "plan_yearly_price"
-msgid "$40/year"
-msgstr "$40/year"
+#. Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.
+msgctxt "plan_terms_yearly_billed_today"
+msgid "{} billed today, then every year. Cancel anytime."
+msgstr "오늘 {} 청구, 이후 매년 청구. 언제든지 취소할 수 있습니다."
 
 #. Used in Shared/Views/SolanaSignMessageSheet.swift.
 msgctxt "please_install_phantom_or_solflare_to_use_this"
@@ -3756,6 +5984,11 @@ msgctxt "points"
 msgid "Points"
 msgstr "포인트"
 
+#. Headline label of the earnings screen.
+msgctxt "points_earned"
+msgid "Points earned"
+msgstr "획득한 포인트"
+
 #. Points leaderboard: the explanation under the list header.
 msgctxt "points_leaderboard_description"
 msgid "All-time points. A block is one finalized epoch; the streak counts consecutive blocks with points, ending at the latest one."
@@ -3770,6 +6003,11 @@ msgstr "아직 포인트 리더보드에 아무도 없습니다."
 msgctxt "points_leaderboard_private_hint"
 msgid "Your network appears as Anonymous until you turn this on."
 msgstr "이 옵션을 켜기 전까지 내 네트워크는 익명으로 표시됩니다."
+
+#. Points count with unit for history rows.
+msgctxt "points_short"
+msgid "{} pts"
+msgstr "{}점"
 
 #. Connect drawer: post quantum encryption toggle label.
 msgctxt "post_quantum_encryption"
@@ -3800,6 +6038,26 @@ msgstr "네트워크 설정 열기"
 msgctxt "private_dns_strict_notice"
 msgid "Private DNS is set to {}. Android sends lookups there directly instead of through URnetwork. If sites stop loading, set Private DNS to Automatic."
 msgstr "비공개 DNS가 {}(으)로 설정되어 있습니다. Android는 URnetwork를 거치지 않고 그곳으로 직접 조회를 보냅니다. 사이트가 로드되지 않으면 비공개 DNS를 자동으로 설정하세요."
+
+#. Title of the advanced private extender fields: one extender with a secret that replaces discovery.
+msgctxt "private_extender"
+msgid "Private extender"
+msgstr "비공개 익스텐더"
+
+#. Help text under the private extender fields.
+msgctxt "private_extender_hint"
+msgid "A private extender replaces every discovered extender. Leave it empty to use discovery."
+msgstr "비공개 익스텐더는 발견된 모든 익스텐더를 대신합니다. 자동 발견을 사용하려면 비워 두세요."
+
+#. Label of the private extender IP address field.
+msgctxt "private_extender_ip"
+msgid "IP address"
+msgstr "IP 주소"
+
+#. Label of the private extender secret field.
+msgctxt "private_extender_secret"
+msgid "Secret"
+msgstr "비밀 키"
 
 #. Network name when privacy is enabled
 msgctxt "private_network"
@@ -3841,10 +6099,40 @@ msgctxt "provide"
 msgid "Provide"
 msgstr "제공"
 
+#. First bullet on the onboarding Contribute bandwidth page.
+msgctxt "provide_intro_bullet_devices"
+msgid "Allow your devices to share internet with each other"
+msgstr "내 기기끼리 인터넷을 공유하도록 허용"
+
+#. Second bullet on the onboarding Contribute bandwidth page, with a heart.
+msgctxt "provide_intro_bullet_people"
+msgid "Share your internet with other people ❤️"
+msgstr "다른 사람들과 인터넷 공유하기 ❤️"
+
+#. Lead line above the two bullets on the onboarding Contribute bandwidth page.
+msgctxt "provide_intro_lead"
+msgid "Your choice, completely optional:"
+msgstr "선택은 자유이며, 전적으로 선택 사항입니다:"
+
 #. Call to action
 msgctxt "provide_mode"
 msgid "Provide mode"
 msgstr "제공 모드"
+
+#. One-line explanation of the Always provide mode in the onboarding Contribute bandwidth picker.
+msgctxt "provide_mode_always_description"
+msgid "Provides to everyone whenever the app is running."
+msgstr "앱이 실행 중일 때 항상 모두에게 제공합니다."
+
+#. One-line explanation of the Auto provide mode in the onboarding Contribute bandwidth picker: public providing only while connected, same-network peers otherwise.
+msgctxt "provide_mode_auto_description"
+msgid "Provides to everyone while you're connected, otherwise only to your own devices."
+msgstr "연결되어 있는 동안 모두에게 제공하고, 그 외에는 내 기기에만 제공합니다."
+
+#. One-line explanation of the Network provide mode in the onboarding Contribute bandwidth picker: the private provider for the network's own devices.
+msgctxt "provide_mode_network_description"
+msgid "Provides only to your own network's devices."
+msgstr "내 네트워크의 기기에만 제공합니다."
 
 #. Settings, under the cellular provide toggle: the label of the choice of what providing does while the device runs on battery.
 msgctxt "provide_power_mode"
@@ -4198,6 +6486,11 @@ msgctxt "provider_status_why"
 msgid "Why?"
 msgstr "이유"
 
+#. Title of the transport settings editor for the provider transport policy.
+msgctxt "provider_transports"
+msgid "Provider transports"
+msgstr "제공자 전송 방식"
+
 #. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "providing"
 msgid "Providing"
@@ -4224,6 +6517,21 @@ msgctxt "purchase_confirmation_timeout"
 msgid "We couldn't confirm your purchase yet. If you completed checkout, your plan will update automatically in a few minutes — there's no need to buy again."
 msgstr "아직 구매를 확인하지 못했습니다. 결제를 완료하셨다면 몇 분 안에 플랜이 자동으로 업데이트됩니다. 다시 구매할 필요가 없습니다."
 
+#. Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).
+msgctxt "purchase_could_not_be_verified"
+msgid "This purchase could not be verified with Google Play, so it can't be applied to your account. If you were charged and your plan doesn't update, please contact support."
+msgstr "Google Play에서 이 구매를 확인할 수 없어 계정에 적용할 수 없습니다. 요금이 청구되었는데 요금제가 업데이트되지 않으면 지원팀에 문의하세요."
+
+#. Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).
+msgctxt "purchase_found_confirming_your_plan"
+msgid "Purchase found. Confirming your plan — it will update automatically."
+msgstr "구매 내역을 찾았습니다. 요금제를 확인하는 중이며 자동으로 업데이트됩니다."
+
+#. Error when a chosen photo or image file holds no QR code.
+msgctxt "qr_code_not_found"
+msgid "No QR code was found in the image."
+msgstr "이미지에서 QR 코드를 찾을 수 없습니다."
+
 #. Tray menu item that exits the app (tears the tunnel down).
 msgctxt "quit"
 msgid "Quit"
@@ -4238,6 +6546,11 @@ msgstr "URnetwork 종료"
 msgctxt "ranked_networks_count"
 msgid "{} ranked networks"
 msgstr "순위가 매겨진 네트워크 {}개"
+
+#. Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.
+msgctxt "reads_per_second"
+msgid "reads/s"
+msgstr "읽기/초"
 
 #. Call to action
 msgctxt "ready_to_connect"
@@ -4401,6 +6714,21 @@ msgctxt "referral_network_updated"
 msgid "Referral network updated"
 msgstr "추천 네트워크가 업데이트되었습니다"
 
+#. Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).
+msgctxt "referral_panel_detail"
+msgid "Every verified referral gives each of you {} GiB/day for free, for life."
+msgstr "확인된 추천 한 건마다 두 분 모두 하루 {} GiB를 평생 무료로 받습니다."
+
+#. Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.
+msgctxt "referral_panel_heading"
+msgid "Refer a friend and you both get free data"
+msgstr "친구를 추천하면 두 사람 모두 무료 데이터를 받습니다"
+
+#. Status line of the gold referral panel while the network has no referral yet.
+msgctxt "referral_panel_none"
+msgid "No friends yet. Share your code and watch the crown appear. 👑"
+msgstr "아직 친구가 없습니다. 코드를 공유하고 왕관이 나타나는 걸 지켜보세요. 👑"
+
 #. Referrals screen: label of the points a network earned from its referrals (the payout_linked_account points), shown next to the total referral count.
 msgctxt "referral_points"
 msgid "Referral points"
@@ -4430,11 +6758,6 @@ msgstr "추천왕이시네요!"
 msgctxt "referral_share_message"
 msgid "Join me on URnetwork! Get the app and enter referral code {} when you sign up."
 msgstr "URnetwork에서 함께해요! 앱을 설치하고 가입할 때 추천 코드 {}을(를) 입력하세요."
-
-#. One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.
-msgctxt "referral_summary"
-msgid "Code: {0} · Referrals: {1} · Friends enter the code when they sign up"
-msgstr "코드: {0} · 추천: {1} · 친구가 가입할 때 코드를 입력합니다"
 
 #. Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).
 msgctxt "referral_toast_joined"
@@ -4576,10 +6899,20 @@ msgctxt "resolvers"
 msgid "Resolvers"
 msgstr "리졸버"
 
+#. Button that resets the transport settings draft to the SDK default policy.
+msgctxt "restore_default_transports"
+msgid "Restore default transports"
+msgstr "기본 전송 방식 복원"
+
 #. dns settings
 msgctxt "restore_most_secure_settings"
 msgid "Restore to most secure settings"
 msgstr "가장 안전한 설정으로 복원"
+
+#. Action label that resyncs App Store purchases (AppStore.sync + entitlement scan). Shown in Settings and in the upgrade flow's failure states (Main/Account/Settings/SettingsForm-iOS.swift, SettingsForm-macOS.swift, Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/PurchaseSuccessView.swift, Shared/Views/Introduction/IntroductionView.swift).
+msgctxt "restore_purchases"
+msgid "Restore purchases"
+msgstr "구매 복원"
 
 #. Retry action label
 msgctxt "retry"
@@ -4596,15 +6929,35 @@ msgctxt "review_urnetwork"
 msgid "Review URnetwork"
 msgstr "URnetwork 리뷰하기"
 
+#. Right stop label of the onboarding route line the anonymized member travels along.
+msgctxt "route_internet"
+msgid "Internet"
+msgstr "인터넷"
+
 #. Call to action
 msgctxt "route_local"
 msgid "Allow local traffic when disconnected"
 msgstr "연결 해제 시 로컬 트래픽 허용"
 
+#. Left stop label of the onboarding route line the anonymized member travels along (you -> URnetwork -> internet).
+msgctxt "route_you"
+msgid "You"
+msgstr "나"
+
 #. A heading for the pinned split rules.
 msgctxt "rules"
 msgid "Rules"
 msgstr "규칙"
+
+#. A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.
+msgctxt "safety_rule"
+msgid "Safety rule"
+msgstr "안전 규칙"
+
+#. Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.
+msgctxt "safety_rule_detail"
+msgid "URnetwork safety rules keep this traffic off the network, for example an encrypted protocol it cannot recognize. A local split rule sends it outside the VPN from your own IP."
+msgstr "URnetwork 안전 규칙은 이 트래픽을 네트워크에서 차단합니다. 예를 들어 인식할 수 없는 암호화 프로토콜이 그렇습니다. 로컬 분할 규칙을 쓰면 내 IP로 VPN 밖으로 보냅니다."
 
 #. Profile
 msgctxt "save"
@@ -4625,6 +6978,11 @@ msgstr "로그 저장"
 msgctxt "saved_as"
 msgid "Saved as {}"
 msgstr "{}(으)로 저장됨"
+
+#. Button: open the camera to scan a QR code.
+msgctxt "scan_qr_code"
+msgid "Scan QR code"
+msgstr "QR 코드 스캔"
 
 #. App split rules: placeholder in the search field that filters the installed apps by name or package id.
 msgctxt "search_apps_placeholder"
@@ -4696,7 +7054,7 @@ msgctxt "seedphrase_only_time"
 msgid "⚠️ This is the ONLY time you'll see this."
 msgstr "⚠️ 지금이 이 내용을 볼 수 있는 유일한 순간입니다."
 
-#. Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).
+#. Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).
 msgctxt "seedphrase_paste_hint"
 msgid "Paste your 12 or 24-word seedphrase here"
 msgstr "12개 또는 24개 단어의 시드 문구를 여기에 붙여넣으세요"
@@ -4767,6 +7125,11 @@ msgctxt "send"
 msgid "Send"
 msgstr "보내기"
 
+#. Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.
+msgctxt "send_feedback_contact"
+msgid "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
+msgstr "피드백을 직접 보내 주시거나, {0}로 이메일을 보내 주시거나, {1}에 참여해 직접 지원을 받으세요."
+
 #. Settings
 msgctxt "send_product_updates"
 msgid "Send me product updates"
@@ -4781,6 +7144,11 @@ msgstr "재설정 링크 보내기"
 msgctxt "send_reset_link_2"
 msgid "Send reset link"
 msgstr "재설정 링크 보내기"
+
+#. Instruction to fund the gas key.
+msgctxt "send_tao_to_mirror"
+msgid "Send about {0} TAO to {1} to cover gas."
+msgstr "가스 비용으로 약 {0} TAO를 {1}에 보내세요."
 
 #. Used in Main/Feedback/FeedbackView.swift.
 msgctxt "send_us_your_feedback_directly_or_join_our"
@@ -4812,10 +7180,51 @@ msgctxt "settings"
 msgid "Settings"
 msgstr "설정"
 
+#. Settings row that asks the system to add the Quick Settings tile (Android 13+).
+msgctxt "settings_add_quick_tile"
+msgid "Add quick connect tile"
+msgstr "빠른 연결 타일 추가"
+
+#. Description under the add-tile settings row.
+msgctxt "settings_add_quick_tile_description"
+msgid "Connect and disconnect from the Quick Settings panel and the lock screen."
+msgstr "빠른 설정 패널과 잠금 화면에서 연결하고 연결을 끊습니다."
+
+#. Settings row that opens the widget picker to pin the app's widgets.
+msgctxt "settings_add_widgets"
+msgid "Add Home Screen widgets"
+msgstr "홈 화면에 위젯 추가"
+
+#. Description under the add-widgets settings row.
+msgctxt "settings_add_widgets_description"
+msgid "Quick connect, transfer balance, providers on the globe and your top contracts."
+msgstr "빠른 연결, 데이터 잔액, 지구본 위의 제공자, 주요 계약."
+
 #. Call to action
 msgctxt "share"
 msgid "Share"
 msgstr "공유"
+
+#. Button and screen title: share the known extenders as a QR code.
+msgctxt "share_extenders"
+msgid "Share extenders"
+msgstr "익스텐더 공유"
+
+#. How many extenders the share code carries.
+msgctxt "share_extenders_count"
+msgid "{} extender"
+msgid_plural "{} extenders"
+msgstr[0] "익스텐더 {}개"
+
+#. Help text on the share screen under the QR code.
+msgctxt "share_extenders_hint"
+msgid "Scan this code with another URnetwork app to share these extenders."
+msgstr "다른 URnetwork 앱으로 이 코드를 스캔하면 이 익스텐더들을 공유할 수 있습니다."
+
+#. Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.
+msgctxt "share_extenders_too_large"
+msgid "The share code is too large for a QR code. Copy the share text instead."
+msgstr "공유 코드가 너무 커서 QR 코드로 만들 수 없습니다. 대신 공유 텍스트를 복사하세요."
 
 #. Call to action
 msgctxt "share_logs"
@@ -4827,10 +7236,25 @@ msgctxt "share_logs_2"
 msgid "Share Logs"
 msgstr "로그 공유"
 
+#. Confirmation after the share text of an extender code was copied to the clipboard.
+msgctxt "share_text_copied"
+msgid "Share text copied"
+msgstr "공유 텍스트를 복사했습니다"
+
 #. Used in Shared/Views/AccountMenu.swift.
 msgctxt "share_urnetwork"
 msgid "Share URnetwork"
 msgstr "URnetwork 공유"
+
+#. Long label of the launcher shortcut that connects the VPN.
+msgctxt "shortcut_connect_long"
+msgid "Connect to URnetwork"
+msgstr "URnetwork에 연결"
+
+#. Long label of the launcher shortcut that disconnects the VPN.
+msgctxt "shortcut_disconnect_long"
+msgid "Disconnect from URnetwork"
+msgstr "URnetwork 연결 해제"
 
 #. Used in Main/Connect/ConnectView-macOS.swift.
 msgctxt "show"
@@ -4841,6 +7265,11 @@ msgstr "보기"
 msgctxt "show_icon_when_connected"
 msgid "Show UR icon when connected"
 msgstr "연결 시 UR 아이콘 표시"
+
+#. Accessibility label for the kill switch exception information button.
+msgctxt "show_kill_switch_exception"
+msgid "Show kill switch exception"
+msgstr "킬 스위치 예외 보기"
 
 #. Points leaderboard: the switch that reveals this network's name on the list. Every ranked network is listed; off = shown as Anonymous.
 msgctxt "show_on_points_leaderboard"
@@ -4886,10 +7315,10 @@ msgctxt "sign_in_methods"
 msgid "Sign-In Methods"
 msgstr "로그인 방법"
 
-#. Button that signs in with a pasted auth code instead of a password.
-msgctxt "sign_in_with_code"
-msgid "Sign in with code"
-msgstr "코드로 로그인"
+#. Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge
+msgctxt "sign_in_with_apple"
+msgid "Sign in with Apple"
+msgstr "Apple로 로그인"
 
 #. Used in Authenticate/LoginInitial/UrGoogleSignInButton.swift.
 msgctxt "sign_in_with_google"
@@ -4925,6 +7354,11 @@ msgctxt "signed_in"
 msgid "Signed in"
 msgstr "로그인됨"
 
+#. App settings: auth code limit error
+msgctxt "site_app_auth_code_limit"
+msgid "Auth code limit reached. Try again later."
+msgstr "인증 코드 한도에 도달했습니다. 나중에 다시 시도하세요."
+
 #. Reliability: average label
 msgctxt "site_app_average_reliability"
 msgid "Average reliability"
@@ -4945,6 +7379,21 @@ msgctxt "site_app_connect_to_view"
 msgid "Connect to view live activity"
 msgstr "연결하면 실시간 활동을 볼 수 있습니다"
 
+#. App settings: connections section
+msgctxt "site_app_connections"
+msgid "Connections"
+msgstr "연결"
+
+#. App connect screen: contract details section title
+msgctxt "site_app_contracts"
+msgid "Contracts"
+msgstr "계약"
+
+#. App: copied flash. Also the linux share-dialog toast after copying the identity payload.
+msgctxt "site_app_copied"
+msgid "Copied"
+msgstr "복사됨"
+
 #. Reliability: country column
 msgctxt "site_app_country"
 msgid "Country"
@@ -4955,6 +7404,31 @@ msgctxt "site_app_country_multipliers"
 msgid "Country multipliers"
 msgstr "국가별 배수"
 
+#. App settings: create auth code button
+msgctxt "site_app_create_auth_code"
+msgid "Create auth code"
+msgstr "인증 코드 만들기"
+
+#. App settings: delete confirm prompt
+msgctxt "site_app_delete_confirm"
+msgid "Type your network name to confirm"
+msgstr "확인하려면 네트워크 이름을 입력하세요"
+
+#. App settings: delete warning
+msgctxt "site_app_delete_warning"
+msgid "This permanently deletes your network, its data, and its earnings. This cannot be undone."
+msgstr "네트워크와 그 데이터, 수익이 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다."
+
+#. App connect screen: device rpc attaching hint
+msgctxt "site_app_device_attaching"
+msgid "Attaching device controls…"
+msgstr "기기 제어 연결 중…"
+
+#. App connect screen: disconnecting state
+msgctxt "site_app_disconnecting"
+msgid "Disconnecting…"
+msgstr "연결 해제 중…"
+
 #. App profile: email label
 msgctxt "site_app_email"
 msgid "Email"
@@ -4964,6 +7438,16 @@ msgstr "이메일"
 msgctxt "site_app_fixed_ip"
 msgid "Fixed IP"
 msgstr "고정 IP"
+
+#. App leaderboard: empty state
+msgctxt "site_app_leaderboard_empty"
+msgid "No networks on the leaderboard yet."
+msgstr "아직 리더보드에 네트워크가 없습니다."
+
+#. App profile: login methods section
+msgctxt "site_app_login_methods"
+msgid "Login methods"
+msgstr "로그인 방법"
 
 #. App sidebar and account panel: opens Manage Subscription (every billing store, renewal date, auto-renew, cancel)
 msgctxt "site_app_manage_subscription"
@@ -4990,6 +7474,16 @@ msgctxt "site_app_multiplier"
 msgid "Multiplier"
 msgstr "배수"
 
+#. App provider: reliability section
+msgctxt "site_app_network_reliability"
+msgid "Network reliability"
+msgstr "네트워크 신뢰성"
+
+#. App provider: no reliability data
+msgctxt "site_app_no_reliability"
+msgid "No reliability data yet."
+msgstr "아직 신뢰성 데이터가 없습니다."
+
 #. Connect drawer: throughput empty state
 msgctxt "site_app_no_traffic"
 msgid "No traffic yet"
@@ -4999,6 +7493,11 @@ msgstr "아직 트래픽 없음"
 msgctxt "site_app_plan"
 msgid "Plan"
 msgstr "플랜"
+
+#. App connect screen: provider grid section title
+msgctxt "site_app_providers"
+msgid "Providers"
+msgstr "제공자"
 
 #. App account: proxies row/screen title
 msgctxt "site_app_proxies"
@@ -5020,10 +7519,20 @@ msgctxt "site_app_strong_anon_note"
 msgid "Always on in the browser, which never connects to providers directly."
 msgstr "브라우저에서는 항상 켜져 있습니다. 브라우저는 제공자에 직접 연결하지 않습니다."
 
+#. App support: intro line
+msgctxt "site_app_support_intro"
+msgid "Send us your feedback directly, or join the community for direct support."
+msgstr "피드백을 직접 보내거나, 커뮤니티에 참여해 직접 지원을 받으세요."
+
 #. Connect drawer: live transfer timeseries section
 msgctxt "site_app_throughput"
 msgid "Transfer"
 msgstr "전송량"
+
+#. Account panel: billing portal failed to open
+msgctxt "site_billing_portal_error"
+msgid "Could not open the billing portal."
+msgstr "결제 포털을 열 수 없습니다."
 
 #. Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.
 msgctxt "site_connect_code_hint"
@@ -5069,6 +7578,11 @@ msgstr "연결 준비 완료"
 msgctxt "site_copy_seedphrase"
 msgid "Copy Seedphrase"
 msgstr "시드 문구 복사"
+
+#. Extension status: setup in flight
+msgctxt "site_ext_setting_up"
+msgid "Setting up…"
+msgstr "설정 중…"
 
 #. Mobile app panel: install-the-native-app CTA
 msgctxt "site_install_app"
@@ -5255,6 +7769,11 @@ msgctxt "site_sub_stripe_body"
 msgid "Your Pro subscription is billed through Stripe. Update your payment details or cancel anytime below."
 msgstr "Pro 구독은 Stripe를 통해 청구됩니다. 아래에서 언제든지 결제 정보를 업데이트하거나 구독을 취소할 수 있습니다."
 
+#. Small muted button at the top of the post-login onboarding flow that leaves the whole flow.
+msgctxt "skip"
+msgid "Skip"
+msgstr "건너뛰기"
+
 #. The subnet alpha token symbol.
 msgctxt "sn_alpha_symbol"
 msgid "SN25α"
@@ -5270,15 +7789,45 @@ msgctxt "sn_payout_schedule_times"
 msgid "This epoch ends {0}. Claim your share from {1} until {2}."
 msgstr "이번 에포크는 {0}에 끝납니다. 내 몫은 {1}부터 {2}까지 받을 수 있습니다."
 
+#. Claim status of an epoch whose alpha can be claimed now.
+msgctxt "sn_status_claimable"
+msgid "Claimable"
+msgstr "받을 수 있음"
+
+#. Claim status of an epoch the vault has not finalized yet.
+msgctxt "sn_status_not_finalized"
+msgid "Not finalized"
+msgstr "확정되지 않음"
+
+#. Claim status of an epoch that is still open (not yet finalized on chain).
+msgctxt "sn_status_open"
+msgid "Open"
+msgstr "진행 중"
+
 #. Blockchain name. A product name: never translated.
 msgctxt "solana"
 msgid "Solana"
 msgstr "Solana"
 
+#. Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.
+msgctxt "solana_one_time_payment"
+msgid "Paying with USDC on Solana is a one-time yearly payment, with no free trial."
+msgstr "Solana의 USDC로 결제하면 연 1회 일시불 결제이며 무료 체험이 없습니다."
+
+#. Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.
+msgctxt "solana_payment_still_checking"
+msgid "Still checking for your Solana payment. Confirmation on the network can take a minute or two."
+msgstr "Solana 결제를 아직 확인하고 있습니다. 네트워크에서 확인되기까지 1~2분 걸릴 수 있습니다."
+
 #. Call to action
 msgctxt "solana_sign_in"
 msgid "Sign in with Solana"
 msgstr "Solana로 로그인"
+
+#. Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).
+msgctxt "solana_wallet"
+msgid "Solana wallet"
+msgstr "Solana 지갑"
 
 #. Solana wallet error in the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns session_not_found: the browser no longer has the wallet connection made in the connect step (another browser or a private window, or its site data was cleared), so nothing was signed. Starting again reconnects the wallet (Phantom or Solflare).
 msgctxt "solana_wallet_error_session_not_found"
@@ -5356,6 +7905,26 @@ msgctxt "split_rule_host_placeholder"
 msgid "example.com, *.example.com, 10.0.0.0/8"
 msgstr "example.com, *.example.com, 10.0.0.0/8"
 
+#. Split rule editor: description of the Route locally mode.
+msgctxt "split_rule_mode_excluded_description"
+msgid "Selected hosts bypass the tunnel."
+msgstr "선택한 호스트는 터널을 우회합니다."
+
+#. Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.
+msgctxt "split_rule_mode_included_description"
+msgid "The default: selected hosts use the tunnel with no pin."
+msgstr "기본값: 선택한 호스트는 고정 없이 터널을 사용합니다."
+
+#. Split rule editor: description of the Keep on one provider mode.
+msgctxt "split_rule_mode_pinned_description"
+msgid "Selected hosts hold their provider longer instead of being moved at the first sign of trouble, so the site changes IP addresses less often mid-session."
+msgstr "선택한 호스트는 문제의 첫 징후에 바로 옮겨지는 대신 제공업체를 더 오래 유지하므로, 세션 중에 사이트의 IP 주소가 덜 자주 바뀝니다."
+
+#. Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.
+msgctxt "split_rule_mode_pinned_title"
+msgid "Keep on one provider"
+msgstr "하나의 제공업체 유지"
+
 #. Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.
 msgctxt "split_rule_preset_google_meet_calls"
 msgid "Google Meet calls"
@@ -5376,6 +7945,11 @@ msgctxt "split_rules_activity_hint"
 msgid "Routing activity appears here while connected."
 msgstr "연결 중에 라우팅 활동이 여기에 표시됩니다."
 
+#. Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.
+msgctxt "split_rules_connect_to_load"
+msgid "Connect once to load the rules you already have."
+msgstr "이미 있는 규칙을 불러오려면 한 번 연결하세요."
+
 #. A description of how to route traffic locally.
 msgctxt "split_rules_hint"
 msgid "Tap traffic below to route it locally, bypassing the tunnel."
@@ -5386,10 +7960,20 @@ msgctxt "split_rules_host_hint"
 msgid "Add a host above, or tap traffic below to route it locally, bypassing the tunnel."
 msgstr "위에서 호스트를 추가하거나 아래 트래픽을 탭하면 터널을 우회하여 로컬로 라우팅됩니다."
 
+#. Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.
+msgctxt "split_rules_host_hint_modes"
+msgid "Add a host above, or tap traffic below to route it locally or hold it to one provider."
+msgstr "위에서 호스트를 추가하거나 아래 트래픽을 탭하여 로컬로 라우팅하거나 하나의 제공업체에 고정하세요."
+
 #. transfer stats and split rules
 msgctxt "split_rules_info_note"
 msgid "Exclusions apply to the whole co-associated network cluster, so related traffic is caught together."
 msgstr "제외는 연관된 네트워크 클러스터 전체에 적용되므로 관련 트래픽이 함께 처리됩니다."
+
+#. Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.
+msgctxt "split_rules_info_note_modes"
+msgid "Rules apply to the whole co-associated network cluster, so related traffic is caught together."
+msgstr "규칙은 연관된 네트워크 클러스터 전체에 적용되므로 관련 트래픽이 함께 처리됩니다."
 
 #. Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.
 msgctxt "split_rules_match_sites_not_apps"
@@ -5406,10 +7990,25 @@ msgctxt "split_rules_start_from_preset"
 msgid "Start from a preset"
 msgstr "프리셋으로 시작"
 
+#. macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.
+msgctxt "sso_browser_open_failed"
+msgid "Could not open the browser. Please try again."
+msgstr "브라우저를 열 수 없습니다. 다시 시도하세요."
+
+#. Error when a browser sign-in (Google or Apple through the browser) took too long and expired.
+msgctxt "sso_sign_in_timed_out"
+msgid "Sign-in timed out. Please try again."
+msgstr "로그인 시간이 초과되었습니다. 다시 시도하세요."
+
 #. Guest mode overlay
 msgctxt "start_earning_join"
 msgid "To start earning, join the network"
 msgstr "수익을 얻기 시작하려면 네트워크에 가입하세요"
+
+#. Primary button of the plan picker (onboarding and upgrade): starts the paid plan's free trial. Replaces 'Join the movement'.
+msgctxt "start_free_trial"
+msgid "Start free trial"
+msgstr "무료 체험 시작"
 
 #. Confirmation button that keeps the user on the seedphrase screen after the warning.
 msgctxt "stay"
@@ -5481,6 +8080,21 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "강력한 익명화"
 
+#. Button on the plan picker for the monthly plan, which has no free trial.
+msgctxt "subscribe"
+msgid "Subscribe"
+msgstr "구독하기"
+
+#. Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.
+msgctxt "subscription_portal_open_failed"
+msgid "Couldn't open the subscription portal. Please try again."
+msgstr "구독 포털을 열 수 없습니다. 다시 시도하세요."
+
+#. The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.
+msgctxt "subscription_purchased_under_different_account"
+msgid "Your subscription was purchased under a different account. Log in to that account to use it."
+msgstr "구독이 다른 계정으로 구매되었습니다. 사용하려면 그 계정으로 로그인하세요."
+
 #. Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.
 msgctxt "successfully_claimed_multiplier"
 msgid "Successfully claimed multiplier!"
@@ -5511,10 +8125,50 @@ msgctxt "supporter"
 msgid "Pro"
 msgstr "Pro"
 
+#. Windows banner text when installing, starting or updating the VPN service failed.
+msgctxt "svc_action_failed"
+msgid "That didn't finish — the service is unchanged. Details are in the app log."
+msgstr "완료되지 않았습니다 — 서비스는 변경되지 않았습니다. 자세한 내용은 앱 로그에 있습니다."
+
 #. Settings: label of the VPN service row.
 msgctxt "svc_service_label"
 msgid "VPN service"
 msgstr "VPN 서비스"
+
+#. Windows banner button that installs the VPN service (Windows asks for administrator permission).
+msgctxt "svc_setup_action"
+msgid "Set up"
+msgstr "설정"
+
+#. Windows banner text under 'Set up the VPN service'.
+msgctxt "svc_setup_message"
+msgid "URnetwork uses a Windows service to carry traffic. One click — Windows will ask for administrator permission."
+msgstr "URnetwork는 Windows 서비스를 사용해 트래픽을 전달합니다. 한 번 클릭 — Windows에서 관리자 권한을 요청합니다."
+
+#. Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.
+msgctxt "svc_setup_title"
+msgid "Set up the VPN service"
+msgstr "VPN 서비스 설정"
+
+#. Windows banner button that starts the stopped VPN service.
+msgctxt "svc_start_action"
+msgid "Start"
+msgstr "시작"
+
+#. Windows banner text under 'Start the VPN service'.
+msgctxt "svc_start_message"
+msgid "The service is installed but not running."
+msgstr "서비스가 설치되어 있지만 실행되고 있지 않습니다."
+
+#. Windows banner title when the VPN service is installed but stopped.
+msgctxt "svc_start_title"
+msgid "Start the VPN service"
+msgstr "VPN 서비스 시작"
+
+#. Windows banner text after the user closed the administrator permission (UAC) prompt without approving.
+msgctxt "svc_uac_declined"
+msgid "Windows asked for permission and the prompt was closed. Click again whenever you're ready."
+msgstr "Windows에서 권한을 요청했지만 창이 닫혔습니다. 준비되면 다시 클릭하세요."
 
 #. Settings: button that uninstalls the VPN service.
 msgctxt "svc_uninstall_action"
@@ -5526,10 +8180,30 @@ msgctxt "svc_uninstall_confirm"
 msgid "This stops the URnetwork service and removes its systemd unit. The app can't connect until it is set up again. You will be asked for administrator permission."
 msgstr "URnetwork 서비스를 중지하고 해당 systemd 유닛을 제거합니다. 다시 설정할 때까지 앱은 연결할 수 없습니다. 관리자 권한을 요청합니다."
 
+#. Windows Settings: confirmation dialog before uninstalling the VPN service.
+msgctxt "svc_uninstall_confirm_windows"
+msgid "This stops the URnetwork service and removes it from Windows. The app can't connect until it is set up again. Windows will ask for administrator permission."
+msgstr "URnetwork 서비스를 중지하고 Windows에서 제거합니다. 다시 설정할 때까지 앱은 연결할 수 없습니다. Windows에서 관리자 권한을 요청합니다."
+
 #. Settings: explanation under the uninstall service button.
 msgctxt "svc_uninstall_note"
 msgid "Remove the systemd service URnetwork uses to carry traffic."
 msgstr "URnetwork가 트래픽을 전달하는 데 사용하는 systemd 서비스를 제거합니다."
+
+#. Windows Settings > VPN service row: what the Uninstall button removes.
+msgctxt "svc_uninstall_note_windows"
+msgid "Remove the Windows service URnetwork uses to carry traffic."
+msgstr "URnetwork가 트래픽을 전달하는 데 사용하는 Windows 서비스를 제거합니다."
+
+#. Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.
+msgctxt "svc_update_message"
+msgid "The installed service is a different version than this app."
+msgstr "설치된 서비스의 버전이 이 앱과 다릅니다."
+
+#. Windows banner title when the installed VPN service is a different version than the app.
+msgctxt "svc_update_title"
+msgid "Update the VPN service"
+msgstr "VPN 서비스 업데이트"
 
 #. Call to action
 msgctxt "switch_account"
@@ -5544,6 +8218,11 @@ msgstr "{}에서 연결을 끊고 계정을 전환하시겠습니까?"
 msgctxt "symbol_dash"
 msgid "-"
 msgstr "-"
+
+#. An ellipsis character used to indicate ongoing processing.
+msgctxt "symbol_ellipsis"
+msgid "..."
+msgstr "..."
 
 msgctxt "symbol_empty"
 msgid ""
@@ -5576,6 +8255,11 @@ msgstr "기기 위치를 제공업체와 동기화"
 msgctxt "system"
 msgid "System"
 msgstr "시스템"
+
+#. A TAO amount with its unit (the gas key balance).
+msgctxt "tao_amount_linux"
+msgid "{} TAO"
+msgstr "{} TAO"
 
 #. Connect
 msgctxt "tap_to_connect"
@@ -5617,6 +8301,11 @@ msgctxt "thanks_for_the_feedback"
 msgid "Thanks for the feedback!"
 msgstr "피드백 감사합니다!"
 
+#. Shown inline in the upgrade flow when a StoreKit purchase attempt throws (Shared/ViewModels/AppStoreSubscriptionManager.swift). Every purchase failure is shown to the user — a payment error they cannot see is one they will hit again. User cancellation is not an error and never shows this.
+msgctxt "the_purchase_could_not_be_completed"
+msgid "The purchase could not be completed. Please try again."
+msgstr "구매를 완료할 수 없습니다. 다시 시도하세요."
+
 #. Used in Authenticate/CreateNetwork/CreateNetworkViewModel.swift.
 msgctxt "there_was_an_error_checking_the_network_name"
 msgid "There was an error checking the network name"
@@ -5637,6 +8326,11 @@ msgctxt "this_is_the_only_time_you_ll"
 msgid "⚠️ This is the ONLY time you'll see this."
 msgstr "⚠️ 지금 이 순간에만 확인할 수 있습니다."
 
+#. Shown inline in the upgrade flow when the server's verify answer for a purchase's transaction JWS is terminal `invalid` — the proof will never verify. The transaction is still finished so StoreKit stops redelivering it; this message is how the failure reaches the user instead of a silent success (Shared/ViewModels/AppStoreSubscriptionManager.swift). Apple sibling of purchase_could_not_be_verified (android).
+msgctxt "this_purchase_couldn_t_be_verified"
+msgid "This purchase couldn't be verified with the App Store, so it can't be applied to your account. If you were charged and your plan doesn't update, please contact support."
+msgstr "App Store에서 이 구매를 확인할 수 없어 계정에 적용할 수 없습니다. 요금이 청구되었는데 요금제가 업데이트되지 않으면 지원팀에 문의하세요."
+
 #. dns settings
 msgctxt "this_region"
 msgid "this region"
@@ -5655,6 +8349,36 @@ msgstr "연결 끊김"
 msgctxt "title_login"
 msgid "Login"
 msgstr "로그인"
+
+#. Badge text for the head mining spot.
+msgctxt "top200"
+msgid "Top 200"
+msgstr "Top 200"
+
+#. Detail under the bound status.
+msgctxt "top200_bound_detail"
+msgid "Emission is paid to your coldkey directly. Bindings renew per epoch."
+msgstr "에미션은 coldkey로 직접 지급됩니다. 바인딩은 에포크마다 갱신됩니다."
+
+#. Status row once bound.
+msgctxt "top200_bound_status"
+msgid "UID {0} · rank #{1}"
+msgstr "UID {0} · 순위 #{1}"
+
+#. Warning when the score nears the floor.
+msgctxt "top200_demotion_warning"
+msgid "Your score is close to the eviction floor. Add routable IPs to keep the spot."
+msgstr "점수가 탈락 기준에 가깝습니다. 자리를 지키려면 라우팅 가능한 IP를 추가하세요."
+
+#. Detail of the Top 200 tile when eligible.
+msgctxt "top200_detail"
+msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
+msgstr "내 네트워크의 라우팅 가능한 IP 범위는 상위 {1}자리 중 약 #{0}위입니다. 상위 채굴자는 tempo마다 SN25α를 직접 받습니다."
+
+#. Headline of the Top 200 tile when eligible.
+msgctxt "top200_you_qualify"
+msgid "You qualify"
+msgstr "자격이 있습니다"
 
 #. Locations List
 msgctxt "top_matches"
@@ -5712,6 +8436,101 @@ msgctxt "transfer_submitted_details"
 msgid "Your transfer has been initiated and will complete once the transaction is processed on chain."
 msgstr "이체가 시작되었으며 블록체인에서 거래가 처리되면 완료됩니다."
 
+#. Section header of the transport mode selection (Auto or a single transport).
+msgctxt "transport"
+msgid "Transport"
+msgstr "전송 방식"
+
+#. Generic warning banner in the transport settings editor when the Auto policy is degraded for a constraint this app version does not recognize (the SDK may report new constraint kinds; "memory" has its own banner).
+msgctxt "transport_auto_degraded"
+msgid "Auto is degraded because system constraints prevent some enabled transports from running."
+msgstr "시스템 제약으로 일부 켜진 전송 방식을 실행할 수 없어 자동 모드가 제한된 상태로 동작합니다."
+
+#. Warning banner in the transport settings editor when the Auto policy is degraded because the platform memory budget cannot admit every enabled transport.
+msgctxt "transport_auto_degraded_memory"
+msgid "Auto is degraded because system memory limits prevent some enabled transports from running."
+msgstr "시스템 메모리 한도로 일부 켜진 전송 방식을 실행할 수 없어 자동 모드가 제한된 상태로 동작합니다."
+
+#. Subtitle of the Auto transport mode row.
+msgctxt "transport_auto_description"
+msgid "Recommended. Uses the enabled transports below."
+msgstr "권장. 아래에서 켠 전송 방식을 사용합니다."
+
+#. Footer of the client transport mode section.
+msgctxt "transport_client_footer"
+msgid "The transport this device uses to reach providers. Auto tries the enabled transports in preference order and keeps every healthy transport of the same tier connected in parallel."
+msgstr "이 기기가 제공자에 연결할 때 사용하는 전송 방식입니다. 자동 모드는 켜진 전송 방식을 우선순위대로 시도하고, 같은 등급의 정상 전송 방식을 모두 병렬로 연결해 둡니다."
+
+#. Transport name: the DNS-disguised transport. A product name; never translated.
+msgctxt "transport_dns"
+msgid "whodis"
+msgstr "whodis"
+
+#. One line description of the whodis (DNS) transport in the transport settings editor.
+msgctxt "transport_dns_description"
+msgid "Disguised as DNS traffic. For networks that filter direct connections."
+msgstr "DNS 트래픽으로 위장합니다. 직접 연결을 걸러 내는 네트워크용입니다."
+
+#. Transport name: the DNS-disguised transport with a reply pump. A product name; never translated.
+msgctxt "transport_dnspump"
+msgid "whodis pump"
+msgstr "whodis pump"
+
+#. One line description of the whodis pump (DNS pump) transport in the transport settings editor.
+msgctxt "transport_dnspump_description"
+msgid "Disguised as DNS traffic with a constant reply pump. Lowest bandwidth, highest availability."
+msgstr "응답을 계속 보내는 DNS 트래픽으로 위장합니다. 대역폭은 가장 낮고 가용성은 가장 높습니다."
+
+#. Transport name: HTTP/1.1 over TLS. A protocol name; never translated.
+msgctxt "transport_h1"
+msgid "H1"
+msgstr "H1"
+
+#. One line description of the H1 transport in the transport settings editor.
+msgctxt "transport_h1_description"
+msgid "Direct over TLS. Works on most networks."
+msgstr "TLS로 직접 연결. 대부분의 네트워크에서 작동합니다."
+
+#. Transport name: HTTP/3 over QUIC. A protocol name; never translated.
+msgctxt "transport_h3"
+msgid "H3"
+msgstr "H3"
+
+#. One line description of the H3 transport in the transport settings editor.
+msgctxt "transport_h3_description"
+msgid "Direct over QUIC. Fastest where it is not filtered."
+msgstr "QUIC로 직접 연결. 걸러지지 않는 곳에서 가장 빠릅니다."
+
+#. Transport name: peer to peer. A protocol name; never translated.
+msgctxt "transport_p2p"
+msgid "P2P"
+msgstr "P2P"
+
+#. Footer of the provider transport mode section.
+msgctxt "transport_provider_footer"
+msgid "The transport this device uses while providing for others. Auto tries the enabled transports in preference order and keeps every healthy transport of the same tier connected in parallel."
+msgstr "이 기기가 다른 사람에게 제공할 때 사용하는 전송 방식입니다. 자동 모드는 켜진 전송 방식을 우선순위대로 시도하고, 같은 등급의 정상 전송 방식을 모두 병렬로 연결해 둡니다."
+
+#. Transport bar label for traffic admitted for sending but not yet attributed to a physical transport.
+msgctxt "transport_queued"
+msgid "queued"
+msgstr "대기 중"
+
+#. Accessibility label / tooltip on the warning icon next to a transport that is enabled under Auto but not currently eligible under a system constraint (for example the platform memory budget). A runtime warning, not a settings restriction: the toggle stays editable.
+msgctxt "transport_unavailable_system_constraints"
+msgid "Unavailable due to system constraints"
+msgstr "시스템 제약으로 사용할 수 없음"
+
+#. Prefix of the transport bar footer listing the enabled transports that carried no traffic in the stats window.
+msgctxt "transport_unused"
+msgid "unused"
+msgstr "사용 안 함"
+
+#. Title of the transport distribution bar under the client statistics chart and of the transport settings editor.
+msgctxt "transports"
+msgid "Transports"
+msgstr "전송 방식"
+
 #. Used in Shared/Views/Introduction/IntroductionView.swift.
 msgctxt "trusted_by_over_100_000_private_networks"
 msgid "Trusted by over 100,000 private networks"
@@ -5741,6 +8560,11 @@ msgstr "연결을 시작할 수 없습니다"
 msgctxt "tunnel_stopped_unexpectedly"
 msgid "The connection stopped."
 msgstr "연결이 중단되었습니다."
+
+#. Label of the unclaimed alpha tile.
+msgctxt "unclaimed"
+msgid "Unclaimed"
+msgstr "받지 않음"
 
 #. A label displayed in the custom dns settings section.
 msgctxt "unencrypted_dns"
@@ -5791,6 +8615,101 @@ msgstr "업데이트 자동 확인"
 msgctxt "upd_auto_check_note"
 msgid "Look for new releases shortly after launch and every six hours. Nothing is ever installed without a click."
 msgstr "실행 직후와 6시간마다 새 릴리스를 찾습니다. 클릭 없이는 아무것도 설치되지 않습니다."
+
+#. Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.
+msgctxt "upd_available_appimage_message"
+msgid "One click downloads the release, verifies it against the release's checksum and replaces this AppImage. The VPN service updates separately."
+msgstr "한 번 클릭하면 릴리스를 다운로드하고 릴리스 체크섬으로 확인한 뒤 이 AppImage를 교체합니다. VPN 서비스는 별도로 업데이트됩니다."
+
+#. Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).
+msgctxt "upd_available_msi_message"
+msgid "One click downloads the release, verifies it and runs its installer, which updates the app and the VPN service. The app closes while it installs."
+msgstr "한 번 클릭하면 릴리스를 다운로드하고 확인한 뒤 설치 프로그램을 실행해 앱과 VPN 서비스를 업데이트합니다. 설치하는 동안 앱이 닫힙니다."
+
+#. Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.
+msgctxt "upd_available_package_message"
+msgid "Download {} from the release page, then run the command below."
+msgstr "릴리스 페이지에서 {}을(를) 다운로드한 다음 아래 명령을 실행하세요."
+
+#. Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.
+msgctxt "upd_available_title_version"
+msgid "Update available: v{}"
+msgstr "업데이트 사용 가능: v{}"
+
+#. Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.
+msgctxt "upd_downloaded_message"
+msgid "This AppImage's folder is not writable, so the verified download was saved below. Replace the AppImage with it by hand."
+msgstr "이 AppImage의 폴더에 쓸 수 없어 확인된 다운로드를 아래에 저장했습니다. 직접 AppImage를 이 파일로 교체하세요."
+
+#. Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.
+msgctxt "upd_failed_checksum"
+msgid "The download didn't match the release's checksums, so it was discarded. Click to try again."
+msgstr "다운로드가 릴리스 체크섬과 일치하지 않아 삭제되었습니다. 클릭하여 다시 시도하세요."
+
+#. Update notice error (Linux Settings, Windows update banner): the release download failed.
+msgctxt "upd_failed_download"
+msgid "The download didn't finish. Check the connection and click to try again."
+msgstr "다운로드가 완료되지 않았습니다. 연결을 확인하고 클릭하여 다시 시도하세요."
+
+#. Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.
+msgctxt "upd_failed_install"
+msgid "The AppImage couldn't be replaced. Check the folder's permissions and click to try again."
+msgstr "AppImage를 교체할 수 없습니다. 폴더 권한을 확인하고 클릭하여 다시 시도하세요."
+
+#. Linux Settings update notice: button that downloads, verifies and installs the update.
+msgctxt "upd_install"
+msgid "Install"
+msgstr "설치"
+
+#. Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.
+msgctxt "upd_manual_install_message"
+msgid "The installer didn't start (it needs administrator approval). The verified download was shown in Explorer — quit the app and run it."
+msgstr "설치 프로그램이 시작되지 않았습니다(관리자 승인이 필요합니다). 확인된 다운로드를 파일 탐색기에 표시했습니다 — 앱을 종료한 뒤 실행하세요."
+
+#. Linux Settings update notice once the update is installed and waiting for a relaunch.
+msgctxt "upd_ready_message"
+msgid "The new AppImage is in place and verified. Relaunch to start using it; the previous file is kept beside it until then."
+msgstr "새 AppImage가 준비되었고 확인되었습니다. 사용을 시작하려면 다시 실행하세요. 그때까지 이전 파일은 옆에 보관됩니다."
+
+#. Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.
+msgctxt "upd_ready_title"
+msgid "Ready to relaunch: v{}"
+msgstr "다시 실행 준비 완료: v{}"
+
+#. Linux Settings update notice: button that restarts the app on the newly installed version.
+msgctxt "upd_relaunch"
+msgid "Relaunch"
+msgstr "다시 실행"
+
+#. Linux Settings update notice: button that opens the release's download page in the browser.
+msgctxt "upd_release_page"
+msgid "Release page"
+msgstr "릴리스 페이지"
+
+#. Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.
+msgctxt "upd_show_file"
+msgid "Show file"
+msgstr "파일 보기"
+
+#. Update notice progress line (Linux Settings, Windows update banner) while the release downloads.
+msgctxt "upd_stage_downloading"
+msgid "Downloading the update…"
+msgstr "업데이트 다운로드 중…"
+
+#. Windows update banner progress line while the verified installer is being launched.
+msgctxt "upd_stage_installing"
+msgid "Starting the installer…"
+msgstr "설치 프로그램 시작 중…"
+
+#. Linux Settings update notice progress line while the verified download replaces the running AppImage file.
+msgctxt "upd_stage_replacing"
+msgid "Replacing the AppImage…"
+msgstr "AppImage 교체 중…"
+
+#. Update progress line (Linux Settings, Windows update banner, macOS Settings > Software update) while the downloaded release is checked against its published checksum.
+msgctxt "upd_stage_verifying"
+msgid "Verifying the download…"
+msgstr "다운로드 확인 중…"
 
 #. Call to action
 msgctxt "update"
@@ -5872,6 +8791,11 @@ msgctxt "urnetwork_vpn_started"
 msgid "URnetwork VPN started"
 msgstr "URnetwork VPN 시작됨"
 
+#. Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.
+msgctxt "usdc_payouts_until_migration"
+msgid "USDC payouts continue to this wallet until the migration to Bittensor is complete."
+msgstr "Bittensor로의 이전이 완료될 때까지 USDC 지급은 계속 이 지갑으로 갑니다."
+
 #. Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.
 msgctxt "usdc_solana_network_only"
 msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
@@ -5895,6 +8819,11 @@ msgstr "대신 프록시로 사용 (VPN 없음)"
 msgctxt "use_as_proxy_no_vpn_detail"
 msgid "Opens ur.io to run URnetwork as an HTTPS proxy without the VPN. SOCKS and WireGuard are available on Pro."
 msgstr "ur.io를 열어 VPN 없이 URnetwork를 HTTPS 프록시로 사용합니다. SOCKS 및 WireGuard는 Pro에서 사용할 수 있습니다."
+
+#. Toggle on the import screen: also apply the extender settings carried by the code.
+msgctxt "use_extender_settings"
+msgid "Use extender settings"
+msgstr "익스텐더 설정 사용"
 
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"
@@ -5954,6 +8883,10 @@ msgctxt "value_int"
 msgid "{}"
 msgstr "{}"
 
+msgctxt "value_string"
+msgid "{}"
+msgstr "{}"
+
 msgctxt "value_with_unit"
 msgid "{0} {1}"
 msgstr "{0} {1}"
@@ -6008,6 +8941,11 @@ msgstr "인증 코드 인증에 문제가 발생했습니다."
 msgctxt "verify_input_label"
 msgid "Verification code"
 msgstr "인증 코드"
+
+#. Standalone Seeker verification action (points multiplier only).
+msgctxt "verify_seeker"
+msgid "Verify Seeker"
+msgstr "Seeker 인증"
 
 #. Call to action
 msgctxt "verify_seeker_token_btn"
@@ -6259,20 +9197,50 @@ msgctxt "wallet"
 msgid "Wallet"
 msgstr "지갑"
 
+#. Error when a wallet address is on the operator's ban list; the user cannot continue.
+msgctxt "wallet_blocked"
+msgid "This wallet can't be used with URnetwork."
+msgstr "이 지갑은 URnetwork에서 사용할 수 없습니다."
+
 #. Error shown when connecting an external wallet to the account fails.
 msgctxt "wallet_connect_failed"
 msgid "Failed to connect the wallet."
 msgstr "지갑을 연결하지 못했습니다."
+
+#. Note under the manual address entry: the wallet only signs a proof of ownership.
+msgctxt "wallet_connect_signed_note_linux"
+msgid "Your wallet signs a message to prove it is yours. Nothing is sent on chain."
+msgstr "지갑이 메시지에 서명해 내 것임을 증명합니다. 체인에는 아무것도 보내지 않습니다."
 
 #. Confirmation shown after an external wallet is connected to the account.
 msgctxt "wallet_connected"
 msgid "Wallet connected."
 msgstr "지갑이 연결되었습니다."
 
+#. Line under the connected coldkey.
+msgctxt "wallet_connected_to_protocol"
+msgid "Connected to the UR protocol. Claims land here. Alpha accrues from the next epoch after connecting."
+msgstr "UR 프로토콜에 연결되었습니다. 받은 보상은 여기로 들어옵니다. Alpha는 연결 후 다음 에포크부터 쌓입니다."
+
+#. Warning when a wallet address has no activity on the Bittensor chain yet; the user may continue.
+msgctxt "wallet_looks_new_warning"
+msgid "This address has no activity on the Bittensor chain yet. It looks like a new wallet. Make sure it is yours before continuing."
+msgstr "이 주소는 아직 Bittensor 체인에서 활동 기록이 없습니다. 새 지갑으로 보입니다. 계속하기 전에 내 지갑이 맞는지 확인하세요."
+
 #. Shown on the create-network step after a wallet sign-in when the wallet isn't linked to any network yet. The user picks a network name and accepts the terms to create one; the wallet signature carries over.
 msgctxt "wallet_needs_network"
 msgid "This wallet isn't linked to a network yet. Pick a network name to create one."
 msgstr "이 지갑은 아직 네트워크에 연결되어 있지 않습니다. 네트워크 이름을 정해 새로 만드세요."
+
+#. Line on the wallet block before a wallet is connected.
+msgctxt "wallet_not_retroactive"
+msgid "Connect a wallet to earn SN25α from the next epoch. Earlier epochs are not settled retroactively."
+msgstr "지갑을 연결하면 다음 에포크부터 SN25α를 받습니다. 이전 에포크는 소급해서 정산되지 않습니다."
+
+#. Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.
+msgctxt "wallet_options"
+msgid "Wallet options"
+msgstr "지갑 옵션"
 
 #. Error shown when signing in with a wallet fails.
 msgctxt "wallet_sign_in_failed"
@@ -6283,6 +9251,16 @@ msgstr "지갑 로그인 실패"
 msgctxt "wallet_sign_in_method_added"
 msgid "Wallet sign-in method added"
 msgstr "지갑 로그인 방법이 추가되었습니다"
+
+#. Error when the bridge signed with a different wallet than the address the user typed.
+msgctxt "wallet_signature_mismatch_linux"
+msgid "The wallet that signed is not the address you entered."
+msgstr "서명한 지갑이 입력한 주소와 다릅니다."
+
+#. Body of the post-purchase screen while the confirmation poll runs (Shared/Views/PurchaseSuccessView.swift). Processing-shaped, not premium-shaped: the server learns of the purchase by webhook and has not confirmed yet.
+msgctxt "we_re_confirming_your_purchase_with_the_app_store"
+msgid "We're confirming your purchase with the App Store. Your plan will update automatically."
+msgstr "App Store에서 구매를 확인하고 있습니다. 요금제가 자동으로 업데이트됩니다."
 
 #. Onboarding offer screen: the small uppercase eyebrow above the headline.
 msgctxt "welcome_offer_eyebrow"
@@ -6303,6 +9281,155 @@ msgstr "추천 네트워크 연결을 해제하면 더 이상 {}에서 포인트
 msgctxt "when_you_refer_a_friend"
 msgid "When you refer a friend:"
 msgstr "친구를 추천하면:"
+
+#. Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".
+msgctxt "widget_chart_peak"
+msgid "peak"
+msgstr "최고"
+
+#. Dashboard widget chart title: this device's own traffic.
+msgctxt "widget_client"
+msgid "Client"
+msgstr "클라이언트"
+
+#. Dashboard widget footer before the tunnel has ever written data.
+msgctxt "widget_connect_once"
+msgid "Connect once to see your traffic here"
+msgstr "한 번 연결하면 여기에 트래픽이 표시됩니다"
+
+#. Contracts widget empty state while the tunnel is down.
+msgctxt "widget_connect_to_see_contracts"
+msgid "Connect to see your contracts"
+msgstr "연결하면 계약이 표시됩니다"
+
+#. Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.
+msgctxt "widget_contract_stack_accessibility"
+msgid "{0} contract, {1}"
+msgid_plural "{0} contracts, {1}"
+msgstr[0] "계약 {0}개, {1}"
+
+#. Description of the contracts widget in the widget gallery.
+msgctxt "widget_contracts_description"
+msgid "Your top client contracts, flowing as they come and go."
+msgstr "주요 클라이언트 계약이 생기고 사라지는 대로 흐르듯 표시됩니다."
+
+#. Description of the quick connect control in the Control Center gallery.
+msgctxt "widget_control_description"
+msgid "Connect or disconnect the URnetwork VPN."
+msgstr "URnetwork VPN을 연결하거나 연결을 끊습니다."
+
+#. Description of the dashboard widget in the widget gallery.
+msgctxt "widget_dashboard_description"
+msgid "Transfer balance, connected location and traffic, with quick connect."
+msgstr "데이터 잔액, 연결된 위치와 트래픽, 빠른 연결."
+
+#. Description of the provider globe widget in the widget gallery.
+msgctxt "widget_globe_description"
+msgid "Your connected providers on the globe."
+msgstr "연결된 제공자를 지구본에 표시합니다."
+
+#. Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.
+msgctxt "widget_intent_source_parameter"
+msgid "Source"
+msgstr "출처"
+
+#. Provider globe widget: providers not shown in the list. The argument is a count.
+msgctxt "widget_more_providers"
+msgid "+{} more"
+msgstr "+{}개 더"
+
+#. Contracts widget empty state while connected with no open client contracts.
+msgctxt "widget_no_contracts"
+msgid "No contracts"
+msgstr "계약 없음"
+
+#. Badge on the small provider globe widget when no providers are connected.
+msgctxt "widget_no_providers"
+msgid "No providers"
+msgstr "제공자 없음"
+
+#. Dashboard widget provider chart label when providing is off.
+msgctxt "widget_not_providing"
+msgid "Not providing"
+msgstr "제공하지 않음"
+
+#. Quick connect control / widget value when the app has no tunnel configuration yet (fresh install or logged out).
+msgctxt "widget_not_signed_in"
+msgid "Not signed in"
+msgstr "로그인하지 않음"
+
+#. Button on the Home Screen widget that opens the app when the tunnel is not configured yet.
+msgctxt "widget_open"
+msgid "Open"
+msgstr "열기"
+
+#. Widget subtitle when the app has no tunnel configuration yet.
+msgctxt "widget_open_to_set_up"
+msgid "Open URnetwork to set up"
+msgstr "URnetwork를 열어 설정하세요"
+
+#. Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.
+msgctxt "widget_peak_rate"
+msgid "{} peak"
+msgstr "최대 {}"
+
+#. Contracts widget header: number of peers with open contracts.
+msgctxt "widget_peer_count"
+msgid "{} peer"
+msgid_plural "{} peers"
+msgstr[0] "피어 {}개"
+
+#. Dashboard widget chart title: traffic relayed for others while providing.
+msgctxt "widget_provider"
+msgid "Provider"
+msgstr "제공자"
+
+#. Widget subtitle: number of connected providers.
+msgctxt "widget_provider_count"
+msgid "{} provider"
+msgid_plural "{} providers"
+msgstr[0] "제공자 {}개"
+
+#. Widget subtitle: number of connected providers while this device is also providing.
+msgctxt "widget_provider_count_providing"
+msgid "{} provider · providing"
+msgid_plural "{} providers · providing"
+msgstr[0] "제공자 {}개 · 제공 중"
+
+#. Title above the provider traffic chart in the dashboard widget: the chart name with the current provide mode (Auto, Always, Network, Never).
+msgctxt "widget_provider_mode_title"
+msgid "Provider · {}"
+msgstr "제공자 · {}"
+
+#. Shown in the dashboard widget in place of the provider traffic chart while providing is off.
+msgctxt "widget_provider_stats_when_enabled"
+msgid "Provider stats will appear when the provider is enabled."
+msgstr "제공자를 켜면 제공자 통계가 표시됩니다."
+
+#. Toast after the system added the Quick Settings tile.
+msgctxt "widget_quick_tile_added"
+msgid "Quick connect tile added"
+msgstr "빠른 연결 타일을 추가했습니다"
+
+#. Title of the action that refreshes the app's Home Screen widgets.
+msgctxt "widget_refresh_intent_title"
+msgid "Refresh URnetwork widgets"
+msgstr "URnetwork 위젯 새로 고침"
+
+#. Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).
+msgctxt "widget_toggle_intent_title"
+msgid "Toggle URnetwork VPN"
+msgstr "URnetwork VPN 켜기/끄기"
+
+#. Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.
+msgctxt "widget_updated_ago"
+msgid "Updated {}"
+msgstr "{} 업데이트됨"
+
+#. Dashboard widget footer in the widget gallery preview.
+msgctxt "widget_updated_just_now"
+msgid "Updated just now"
+msgstr "방금 업데이트됨"
 
 #. Account: the Widgets section (quick connect control and Home Screen widgets, with how to add them).
 msgctxt "widgets"
@@ -6354,6 +9481,11 @@ msgctxt "you_get_3_gib_day_for_life"
 msgid "You get 3 GiB/day for life"
 msgstr "회원님은 평생 3 GiB/일을 받습니다"
 
+#. Detail line under the onboarding data page title.
+msgctxt "you_get_free_data_every_day"
+msgid "You get free data every day."
+msgstr "매일 무료 데이터를 받습니다."
+
 msgctxt "you_have_n_other_devices_online"
 msgid "You have {} other device online"
 msgid_plural "You have {} other devices online"
@@ -6379,6 +9511,11 @@ msgctxt "you_re_premium"
 msgid "You're premium."
 msgstr "프리미엄 사용자입니다."
 
+#. Title of the onboarding data page (was 'Boost your bandwidth').
+msgctxt "your_bandwidth"
+msgid "Your bandwidth"
+msgstr "내 대역폭"
+
 #. Label for the empty text field.
 msgctxt "your_email"
 msgid "Your email"
@@ -6403,6 +9540,11 @@ msgstr "친구는 평생 3 GiB/일을 받습니다"
 msgctxt "your_purchase_needs_to_be_approved_before_it_can"
 msgid "Your purchase needs to be approved before it can complete. UR Pro will turn on by itself once it goes through — there's no need to buy again."
 msgstr "구매를 완료하려면 승인이 필요합니다. 승인이 완료되면 UR Pro가 자동으로 켜지므로 다시 구매하지 않아도 됩니다."
+
+#. Label above the referral code pill in the gold referral panel.
+msgctxt "your_referral_code"
+msgid "Your referral code"
+msgstr "내 추천 코드"
 
 #. Used in Shared/Views/Introduction/ParticipateReferView.swift.
 msgctxt "your_referral_link"
