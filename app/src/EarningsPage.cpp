@@ -270,6 +270,16 @@ Gtk::Button* MakeGoldButton(const Glib::ustring& text) {
   return button;
 }
 
+// The user's zone's offset from UTC at `millis`, in minutes, by GLib's rules
+// for that date (daylight time included); 0 when GLib cannot say.
+int32_t LocalUtcOffsetMinutes(int64_t millis) {
+  GDateTime* local = g_date_time_new_from_unix_local(millis / 1000);
+  if (local == nullptr) return 0;
+  const GTimeSpan offset = g_date_time_get_utc_offset(local);
+  g_date_time_unref(local);
+  return static_cast<int32_t>(offset / G_TIME_SPAN_MINUTE);
+}
+
 // A status chip on a history row / claim row: "unclaimed", "Claimed", ...
 Gtk::Label* MakeStatusChip(const Glib::ustring& text) {
   auto* chip = Gtk::make_managed<Gtk::Label>(text);
@@ -599,11 +609,14 @@ void FetchHead(SdkHost& host, HeadDone done) {
 // The vault's view of this network's epochs, read by the SDK in this process
 // (eth_call + the published payout artifact), after the wallet cache is
 // synced from the server so the scan starts at the wallet's first epoch.
+// The claims come with the current epoch's schedule (the coordinator's policy)
+// when the SDK could read it.
 using ClaimsDone = std::function<void(std::optional<std::vector<SnClaimRow>> claims,
-                                      int64_t totalClaimableRao, std::string err)>;
+                                      int64_t totalClaimableRao, std::string err,
+                                      std::optional<snpayout::EpochSchedule> schedule)>;
 void FetchClaims(SdkHost& host, ClaimsDone done) {
   if (!host.hasDevice()) {
-    done(std::nullopt, 0, kNoDevice);
+    done(std::nullopt, 0, kNoDevice, std::nullopt);
     return;
   }
   urnet::DeviceRemote& device = host.device();
@@ -624,7 +637,8 @@ void FetchClaims(SdkHost& host, ClaimsDone done) {
       device.snClaims([done](std::optional<urnet::SnClaimsResult> result,
                              std::optional<std::string> err) {
       if (err || !result || result->error) {
-        done(std::nullopt, 0, ErrorText(result ? result->error : std::nullopt, err, "no result"));
+        done(std::nullopt, 0, ErrorText(result ? result->error : std::nullopt, err, "no result"),
+             std::nullopt);
         return;
       }
       std::vector<SnClaimRow> rows;
@@ -642,7 +656,16 @@ void FetchClaims(SdkHost& host, ClaimsDone done) {
           rows.push_back(row);
         }
       }
-      done(std::move(rows), result->total_claimable_rao, std::string());
+      std::optional<snpayout::EpochSchedule> schedule;
+      if (result->schedule) {
+        snpayout::EpochSchedule s;
+        s.epoch = result->schedule->epoch;
+        s.endMillis = result->schedule->end_millis;
+        s.claimOpenMillis = result->schedule->claim_open_millis;
+        s.expiryMillis = result->schedule->expiry_millis;
+        schedule = s;
+      }
+      done(std::move(rows), result->total_claimable_rao, std::string(), schedule);
       });
     });
   });
@@ -857,8 +880,8 @@ ClaimAlphaSheet::ClaimAlphaSheet(Gtk::Window& parent, std::string coldkey,
   column->append(*rowsPanel_);
   openNote_ = MakeSizedLabel(
       T_("claims_open_after_finalization",
-         "Claims open 48 hours after an epoch is finalized and stay open for the vault's "
-         "expiry window."),
+         "Each epoch's claims open after its payout list is finalized and stay open until "
+         "they expire."),
       12, "ur-caption");
   column->append(*openNote_);
 
@@ -1427,6 +1450,33 @@ void EarningsPage::BuildEarningsPane() {
     pointsCard_ = row.root;
     pointsPanel_ = row.content;
     pointsCard_->set_visible(false);  // collapsed until Ready
+    content->append(*row.root);
+  }
+
+  // 2. how and when SN payouts happen — collapsed until the coldkey is known
+  {
+    auto row = MakePaddedRow(10);
+    row.content->set_spacing(6);
+    payoutCard_ = row.root;
+    payoutText_ = MakeWrappedNote({}, "ur-row-note");
+    row.content->append(*payoutText_);
+    payoutTimes_ = MakeWrappedNote({}, "ur-row-note");
+    payoutTimes_->set_visible(false);
+    row.content->append(*payoutTimes_);
+    // the coldkey flow the Bittensor block's button opens
+    setColdkeyButton_ = Gtk::make_managed<Gtk::Button>(T_("set_coldkey", "Set coldkey"));
+    setColdkeyButton_->add_css_class("flat");
+    setColdkeyButton_->set_halign(Gtk::Align::START);
+    setColdkeyButton_->set_visible(false);
+    setColdkeyButton_->signal_clicked().connect(
+        sigc::mem_fun(*this, &EarningsPage::OnConnectWithBridge));
+    row.content->append(*setColdkeyButton_);
+    // the claim sheet the unclaimed tile opens; the app never claims by itself
+    payoutClaimButton_ = MakeGoldButton(T_("claim", "Claim"));
+    payoutClaimButton_->set_visible(false);
+    payoutClaimButton_->signal_clicked().connect(sigc::mem_fun(*this, &EarningsPage::OnClaim));
+    row.content->append(*payoutClaimButton_);
+    payoutCard_->set_visible(false);
     content->append(*row.root);
   }
 
@@ -2024,8 +2074,10 @@ void EarningsPage::LoadWalletLayer() {
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   sn::FetchClaims(host_, [this, epoch, seen](std::optional<std::vector<SnClaimRow>> claims,
-                                              int64_t total, std::string err) {
-    PostToMain([this, epoch, seen, claims = std::move(claims), total, err = std::move(err)] {
+                                              int64_t total, std::string err,
+                                              std::optional<snpayout::EpochSchedule> schedule) {
+    PostToMain([this, epoch, seen, claims = std::move(claims), total, err = std::move(err),
+                schedule] {
       if (*epoch != seen) return;
       if (!claims) {
         g_warning("earnings: sn claims failed: %s", err.c_str());
@@ -2047,7 +2099,7 @@ void EarningsPage::LoadWalletLayer() {
         ApplyClaims(std::nullopt, 0, Fetch::Failed, text);
         return;
       }
-      ApplyClaims(std::move(claims), total, Fetch::Ready);
+      ApplyClaims(std::move(claims), total, Fetch::Ready, {}, schedule);
     });
   });
   sn::FetchGas(host_, [this, epoch, seen](std::optional<SnGasInfo> gas, std::string err) {
@@ -2184,24 +2236,30 @@ void EarningsPage::ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state
     totalClaimableRao_ = 0;
     claimsState_ = Fetch::Ready;
     claimsFailure_.clear();
+    schedule_.reset();
   }
   RebuildWalletBlock();
+  RebuildPayoutLine();
   RebuildUnclaimedTile();
   RebuildHistory();  // the alpha column follows the wallet
 }
 
 void EarningsPage::ApplyClaims(std::optional<std::vector<SnClaimRow>> claims,
                                int64_t totalClaimableRao, Fetch state,
-                               const Glib::ustring& failure) {
+                               const Glib::ustring& failure,
+                               std::optional<snpayout::EpochSchedule> schedule) {
   claimsState_ = state;
   claimsFailure_ = failure;
   if (state == Fetch::Ready) {
     claims_ = claims.value_or(std::vector<SnClaimRow>{});
     totalClaimableRao_ = totalClaimableRao;
+    schedule_ = schedule;
   } else if (state == Fetch::Failed) {
     claims_.clear();
     totalClaimableRao_ = 0;
+    schedule_.reset();
   }
+  RebuildPayoutLine();
   RebuildUnclaimedTile();
   RebuildHistory();
 }
@@ -2316,6 +2374,40 @@ void EarningsPage::ApplyLeaderboard(std::optional<urnet::LeaderboardEarnersList>
 void EarningsPage::RebuildPointsCard() {
   RemoveAllChildren(*pointsPanel_);
   pointsPanel_->append(*BuildPointsBreakdown(AggregatePoints(points_)));
+}
+
+// How and when SN payouts happen, under the points. The decision is
+// snpayout::PayoutLineFor's; the times are the reader's local time, with the
+// zone's offset taken at each instant. Claim opens the claim sheet and Set
+// coldkey the coldkey flow, the same handlers as the unclaimed tile's button
+// and the Bittensor block's.
+void EarningsPage::RebuildPayoutLine() {
+  if (payoutCard_ == nullptr) return;
+  const snpayout::PayoutLineView view = snpayout::PayoutLineFor(
+      walletState_ == Fetch::Ready, wallet_.has_value(), totalClaimableRao_, schedule_,
+      g_get_real_time() / 1000, [](int64_t millis) {
+        return snpayout::FormatScheduleTime(millis, LocalUtcOffsetMinutes(millis));
+      });
+  const bool shown = view.kind != snpayout::LineKind::Hidden;
+  payoutCard_->set_visible(shown);
+  if (!shown) return;
+  const bool setColdkey = view.kind == snpayout::LineKind::SetColdkey;
+  payoutText_->set_text(
+      setColdkey ? Glib::ustring(T_("set_coldkey_to_get_paid",
+                                    "Set your Bittensor coldkey to get paid"))
+                 : Glib::ustring(T_("sn_payout_schedule",
+                                    "Earnings settle every epoch and are paid in SN25α to your "
+                                    "Bittensor coldkey when you claim them.")));
+  kit::SetTextOrCollapse(
+      *payoutTimes_,
+      view.showTimes
+          ? Glib::ustring(Format(T_("sn_payout_schedule_times",
+                                    "This epoch ends {0}. Claim your share from {1} until {2}."),
+                                 view.epochEnd, view.claimOpen, view.expiry))
+          : Glib::ustring());
+  setColdkeyButton_->set_visible(setColdkey);
+  payoutClaimButton_->set_visible(view.showClaim);
+  payoutClaimButton_->set_sensitive(view.showClaim && !claiming_);
 }
 
 void EarningsPage::RebuildUnclaimedTile() {
@@ -2513,8 +2605,8 @@ void EarningsPage::RebuildHistory() {
       auto note = MakePaddedRow(8);
       note.content->append(*MakeWrappedNote(
           T_("claims_open_after_finalization",
-             "Claims open 48 hours after an epoch is finalized and stay open for the vault's "
-             "expiry window."),
+             "Each epoch's claims open after its payout list is finalized and stay open until "
+             "they expire."),
           "ur-row-note"));
       historyPanel_->append(*note.root);
     }
@@ -3152,7 +3244,8 @@ void EarningsPage::RebuildSolanaCard() {
   const Glib::ustring waiting =
       view.pendingUsd.empty()
           ? Glib::ustring()
-          : Glib::ustring(Format(T_("usdc_waiting", "{} USDC waiting"), view.pendingUsd));
+          : Glib::ustring(Format(T_("usdc_waiting", "Final USDC payout: {} USDC waiting"),
+                                 view.pendingUsd));
 
   solanaCard_->set_visible(view.showCard);
   solanaCard_->set_sensitive(!removingSolanaWallet_);
@@ -3793,7 +3886,14 @@ void EarningsPage::ApplyPreviewSample() {
   sampleClaims.push_back(
       claim(40, 58, 950000000, "claimed", "0xSAMPLEtxSAMPLEtxSAMPLEtxSAMPLEtxSAMPLEtxSAMPLE40"));
   sampleClaims.push_back(claim(39, 80, 1380000000, "expired", ""));
-  ApplyClaims(sampleClaims, 2031000000LL + 1210000000LL, Fetch::Ready);
+  // epoch 43 closes three days out on the sample's 12 s blocks: the
+  // 14,400-block finalize offset, then 8 claim epochs plus 1 grace epoch
+  snpayout::EpochSchedule schedule;
+  schedule.epoch = 43;
+  schedule.endMillis = g_get_real_time() / 1000 + 21'600LL * 12'000;
+  schedule.claimOpenMillis = schedule.endMillis + 14'400LL * 12'000;
+  schedule.expiryMillis = schedule.endMillis + (9LL * 50'400 - 1) * 12'000;
+  ApplyClaims(sampleClaims, 2031000000LL + 1210000000LL, Fetch::Ready, {}, schedule);
   SnGasInfo gas;
   gas.address = "0x9a1cSAMPLEsampleSAMPLEsampleSAMPLEsamplee07f";
   gas.mirrorSs58 = "5GhSAMPLEsampleSAMPLEsampleSAMPLEsampleSAMPL2q";
