@@ -1203,7 +1203,7 @@ struct StatusReply {
   // logupload::Flight reads it: its id (the upload_logs reply's upload_id; 0
   // before the first), where it is (logupload::ToString(FlightState): "queued",
   // "running", "uploaded", "refused", "failed") and the device that carries it.
-  // The GUI reads the outcome of its upload here. ADDITIVE within v1; absent
+  // The GUI reads the outcome of its upload here. Additive within v1; absent
   // parses 0 and "". RedactStatusForForeignUid drops them like every field it
   // does not list: they describe another user's feedback.
   int64_t log_upload_id = 0;
@@ -1343,7 +1343,7 @@ inline StatusReply RedactStatusForForeignUid(const StatusReply& full) {
 // Polled, about once a second while the Earnings or the connect destination is
 // on screen, so it is answered like `status`: no polkit check, and an empty
 // reply for a caller whose status would be redacted (another uid's session;
-// the series and the status describe that user's provider). A NEW VERB,
+// the series and the status describe that user's provider). A new verb,
 // additive within protocol v1: a daemon that predates it answers
 // kErrorUnknownVerb, and the GUI then shows no provider statistics while
 // disconnected, as before.
@@ -1489,7 +1489,7 @@ inline void from_json(const nlohmann::json& j, UploadLogsRequest& v) {
 
 // The device that carries it (logupload::ToString: "tunnel", "provider",
 // "standalone", or "queued" behind a tunnel start in progress), and the id
-// status names the upload by (log_upload_id). ADDITIVE: absent parses 0.
+// status names the upload by (log_upload_id). Additive: absent parses 0.
 struct UploadLogsReply {
   std::string carrier;
   int64_t upload_id = 0;

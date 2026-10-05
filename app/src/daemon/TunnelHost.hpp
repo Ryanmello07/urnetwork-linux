@@ -114,7 +114,7 @@ class TunnelHost {
   //
   // A start while a start is already running does NOT tear down and restart —
   // it returns the live status with error_code=start_in_progress.
-  // MAIN LOOP ONLY.
+  // Main loop only.
   ctl::StatusReply Start(const ctl::StartTunnelRequest& config);
 
   // True when the LIVE session already satisfies this request, so the daemon
@@ -138,7 +138,7 @@ class TunnelHost {
   // Tears the session down and records why. "user" for an explicit
   // stop_tunnel, "daemon_shutdown" at exit; the reaper supplies "io_loop".
   // Blocks until a running bring-up has finished (bounded by the SDK call it
-  // is inside). MAIN LOOP ONLY.
+  // is inside). Main loop only.
   void Stop(const std::string& reason = "user");
 
   // Applies the provide control mode to the live device, or stashes it for
@@ -172,7 +172,7 @@ class TunnelHost {
   // setting with this daemon's word that it takes its write. `pollStatus`
   // renews the status controller's polling lease (provide::ProviderStatusLease).
   // Empty without that device, and while a bring-up owns the session (which
-  // retires it first). MAIN LOOP ONLY; never blocks, and never throws across
+  // retires it first). Main loop only; never blocks, and never throws across
   // the wire.
   ctl::ProviderStatsReply ProviderStats(bool pollStatus);
   // The connect page's Extender switch while no tunnel session's device takes
