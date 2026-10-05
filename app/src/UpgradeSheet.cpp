@@ -19,6 +19,7 @@
 #include "CheckoutCrashRoute.hpp"
 #include "CheckoutSessionMode.hpp"
 #include "ClientEvents.hpp"
+#include "GuestConversion.hpp"
 #include "I18n.hpp"
 #include "PricePresentation.hpp"
 #include "Ui.hpp"
@@ -448,6 +449,12 @@ void UpgradeSheet::RequestPaymentSheet() {
         PostToMain([this, epoch, issued, result = std::move(result), err = std::move(err)] {
           if (*epoch != issued) return;  // sheet was reset since
           if (state_ != State::Launching) return;
+          if (result && result->error &&
+              PurchaseRefusalFor(result->error->code.value_or(std::string())) ==
+                  PurchaseRefusal::AddSignIn) {
+            RefuseForGuest();
+            return;
+          }
           // the intent to confirm: the SetupIntent for the yearly plan (the
           // trial defers the charge), the PaymentIntent for monthly
           std::string clientSecret;
@@ -471,6 +478,16 @@ void UpgradeSheet::RequestPaymentSheet() {
 #endif
 }
 
+void UpgradeSheet::RefuseForGuest() {
+  if (!purchaseEmitted_) {
+    EmitPurchase("failed", kPurchaseErrorCodeGuestSignInRequired);
+    purchaseEmitted_ = true;
+  }
+  SetState(State::Options);
+  hide();
+  if (on_guest_sign_in_required) on_guest_sign_in_required();
+}
+
 void UpgradeSheet::RequestSession(bool embedded) {
   urnet::StripeCreateCheckoutSessionArgs args;
   args.item_id = plans_->Yearly() ? kItemProYearly : kItemProMonthly;
@@ -488,6 +505,13 @@ void UpgradeSheet::RequestSession(bool embedded) {
         PostToMain([this, epoch, issued, embedded, result = std::move(result),
                     err = std::move(err)] {
           if (*epoch != issued) return;  // sheet was reset since
+          if (result && result->error &&
+              PurchaseRefusalFor(result->error->code.value_or(std::string())) ==
+                  PurchaseRefusal::AddSignIn) {
+            // a guest network: no other session can sell it a plan either
+            RefuseForGuest();
+            return;
+          }
           auto fail = [this](const std::string& message) {
             if (!purchaseEmitted_) {
               EmitPurchase("failed", "transport");

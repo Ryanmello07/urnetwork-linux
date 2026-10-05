@@ -90,6 +90,11 @@ ConnectDrawer::ConnectDrawer(SdkHost& host, Gtk::Window& parent,
   transportSheet_ = std::make_unique<TransportSheet>(parent_, host_, TransportSheet::Kind::Client);
   redeemSheet_ = std::make_unique<RedeemCodeSheet>(parent_, host_, balance_);
   upgradeSheet_ = std::make_unique<UpgradeSheet>(parent_, host_, balance_);
+  // the server refused the checkout for a guest network the balance had not
+  // reported yet: the conversion, then the upgrade once it is done
+  upgradeSheet_->on_guest_sign_in_required = [this] {
+    if (on_guest_upgrade) on_guest_upgrade([this] { OpenUpgrade(); });
+  };
 
   // intro: the drawer slides up while its cards fade in, staggered (macOS
   // motion parity; first appearance only)

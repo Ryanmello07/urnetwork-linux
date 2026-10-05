@@ -154,6 +154,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // once it is done and the network no longer reads as a guest
   // (GuestUpgradeContinuation).
   void DivertGuestToConversion(std::function<void()> checkout);
+  void OnOnboardingGuestSignInRequired();
   void NavigateVerify(const std::string& userAuth);
   void ApplyAuthState(bool loggedIn);
   // ONE READING IN, EVERY WINDOW SURFACE OUT. There is no SetConnected(bool)
