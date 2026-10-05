@@ -1,7 +1,12 @@
 # Sources with translatable strings, relative to the project source root.
 # Every string in them is looked up with T_/TN_ (src/I18n.hpp) under its
 # localization-store key id. Keep this list in sync when a source starts (or
-# stops) carrying user-facing text.
+# stops) carrying user-facing text: tests/PotfilesTest.cpp fails when a source
+# that calls T_ or TN_ is missing here, or when an entry is not such a source.
+#
+# Read by the maintainer targets po/meson.build sets up (urnetwork-pot and
+# urnetwork-update-po run xgettext over it); the build and install never read
+# it, since the catalogs come from the localization store.
 #
 # Not listed, deliberately:
 #   src/I18n.hpp        the T_/TN_ wrappers themselves — the only "T_(" text in
@@ -10,7 +15,7 @@
 #   src/main.cpp        only the gettext bootstrap and stderr diagnostics
 src/AuthViews.cpp
 src/ConnectDrawer.cpp
-src/IpFamilyHistogram.cpp
+src/IpFamilyStatusRow.cpp
 src/ExtenderPanel.cpp
 src/ExtenderSection.cpp
 src/ControlDohSection.cpp
@@ -47,3 +52,18 @@ src/SolanaWalletSheet.cpp
 src/AccountPage.cpp
 src/ReferralRoyalty.cpp
 src/ReferralCodeBox.cpp
+src/BittensorManualSheet.cpp
+src/EmojiTagSheet.cpp
+src/ExcludeAppsSheet.cpp
+src/ExtenderProvideRowPaint.hpp
+src/GuestConversionSheet.cpp
+src/HomeShell.cpp
+src/KillSwitchCopy.hpp
+src/LicensesSheet.cpp
+src/OfferCard.cpp
+src/Onboarding.cpp
+src/PlanPicker.cpp
+src/ReferralPanel.cpp
+src/ReferralsPage.cpp
+src/TransferChart.cpp
+src/WalletConnect.cpp

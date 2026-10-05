@@ -570,6 +570,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/CountFormatTest.cpp',
     'tests/ExtenderSharePresentationTest.cpp',
     'tests/ControlDohWiringTest.cpp',
+    'tests/PotfilesTest.cpp',
     'tests/TransportStatusPresentationTest.cpp',
     'tests/DaemonUnreachableCopyTest.cpp',
     'tests/CheckoutEnvelopeTest.cpp',
@@ -642,6 +643,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # ../../packaging/lib/common.sh the same way.
               # EarningsPageTeardownTest reads EarningsPage.cpp the same way:
               # its destructor must touch no widget (issue #13).
+              # PotfilesTest reads every source and po/POTFILES.in the same way.
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
               # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
               # ProviderStatusWiringTest reads SdkHost.cpp, EarningsPage.cpp and
