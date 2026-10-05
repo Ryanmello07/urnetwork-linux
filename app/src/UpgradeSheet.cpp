@@ -16,6 +16,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "CheckoutBridgeError.hpp"
 #include "CheckoutCrashRoute.hpp"
 #include "CheckoutSessionMode.hpp"
 #include "ClientEvents.hpp"
@@ -40,7 +41,8 @@ constexpr const char* kItemProYearly = "pro_yearly";
 // stays in Stripe's iframe, no card data ever touches the app — and hands
 // control back by navigating to the redirect_link:
 //   done:  urnetwork://checkout?status=complete&session_id=cs_...
-//   error: urnetwork://checkout?errorCode=-1&errorMessage=...
+//   error: urnetwork://checkout?errorCode=<code>&errorMessage=...
+// (the error's code is one of urnet::CheckoutBridgeError*, CheckoutBridgeError.hpp)
 // The session is redirect_on_completion "never" (CheckoutSessionMode.hpp), so
 // the done hand-back comes from Stripe's onComplete on the bridge page, in
 // place. The url and the hand-back are the SDK's envelope
@@ -745,11 +747,13 @@ void UpgradeSheet::HandleCheckoutCallback(const std::string& uri) {
     // the checkout bridge's hand-back is the SDK's envelope; the pay page's
     // (urnetwork://pay/done, urnetwork://pay/error?errorMessage=) is this sheet's
     bool complete = false;
+    std::string errorCode;
     std::string errorMessage;
     if (urnet::isCheckoutRedirect(uri)) {
       try {
         if (auto redirect = urnet::parseCheckoutRedirect(uri)) {
           complete = redirect->Complete;
+          errorCode = redirect->ErrorCode;
           errorMessage = redirect->ErrorMessage;
         }
       } catch (...) {
@@ -774,10 +778,12 @@ void UpgradeSheet::HandleCheckoutCallback(const std::string& uri) {
     EmitPurchase("failed", paySheetActive_ ? "payment_sheet" : "checkout");
     purchaseEmitted_ = true;
     SetState(State::Options);
-    errorLabel_->set_text(!errorMessage.empty()
-                              ? Glib::ustring(errorMessage)
-                              : T_("something_went_wrong_please_try_again_later",
-                                   "Something went wrong. Please try again later."));
+    // the page's code in this app's words when it knows it, else the page's text
+    const CheckoutFailureText failure = CheckoutFailureTextFor(errorCode, errorMessage);
+    errorLabel_->set_text(failure.key
+                              ? Glib::ustring(g_dpgettext2(GETTEXT_PACKAGE, failure.key,
+                                                           failure.english))
+                              : Glib::ustring(failure.pageText));
     errorLabel_->set_visible(true);
   });
 }
