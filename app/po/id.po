@@ -4490,6 +4490,11 @@ msgctxt "remove_wallet"
 msgid "Remove wallet"
 msgstr "Hapus dompet"
 
+#. Body of the remove confirmation for the payout wallet (the title is remove_wallet). Removing the payout wallet makes another of the account's active Solana or Polygon wallets the payout wallet when there is one (the server picks it; payouts_now_go_to names it after the removal), and holds USDC payouts until the user connects a wallet when there is none.
+msgctxt "remove_wallet_moves_or_holds_payouts"
+msgid "USDC payouts move to another of your Solana or Polygon wallets, or are held until you connect one."
+msgstr "Pembayaran USDC dialihkan ke dompet Solana atau Polygon Anda yang lain, atau ditahan sampai Anda menghubungkan dompet."
+
 #. Reset link sent
 msgctxt "resend_reset_link"
 msgid "Resend link"
