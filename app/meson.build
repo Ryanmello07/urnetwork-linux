@@ -621,6 +621,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProviderStatusPresentationTest.cpp',
     'tests/ProviderStatusWiringTest.cpp',
     'tests/ProvideLifecycleTest.cpp',
+    'tests/SignOutTest.cpp',
+    'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
     'tests/ProviderOnlyStatusWiringTest.cpp',
     'tests/ExcludeLauncherTest.cpp',
@@ -649,6 +651,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # ProvideWhileDisconnectedWiringTest reads the provider-only device's
               # daemon and GUI call sites the same way, and
               # ProviderOnlyStatusWiringTest its statistics and settings call sites.
+              # SignOutWiringTest reads SdkHost and the health poll the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,

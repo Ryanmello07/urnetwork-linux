@@ -163,7 +163,10 @@ UR_TEST(ProvideWiring_TheReconcileUsesTheSharedStep) {
   UR_EXPECT_TRUE(Has(reconcile, "control_.SetProvide(mode, &error)"));
   UR_EXPECT_TRUE(Has(reconcile, "providerBackoff_.Allows(nowMillis)"));
   UR_EXPECT_TRUE(Before(reconcile, "if (live ||", "TeardownDeviceLocked();"));
-  UR_EXPECT_TRUE(Before(reconcile, "clientJwt.empty() || instanceId.empty()", "control_.Status("));
+  // signed out (SignOut.hpp) reads as a mode that does not provide, decided
+  // before the status is read
+  UR_EXPECT_TRUE(Before(reconcile, "!signedOut_.load() && !clientJwt.empty() && !instanceId.empty()",
+                        "control_.Status("));
 }
 
 // With no DeviceRemote the provide dot and the discoverable line read the

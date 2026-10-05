@@ -34,6 +34,7 @@
 #include "Health.hpp"
 #include "ProvideLifecycle.hpp"
 #include "RpcSession.hpp"
+#include "SignOut.hpp"
 #include "VerifySendNotice.hpp"
 #include "AddSignInFlow.hpp"
 #include "BittensorWalletFlow.hpp"
@@ -638,6 +639,17 @@ class SdkHost {
   // parity: Device::refreshToken). No-op without a device.
   void RefreshJwt();
 
+  // Sign out of URnetwork (owner decision 2026-10-05: the tunnel and the
+  // provider stop as on Quit; the app keeps running, signed out). Signed out
+  // at once (signedOut_), so a reconcile or a connect that runs after this
+  // starts nothing for the account; the local credentials are logged out;
+  // the DeviceRemote goes, as Shutdown takes it down; then the sign-out is
+  // recorded as owed (SignOut.hpp) and delivered: Quit's stop_tunnel, which
+  // also lifts the kill-switch floor, unless the daemon runs another user's
+  // session. A delivery that does not complete (no daemon, a refusal) leaves
+  // it owed in a marker that outlives the app: the provider reconcile, which
+  // the health poll runs, delivers it first, and nothing starts until it has
+  // been delivered. The sign-out completes in the app either way.
   void Logout();
 
   // Quit-path teardown: bring the device and the daemon tunnel down WITHOUT
@@ -1291,6 +1303,25 @@ class SdkHost {
   // a poll in the same dispatch) must not start a provider the quit just
   // stopped (guarded by mutex_).
   bool providerReconcileClosed_ = false;
+
+  // ---- the sign-out the daemon is owed (SignOut.hpp) -------------------------
+  // Set by Logout and cleared when a sign-in stores its credential or a space
+  // with one is chosen: until the asynchronous local logout lands, the stored
+  // jwt still names the account that left, so IsLoggedIn, the reconcile and the
+  // start read this first. Atomic: the sign-in's commit lands on the sdk's
+  // thread.
+  std::atomic<bool> signedOut_{false};
+  // The daemon as a delivery sees it: the session ensured, the status read for
+  // this uid, and stop_tunnel. Requires mutex_.
+  signout::Daemon SignOutDaemonLocked();
+  // Deliver an owed sign-out ahead of a reconcile or a start, paced by
+  // signOutBackoff_ unless a person asked (userInitiated). Requires mutex_.
+  void SettleSignOutLocked(const char* reason, bool userInitiated);
+  // The marker file (SignOutOwedPath in SdkHost.cpp).
+  static signout::Marker SignOutMarker();
+  // Loaded by Initialize (guarded by mutex_).
+  signout::Obligation signOut_{SignOutMarker()};
+  provide::ProviderStepBackoff signOutBackoff_;  // guarded by mutex_
   // What ReadStats shows with no DeviceRemote: the provider-only device's
   // running bit, live tier and network-key bit as `status` last said. Atomic
   // for the same reason provideHasNetworkKey_ is.
