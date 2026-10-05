@@ -336,7 +336,7 @@ bool TunnelHost::InstallFilterLocked(FilterState state, bool floor, std::string*
   const FilterConfig cfg = FilterConfigForLocked(state, floor, &excludeId);
   const bool ok = filter_.Apply(cfg, error);
   if (ok) {
-    // What is IN FORCE: NetFilter::Apply drops a slice the kernel refused.
+    // What is in force: NetFilter::Apply drops a slice the kernel refused.
     const bool excluded = !filter_.appliedConfig().exclude_cgroups.empty();
     if (excludeId != 0 && !excluded) {
       excludeRefusedId_ = excludeId;
@@ -480,8 +480,8 @@ void TunnelHost::LoadNetworkSpaceLocked(const std::string& networkSpaceJson) {
   if (!spaceManager_) {
     spaceManager_ = urnet::newNetworkSpaceManager(storageRoot_ + "/sdk");
     // The daemon owns this storage, so the move of a space stored under
-    // the retired ur.network key is its own job, done ONCE where the
-    // manager is created and BEFORE the import below can materialize
+    // the retired ur.network key is its own job, done once where the
+    // manager is created and before the import below can materialize
     // the current key (NetworkSpaceBootstrap.hpp: an existing
     // destination makes the move a no-op, which would strand the
     // device's local state under the old key).
@@ -510,7 +510,7 @@ urnet::DeviceLocal TunnelHost::NewDeviceLocked(const std::string& byJwt,
   bool restoreFailed = false;
   // Both constructions size the device at the measured host's memory tier
   // (TunnelPolicy.hpp) instead of the SDK's 20 MiB default, which is what
-  // lets the H3 carrier windows reach their full size. The SAME cached
+  // lets the H3 carrier windows reach their full size. The same cached
   // measurement chose the process budget at startup, so the target and the
   // budget backing it are always one tier.
   const urnw::MemoryTier memoryTier =
@@ -532,7 +532,7 @@ urnet::DeviceLocal TunnelHost::NewDeviceLocked(const std::string& byJwt,
         *networkSpace_, byJwt, UrDeviceDescription(), UrDeviceSpec(), appVersion, instanceId,
         /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
         memoryTier.device_target_byte_count);
-    // Persist ONLY when nothing was stored. Overwriting after a FAILED
+    // Persist only when nothing was stored. Overwriting after a failed
     // restore silently rotates this device's provider identity — peers
     // stop recognising it and its reputation is gone — for what may be a
     // transient failure. The stored identity is left intact so a later,
@@ -1095,7 +1095,7 @@ void TunnelHost::ReapRetiredLoopsLocked() {
 }
 
 void TunnelHost::StopInternalLocked(const std::string& reason) {
-  // FIRST, and in every teardown: the provider-only device never shares a
+  // First, and in every teardown: the provider-only device never shares a
   // moment with a tunnel session's device. RunStart opens with this function,
   // so a Connect retires the provider before the egress marker, the capture
   // routes or the session's own DeviceLocal (the same identity) exist. A
@@ -1694,10 +1694,10 @@ void TunnelHost::MaintainFilterLocked() {
     }
   }
 
-  // 2) PER-APP EXCLUSION. nft binds the urnetwork-exclude slice to its cgroup
+  // 2) Per-app exclusion. nft binds the urnetwork-exclude slice to its cgroup
   //    id when the ruleset loads, so a slice that appears (the first
   //    urnetwork-exclude of a login), disappears (logout) or comes back, and a
-  //    tunnel that changes owner, all need the SAME state installed again with
+  //    tunnel that changes owner, all need the same state installed again with
   //    the slice as it is now. One stat a tick; an nft run only on a change.
   if (filter_.installed()) {
     uint64_t excludeId = 0;
@@ -1719,7 +1719,7 @@ void TunnelHost::MaintainFilterLocked() {
     }
   }
 
-  // 3) TAMPER / FLUSH DETECTION. nftables hands out no notification when a
+  // 3) Tamper / flush detection. nftables hands out no notification when a
   //    third party destroys our table, and `nft flush ruleset` is the FIRST
   //    LINE of the /etc/sysconfig/nftables.conf Fedora and Bazzite ship — so
   //    `systemctl restart nftables` silently deletes `table inet urnetwork`,

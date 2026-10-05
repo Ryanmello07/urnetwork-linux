@@ -282,7 +282,7 @@ UR_TEST(classifyLeavesOutWhatTheMenuLeavesOut) {
                  Offer::Hidden);
   UR_EXPECT_TRUE(ClassifyText(Entry("Type=Application\nExec=x\nHidden=true\n"), "x.desktop") ==
                  Offer::Hidden);
-  UR_EXPECT_TRUE(ClassifyText(Entry("Type=Link\nURL=https://ur.io\n"), "x.desktop") ==
+  UR_EXPECT_TRUE(ClassifyText(Entry("Type=Link\nURL=https://site.example\n"), "x.desktop") ==
                  Offer::NotAnApplication);
   UR_EXPECT_TRUE(ClassifyText(Entry("Type=Application\nDBusActivatable=true\n"), "x.desktop") ==
                  Offer::NotAnApplication);

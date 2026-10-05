@@ -1562,7 +1562,7 @@ void ControlServer::Dispatch(uint64_t connId, const nlohmann::json& request, Rep
   }
 
   // provider_stats on the same terms: polled about once a second while the
-  // GUI's Earnings destination shows, so never gated, and EMPTY for a caller
+  // GUI's Earnings destination shows, so never gated, and empty for a caller
   // whose status is redacted, since the series and the provider status
   // describe another user's provider. Only a caller who may read the answer
   // renews the provider status controller's polling.
@@ -1995,7 +1995,7 @@ nlohmann::json ControlServer::HandleStartProvider(Connection* conn, int64_t id,
   const auto req = request.get<ctl::StartProviderRequest>();
   const TunnelHost::ProviderStartResult result = tunnel_.StartProvider(req);
   if (!result.ok) {
-    // The status rides on the refusal too, so the client sees what IS running
+    // The status rides on the refusal too, so the client sees what is running
     // (a tunnel session, an armed floor) beside the reason.
     nlohmann::json failed = ctl::MakeReply(id, false, nlohmann::json(tunnel_.Status()));
     failed["error"] = result.error.empty() ? "the provider could not be started" : result.error;

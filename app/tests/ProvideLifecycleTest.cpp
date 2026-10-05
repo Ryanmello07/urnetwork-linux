@@ -64,7 +64,7 @@ UR_TEST(provideLifecycleConnectedOrNotByMode) {
   }
 }
 
-// THE DEFECT, as one assertion each: disconnecting must not end providing for
+// The defect, as one assertion each: disconnecting must not end providing for
 // the modes that provide while disconnected.
 UR_TEST(provideLifecycleDisconnectingKeepsAlwaysNetworkAndAuto) {
   UR_EXPECT_TRUE(provide::ProviderRuns(provide::ControlMode::Always, /*connected=*/false));

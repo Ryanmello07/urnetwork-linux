@@ -31,7 +31,7 @@
 //   * The SDK IoLoop done callback runs on an SDK thread and does nothing but
 //     publish; the real teardown (and arming the kill switch on an unexpected
 //     drop) happens on the reaper tick, on the main loop, where it is safe.
-//   * StartProvider runs on the main loop too and only TRY-locks opMutex_. The
+//   * StartProvider runs on the main loop too and only try-locks opMutex_. The
 //     provider-only device it builds never coexists with a tunnel session's:
 //     every teardown, and so the head of every bring-up, retires it first.
 //     ProviderStats, which reads that device's view controllers for the GUI,
@@ -139,7 +139,7 @@ class TunnelHost {
   // disconnected retires it, any other mode is applied to it.
   bool SetProvideMode(const std::string& mode);
 
-  // THE PROVIDER-ONLY DEVICE (start_provider; ProvideLifecycle.hpp). Keeps
+  // The provider-only device (start_provider; ProvideLifecycle.hpp). Keeps
   // providing while the user is disconnected: a DeviceLocal built from the
   // persisted identity and the request's credentials and network space, with
   // the request's provide mode — and nothing else. No tun, no capture routes,
@@ -149,7 +149,7 @@ class TunnelHost {
   //
   // Refused while a tunnel session exists or is being built (its device is
   // the provider) and while the kill-switch floor is armed. The same request
-  // again keeps the running device and only applies the mode. MAIN LOOP ONLY.
+  // again keeps the running device and only applies the mode. Main loop only.
   struct ProviderStartResult {
     bool ok = false;
     std::string error;
@@ -206,7 +206,7 @@ class TunnelHost {
   // The whole bring-up. Runs either inline (async=false) or on worker_.
   void RunStart(ctl::StartTunnelRequest config);
   // RunStart's network space and DeviceLocal steps, shared with StartProvider
-  // so both devices come from ONE copy of the identity rules (never rotate the
+  // so both devices come from one copy of the identity rules (never rotate the
   // stored identity after a failed restore). Both require opMutex_;
   // NewDeviceLocked throws when no device could be built at all.
   void LoadNetworkSpaceLocked(const std::string& networkSpaceJson);
@@ -352,7 +352,7 @@ class TunnelHost {
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::DeviceLocal> device_;
   // The provider-only device (StartProvider), and the request it was built
-  // from. A SEPARATE slot from device_, which keeps its one meaning — the
+  // from. A separate slot from device_, which keeps its one meaning — the
   // tunnel session's device — for every check below that reads it (the filter
   // teardown retry, adoption, the published identity). Guarded by opMutex_.
   std::optional<urnet::DeviceLocal> providerDevice_;

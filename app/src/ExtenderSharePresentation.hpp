@@ -107,7 +107,7 @@ struct Text {
   std::string_view english;
 };
 
-// sdk ControlDohError* (URNET_CONTROL_DOH_ERROR_*): each id IS the
+// sdk ControlDohError* (URNET_CONTROL_DOH_ERROR_*): each id is the
 // localization key of its message, the vless_error_* pattern.
 inline constexpr const char* kControlDohErrorUrlInvalid = "control_doh_error_url_invalid";
 inline constexpr const char* kControlDohErrorHttpsRequired = "control_doh_error_https_required";
@@ -125,8 +125,8 @@ inline constexpr const char* kSdkErrorIdInternal = "internal_error";
 inline constexpr const char* kControlDohChinaCountryCode = "cn";
 
 // The servers box back into the list set_control_doh_urls takes: split on line
-// breaks (\n and \r), trimmed, blank lines dropped, in order. NOT on commas and
-// NOT de-duplicated, unlike the hosts box: every platform splits this box the
+// breaks (\n and \r), trimmed, blank lines dropped, in order. Not on commas and
+// not de-duplicated, unlike the hosts box: every platform splits this box the
 // same way, and the SDK drops repeats and normalizes the rest. Shown back one
 // per line (JoinHostLines).
 inline std::vector<std::string> SplitControlDohLines(const std::string& text) {

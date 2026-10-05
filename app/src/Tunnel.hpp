@@ -434,7 +434,7 @@ inline constexpr const char* kNftFwdChainName = "urnw_fwd";
 // reproduced the original mistake — a green check on the wrong question — in a
 // new place. At postrouting the device is the real one.
 inline constexpr const char* kNftProbeChainName = "urnw_probe";
-// The SIXTH chain, present only while an urnetwork-exclude slice is in force
+// The sixth chain, present only while an urnetwork-exclude slice is in force
 // on a tunnel: it masquerades kBypassMark on the physical interface (see
 // "per-app split tunnel" in TunnelPolicy.hpp for why the source address needs
 // it).

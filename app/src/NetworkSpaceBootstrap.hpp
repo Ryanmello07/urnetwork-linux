@@ -103,7 +103,7 @@ inline auto RefreshUrNetworkSpace(Manager& manager) {
 }
 
 // The launch bootstrap of the official space: the legacy move, then the
-// refresh, which reads what the space stores AFTER the move so a moved space
+// refresh, which reads what the space stores after the move so a moved space
 // keeps what it carried.
 template <class Key, class Values, class Manager>
 inline auto BootstrapUrNetworkSpace(Manager& manager) {
@@ -113,7 +113,7 @@ inline auto BootstrapUrNetworkSpace(Manager& manager) {
 
 // The space the GUI binds to at launch (android installBundleNetworkSpace,
 // apple NetworkSpaceStartup.prepareBundledNetworkSpace parity): the bootstrap
-// above, then the space the manager persisted as ACTIVE -- the server the user
+// above, then the space the manager persisted as active -- the server the user
 // last applied in the network sheet, which ApplyNetworkServer makes active and
 // the manager records in its storage. The bundled space is made active only
 // when it was just created (a first launch) or nothing is active; any other
@@ -128,7 +128,7 @@ inline auto BootstrapUrNetworkSpace(Manager& manager) {
 template <class Key, class Values, class Manager>
 inline auto LaunchUrNetworkSpace(Manager& manager) {
   MigrateLegacyUrNetworkSpace<Key>(manager);
-  // sampled BEFORE the refresh, which creates the bundled space when it is
+  // sampled before the refresh, which creates the bundled space when it is
   // missing -- asking afterwards would always answer that it existed
   const bool bundledExisted =
       static_cast<bool>(manager.getNetworkSpace(UrNetworkSpaceKey<Key>(kUrHostName)));

@@ -482,7 +482,7 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     case Verb::LocationOverrideWrite:
     case Verb::LocationOverrideClear:
       return true;
-    // NOT a press: the GUI sends start_provider from its health poll as well
+    // Not a press: the GUI sends start_provider from its health poll as well
     // as after Disconnect, so a check that needs a password answers with a
     // challenge code (and the GUI backs off) instead of raising a dialog every
     // few seconds. At the console control-tunnel is allow_active=yes anyway.
@@ -938,15 +938,15 @@ inline void from_json(const nlohmann::json& j, SetProvideRequest& v) {
 
 // ---- start_provider --------------------------------------------------------
 // Keep providing while disconnected (support inbox 1521, P008). The daemon
-// builds a PROVIDER-ONLY DeviceLocal: the persisted device identity, this
+// builds a provider-only DeviceLocal: the persisted device identity, this
 // session's credentials and network space, the requested provide mode — and
 // nothing else. No tun, no capture routes, no DNS change, no nftables change,
-// no egress marker, and NO device RPC listener: the GUI binds no DeviceRemote
+// no egress marker, and no device RPC listener: the GUI binds no DeviceRemote
 // to it, so nothing in the GUI can mistake it for a tunnel session, and the
 // user's own traffic is routed exactly as if URnetwork were not running.
 // ProvideLifecycle.hpp carries the whole argument.
 //
-// A NEW VERB, not a start_tunnel field. A daemon that predates it answers
+// A new verb, not a start_tunnel field. A daemon that predates it answers
 // `unknown verb`; a start_tunnel field it silently dropped would have brought
 // up a full tunnel — capture routes and all — for a request that asked for
 // none (the Windows protocol notes record exactly that hazard for its mode
@@ -1118,8 +1118,8 @@ struct StatusReply {
   bool rpc_pinned = false;
 
   // ---- the provider-only device (start_provider) --------------------------
-  // ADDITIVE within v1; absent parses as "not running", which is what a daemon
-  // predating start_provider is. A DeviceLocal provides WITHOUT a tunnel
+  // Additive within v1; absent parses as "not running", which is what a daemon
+  // predating start_provider is. A DeviceLocal provides without a tunnel
   // because the user is disconnected and their provide mode keeps a provider
   // running (ProvideLifecycle.hpp). Never true beside a tunnel session: that
   // session's device is the provider, and the GUI reads it over the device RPC.

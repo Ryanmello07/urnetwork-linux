@@ -145,7 +145,7 @@ struct FilterDerived {
   std::vector<std::string> resolvers;   // the v4 resolvers that passed inet_pton
   std::vector<std::string> resolvers6;  // the v6 resolvers that passed inet_pton
   // The urnetwork-exclude slices to mark, route around the tunnel and accept.
-  // Only with the socket-cgroup match: the mark rule IS that match.
+  // Only with the socket-cgroup match: the mark rule is that match.
   std::vector<CgroupRef> excluded;
 };
 
@@ -1098,7 +1098,7 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
   line("\t\tip daddr 169.254.169.254 counter drop");
   line("");
 
-  // PER-APP EXCLUSION (urnetwork-exclude). Above every block that follows — the
+  // Per-app exclusion (urnetwork-exclude). Above every block that follows — the
   // DNS floor, the off-tunnel v6 block and the floor itself — because the
   // command was explicitly asked to leave outside the tunnel, and below the
   // metadata drop, which holds in every state. Only packets the mark chain
@@ -1283,7 +1283,7 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
   if (cfg.floor) line("\t\tcounter drop");
   line("\t}");
 
-  // -- 4. THE EXCLUDED SLICE'S SOURCE ADDRESS. connect() looked the route up
+  // -- 4. The excluded slice's source address. connect() looked the route up
   //    before the mark chain marked the packet, so the socket is bound to the
   //    tun's address; the mark re-routes the packet out of the physical
   //    interface but keeps that address (see EgressSocketMarker). Masquerade
@@ -2002,7 +2002,7 @@ bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
     std::fprintf(stderr, "[filter] apply %s failed: %s\n", ToString(cfg.state),
                  lastError_.c_str());
     if (cfg.exclude_cgroups.empty()) return false;
-    // AN EXCLUSION NEVER COSTS THE FLOOR. Its rules are the only ones here that
+    // An exclusion never costs the floor. Its rules are the only ones here that
     // need nftables NAT (an inet nat chain, Linux 5.2), and a slice removed
     // between the check above and the load fails the transaction too. Either
     // way the protective ruleset goes in without them, and the slice's commands
