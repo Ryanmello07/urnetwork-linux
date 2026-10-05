@@ -17,10 +17,17 @@
 // builds or refreshes the space, before any Device is constructed or a
 // NetworkSpace held.
 //
+// The refresh writes the official values OVER what the space already stores
+// (StoredNetworkSpace.hpp): updateNetworkSpaceValues replaces the whole value
+// set, and a refresh built from nothing wiped, on every launch, what the user
+// had saved in the space -- its VLESS server and its private extender.
+//
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
 #include <string>
+
+#include "StoredNetworkSpace.hpp"
 
 namespace urnw {
 
@@ -43,13 +50,14 @@ inline Key UrNetworkSpaceKey(const std::string& hostName) {
   return key;
 }
 
-// The value set of the official space (official == true: the bundled space,
+// The values of the official space (official == true: the bundled space,
 // pinned endpoints, ur.io links) or of a self-hosted deployment under
-// `hostName` (deriving everything off its own name). Neither carries a
-// migration host: the operator stays on its host.
+// `hostName` (deriving everything off its own name), written over `values` --
+// what the space stores already. Every value they do not name is kept as it
+// is: the VLESS server, the private extender, the extender overrides, alt_url,
+// sn_chain. Neither carries a migration host: the operator stays on its host.
 template <class Values>
-inline Values UrNetworkSpaceValues(bool official, const std::string& hostName) {
-  Values values;
+inline Values UrNetworkSpaceValuesOver(Values values, bool official, const std::string& hostName) {
   values.bundled = official;
   values.net_expose_server_ips = true;
   values.net_expose_server_host_names = true;
@@ -58,6 +66,12 @@ inline Values UrNetworkSpaceValues(bool official, const std::string& hostName) {
   values.wallet = "circle";
   values.sso_google = false;
   return values;
+}
+
+// The same values for a space that stores nothing yet.
+template <class Values>
+inline Values UrNetworkSpaceValues(bool official, const std::string& hostName) {
+  return UrNetworkSpaceValuesOver(Values{}, official, hostName);
 }
 
 // Moves a space stored under the retired ur.network/main key to
@@ -72,13 +86,20 @@ inline bool MigrateLegacyUrNetworkSpace(Manager& manager) {
 }
 
 // The launch bootstrap of the official space: the legacy move, then the
-// build/refresh of the space under the current key. Idempotent
+// build/refresh of the space under the current key -- the official values over
+// what that space stores, read AFTER the move so a moved space keeps what it
+// carried. The bundled space has no url overrides, so those are the one stored
+// value the refresh clears (as a refresh from nothing always did). Idempotent
 // (updateNetworkSpaceValues persists and returns the space for the fixed key).
 template <class Key, class Values, class Manager>
 inline auto BootstrapUrNetworkSpace(Manager& manager) {
   MigrateLegacyUrNetworkSpace<Key>(manager);
-  return manager.updateNetworkSpaceValues(UrNetworkSpaceKey<Key>(kUrHostName),
-                                          UrNetworkSpaceValues<Values>(true, kUrHostName));
+  const Key key = UrNetworkSpaceKey<Key>(kUrHostName);
+  Values values = UrNetworkSpaceValuesOver(StoredNetworkSpaceValues<Key, Values>(manager, key),
+                                           true, kUrHostName);
+  values.api_url.reset();
+  values.platform_url.reset();
+  return manager.updateNetworkSpaceValues(key, values);
 }
 
 }  // namespace urnw

@@ -670,12 +670,19 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       key.host_name = hostName;
       key.env_name = std::string(kUrEnvName);
 
-      // The same value set BuildUrNetworkSpace writes, with the
+      // The same host values BuildUrNetworkSpace writes, with the
       // host-dependent parts varied (iOS DeviceManager.applyNetworkSpace
-      // parity). `bundled` is true only for the official host with no
-      // overrides: a bundled space carries pinned endpoints a custom
-      // deployment does not have.
-      urnet::NetworkSpaceValues values = UrNetworkSpaceValues(official, hostName);
+      // parity), written OVER what the space already stores under this key --
+      // nothing for a server this client never used. updateNetworkSpaceValues
+      // replaces the whole set, and a set built from nothing dropped what the
+      // user had saved in the space (its VLESS server, its private extender)
+      // whenever the sheet re-applied the server in force. Only what this
+      // sheet decides changes: the host's values and the url overrides.
+      // `bundled` is true only for the official host with no overrides: a
+      // bundled space carries pinned endpoints a custom deployment does not
+      // have.
+      urnet::NetworkSpaceValues values = UrNetworkSpaceValuesOver(
+          StoredNetworkSpaceValues(*spaceManager_, key), official, hostName);
       values.bundled = official && !explicitUrls;
       values.api_url = apiUrl;
       values.platform_url = connectUrl;
@@ -721,6 +728,63 @@ std::string SdkHost::NetworkSpaceJson() {
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] network space toJson failed: %s\n", e.what());
     return "";
+  }
+}
+
+// ---- VLESS (sdk vless_settings_ui.go) ----------------------------------------
+// Nothing here logs the settings: the user id is the server's credential.
+
+std::optional<urnet::VlessSettings> SdkHost::GetVlessSettings() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getVlessSettings();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getVlessSettings failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<std::string> SdkHost::SetVlessSettings(const urnet::VlessSettings& settings) {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    // The SDK persists through the space's manager and applies the change IN
+    // PLACE (sdk updateInPlaceValues): the manager keeps this same space, so
+    // networkSpace_ and the Api, LocalState and device derived from it all
+    // stay valid -- nothing to re-derive, unlike ApplyNetworkServer.
+    return networkSpace_->setVlessSettings(settings);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] setVlessSettings failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::optional<urnet::VlessLinkResult> SdkHost::ParseVlessLink(const std::string& link) {
+  try {
+    return urnet::parseVlessLink(link);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] parseVlessLink failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
+
+std::string SdkHost::VlessSettingsLink(const urnet::VlessSettings& settings) {
+  try {
+    return urnet::vlessSettingsLink(settings);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] vlessSettingsLink failed: %s\n", e.what());
+    return "";
+  }
+}
+
+std::string SdkHost::ValidateVlessSettings(const urnet::VlessSettings& settings) {
+  try {
+    return urnet::validateVlessSettings(settings);
+  } catch (const std::exception& e) {
+    // a check that could not run is not a pass
+    std::fprintf(stderr, "[sdk] validateVlessSettings failed: %s\n", e.what());
+    return urnet::VlessErrorLinkInvalid;
   }
 }
 
@@ -3618,50 +3682,41 @@ bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secre
   std::scoped_lock lock(mutex_);
   if (!spaceManager_ || !networkSpace_) return false;
   try {
-    urnet::NetworkSpaceKey key;
-    key.host_name = networkSpace_->getHostName();
-    key.env_name = networkSpace_->getEnvName();
-
-    // updateNetworkSpaceValues takes the WHOLE value set, not a patch, so every
-    // field is read back off the live space before the one being edited is
-    // changed. Writing only net_extender would silently reset the api/platform
-    // url overrides a custom network server left here (ApplyNetworkServer) and
-    // the extender settings the view controller wrote.
-    urnet::NetworkSpaceValues values;
-    values.bundled = networkSpace_->getBundled();
-    values.net_expose_server_ips = networkSpace_->getNetExposeServerIps();
-    values.net_expose_server_host_names = networkSpace_->getNetExposeServerHostNames();
-    values.link_host_name = networkSpace_->getLinkHostName();
-    values.migration_host_name = networkSpace_->getMigrationHostName();
-    values.wallet = networkSpace_->getWallet();
-    values.sso_google = networkSpace_->getSsoGoogle();
-    values.api_url = networkSpace_->getConfiguredApiUrl();
-    values.platform_url = networkSpace_->getConfiguredPlatformUrl();
-    if (const std::string envSecret = networkSpace_->getEnvSecret(); !envSecret.empty()) {
-      values.env_secret = envSecret;
+    // updateNetworkSpaceValues takes the WHOLE value set, not a patch, so the
+    // write starts from what the space STORES (its toJson) and changes the
+    // private extender alone. Not from the getters: they answer EFFECTIVE
+    // values, so writing them back pinned every derived default (the extender
+    // dns name, the gossip url, the bundled root keys) as an explicit
+    // override, and the values no getter reads -- alt_url, sn_chain, the VLESS
+    // server -- were silently dropped.
+    const auto stored = ParseStoredNetworkSpace(networkSpace_->toJson());
+    if (!stored) {
+      // without a readable key the write would land in a different space
+      std::fprintf(stderr, "[sdk] set private extender refused: the space json does not read\n");
+      return false;
     }
-    if (const std::string store = networkSpace_->getStore(); !store.empty()) {
-      values.store = store;
-    }
-    if (const std::string dnsName = networkSpace_->getExtenderDnsName(); !dnsName.empty()) {
-      values.extender_dns_name = dnsName;
-    }
-    if (const std::string gossipUrl = networkSpace_->getGossipUrl(); !gossipUrl.empty()) {
-      values.gossip_url = gossipUrl;
-    }
-    values.extender_hosts = networkSpace_->getExtenderHosts();
-    values.extender_root_public_keys = networkSpace_->getExtenderRootPublicKeys();
+    urnet::NetworkSpaceValues values = stored->values;
 
     // both fields empty = "no private extender": the advanced override is off
     // and discovery resumes
+    values.net_extender.reset();
     if (!ip.empty() || !secret.empty()) {
       urnet::NetExtender netExtender;
       netExtender.ip = ip;
       netExtender.secret = secret;
       values.net_extender = netExtender;
     }
+    // Saving what is already stored is not a write: the manager REBUILDS a
+    // space it is handed unchanged values for, closing the one everything here
+    // is derived from (a changed extender is applied in place instead).
+    const auto& before = stored->values.net_extender;
+    const auto& after = values.net_extender;
+    if (before.has_value() == after.has_value() &&
+        (!after || (before->ip == after->ip && before->secret == after->secret))) {
+      return true;
+    }
 
-    networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
+    networkSpace_ = spaceManager_->updateNetworkSpaceValues(stored->key, values);
     spaceManager_->setActiveNetworkSpace(*networkSpace_);
     // ...and re-derive what hangs off the space, exactly as ApplyNetworkServer
     // does: the handle is new, and a freshly derived Api carries no token.

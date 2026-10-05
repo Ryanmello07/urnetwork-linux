@@ -6,8 +6,8 @@
 //
 //   Pane A "General" — what the app DOES: the General group (product updates,
 //     automatic update checks) then the Connections group (kill switch + its
-//     two honesty disclosures, blocked locations, app split rules, the VPN
-//     service row).
+//     two honesty disclosures, blocked locations, VLESS, app split rules, the
+//     VPN service row).
 //   Pane B "Device" — what this machine IS: the Device group (name, spec),
 //     Post Quantum Identity, then Advanced (the advanced-mode toggle and
 //     Save logs).
@@ -67,6 +67,9 @@ class ProviderIdentitiesSheet;
 class SettingsDeviceNameSheet;
 class SettingsBlockedLocationsSheet;
 class LicensesSheet;
+// The VLESS editor (VlessSheet.hpp); the login screen's network sheet opens
+// its own instance for the same space.
+class VlessSheet;
 
 // §2.1 — the six terminal states of every async field on this destination and
 // its sheets. NoDevice is NOT a nicety: "signed in but the service is not up"
@@ -161,6 +164,7 @@ class SettingsPage : public Gtk::Box {
   void ShowAppSplitRulesSheet();
   void ShowIdentitySheet();
   void ShowLicensesSheet();
+  void ShowVlessSheet();
 
   // ---- helpers -------------------------------------------------------------
   void Snack(const Glib::ustring& message, bool error);
@@ -234,6 +238,7 @@ class SettingsPage : public Gtk::Box {
   std::unique_ptr<SplitRulesSheet> splitRulesSheet_;
   std::unique_ptr<ProviderIdentitiesSheet> identitiesSheet_;
   std::unique_ptr<LicensesSheet> licensesSheet_;
+  std::unique_ptr<VlessSheet> vlessSheet_;
   std::unique_ptr<Gtk::Window> confirmDialog_;  // the uninstall confirmation
 };
 

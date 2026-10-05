@@ -212,6 +212,7 @@ executable('urnetwork-gui',
     'src/SupportPage.cpp',
     'src/NetworkPage.cpp',
     'src/SettingsPage.cpp',
+    'src/VlessSheet.cpp',
     'src/UpdateChecker.cpp',
     'src/LicensesSheet.cpp',
     'src/DeveloperPage.cpp',
@@ -519,7 +520,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # official repo, the tag grammar, the own-arch asset and its digest, the
 # install-kind probe, the launch throttle) and its wiring, the split-rules
 # activity row's reading of the block action reason (the safety-rule chip and
-# the route-locally offer), and the daemon
+# the route-locally offer), the VLESS editor's form, visibility rules,
+# settings mapping and messages and the stored network space values every
+# space write starts from, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -591,6 +594,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ConfirmationPollGateTest.cpp',
     'tests/AddSignInFlowTest.cpp',
     'tests/AddSignInWiringTest.cpp',
+    'tests/VlessPresentationTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
