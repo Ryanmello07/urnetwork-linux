@@ -961,6 +961,10 @@ bool MainWindow::PollDaemonHealth() {
     // Nothing claimed, nothing to contradict — but the DNS verdict from the
     // last session must not outlive it on screen.
     if (drawer_) drawer_->SetTunnelDnsState(false, false, {});
+    // Disconnected is when the provider-only device is the provider: start it
+    // after a launch without auto-connect, bring it back after a service
+    // restart or an unexpected drop, and stop one the mode no longer wants.
+    host_.ReconcileProvider("health poll");
     return true;
   }
   const auto status = host_.Control().Status();

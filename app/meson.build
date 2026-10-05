@@ -603,6 +603,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/AddSignInFlowTest.cpp',
     'tests/AddSignInWiringTest.cpp',
     'tests/VlessPresentationTest.cpp',
+    'tests/ProvideLifecycleTest.cpp',
+    'tests/ProvideWhileDisconnectedWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -622,6 +624,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # its destructor must touch no widget (issue #13).
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
               # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
+              # ProvideWhileDisconnectedWiringTest reads the provider-only device's
+              # daemon and GUI call sites the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

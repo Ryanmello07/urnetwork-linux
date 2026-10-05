@@ -31,6 +31,9 @@
 //   * The SDK IoLoop done callback runs on an SDK thread and does nothing but
 //     publish; the real teardown (and arming the kill switch on an unexpected
 //     drop) happens on the reaper tick, on the main loop, where it is safe.
+//   * StartProvider runs on the main loop too and only TRY-locks opMutex_. The
+//     provider-only device it builds never coexists with a tunnel session's:
+//     every teardown, and so the head of every bring-up, retires it first.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -129,8 +132,30 @@ class TunnelHost {
   void Stop(const std::string& reason = "user");
 
   // Applies the provide control mode to the live device, or stashes it for
-  // the next Start when the tunnel is down.
+  // the next Start when the tunnel is down. With no tunnel session it also
+  // decides the provider-only device: a mode that does not provide while
+  // disconnected retires it, any other mode is applied to it.
   bool SetProvideMode(const std::string& mode);
+
+  // THE PROVIDER-ONLY DEVICE (start_provider; ProvideLifecycle.hpp). Keeps
+  // providing while the user is disconnected: a DeviceLocal built from the
+  // persisted identity and the request's credentials and network space, with
+  // the request's provide mode — and nothing else. No tun, no capture routes,
+  // no DNS change, no nftables change, no egress marker and no device RPC
+  // listener, so this machine's own traffic is routed exactly as it would be
+  // without URnetwork, and no client can drive the device.
+  //
+  // Refused while a tunnel session exists or is being built (its device is
+  // the provider) and while the kill-switch floor is armed. The same request
+  // again keeps the running device and only applies the mode. MAIN LOOP ONLY.
+  struct ProviderStartResult {
+    bool ok = false;
+    std::string error;
+    const char* code = nullptr;  // a ctl::kCode* when !ok
+  };
+  ProviderStartResult StartProvider(const ctl::StartProviderRequest& request);
+  // A provider-only device is running. Never blocks behind a bring-up.
+  bool ProviderRunning() const;
 
   // The kill switch the CLIENT asked for. Semantics follow the Windows source
   // of truth (docs/linux_agent_help.md §6.3): a user disconnect always lifts
@@ -171,6 +196,20 @@ class TunnelHost {
 
   // The whole bring-up. Runs either inline (async=false) or on worker_.
   void RunStart(ctl::StartTunnelRequest config);
+  // RunStart's network space and DeviceLocal steps, shared with StartProvider
+  // so both devices come from ONE copy of the identity rules (never rotate the
+  // stored identity after a failed restore). Both require opMutex_;
+  // NewDeviceLocked throws when no device could be built at all.
+  void LoadNetworkSpaceLocked(const std::string& networkSpaceJson);
+  urnet::DeviceLocal NewDeviceLocked(const std::string& byJwt, const std::string& instanceId,
+                                     const std::string& appVersion);
+  // Closes the provider-only device, waits a bounded time for its sockets to
+  // close and clears its published status. A no-op without one. Requires
+  // opMutex_.
+  void RetireProviderDeviceLocked();
+  // Publishes the provider-only device's live tier and network key into
+  // status_. Requires opMutex_.
+  void RefreshProviderStatusLocked();
   // Requires opMutex_. A reason means "somebody asked for this stop": it lifts
   // the nftables policy on the way out (ApplyFilterLocked(Off)) and REPLACES
   // status_.error/error_code with the reason. An EMPTY reason means "the caller
@@ -297,6 +336,12 @@ class TunnelHost {
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::DeviceLocal> device_;
+  // The provider-only device (StartProvider), and the request it was built
+  // from. A SEPARATE slot from device_, which keeps its one meaning — the
+  // tunnel session's device — for every check below that reads it (the filter
+  // teardown retry, adoption, the published identity). Guarded by opMutex_.
+  std::optional<urnet::DeviceLocal> providerDevice_;
+  ctl::StartProviderRequest providerConfig_;
   std::optional<urnet::IoLoop> ioLoop_;
   // Set by the LIVE loop's done callback; a retired loop carries its own copy
   // (see retiredLoops_) so the two can never be confused.

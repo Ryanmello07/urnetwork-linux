@@ -180,6 +180,7 @@ inline bool VerbNeedsAuthorization(ctl::Verb verb) {
     case ctl::Verb::AttachTunnel:
     case ctl::Verb::StopTunnel:
     case ctl::Verb::SetProvide:
+    case ctl::Verb::StartProvider:
     case ctl::Verb::SetKillSwitch:
     case ctl::Verb::LocationOverrideWrite:
     case ctl::Verb::LocationOverrideClear:
@@ -399,6 +400,12 @@ class ControlClient {
 
   bool StopTunnel(std::string* error = nullptr);
   bool SetProvide(const std::string& mode, std::string* error = nullptr);
+  // Runs the provider-only device while there is no tunnel session
+  // (ControlProtocol.hpp start_provider). ctl::ValidateStartProviderRequest
+  // runs before anything is sent. `out` receives the status the reply carries
+  // on success and on a daemon refusal; `code` the refusal's ctl::kCode*.
+  bool StartProvider(const ctl::StartProviderRequest& request, ctl::StatusReply* out = nullptr,
+                     std::string* error = nullptr, std::string* code = nullptr);
   // Asks the daemon to install (or lift) the nftables kill switch. `out`
   // receives the status whose kill_switch field is what is REALLY in force —
   // Failed is a distinct state from Off and must be rendered as such.

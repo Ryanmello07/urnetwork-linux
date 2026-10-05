@@ -2731,6 +2731,14 @@ LiveStats SdkHost::ReadStats() {
     if (auto np = device_->getNetworkPeers(); np && np->Connected) {
       s.provideClients = static_cast<int64_t>(np->Connected->size());
     }
+  } else {
+    // No DeviceRemote, so no tunnel session: what provides now, if anything,
+    // is the daemon's provider-only device, as its status last said
+    // (ReconcileProvider). The provide dot and the discoverable line read
+    // these; without them they said "not providing" over a device that is.
+    s.provideMode = daemonProviderMode_.load();
+    s.provideEnabled = daemonProviderRunning_.load() && s.provideMode != 0;
+    s.provideHasNetworkKey = daemonProviderNetworkKey_.load();
   }
   return s;
 }
@@ -3367,6 +3375,10 @@ void SdkHost::SetProviderTransportSettings(const urnet::TransportSettings& setti
       std::fprintf(stderr, "[sdk] persist provider transport settings failed: %s\n", e.what());
     }
   }
+  // A provider-only device runs on the policy it was built with; a new one
+  // (the daemon rebuilds for a changed request) picks the edit up.
+  ReconcileProviderLocked("provider transport policy changed", /*userInitiated=*/true,
+                          /*settingsChanged=*/true);
 }
 
 std::optional<urnet::TransportStatus> SdkHost::GetTransportStatus() {
@@ -3932,6 +3944,13 @@ void SdkHost::Disconnect() {
   // teardown the SDK can simply stop publishing, and a reading nobody
   // refreshes is exactly how the row used to latch on its last word.
   PublishConnectReading();
+  // AND KEEP PROVIDING. stop_tunnel ended the daemon's DeviceLocal along with
+  // the tunnel, which is how a Linux "Always" provider used to stop earning
+  // the moment it disconnected. When the provide mode still provides while
+  // disconnected, the provider-only device takes over — no tun, no routes, no
+  // DNS (ProvideLifecycle.hpp). Posted, so the window settles on Disconnected
+  // before the daemon builds it.
+  PostToMain([this] { ReconcileProvider("disconnect", /*userInitiated=*/true); });
 }
 
 void SdkHost::SetProvideControlMode(const std::string& mode) {
@@ -3941,6 +3960,10 @@ void SdkHost::SetProvideControlMode(const std::string& mode) {
   // does both) — DeviceLocal.SetProvideControlMode
   // alone does not persist, and StartTunnel restores the persisted mode.
   if (localState_) localState_->setProvideControlMode(mode);
+  // Disconnected, the provider-only device follows the new mode: started for a
+  // mode that provides while disconnected, stopped for one that does not.
+  ReconcileProviderLocked("provide mode changed", /*userInitiated=*/true,
+                          /*settingsChanged=*/false);
 }
 
 std::string SdkHost::GetProvideControlMode() {
@@ -3953,6 +3976,122 @@ std::string SdkHost::GetProvideControlMode() {
 bool SdkHost::ProvideEnabled() {
   std::scoped_lock lock(mutex_);
   return device_ && device_->getProvideEnabled();
+}
+
+void SdkHost::ReconcileProvider(const char* reason, bool userInitiated) {
+  std::scoped_lock lock(mutex_);
+  ReconcileProviderLocked(reason, userInitiated, /*settingsChanged=*/false);
+}
+
+void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
+                                      bool settingsChanged) {
+  if (!localState_ || providerReconcileClosed_) return;
+  const std::string clientJwt = localState_->getByClientJwt();
+  const std::string instanceId = localState_->getInstanceId();
+  if (clientJwt.empty() || instanceId.empty()) return;  // signed out: nothing provides
+  const std::string mode = localState_->getProvideControlMode();
+  const provide::ControlMode controlMode = provide::ControlModeFrom(mode);
+  // A mode that does not provide asks the daemon nothing once nothing is known
+  // to run. The first call after launch still asks once: a provider an earlier
+  // run left behind under another mode must be stopped.
+  if (!provide::ProviderRuns(controlMode, /*connected=*/false) && providerStateKnown_ &&
+      !daemonProviderRunning_.load()) {
+    return;
+  }
+  if (userInitiated) providerBackoff_.NoteSuccess();
+
+  std::string statusError;
+  const std::optional<ctl::StatusReply> status = control_.Status(&statusError);
+  if (!status) return;  // unreachable: Connect reports that, and the next poll asks again
+  providerStateKnown_ = true;
+
+  if (device_) {
+    // A live tunnel session's device IS the provider. One in flux is decided
+    // on the next call.
+    const bool live = status->tunnel_state == ctl::TunnelState::Up && status->rpc_pinned &&
+                      deviceControlGeneration_ == control_.SessionGeneration();
+    if (live || status->tunnel_state == ctl::TunnelState::Starting ||
+        status->tunnel_state == ctl::TunnelState::Stopping) {
+      return;
+    }
+    // Bound to a session the daemon no longer runs (a Disconnect's stop_tunnel,
+    // a protective teardown, a service restart): the same staleness rule
+    // StartTunnelLocked applies at 2a, so the pages stop folding on it.
+    g_message("provide: the bound device is stale (daemon tunnel_state=%s); dropping it",
+              ctl::ToString(status->tunnel_state));
+    TeardownDeviceLocked();
+    EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
+    PublishConnectReading();
+  }
+  NoteDaemonProviderLocked(*status);
+
+  const provide::DisconnectedStep step =
+      provide::DisconnectedProviderStep(mode, ctl::ProviderFactsFrom(*status), settingsChanged);
+  if (step == provide::DisconnectedStep::None) return;
+  const int64_t nowMillis = g_get_monotonic_time() / 1000;
+  if (!providerBackoff_.Allows(nowMillis)) return;
+
+  if (step == provide::DisconnectedStep::Start) {
+    ctl::StartProviderRequest request;
+    request.by_jwt = clientJwt;
+    request.instance_id = instanceId;
+    request.app_version = kAppVersion;
+    try {
+      if (networkSpace_) request.network_space_json = networkSpace_->toJson();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] network space toJson failed: %s\n", e.what());
+    }
+    request.provide_mode = mode;
+    // The mirror BindRemoteDeviceLocked seeds a tunnel session's device from.
+    if (auto settings = localState_->getProviderTransportSettings(); settings) {
+      request.provider_transport_settings_json = nlohmann::json(*settings).dump();
+    }
+    ctl::StatusReply after;
+    std::string error;
+    std::string code;
+    if (control_.StartProvider(request, &after, &error, &code)) {
+      providerBackoff_.NoteSuccess();
+      NoteDaemonProviderLocked(after);
+      g_message("provide: providing without a tunnel (%s, mode %s)", reason,
+                provide::ToString(controlMode));
+      return;
+    }
+    providerBackoff_.NoteFailure(nowMillis);
+    g_warning("provide: the provider could not run without a tunnel (%s, code=%s): %s; "
+              "trying again in %llds",
+              reason, code.empty() ? "none" : code.c_str(),
+              error.empty() ? "no detail" : error.c_str(),
+              static_cast<long long>(providerBackoff_.DelayMillis() / 1000));
+    return;
+  }
+
+  // Apply and Stop are both set_provide: the daemon applies a mode that
+  // provides while disconnected to the running device and retires it for one
+  // that does not.
+  std::string error;
+  if (control_.SetProvide(mode, &error)) {
+    providerBackoff_.NoteSuccess();
+    if (const auto after = control_.Status()) NoteDaemonProviderLocked(*after);
+    g_message("provide: %s the provider without a tunnel (%s, mode %s)",
+              step == provide::DisconnectedStep::Stop ? "stopped" : "re-moded", reason,
+              provide::ToString(controlMode));
+    return;
+  }
+  providerBackoff_.NoteFailure(nowMillis);
+  g_warning("provide: set_provide failed (%s): %s; trying again in %llds", reason,
+            error.empty() ? "no detail" : error.c_str(),
+            static_cast<long long>(providerBackoff_.DelayMillis() / 1000));
+}
+
+void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {
+  // A redacted status names nothing of ours.
+  const bool running = status.provider_running && !status.redacted;
+  const int64_t tier = running ? status.provider_mode : 0;
+  const bool networkKey = running && status.provider_network_key;
+  bool changed = daemonProviderRunning_.exchange(running) != running;
+  changed = daemonProviderMode_.exchange(tier) != tier || changed;
+  changed = daemonProviderNetworkKey_.exchange(networkKey) != networkKey || changed;
+  if (changed) PublishStats();
 }
 
 // DeviceRemote teardown without touching the stored auth or the daemon:
@@ -4066,6 +4205,12 @@ void SdkHost::Shutdown() {
   // The daemon's DeviceLocal (and its pinned listener with it) is gone, so the
   // remembered session can no longer be attached to by anything.
   ForgetRpcSession();
+  // stop_tunnel retires the provider-only device as well: quitting stops
+  // providing, exactly as it stops the tunnel, and nothing restarts it.
+  providerReconcileClosed_ = true;
+  daemonProviderRunning_.store(false);
+  daemonProviderMode_.store(0);
+  daemonProviderNetworkKey_.store(false);
 }
 
 void SdkHost::Logout() {
@@ -4075,6 +4220,13 @@ void SdkHost::Logout() {
   // unreachable daemon has nothing running for us anyway)
   control_.StopTunnel();
   ForgetRpcSession();
+  // stop_tunnel retired the provider-only device too; nothing provides for a
+  // signed-out app.
+  daemonProviderRunning_.store(false);
+  daemonProviderMode_.store(0);
+  daemonProviderNetworkKey_.store(false);
+  providerStateKnown_ = false;
+  providerBackoff_.NoteSuccess();
   pendingWalletAuth_.reset();
   if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
   if (events_) events_->NewSession();  // the next sign-in is a new session

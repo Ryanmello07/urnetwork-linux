@@ -32,6 +32,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "ProvideLifecycle.hpp"
+
 namespace urnw::ctl {
 
 // Bump ONLY on incompatible wire-format changes, decoupled from the app
@@ -353,6 +355,7 @@ enum class Verb {
   AttachTunnel,
   StopTunnel,
   SetProvide,
+  StartProvider,
   SetKillSwitch,
   LocationOverrideAvailable,
   LocationOverrideWrite,
@@ -368,6 +371,7 @@ inline const char* ToString(Verb v) {
     case Verb::AttachTunnel: return "attach_tunnel";
     case Verb::StopTunnel: return "stop_tunnel";
     case Verb::SetProvide: return "set_provide";
+    case Verb::StartProvider: return "start_provider";
     case Verb::SetKillSwitch: return "set_kill_switch";
     case Verb::LocationOverrideAvailable: return "location_override_available";
     case Verb::LocationOverrideWrite: return "location_override_write";
@@ -384,6 +388,7 @@ inline Verb VerbFromString(const std::string& s) {
   if (s == "attach_tunnel") return Verb::AttachTunnel;
   if (s == "stop_tunnel") return Verb::StopTunnel;
   if (s == "set_provide") return Verb::SetProvide;
+  if (s == "start_provider") return Verb::StartProvider;
   if (s == "set_kill_switch") return Verb::SetKillSwitch;
   if (s == "location_override_available") return Verb::LocationOverrideAvailable;
   if (s == "location_override_write") return Verb::LocationOverrideWrite;
@@ -432,6 +437,11 @@ inline const char* ActionIdForVerb(Verb verb, bool is_log_tail, bool cross_uid) 
     case Verb::AttachTunnel:
     case Verb::StopTunnel:
     case Verb::SetProvide:
+    // start_provider sits with set_provide: it applies the same provide mode,
+    // to a device built without a tunnel. A provider-only session belongs to
+    // the uid that started it, so another uid's start costs the take-over
+    // action exactly as replacing their tunnel would.
+    case Verb::StartProvider:
     case Verb::LocationOverrideWrite:
     case Verb::LocationOverrideClear:
       return cross_uid ? kActionTakeOverTunnel : kActionControlTunnel;
@@ -466,6 +476,11 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     case Verb::LocationOverrideWrite:
     case Verb::LocationOverrideClear:
       return true;
+    // NOT a press: the GUI sends start_provider from its health poll as well
+    // as after Disconnect, so a check that needs a password answers with a
+    // challenge code (and the GUI backs off) instead of raising a dialog every
+    // few seconds. At the console control-tunnel is allow_active=yes anyway.
+    case Verb::StartProvider:
     case Verb::Hello:
     case Verb::Status:
     case Verb::LocationOverrideAvailable:
@@ -902,12 +917,113 @@ inline void from_json(const nlohmann::json& j, SetKillSwitchRequest& v) {
   detail::Get(j, "enabled", v.enabled);
 }
 
+// set_provide applies the mode to the live device and stashes it for the next
+// start. With no tunnel session it also decides the provider-only device: a
+// mode that does not provide while disconnected (provide::ProviderRuns)
+// retires it, any other mode is applied to it.
 struct SetProvideRequest {
   std::string mode;  // "never"|"always"|"network"|"auto"|"manual"
 };
 inline void to_json(nlohmann::json& j, const SetProvideRequest& v) { j["mode"] = v.mode; }
 inline void from_json(const nlohmann::json& j, SetProvideRequest& v) {
   detail::Get(j, "mode", v.mode);
+}
+
+// ---- start_provider --------------------------------------------------------
+// Keep providing while disconnected (support inbox 1521, P008). The daemon
+// builds a PROVIDER-ONLY DeviceLocal: the persisted device identity, this
+// session's credentials and network space, the requested provide mode — and
+// nothing else. No tun, no capture routes, no DNS change, no nftables change,
+// no egress marker, and NO device RPC listener: the GUI binds no DeviceRemote
+// to it, so nothing in the GUI can mistake it for a tunnel session, and the
+// user's own traffic is routed exactly as if URnetwork were not running.
+// ProvideLifecycle.hpp carries the whole argument.
+//
+// A NEW VERB, not a start_tunnel field. A daemon that predates it answers
+// `unknown verb`; a start_tunnel field it silently dropped would have brought
+// up a full tunnel — capture routes and all — for a request that asked for
+// none (the Windows protocol notes record exactly that hazard for its mode
+// field). Additive within protocol v1 for the reasons the version comment
+// above gives.
+//
+// The same request again is idempotent: the daemon keeps a device built from
+// identical credentials and only applies the mode, which is also how a
+// relaunched GUI adopts the provider its previous run left running.
+//
+// Refusal codes, declared here because ValidateStartProviderRequest returns the
+// first; the daemon emits the others (and kCodeStartInProgress while a tunnel
+// bring-up runs).
+//
+// The mode does not provide while disconnected (never, or a mode the sdk does
+// not enforce): the daemon will not run a device for it.
+inline constexpr const char* kCodeProvideModeOff = "provide_mode_off";
+// A tunnel session exists: its DeviceLocal is already the provider, and a
+// second device under the same identity would compete with it.
+inline constexpr const char* kCodeTunnelSessionActive = "tunnel_session_active";
+// The kill-switch floor holds this machine blocked after an unexpected drop.
+// It stays the only thing in force until the user reconnects or lifts it.
+inline constexpr const char* kCodeKillSwitchArmed = "kill_switch_armed";
+// The device could not be built; the message carries the SDK's error.
+inline constexpr const char* kCodeProviderStartFailed = "provider_start_failed";
+
+struct StartProviderRequest {
+  // The same four as StartTunnelRequest, with the same meaning: the client jwt
+  // the device registers with, the device instance id, the app version and the
+  // GUI's active network space (empty = the compiled-in default).
+  std::string by_jwt;
+  std::string instance_id;
+  std::string app_version;
+  std::string network_space_json;
+  // The provide control mode ("always", "network", "auto"); one that does not
+  // provide while disconnected is refused with kCodeProvideModeOff.
+  std::string provide_mode;
+  // The provider transport policy the user edited (urnet::TransportSettings as
+  // JSON), empty when never edited: the tunnel session seeds its device from
+  // the same mirror (SdkHost::BindRemoteDeviceLocked), so providing behaves
+  // the same connected or not.
+  std::string provider_transport_settings_json;
+};
+inline void to_json(nlohmann::json& j, const StartProviderRequest& v) {
+  j["by_jwt"] = v.by_jwt;
+  j["instance_id"] = v.instance_id;
+  j["app_version"] = v.app_version;
+  if (!v.network_space_json.empty()) j["network_space_json"] = v.network_space_json;
+  j["provide_mode"] = v.provide_mode;
+  if (!v.provider_transport_settings_json.empty()) {
+    j["provider_transport_settings_json"] = v.provider_transport_settings_json;
+  }
+}
+inline void from_json(const nlohmann::json& j, StartProviderRequest& v) {
+  detail::Get(j, "by_jwt", v.by_jwt);
+  detail::Get(j, "instance_id", v.instance_id);
+  detail::Get(j, "app_version", v.app_version);
+  detail::Get(j, "network_space_json", v.network_space_json);
+  detail::Get(j, "provide_mode", v.provide_mode);
+  detail::Get(j, "provider_transport_settings_json", v.provider_transport_settings_json);
+}
+
+// Both halves apply it, the GUI before a frame is sent and the daemon before
+// anything is built, so the rule is one function. Reuses StartTunnelRejection:
+// a message, and a code only where the client has a branch to take.
+inline std::optional<StartTunnelRejection> ValidateStartProviderRequest(
+    const StartProviderRequest& req) {
+  if (req.by_jwt.empty()) return StartTunnelRejection{"by_jwt is required", nullptr};
+  if (req.instance_id.empty()) return StartTunnelRejection{"instance_id is required", nullptr};
+  if (!provide::ProviderRuns(provide::ControlModeFrom(req.provide_mode), /*connected=*/false)) {
+    return StartTunnelRejection{
+        "provide mode '" + req.provide_mode + "' does not provide while disconnected",
+        kCodeProvideModeOff};
+  }
+  if (!req.provider_transport_settings_json.empty()) {
+    const nlohmann::json settings =
+        nlohmann::json::parse(req.provider_transport_settings_json, nullptr,
+                              /*allow_exceptions=*/false);
+    if (!settings.is_object()) {
+      return StartTunnelRejection{"provider_transport_settings_json is not a JSON object",
+                                  nullptr};
+    }
+  }
+  return std::nullopt;
 }
 
 // The daemon's whole feedback channel. Every field beyond the original four is
@@ -981,6 +1097,23 @@ struct StatusReply {
   // gates on the start reply. Absent parses false — fail closed.
   bool rpc_pinned = false;
 
+  // ---- the provider-only device (start_provider) --------------------------
+  // ADDITIVE within v1; absent parses as "not running", which is what a daemon
+  // predating start_provider is. A DeviceLocal provides WITHOUT a tunnel
+  // because the user is disconnected and their provide mode keeps a provider
+  // running (ProvideLifecycle.hpp). Never true beside a tunnel session: that
+  // session's device is the provider, and the GUI reads it over the device RPC.
+  bool provider_running = false;
+  // The control mode it runs under ("" while none), so the GUI can tell whether
+  // a mode it just picked still has to be applied.
+  std::string provider_control_mode;
+  // Its live provide tier (provide::Tier: 0 none, 1 network, 3 public) and
+  // whether it holds a network-mode provide key: the Connect page's provide
+  // dot and discoverable line, which have no DeviceRemote to read while
+  // disconnected.
+  int64_t provider_mode = 0;
+  bool provider_network_key = false;
+
   // This status was cut down because the caller is neither root nor the uid
   // that owns the running tunnel. ADDITIVE within v1; absent parses false.
   //
@@ -1014,6 +1147,10 @@ inline void to_json(nlohmann::json& j, const StatusReply& v) {
   j["up_since_millis"] = v.up_since_millis;
   j["owner_connected"] = v.owner_connected;
   j["rpc_pinned"] = v.rpc_pinned;
+  j["provider_running"] = v.provider_running;
+  j["provider_control_mode"] = v.provider_control_mode;
+  j["provider_mode"] = v.provider_mode;
+  j["provider_network_key"] = v.provider_network_key;
   j["redacted"] = v.redacted;
 }
 inline void from_json(const nlohmann::json& j, StatusReply& v) {
@@ -1041,7 +1178,27 @@ inline void from_json(const nlohmann::json& j, StatusReply& v) {
   detail::Get(j, "up_since_millis", v.up_since_millis);
   detail::Get(j, "owner_connected", v.owner_connected);
   detail::Get(j, "rpc_pinned", v.rpc_pinned);  // absent = false = fails closed
+  detail::Get(j, "provider_running", v.provider_running);  // absent = not running
+  detail::Get(j, "provider_control_mode", v.provider_control_mode);
+  detail::Get(j, "provider_mode", v.provider_mode);
+  detail::Get(j, "provider_network_key", v.provider_network_key);
   detail::Get(j, "redacted", v.redacted);      // absent = false = a full status
+}
+
+// The facts provide::DisconnectedProviderStep decides on, read off one status.
+// providerControlMode points into `status`, which must outlive the result.
+inline provide::DaemonProviderFacts ProviderFactsFrom(const StatusReply& status) {
+  provide::DaemonProviderFacts facts;
+  facts.answered = true;
+  facts.redacted = status.redacted;
+  facts.tunnelSession = status.tunnel_state == TunnelState::Starting ||
+                        status.tunnel_state == TunnelState::Up ||
+                        status.tunnel_state == TunnelState::Stopping;
+  facts.killSwitchArmed = status.kill_switch == KillSwitchState::Armed;
+  facts.providerRunning = status.provider_running;
+  facts.ownerConnected = status.owner_connected;
+  facts.providerControlMode = status.provider_control_mode;
+  return facts;
 }
 
 // The non-owner, non-root view of a tunnel somebody else on this machine
@@ -1246,7 +1403,9 @@ inline constexpr const char* kCodeKillSwitchFailed = "kill_switch_failed";
 inline constexpr const char* kCodeDnsApplyFailed = "dns_apply_failed";
 // Also in this table, declared earlier because ValidateStartTunnelRequest
 // returns them: kCodeRpcPinRequired, kCodeRpcPinInvalid, kCodeRpcListenFailed
-// (see the device-RPC mTLS pinning section near the top of this header).
+// (see the device-RPC mTLS pinning section near the top of this header). And
+// the start_provider refusals, declared with that verb: kCodeProvideModeOff,
+// kCodeTunnelSessionActive, kCodeKillSwitchArmed, kCodeProviderStartFailed.
 
 // {"verb":…,"id":N,…payload}
 inline nlohmann::json MakeRequest(Verb verb, int64_t id,

@@ -17,6 +17,7 @@
 
 #include "IoLoopFd.hpp"
 #include "NetworkSpaceConfig.hpp"
+#include "ProvideLifecycle.hpp"
 #include "TunnelPolicy.hpp"
 #include "daemon/HostMemory.hpp"
 #include "daemon/DaemonLog.hpp"
@@ -472,6 +473,94 @@ ctl::StatusReply TunnelHost::Start(const ctl::StartTunnelRequest& config) {
   return Status();
 }
 
+// An absent or broken json falls back to the compiled-in default — silence
+// means production, never a surprise server.
+void TunnelHost::LoadNetworkSpaceLocked(const std::string& networkSpaceJson) {
+  if (!spaceManager_) {
+    spaceManager_ = urnet::newNetworkSpaceManager(storageRoot_ + "/sdk");
+    // The daemon owns this storage, so the move of a space stored under
+    // the retired ur.network key is its own job, done ONCE where the
+    // manager is created and BEFORE the import below can materialize
+    // the current key (NetworkSpaceBootstrap.hpp: an existing
+    // destination makes the move a no-op, which would strand the
+    // device's local state under the old key).
+    MigrateLegacyUrNetworkSpace(*spaceManager_);
+  }
+  networkSpace_.reset();
+  if (!networkSpaceJson.empty()) {
+    try {
+      networkSpace_ = spaceManager_->importNetworkSpaceFromJson(networkSpaceJson);
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[tunnel] import network space failed (using default): %s\n",
+                   e.what());
+    }
+  }
+  if (!networkSpace_) networkSpace_ = BuildUrNetworkSpace(*spaceManager_);
+}
+
+// enable_rpc is always false: a device gets a listener only from setRpcServer
+// with pinned material (RunStart step 4), and the provider-only device never
+// gets one at all.
+urnet::DeviceLocal TunnelHost::NewDeviceLocked(const std::string& byJwt,
+                                               const std::string& instanceId,
+                                               const std::string& appVersionIn) {
+  const std::string appVersion = appVersionIn.empty() ? kUrAppVersionFallback : appVersionIn;
+  const bool hadStoredMaterial = HasStoredKeyMaterial();
+  bool restoreFailed = false;
+  // Both constructions size the device at the measured host's memory tier
+  // (TunnelPolicy.hpp) instead of the SDK's 20 MiB default, which is what
+  // lets the H3 carrier windows reach their full size. The SAME cached
+  // measurement chose the process budget at startup, so the target and the
+  // budget backing it are always one tier.
+  const urnw::MemoryTier memoryTier =
+      urnw::MemoryTierForHost(urnw::HostMemoryByteCountCached());
+  std::optional<urnet::DeviceLocal> device;
+  if (auto km = LoadKeyMaterial()) {
+    try {
+      device = urnet::newDeviceLocalWithMemoryTarget(
+          *networkSpace_, byJwt, UrDeviceDescription(), UrDeviceSpec(), appVersion, instanceId,
+          /*enable_rpc=*/false, *km, memoryTier.device_target_byte_count);
+    } catch (const std::exception& e) {
+      restoreFailed = true;
+      std::fprintf(stderr, "[tunnel] restore device key material failed: %s\n", e.what());
+    }
+  }
+  if (!device) {
+    // An empty key material (handle 0) is nil in the SDK: new identity.
+    device = urnet::newDeviceLocalWithMemoryTarget(
+        *networkSpace_, byJwt, UrDeviceDescription(), UrDeviceSpec(), appVersion, instanceId,
+        /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
+        memoryTier.device_target_byte_count);
+    // Persist ONLY when nothing was stored. Overwriting after a FAILED
+    // restore silently rotates this device's provider identity — peers
+    // stop recognising it and its reputation is gone — for what may be a
+    // transient failure. The stored identity is left intact so a later,
+    // healthy start can still use it; this session runs on an ephemeral
+    // one and says so at error level.
+    if (!hadStoredMaterial) {
+      try {
+        if (auto km = device->getKeyMaterial(); km && !km.isEmpty()) {
+          if (!PersistKeyMaterial(km)) {
+            std::fprintf(stderr,
+                         "[tunnel] ERROR: the new device identity could not be saved; the "
+                         "next start will register a different device\n");
+          }
+        }
+      } catch (const std::exception& e) {
+        std::fprintf(stderr, "[tunnel] persist device key material failed: %s\n", e.what());
+      }
+    } else if (restoreFailed) {
+      std::fprintf(stderr,
+                   "[tunnel] ERROR: the stored device identity could not be restored. This "
+                   "session runs on a TEMPORARY identity and the stored one has been left "
+                   "untouched; provider reputation is not lost, but it is not in use "
+                   "either. Fix or remove %s to resolve this.\n",
+                   storageRoot_.c_str());
+    }
+  }
+  return std::move(*device);
+}
+
 void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
   {
     std::scoped_lock lock(opMutex_);
@@ -601,29 +690,8 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // --- 2) network space (daemon-owned storage) --------------------------
       // The GUI's active space rides in on start_tunnel (windows parity): the
       // DeviceLocal must live in the SAME network as the jwt it registers, or
-      // a custom-server session would sync against production. An absent or
-      // broken json falls back to the compiled-in default — silence means
-      // production, never a surprise server.
-      if (!spaceManager_) {
-        spaceManager_ = urnet::newNetworkSpaceManager(storageRoot_ + "/sdk");
-        // The daemon owns this storage, so the move of a space stored under
-        // the retired ur.network key is its own job, done ONCE where the
-        // manager is created and BEFORE the import below can materialize
-        // the current key (NetworkSpaceBootstrap.hpp: an existing
-        // destination makes the move a no-op, which would strand the
-        // device's local state under the old key).
-        MigrateLegacyUrNetworkSpace(*spaceManager_);
-      }
-      networkSpace_.reset();
-      if (!config.network_space_json.empty()) {
-        try {
-          networkSpace_ = spaceManager_->importNetworkSpaceFromJson(config.network_space_json);
-        } catch (const std::exception& e) {
-          std::fprintf(stderr, "[tunnel] import network space failed (using default): %s\n",
-                       e.what());
-        }
-      }
-      if (!networkSpace_) networkSpace_ = BuildUrNetworkSpace(*spaceManager_);
+      // a custom-server session would sync against production.
+      LoadNetworkSpaceLocked(config.network_space_json);
       if (stopRequested_.load()) throw std::runtime_error("start cancelled");
 
       // --- 3) DeviceLocal, with NO listener of its own -----------------------
@@ -644,61 +712,7 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // installed at step 4. The single other thing enable_rpc=false changes is
       // newSecurityPolicyMonitor(ctx, device, settings.Verbose), which returns
       // nil immediately because DefaultDeviceLocalSettings sets Verbose=false.
-      const std::string appVersion =
-          config.app_version.empty() ? kUrAppVersionFallback : config.app_version;
-      const bool hadStoredMaterial = HasStoredKeyMaterial();
-      bool restoreFailed = false;
-      // Both constructions size the device at the measured host's memory tier
-      // (TunnelPolicy.hpp) instead of the SDK's 20 MiB default, which is what
-      // lets the H3 carrier windows reach their full size. The SAME cached
-      // measurement chose the process budget at startup, so the target and the
-      // budget backing it are always one tier.
-      const urnw::MemoryTier memoryTier =
-          urnw::MemoryTierForHost(urnw::HostMemoryByteCountCached());
-      if (auto km = LoadKeyMaterial()) {
-        try {
-          device_ = urnet::newDeviceLocalWithMemoryTarget(
-              *networkSpace_, config.by_jwt, UrDeviceDescription(), UrDeviceSpec(), appVersion,
-              config.instance_id, /*enable_rpc=*/false, *km,
-              memoryTier.device_target_byte_count);
-        } catch (const std::exception& e) {
-          restoreFailed = true;
-          std::fprintf(stderr, "[tunnel] restore device key material failed: %s\n", e.what());
-        }
-      }
-      if (!device_) {
-        // An empty key material (handle 0) is nil in the SDK: new identity.
-        device_ = urnet::newDeviceLocalWithMemoryTarget(
-            *networkSpace_, config.by_jwt, UrDeviceDescription(), UrDeviceSpec(), appVersion,
-            config.instance_id, /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
-            memoryTier.device_target_byte_count);
-        // Persist ONLY when nothing was stored. Overwriting after a FAILED
-        // restore silently rotates this device's provider identity — peers
-        // stop recognising it and its reputation is gone — for what may be a
-        // transient failure. The stored identity is left intact so a later,
-        // healthy start can still use it; this session runs on an ephemeral
-        // one and says so at error level.
-        if (!hadStoredMaterial) {
-          try {
-            if (auto km = device_->getKeyMaterial(); km && !km.isEmpty()) {
-              if (!PersistKeyMaterial(km)) {
-                std::fprintf(stderr,
-                             "[tunnel] ERROR: the new device identity could not be saved; the "
-                             "next start will register a different device\n");
-              }
-            }
-          } catch (const std::exception& e) {
-            std::fprintf(stderr, "[tunnel] persist device key material failed: %s\n", e.what());
-          }
-        } else if (restoreFailed) {
-          std::fprintf(stderr,
-                       "[tunnel] ERROR: the stored device identity could not be restored. This "
-                       "session runs on a TEMPORARY identity and the stored one has been left "
-                       "untouched; provider reputation is not lost, but it is not in use "
-                       "either. Fix or remove %s to resolve this.\n",
-                       storageRoot_.c_str());
-        }
-      }
+      device_ = NewDeviceLocked(config.by_jwt, config.instance_id, config.app_version);
 
       // --- 4) device-RPC mTLS pinning (windows TunnelController parity) -----
       // MANDATORY. Both halves pin the SAME generated material; the SDK
@@ -1080,6 +1094,13 @@ void TunnelHost::ReapRetiredLoopsLocked() {
 }
 
 void TunnelHost::StopInternalLocked(const std::string& reason) {
+  // FIRST, and in every teardown: the provider-only device never shares a
+  // moment with a tunnel session's device. RunStart opens with this function,
+  // so a Connect retires the provider before the egress marker, the capture
+  // routes or the session's own DeviceLocal (the same identity) exist. A
+  // no-op when there is none, which is every teardown of a tunnel session.
+  RetireProviderDeviceLocked();
+
   const bool hadSession = device_.has_value() || tunnel_ || ioLoop_.has_value();
   if (hadSession) {
     std::scoped_lock lock(statusMutex_);
@@ -1334,7 +1355,190 @@ bool TunnelHost::SetProvideMode(const std::string& mode) {
       return false;
     }
   }
+  if (providerDevice_) {
+    // The provider-only device exists for exactly the modes that provide while
+    // disconnected; any other mode ends it, and that is how Never stops it.
+    const provide::ControlMode controlMode = provide::ControlModeFrom(mode);
+    if (!provide::ProviderRuns(controlMode, /*connected=*/false)) {
+      DaemonLogf("[provide] provide mode %s does not provide while disconnected; stopping the "
+                 "provider device\n",
+                 provide::ToString(controlMode));
+      RetireProviderDeviceLocked();
+      return true;
+    }
+    try {
+      providerDevice_->setProvideControlMode(mode);
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[provide] set provide mode failed: %s\n", e.what());
+      return false;
+    }
+    providerConfig_.provide_mode = mode;
+    RefreshProviderStatusLocked();
+  }
   return true;
+}
+
+// ---- the provider-only device ----------------------------------------------
+
+namespace {
+
+// How long a retired provider device may take to close its sockets before it
+// is released anyway. close() returns first; the wait keeps a late packet from
+// the provider's sockets (unmarked, because no egress marker runs without a
+// tunnel) out of the capture routes a Connect installs moments later.
+constexpr int64_t kProviderCloseWaitMillis = 2000;
+
+// The same session: a device built from these credentials, in this space and
+// with this provider policy can keep running and only take a new mode.
+bool SameProviderSession(const ctl::StartProviderRequest& a, const ctl::StartProviderRequest& b) {
+  return a.by_jwt == b.by_jwt && a.instance_id == b.instance_id &&
+         a.app_version == b.app_version && a.network_space_json == b.network_space_json &&
+         a.provider_transport_settings_json == b.provider_transport_settings_json;
+}
+
+}  // namespace
+
+TunnelHost::ProviderStartResult TunnelHost::StartProvider(
+    const ctl::StartProviderRequest& request) {
+  ProviderStartResult result;
+  // Re-validated here as start_tunnel is: this process is root, and ControlServer
+  // is not the only possible caller.
+  if (const auto invalid = ctl::ValidateStartProviderRequest(request)) {
+    result.error = invalid->message;
+    result.code = invalid->code;
+    return result;
+  }
+  if (busy_.load()) {
+    result.error = "a tunnel start is in progress";
+    result.code = ctl::kCodeStartInProgress;
+    return result;
+  }
+  std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    result.error = "a tunnel start is in progress";
+    result.code = ctl::kCodeStartInProgress;
+    return result;
+  }
+  if (device_.has_value() || tunnel_ != nullptr || ioLoop_.has_value()) {
+    result.error = "a tunnel session is running, and its device is already the provider";
+    result.code = ctl::kCodeTunnelSessionActive;
+    return result;
+  }
+  if (filter_.state() == FilterState::Armed) {
+    // The floor an unexpected drop armed is the only thing in force until the
+    // user reconnects or lifts it. A provider would leave through the daemon's
+    // own permit, which exists so a reconnect can; it is not started here.
+    result.error =
+        "the kill switch is holding this machine blocked; providing resumes after you "
+        "reconnect or lift it";
+    result.code = ctl::kCodeKillSwitchArmed;
+    return result;
+  }
+
+  // The same request again (a relaunched GUI adopting the provider, or a
+  // retried frame): keep the device, apply the mode.
+  if (providerDevice_ && SameProviderSession(providerConfig_, request)) {
+    try {
+      providerDevice_->setProvideControlMode(request.provide_mode);
+    } catch (const std::exception& e) {
+      result.error = std::string("the provide mode could not be applied: ") + e.what();
+      result.code = ctl::kCodeProviderStartFailed;
+      return result;
+    }
+    providerConfig_.provide_mode = request.provide_mode;
+    {
+      std::scoped_lock statusLock(statusMutex_);
+      pendingProvideMode_ = request.provide_mode;
+    }
+    RefreshProviderStatusLocked();
+    result.ok = true;
+    return result;
+  }
+
+  RetireProviderDeviceLocked();
+  try {
+    // RunStart's steps 2 and 3 and nothing after them: no egress marker, no
+    // nftables transaction, no setRpcServer, no tun, no IoLoop, no DNS. The
+    // device's sockets follow the main routing table like any process's.
+    LoadNetworkSpaceLocked(request.network_space_json);
+    providerDevice_ = NewDeviceLocked(request.by_jwt, request.instance_id, request.app_version);
+    if (!request.provider_transport_settings_json.empty()) {
+      providerDevice_->setProviderTransportSettings(
+          nlohmann::json::parse(request.provider_transport_settings_json)
+              .get<urnet::TransportSettings>());
+    }
+    providerDevice_->setProvideControlMode(request.provide_mode);
+    providerConfig_ = request;
+    {
+      // A later tunnel start applies the same mode (RunStart step 4).
+      std::scoped_lock statusLock(statusMutex_);
+      pendingProvideMode_ = request.provide_mode;
+    }
+    RefreshProviderStatusLocked();
+    DaemonLogf("[provide] providing without a tunnel (mode %s, tier %lld); this machine's own "
+               "traffic is not routed through URnetwork\n",
+               provide::ToString(provide::ControlModeFrom(request.provide_mode)),
+               static_cast<long long>(Status().provider_mode));
+    result.ok = true;
+  } catch (const std::exception& e) {
+    RetireProviderDeviceLocked();
+    result.error = std::string("the provider could not be started: ") + e.what();
+    result.code = ctl::kCodeProviderStartFailed;
+    DaemonLogf("[provide] %s\n", result.error.c_str());
+  }
+  return result;
+}
+
+bool TunnelHost::ProviderRunning() const {
+  std::scoped_lock lock(statusMutex_);
+  return status_.provider_running;
+}
+
+void TunnelHost::RetireProviderDeviceLocked() {
+  if (providerDevice_) {
+    try {
+      providerDevice_->close();
+      if (!providerDevice_->waitForClose(kProviderCloseWaitMillis)) {
+        DaemonLogf("[provide] the provider device had not finished closing after %lld ms; "
+                   "releasing it\n",
+                   static_cast<long long>(kProviderCloseWaitMillis));
+      }
+    } catch (const std::exception& e) {
+      DaemonLogf("[provide] closing the provider device failed: %s\n", e.what());
+    }
+    providerDevice_.reset();
+    DaemonLogf("[provide] stopped providing without a tunnel\n");
+  }
+  providerConfig_ = ctl::StartProviderRequest();
+  std::scoped_lock lock(statusMutex_);
+  status_.provider_running = false;
+  status_.provider_control_mode.clear();
+  status_.provider_mode = 0;
+  status_.provider_network_key = false;
+}
+
+void TunnelHost::RefreshProviderStatusLocked() {
+  if (!providerDevice_) return;
+  int64_t tier = 0;
+  bool networkKey = false;
+  try {
+    tier = providerDevice_->getProvideMode();
+    if (auto keys = providerDevice_->getProvideSecretKeys()) {
+      for (const auto& key : *keys) {
+        if (key.provide_mode == urnet::ProvideModeNetwork) {
+          networkKey = true;
+          break;
+        }
+      }
+    }
+  } catch (const std::exception&) {
+    // status must never throw across the wire; the next tick reads again
+  }
+  std::scoped_lock lock(statusMutex_);
+  status_.provider_running = true;
+  status_.provider_control_mode = providerConfig_.provide_mode;
+  status_.provider_mode = tier;
+  status_.provider_network_key = networkKey;
 }
 
 bool TunnelHost::SetKillSwitch(bool enabled, std::string* error) {
@@ -1712,22 +1916,29 @@ void TunnelHost::Reap() {
   std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
   if (!lock.owns_lock()) return;  // next tick
 
-  if (device_) {
+  // The tunnel session's device or the provider-only device, whichever is live
+  // (never both): a provider's transports follow a path change too.
+  urnet::DeviceLocal* liveDevice =
+      device_ ? &*device_ : (providerDevice_ ? &*providerDevice_ : nullptr);
+  if (liveDevice != nullptr) {
     const std::string tunnelInterface = tunnel_ ? tunnel_->name() : std::string();
     const LinuxNetworkChange networkChange =
         networkQualityTracker_.Observe(ReadNetworkQuality(tunnelInterface));
     try {
       if (networkChange == LinuxNetworkChange::Path) {
         DaemonLogf("[tunnel] physical network path changed; refreshing transports\n");
-        device_->networkChanged();
+        liveDevice->networkChanged();
       } else if (networkChange == LinuxNetworkChange::Quality) {
         DaemonLogf("[tunnel] physical network quality changed; remeasuring transfer pacing\n");
-        device_->networkQualityChanged();
+        liveDevice->networkQualityChanged();
       }
     } catch (const std::exception& e) {
       DaemonLogf("[tunnel] network change notification failed: %s\n", e.what());
     }
   }
+  // The provider-only device's tier and keys are the sdk's to change, so
+  // `status` re-reads them once a second (a no-op without that device).
+  RefreshProviderStatusLocked();
 
   const bool died = ioLoopDied_.load();
   const int orphanTimeout = orphanTimeoutSeconds_.load();
