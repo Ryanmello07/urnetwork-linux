@@ -2,12 +2,15 @@
 // ProviderIdleReasonFor): every row of the decision in order, the precedences
 // between them (Auto disconnected and paused, Network paused, Never paused,
 // an unknown mode, the two pause reasons, traffic or none), and this
-// platform's rule that no reason is derived while no tunnel session runs,
-// since Linux provides nothing then in any mode.
+// platform's rule (SessionIdleReasonFor): a reason only while a provider
+// device runs, the tunnel session's or, disconnected, the daemon's
+// provider-only device, and "no traffic yet" only of a provider window that
+// was read.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "ProviderStatusPresentation.hpp"
@@ -113,9 +116,10 @@ UR_TEST(ProviderIdlePrecedences) {
                     Reason("always", kProvideModePublic, false, ProvideNetworkMode::All, 2048)));
 }
 
-UR_TEST(ProviderIdleLinuxDerivesNothingWithoutATunnelSession) {
-  // no session: the daemon's device, the only thing that provides, is not
-  // running in any mode, so neither "Choose Always" nor "own devices" is true
+UR_TEST(ProviderIdleLinuxDerivesNothingWithoutAProviderDevice) {
+  // no provider device at all (no tunnel session, and the daemon refused the
+  // provider-only device, predates it or cannot be reached): nothing provides
+  // in any mode, so neither "Choose Always" nor "own devices" is true
   for (const char* mode : {"auto", "always", "network", "never"}) {
     for (const int64_t live : {kNone, kNetwork, kProvideModePublic}) {
       UR_EXPECT_TRUE_MSG(mode, Is(ProviderIdleReason::None,
@@ -135,6 +139,37 @@ UR_TEST(ProviderIdleLinuxDerivesNothingWithoutATunnelSession) {
                     SessionIdleReasonFor(true, "always", kProvideModePublic, false, 512)));
   UR_EXPECT_TRUE(Is(ProviderIdleReason::PausedNoNetwork,
                     SessionIdleReasonFor(true, "always", kProvideModePublic, true, 0)));
+}
+
+// Disconnected, the daemon's provider-only device provides, at the tier its
+// status carries: Auto shares only with the user's own devices then (so
+// "Choose Always to earn while idle" is true), Network always does, and Always
+// is public, with the daemon's provider window deciding "no traffic yet".
+UR_TEST(ProviderIdleLinuxProviderOnlyDeviceGivesTheDisconnectedReasons) {
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::AutoNotConnected,
+                    SessionIdleReasonFor(true, "auto", kNetwork, false, 0)));
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::AutoNotConnected,
+                    SessionIdleReasonFor(true, "auto", kNetwork, false, std::nullopt)));
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::NetworkOnly,
+                    SessionIdleReasonFor(true, "network", kNetwork, false, std::nullopt)));
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::NoTrafficYet,
+                    SessionIdleReasonFor(true, "always", kProvideModePublic, false, 0)));
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::None,
+                    SessionIdleReasonFor(true, "always", kProvideModePublic, false, 4096)));
+}
+
+// No provider window has been read (a daemon that predates provider_stats, or
+// before the first read): "no traffic yet" would claim what nobody measured,
+// so it is not said. The reasons that do not depend on traffic still are.
+UR_TEST(ProviderIdleUnreadTrafficIsNeverNoTrafficYet) {
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::None,
+                    SessionIdleReasonFor(true, "always", kProvideModePublic, false, std::nullopt)));
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::None,
+                    SessionIdleReasonFor(true, "auto", kProvideModePublic, false, std::nullopt)));
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::PausedNoNetwork,
+                    SessionIdleReasonFor(true, "always", kProvideModePublic, true, std::nullopt)));
+  UR_EXPECT_TRUE(Is(ProviderIdleReason::None,
+                    SessionIdleReasonFor(false, "always", kProvideModePublic, false, std::nullopt)));
 }
 
 }  // namespace

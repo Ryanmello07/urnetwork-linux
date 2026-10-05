@@ -34,6 +34,8 @@
 //   * StartProvider runs on the main loop too and only TRY-locks opMutex_. The
 //     provider-only device it builds never coexists with a tunnel session's:
 //     every teardown, and so the head of every bring-up, retires it first.
+//     ProviderStats, which reads that device's view controllers for the GUI,
+//     only try-locks it as well.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -156,6 +158,13 @@ class TunnelHost {
   ProviderStartResult StartProvider(const ctl::StartProviderRequest& request);
   // A provider-only device is running. Never blocks behind a bring-up.
   bool ProviderRunning() const;
+  // What the provider-only device's own view controllers say (provider_stats):
+  // its provider series, transport share and packet-stats bit, and its
+  // provider status. `pollStatus` renews the status controller's polling lease
+  // (provide::ProviderStatusLease). Empty without that device, and while a
+  // bring-up owns the session (which retires it first). MAIN LOOP ONLY; never
+  // blocks, and never throws across the wire.
+  ctl::ProviderStatsReply ProviderStats(bool pollStatus);
 
   // The kill switch the CLIENT asked for. Semantics follow the Windows source
   // of truth (docs/linux_agent_help.md §6.3): a user disconnect always lifts
@@ -207,6 +216,12 @@ class TunnelHost {
   // close and clears its published status. A no-op without one. Requires
   // opMutex_.
   void RetireProviderDeviceLocked();
+  // The provider-only device's view controllers: opened right after the device
+  // is built, each on its own (one that cannot open costs only its own
+  // statistics), and closed with the typed closes before the device. Both
+  // require opMutex_.
+  void OpenProviderViewControllersLocked();
+  void CloseProviderViewControllersLocked();
   // Publishes the provider-only device's live tier and network key into
   // status_. Requires opMutex_.
   void RefreshProviderStatusLocked();
@@ -342,6 +357,14 @@ class TunnelHost {
   // teardown retry, adoption, the published identity). Guarded by opMutex_.
   std::optional<urnet::DeviceLocal> providerDevice_;
   ctl::StartProviderRequest providerConfig_;
+  // Its view controllers, which the GUI reads through provider_stats because
+  // it has no DeviceRemote for this device: the provider series behind the
+  // Earnings plots and the "no traffic yet" line, and the provider status
+  // behind the reason line, the demand histogram and "Why?". The status
+  // controller polls only while the lease is held. Guarded by opMutex_.
+  std::optional<urnet::ContractViewController> providerContractVc_;
+  std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
+  provide::ProviderStatusLease providerStatusLease_;
   std::optional<urnet::IoLoop> ioLoop_;
   // Set by the LIVE loop's done callback; a retired loop carries its own copy
   // (see retiredLoops_) so the two can never be confused.

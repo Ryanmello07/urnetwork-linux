@@ -35,7 +35,9 @@
 //
 // Pure and header-only (C++17, no GTK, glib or SDK): tests/ProvideLifecycleTest.cpp
 // runs it on any host, ControlProtocol.hpp validates start_provider with it and
-// TunnelHost retires the provider-only device with it.
+// TunnelHost retires the provider-only device with it. The tail of the file
+// paces how the GUI reads that device's statistics (provider_stats) and how
+// long the daemon keeps polling its provider status.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -172,6 +174,64 @@ class ProviderStepBackoff {
  private:
   int64_t delayMillis_ = 0;
   int64_t notBeforeMillis_ = 0;
+};
+
+// ---- the provider-only device's statistics (provider_stats) ----------------
+// The provider-only device has no DeviceRemote, so the GUI's provider
+// statistics (the Earnings plots, the "no traffic yet" line, the provider
+// status) come from the daemon, which runs the SDK's view controllers on it.
+
+// What the GUI's poll does on a tick, while the Earnings destination is on
+// screen. A tunnel session's DeviceRemote is the source while one is bound, and
+// with no provider-only device there is nothing to read, so the daemon's
+// snapshot is dropped then. A daemon that answered that it predates the verb is
+// not asked again on the same connection.
+enum class ProviderStatsStep {
+  Drop,   // forget the daemon's snapshot
+  Fetch,  // provider_stats
+};
+
+constexpr ProviderStatsStep DaemonProviderStatsStep(bool sessionDevice, bool providerRunning,
+                                                    bool verbUnsupported) {
+  if (sessionDevice || !providerRunning || verbUnsupported) return ProviderStatsStep::Drop;
+  return ProviderStatsStep::Fetch;
+}
+
+// The daemon's provider status controller polls the API only while a GUI that
+// shows the provider status keeps asking (provider_stats with poll_status,
+// about once a second): each such request renews the lease, and the reaper
+// stops the controller once it runs out, so a GUI that quit or crashed leaves
+// nothing polling. A new controller (a rebuilt device) starts over (Release).
+class ProviderStatusLease {
+ public:
+  static constexpr int64_t kLeaseMillis = 15 * 1000;
+
+  // A request asked at `nowMillis`. True when the controller has to start.
+  bool Renew(int64_t nowMillis) {
+    const bool start = !held_;
+    held_ = true;
+    untilMillis_ = nowMillis + kLeaseMillis;
+    return start;
+  }
+
+  // True once, when the lease has run out at `nowMillis`: the controller has
+  // to stop.
+  bool Expire(int64_t nowMillis) {
+    if (!held_ || nowMillis < untilMillis_) return false;
+    held_ = false;
+    return true;
+  }
+
+  void Release() {
+    held_ = false;
+    untilMillis_ = 0;
+  }
+
+  bool Held() const { return held_; }
+
+ private:
+  bool held_ = false;
+  int64_t untilMillis_ = 0;
 };
 
 }  // namespace urnw::provide

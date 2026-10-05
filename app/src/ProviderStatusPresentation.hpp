@@ -86,18 +86,27 @@ inline ProviderIdleReason ProviderIdleReasonFor(const std::string& controlMode,
   return ProviderIdleReason::None;
 }
 
-// The reason on this platform. Linux provides only through the daemon's
-// DeviceLocal, which exists only while the tunnel is up: Disconnect stops it
-// in every control mode. With no session there is no live provide mode to
-// read and nothing is provided whatever the mode, and the provider
-// statistics' header already says providing_disabled, so no reason is
-// derived: Auto's "Choose Always to earn while idle" would not be true here.
-inline ProviderIdleReason SessionIdleReasonFor(bool sessionUp, const std::string& controlMode,
+// The reason on this platform. Linux provides through the daemon: connected,
+// the tunnel session's DeviceLocal; disconnected, the provider-only device
+// that runs for a mode that provides then (ProvideLifecycle.hpp), whose live
+// tier the daemon's status carries. `providerRuns` is either of them. With
+// neither there is no live provide mode to read (the daemon refused the
+// provider-only device, predates it or cannot be reached) and nothing is
+// provided, so no reason is derived: "Choose Always to earn while idle" or
+// "own devices" would not be true then. `recentProviderBytes` is nullopt
+// while no throughput window has been read from either device, and "no
+// traffic yet" is said only of a window that was read and is empty.
+inline ProviderIdleReason SessionIdleReasonFor(bool providerRuns, const std::string& controlMode,
                                                int64_t liveProvideMode, bool providePaused,
-                                               int64_t recentProviderBytes) {
-  if (!sessionUp) return ProviderIdleReason::None;
-  return ProviderIdleReasonFor(controlMode, liveProvideMode, providePaused,
-                               ProvideNetworkMode::All, recentProviderBytes);
+                                               std::optional<int64_t> recentProviderBytes) {
+  if (!providerRuns) return ProviderIdleReason::None;
+  const ProviderIdleReason reason =
+      ProviderIdleReasonFor(controlMode, liveProvideMode, providePaused, ProvideNetworkMode::All,
+                            recentProviderBytes.value_or(0));
+  if (reason == ProviderIdleReason::NoTrafficYet && !recentProviderBytes) {
+    return ProviderIdleReason::None;
+  }
+  return reason;
 }
 
 // ---- the server's reason and the line under the provide mode row --------------

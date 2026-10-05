@@ -685,11 +685,20 @@ class SdkHost {
   // (provide::DisconnectedProviderStep) — and drops a device bound to a
   // session the daemon no longer runs, the rule StartTunnelLocked applies. A
   // live tunnel session is left alone: its device provides. Runs after
-  // Disconnect, on a provide mode or provider policy change, and from the
-  // window's health poll while disconnected; `userInitiated` restarts the
-  // retry pacing. Asks the daemon nothing for a mode that does not provide once
-  // nothing is known to run. Main loop.
-  void ReconcileProvider(const char* reason, bool userInitiated = false);
+  // Disconnect, on a provide mode or provider policy change, after a network
+  // space value is saved, and from the window's health poll while
+  // disconnected; `userInitiated` restarts the retry pacing, and
+  // `settingsChanged` sends start_provider even to a running provider, which
+  // the daemon replaces when the request differs (a saved DoH server list
+  // changes the network space it was built from). Asks the daemon nothing for a
+  // mode that does not provide once nothing is known to run. Main loop.
+  void ReconcileProvider(const char* reason, bool userInitiated = false,
+                         bool settingsChanged = false);
+  // A provider device runs: a tunnel session's (a DeviceRemote is bound) or,
+  // with none, the daemon's provider-only device as its status last said. The
+  // Earnings page derives a local idle reason only then
+  // (providerstatus::SessionIdleReasonFor).
+  bool ProviderRuns();
 
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
@@ -813,20 +822,23 @@ class SdkHost {
   // same Throughput tick as ThroughputPoints (EXTENDER.md O3, O5): the provider
   // points carry the provider's Local and Block routes, the extender points
   // the traffic this device's extender role relayed, in the Remote route only.
-  // nullopt with no session.
+  // nullopt with no session, except that the provider series (and the provider
+  // distribution above) of the daemon's provider-only device stand in while no
+  // DeviceRemote is bound (provider_stats; see DaemonProviderStats).
   std::optional<urnet::ThroughputPointList> ProviderThroughputPoints();
   std::optional<urnet::ThroughputPointList> ExtenderThroughputPoints();
   // The device reports provider packet stats: the half of the provider
-  // statistics gate (O8) the provide control mode does not decide. false with
-  // no session. The extender role's running state is not read here: it is the
-  // Enabled of the pushed GetExtenderProvideStatus.
+  // statistics gate (O8) the provide control mode does not decide. With no
+  // session, the provider-only device's answer as the daemon last gave it, and
+  // false without one. The extender role's running state is not read here: it
+  // is the Enabled of the pushed GetExtenderProvideStatus.
   bool HasProviderStats();
   // The same fact asked of the DEVICE, one device rpc, for the forced re-reads
   // right after a contract view controller opens (a device arriving, the
   // window coming back): a new controller's provider stats stay nil until its
   // first sample, while the device answers at once. Provider presence is fixed
-  // per device, so the two agree once the controller has sampled. false with
-  // no device.
+  // per device, so the two agree once the controller has sampled. With no
+  // device, the provider-only device's answer as HasProviderStats gives it.
   bool DeviceHasProviderStats();
   std::optional<urnet::BlockActionList> BlockActions();
   std::optional<urnet::BlockStats> BlockStatsSnapshot();
@@ -957,12 +969,12 @@ class SdkHost {
   // the same path ApplyNetworkServer uses -- over what the space stores, so no
   // other value moves. Empty ip AND secret clears it.
   //
-  // KNOWN LIMIT (the daemon split): this writes the GUI's OWN space, which is
-  // the one its api/auth calls dial. urnetworkd builds its space from its own
-  // storage (daemon/TunnelHost.cpp), so the tunnel's provider dials do not see
-  // a private extender set here until the daemon is taught the same value.
-  // Every other extender setting goes through the view controller above and
-  // therefore does reach the daemon.
+  // This writes the GUI's OWN space, the one its api/auth calls dial. urnetworkd
+  // builds its devices from the space the GUI sends with start_tunnel and
+  // start_provider, so a tunnel takes a private extender set here at its next
+  // connect, and a running provider-only device at once (the save sends
+  // start_provider again). Every other extender setting goes through the view
+  // controller above and therefore reaches the daemon directly.
   std::optional<urnet::NetExtender> GetPrivateExtender();
   bool SetPrivateExtender(const std::string& ip, const std::string& secret);
 
@@ -984,12 +996,16 @@ class SdkHost {
     // one of the network's provider clients
     std::optional<urnet::ProviderStatus> status;
   };
-  // The controller's state, read together under the lock.
+  // The controller's state, read together under the lock. With no DeviceRemote
+  // it is the controller the daemon runs on its provider-only device, as
+  // provider_stats last read it.
   ProviderStatusSnapshot ProviderStatusNow();
   // Polling follows the Earnings destination on screen: true starts the
   // controller (one poll at once, then about once a minute), false stops it
   // and keeps its last snapshot. Remembered across the controller's close and
-  // reopen.
+  // reopen. It also paces provider_stats, which reads the provider-only
+  // device's statistics from the daemon at once and then about once a second
+  // while polling.
   void SetProviderStatusPolling(bool polling);
 
   // ---- reliability / exits (Home's Advanced inspector + the Developer page) --
@@ -1260,6 +1276,10 @@ class SdkHost {
   // Requires mutex_. settingsChanged: the provider policy was just edited,
   // which only a new device picks up.
   void ReconcileProviderLocked(const char* reason, bool userInitiated, bool settingsChanged);
+  // After a saved network space value (DoH servers, VLESS, the private
+  // extender, the server): the reconcile with settingsChanged, posted to the
+  // main loop. Takes no lock, so callers may hold mutex_.
+  void ReconcileProviderAfterSpaceChange(const char* reason);
   // Caches what the daemon's status says about the provider-only device and
   // republishes the stats when it changed. Requires mutex_.
   void NoteDaemonProviderLocked(const ctl::StatusReply& status);
@@ -1277,6 +1297,32 @@ class SdkHost {
   std::atomic<bool> daemonProviderRunning_{false};
   std::atomic<int64_t> daemonProviderMode_{0};
   std::atomic<bool> daemonProviderNetworkKey_{false};
+  // ---- the provider-only device's statistics (provider_stats) ---------------
+  // What the daemon's view controllers on the provider-only device last said,
+  // in the SDK's types. The provider statistics accessors and ProviderStatusNow
+  // read it while no DeviceRemote is bound, so the Earnings page's plots, its
+  // "no traffic yet" line and the provider status describe the device that is
+  // providing. Fetched at once and then about once a second while the Earnings
+  // destination is on screen and the daemon's status says that device runs.
+  struct DaemonProviderStats {
+    bool hasProviderStats = false;
+    std::optional<urnet::ThroughputPointList> providerPoints;
+    std::optional<urnet::TransportDistribution> providerDistribution;
+    ProviderStatusSnapshot status;
+    // the status part as it arrived, so an unchanged poll emits nothing
+    std::string statusJson;
+  };
+  // Requires mutex_. One tick of the poll (provide::DaemonProviderStatsStep).
+  void PollDaemonProviderStatsLocked();
+  // Requires mutex_. Forgets the snapshot and tells the pages when there was one.
+  void DropDaemonProviderStatsLocked();
+  std::optional<DaemonProviderStats> daemonProviderStats_;  // guarded by mutex_
+  unsigned int providerStatsPollId_ = 0;  // g_timeout source id; 0 = unarmed
+  // ControlClient::SessionGeneration() of the daemon connection that answered
+  // provider_stats with ctl::kErrorUnknownVerb: it predates the verb, and is
+  // not asked again until the connection is rebuilt. 0 = none (guarded by
+  // mutex_).
+  uint64_t providerStatsUnsupportedGeneration_ = 0;
   // RequestReliability's worker. Two guards, deliberately separate:
   //   * reliabilityBusy_ is the single-flight gate and is cleared BY THE WORKER
   //     as soon as the read returns — lock-free, and never under the mutex

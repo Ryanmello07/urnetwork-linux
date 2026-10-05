@@ -187,6 +187,7 @@ inline bool VerbNeedsAuthorization(ctl::Verb verb) {
       return true;
     case ctl::Verb::Hello:
     case ctl::Verb::Status:
+    case ctl::Verb::ProviderStats:
     case ctl::Verb::LocationOverrideAvailable:
     case ctl::Verb::Unknown:
       return false;
@@ -406,6 +407,11 @@ class ControlClient {
   // on success and on a daemon refusal; `code` the refusal's ctl::kCode*.
   bool StartProvider(const ctl::StartProviderRequest& request, ctl::StatusReply* out = nullptr,
                      std::string* error = nullptr, std::string* code = nullptr);
+  // The provider-only device's statistics (ControlProtocol.hpp provider_stats).
+  // nullopt on a transport failure or a refused request, with `error`; a daemon
+  // that predates the verb answers ctl::kErrorUnknownVerb.
+  std::optional<ctl::ProviderStatsReply> ProviderStats(const ctl::ProviderStatsRequest& request,
+                                                       std::string* error = nullptr);
   // Asks the daemon to install (or lift) the nftables kill switch. `out`
   // receives the status whose kill_switch field is what is REALLY in force —
   // Failed is a distinct state from Off and must be rendered as such.

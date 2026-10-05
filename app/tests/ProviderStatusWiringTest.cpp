@@ -186,9 +186,10 @@ UR_TEST(ProviderStatusLineIsAppliedBeforeTheProvideGateReturns) {
   const std::string pull =
       ProviderStatusFunctionBody(page, "void EarningsPage::PullProviderThroughput(bool forced)");
   UR_EXPECT_TRUE(InOrder(pull, "distribution->ByteCount", "ApplyStatusLine();"));
-  // and this platform's session gate decides the local reason
+  // and this platform's gate decides the local reason: a provider device runs,
+  // the tunnel session's or the daemon's provider-only device
   const std::string line = ProviderStatusFunctionBody(page, "void EarningsPage::ApplyStatusLine()");
-  UR_EXPECT_TRUE(line.find("providerstatus::SessionIdleReasonFor(host_.hasDevice(),") !=
+  UR_EXPECT_TRUE(line.find("providerstatus::SessionIdleReasonFor(host_.ProviderRuns(),") !=
                  std::string::npos);
   UR_EXPECT_TRUE(line.find("controlMode_ != \"never\"") != std::string::npos);
 }

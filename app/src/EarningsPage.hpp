@@ -601,12 +601,13 @@ class EarningsPage : public Gtk::Box {
   extender::StatsSections statsSections_;
   bool statsSectionsApplied_ = false;
   // the provider status's inputs: the control mode the row shows, the live
-  // provide state, the provider bytes of the throughput window and the
-  // controller's last reading, with the view and the "Why?" rows last drawn
+  // provide state, the provider bytes of the throughput window (nullopt while
+  // no window has been read) and the controller's last reading, with the view
+  // and the "Why?" rows last drawn
   std::string controlMode_;
   int64_t liveProvideMode_ = 0;
   bool providePaused_ = false;
-  int64_t recentProviderBytes_ = 0;
+  std::optional<int64_t> recentProviderBytes_;
   providerstatus::Poll providerStatus_;
   providerstatus::StatusView providerStatusView_;
   std::vector<providerstatus::NumberRow> whyRowsDrawn_;

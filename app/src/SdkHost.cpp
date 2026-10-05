@@ -288,6 +288,11 @@ SdkHost::~SdkHost() {
   // page's bridge makes, and it is the right one against a use-after-free.
   std::scoped_lock lock(reliabilityWorkerMutex_);
   if (reliabilityWorker_.joinable()) reliabilityWorker_.join();
+  // The provider_stats poll's timeout holds `this` as well.
+  if (providerStatsPollId_ != 0) {
+    g_source_remove(providerStatsPollId_);
+    providerStatsPollId_ = 0;
+  }
   // Last, and unconditionally: the reservation is the only member that is a
   // kernel resource rather than an SDK handle, and leaking it would keep the
   // address held by a zombie fd for the rest of the process.
@@ -724,6 +729,9 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
   // old session is genuinely gone.
   if (onAuth_) onAuth_(loggedIn);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
+  // stop_tunnel retired the old server's provider-only device with the rest; a
+  // space this device is already signed in to provides again on its own.
+  ReconcileProviderAfterSpaceChange("network server changed");
   return true;
 }
 
@@ -760,7 +768,10 @@ std::optional<std::string> SdkHost::SetVlessSettings(const urnet::VlessSettings&
     // PLACE (sdk updateInPlaceValues): the manager keeps this same space, so
     // networkSpace_ and the Api, LocalState and device derived from it all
     // stay valid -- nothing to re-derive, unlike ApplyNetworkServer.
-    return networkSpace_->setVlessSettings(settings);
+    std::optional<std::string> answer = networkSpace_->setVlessSettings(settings);
+    // "" is a save; a provider-only device takes the new space now.
+    if (answer && answer->empty()) ReconcileProviderAfterSpaceChange("VLESS settings saved");
+    return answer;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] setVlessSettings failed: %s\n", e.what());
     return std::nullopt;
@@ -820,7 +831,11 @@ std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::str
     // drops repeats, normalizes and answers the error id, and it applies IN
     // PLACE (sdk updateInPlaceValues) -- the strategy's DoH cache is swapped
     // and networkSpace_, with everything derived from it, stays valid.
-    return networkSpace_->setControlDohUrls(urnet::StringList(urls));
+    std::optional<std::string> answer = networkSpace_->setControlDohUrls(urnet::StringList(urls));
+    // "" is a save. The tunnel takes the servers at the next connect (the
+    // section's note); a provider-only device takes them now.
+    if (answer && answer->empty()) ReconcileProviderAfterSpaceChange("DoH servers saved");
+    return answer;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] setControlDohUrls failed: %s\n", e.what());
     return std::nullopt;
@@ -3086,6 +3101,8 @@ void SdkHost::SetPresentationActive(bool active) {
 // GetApi) and finds this device by the remote's client id, the daemon's
 // provider client. Its listener only emits an event tag, like the peers': the
 // earnings page marshals onto the GTK loop and re-reads ProviderStatusNow.
+// While disconnected there is no DeviceRemote, and the daemon runs the same
+// controller on its provider-only device (provider_stats, below).
 
 void SdkHost::OpenProviderStatusLocked(const std::string& provideControlMode) {
   if (!device_ || providerStatusVc_ || provideControlMode == "never") return;
@@ -3115,7 +3132,11 @@ void SdkHost::CloseProviderStatusLocked() {
 SdkHost::ProviderStatusSnapshot SdkHost::ProviderStatusNow() {
   std::scoped_lock lock(mutex_);
   ProviderStatusSnapshot snapshot;
-  if (!providerStatusVc_) return snapshot;
+  if (!providerStatusVc_) {
+    // No session: the controller the daemon runs on its provider-only device.
+    if (!device_ && daemonProviderStats_) return daemonProviderStats_->status;
+    return snapshot;
+  }
   snapshot.open = true;
   try {
     snapshot.loaded = providerStatusVc_->getIsLoaded();
@@ -3132,10 +3153,123 @@ SdkHost::ProviderStatusSnapshot SdkHost::ProviderStatusNow() {
   return snapshot;
 }
 
+// ---- the provider-only device's statistics (provider_stats) -----------------
+// While no DeviceRemote is bound the provider is the daemon's provider-only
+// device, and its view controllers run in the daemon. This reads them about
+// once a second while the Earnings destination is on screen, so the page's
+// plots, its "no traffic yet" line and the provider status describe the device
+// that is providing rather than saying nothing (support inbox 1521, P008).
+
+namespace {
+
+constexpr guint kProviderStatsPollMillis = 1000;
+
+// One SDK payload of a provider_stats reply, in the SDK's own JSON. A part
+// that does not parse is left empty: it costs its own chart, never the page.
+// Logged at debug level only, because the poll would repeat it every second.
+template <typename T>
+std::optional<T> ProviderStatsPart(const std::string& json, const char* what) {
+  if (json.empty()) return std::nullopt;
+  try {
+    return nlohmann::json::parse(json).get<T>();
+  } catch (const std::exception& e) {
+    g_debug("provide: the daemon's provider %s does not read: %s", what, e.what());
+    return std::nullopt;
+  }
+}
+
+}  // namespace
+
+void SdkHost::PollDaemonProviderStatsLocked() {
+  const bool unsupported = providerStatsUnsupportedGeneration_ != 0 &&
+                           providerStatsUnsupportedGeneration_ == control_.SessionGeneration();
+  if (provide::DaemonProviderStatsStep(device_.has_value(), daemonProviderRunning_.load(),
+                                       unsupported) == provide::ProviderStatsStep::Drop) {
+    DropDaemonProviderStatsLocked();
+    return;
+  }
+  ctl::ProviderStatsRequest request;
+  // asked only while the Earnings destination shows the provider status
+  request.poll_status = true;
+  std::string error;
+  std::optional<ctl::ProviderStatsReply> reply;
+  try {
+    reply = control_.ProviderStats(request, &error);
+  } catch (const std::exception& e) {
+    error = e.what();
+  }
+  if (!reply) {
+    if (error == ctl::kErrorUnknownVerb) {
+      // A daemon from before the verb: the page shows what it showed then, no
+      // provider statistics while disconnected.
+      g_message("provide: the system service predates provider_stats; no provider statistics "
+                "while disconnected");
+      providerStatsUnsupportedGeneration_ = control_.SessionGeneration();
+      DropDaemonProviderStatsLocked();
+    }
+    // Unreachable or refused: the last snapshot stands until the status says
+    // the device is gone.
+    return;
+  }
+  if (!reply->running) {
+    DropDaemonProviderStatsLocked();
+    return;
+  }
+  DaemonProviderStats stats;
+  stats.hasProviderStats = reply->has_provider_stats;
+  stats.providerPoints = ProviderStatsPart<urnet::ThroughputPointList>(
+      reply->provider_throughput_points_json, "series");
+  stats.providerDistribution = ProviderStatsPart<urnet::TransportDistribution>(
+      reply->provider_transport_distribution_json, "transport distribution");
+  stats.status.open = reply->status_open;
+  stats.status.loaded = reply->status_loaded;
+  stats.status.lastFetchError = reply->status_last_fetch_error;
+  stats.status.status =
+      ProviderStatsPart<urnet::ProviderStatus>(reply->provider_status_json, "status");
+  stats.statusJson = reply->provider_status_json;
+  const bool statusChanged = !daemonProviderStats_ ||
+                             daemonProviderStats_->status.open != stats.status.open ||
+                             daemonProviderStats_->status.loaded != stats.status.loaded ||
+                             daemonProviderStats_->status.lastFetchError !=
+                                 stats.status.lastFetchError ||
+                             daemonProviderStats_->statusJson != stats.statusJson;
+  daemonProviderStats_ = std::move(stats);
+  // the two events the DeviceRemote's controllers raise for the same facts
+  EmitDrawerEvent(DrawerEvent::Throughput);
+  if (statusChanged) EmitDrawerEvent(DrawerEvent::ProviderStatus);
+}
+
+void SdkHost::DropDaemonProviderStatsLocked() {
+  if (!daemonProviderStats_) return;
+  daemonProviderStats_.reset();
+  EmitDrawerEvent(DrawerEvent::Throughput);
+  EmitDrawerEvent(DrawerEvent::ProviderStatus);
+}
+
 void SdkHost::SetProviderStatusPolling(bool polling) {
   std::scoped_lock lock(mutex_);
   if (providerStatusPolling_ == polling) return;
   providerStatusPolling_ = polling;
+  // The provider-only device's statistics follow the same schedule: read at
+  // once, then about once a second, while polling. Stopping keeps the last
+  // snapshot, as the controller below keeps its own.
+  if (polling) {
+    if (providerStatsPollId_ == 0) {
+      providerStatsPollId_ = g_timeout_add(
+          kProviderStatsPollMillis,
+          [](gpointer data) -> gboolean {
+            auto* self = static_cast<SdkHost*>(data);
+            std::scoped_lock pollLock(self->mutex_);
+            self->PollDaemonProviderStatsLocked();
+            return G_SOURCE_CONTINUE;
+          },
+          this);
+    }
+    PollDaemonProviderStatsLocked();
+  } else if (providerStatsPollId_ != 0) {
+    g_source_remove(providerStatsPollId_);
+    providerStatsPollId_ = 0;
+  }
   if (!providerStatusVc_) return;
   if (polling) {
     providerStatusVc_->start();
@@ -3419,14 +3553,17 @@ std::optional<urnet::TransportDistribution> SdkHost::ClientTransportDistribution
 
 std::optional<urnet::TransportDistribution> SdkHost::ProviderTransportDistribution() {
   std::scoped_lock lock(mutex_);
-  if (!contractVc_) return std::nullopt;
-  return contractVc_->getProviderTransportDistribution();
+  if (contractVc_) return contractVc_->getProviderTransportDistribution();
+  // no session: the provider-only device's, as the daemon last read it
+  if (!device_ && daemonProviderStats_) return daemonProviderStats_->providerDistribution;
+  return std::nullopt;
 }
 
 std::optional<urnet::ThroughputPointList> SdkHost::ProviderThroughputPoints() {
   std::scoped_lock lock(mutex_);
-  if (!contractVc_) return std::nullopt;
-  return contractVc_->getProviderThroughputPoints();
+  if (contractVc_) return contractVc_->getProviderThroughputPoints();
+  if (!device_ && daemonProviderStats_) return daemonProviderStats_->providerPoints;
+  return std::nullopt;
 }
 
 std::optional<urnet::ThroughputPointList> SdkHost::ExtenderThroughputPoints() {
@@ -3437,12 +3574,13 @@ std::optional<urnet::ThroughputPointList> SdkHost::ExtenderThroughputPoints() {
 
 bool SdkHost::HasProviderStats() {
   std::scoped_lock lock(mutex_);
-  return contractVc_ && contractVc_->getProviderPacketStats().has_value();
+  if (contractVc_) return contractVc_->getProviderPacketStats().has_value();
+  return !device_ && daemonProviderStats_ && daemonProviderStats_->hasProviderStats;
 }
 
 bool SdkHost::DeviceHasProviderStats() {
   std::scoped_lock lock(mutex_);
-  if (!device_) return false;
+  if (!device_) return daemonProviderStats_ && daemonProviderStats_->hasProviderStats;
   try {
     return device_->getProviderPacketStats().has_value();
   } catch (const std::exception& e) {
@@ -3857,6 +3995,8 @@ bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secre
     if (const std::string byJwt = localState_->getByJwt(); !byJwt.empty()) {
       api_->setByJwt(byJwt);
     }
+    // a provider-only device takes the new space now
+    ReconcileProviderAfterSpaceChange("private extender saved");
     return true;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] set private extender failed: %s\n", e.what());
@@ -4109,10 +4249,25 @@ bool SdkHost::ProvideEnabled() {
   return device_ && device_->getProvideEnabled();
 }
 
-void SdkHost::ReconcileProvider(const char* reason, bool userInitiated) {
+void SdkHost::ReconcileProvider(const char* reason, bool userInitiated, bool settingsChanged) {
   std::scoped_lock lock(mutex_);
-  ReconcileProviderLocked(reason, userInitiated, /*settingsChanged=*/false);
+  ReconcileProviderLocked(reason, userInitiated, settingsChanged);
 }
+
+// A provider-only device runs on the network space it was built from. Once a
+// saved value changes that space, start_provider goes out again and the daemon
+// replaces the device (ctl::SameProviderDevice): otherwise a user in China who
+// saves DoH servers that work there keeps a provider on the old ones, which may
+// never reach the API, until it happens to restart. Posted, so the save's own
+// outcome renders first and the daemon's device build never runs inside the
+// caller's save.
+void SdkHost::ReconcileProviderAfterSpaceChange(const char* reason) {
+  PostToMain([this, reason] {
+    ReconcileProvider(reason, /*userInitiated=*/true, /*settingsChanged=*/true);
+  });
+}
+
+bool SdkHost::ProviderRuns() { return hasDevice() || daemonProviderRunning_.load(); }
 
 void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
                                       bool settingsChanged) {
@@ -4342,6 +4497,7 @@ void SdkHost::Shutdown() {
   daemonProviderRunning_.store(false);
   daemonProviderMode_.store(0);
   daemonProviderNetworkKey_.store(false);
+  DropDaemonProviderStatsLocked();
 }
 
 void SdkHost::Logout() {
@@ -4356,6 +4512,7 @@ void SdkHost::Logout() {
   daemonProviderRunning_.store(false);
   daemonProviderMode_.store(0);
   daemonProviderNetworkKey_.store(false);
+  DropDaemonProviderStatsLocked();
   providerStateKnown_ = false;
   providerBackoff_.NoteSuccess();
   pendingWalletAuth_.reset();

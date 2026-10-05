@@ -66,7 +66,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
       ctl::Verb::Hello,          ctl::Verb::Status,
       ctl::Verb::StartTunnel,    ctl::Verb::AttachTunnel,
       ctl::Verb::StopTunnel,     ctl::Verb::SetProvide,
-      ctl::Verb::StartProvider,
+      ctl::Verb::StartProvider,  ctl::Verb::ProviderStats,
       ctl::Verb::LocationOverrideAvailable,
       ctl::Verb::LocationOverrideWrite, ctl::Verb::LocationOverrideClear,
   };
@@ -81,6 +81,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
   UR_EXPECT_TRUE(ctl::VerbFromString("stop_tunnel") == ctl::Verb::StopTunnel);
   UR_EXPECT_TRUE(ctl::VerbFromString("set_provide") == ctl::Verb::SetProvide);
   UR_EXPECT_TRUE(ctl::VerbFromString("start_provider") == ctl::Verb::StartProvider);
+  UR_EXPECT_TRUE(ctl::VerbFromString("provider_stats") == ctl::Verb::ProviderStats);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_available") ==
                  ctl::Verb::LocationOverrideAvailable);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_write") ==
@@ -581,6 +582,102 @@ UR_TEST(controlProviderFactsReadOneStatus) {
   status.kill_switch = ctl::KillSwitchState::Failed;
   UR_EXPECT_FALSE(ctl::ProviderFactsFrom(status).killSwitchArmed);
   UR_EXPECT_TRUE(ctl::ProviderFactsFrom(ctl::RedactStatusForForeignUid(status)).redacted);
+}
+
+// A saved network space value (the bootstrap DoH servers, P216) is a different
+// provider device: the daemon replaces the running one instead of keeping it
+// on the old servers. A new mode alone keeps the device.
+UR_TEST(controlSameProviderDeviceReplacesOnAChangedSpace) {
+  ctl::StartProviderRequest running = ProviderRequest("always");
+  running.network_space_json = R"({"values":{}})";
+  running.provider_transport_settings_json = R"({"mode":"auto"})";
+  UR_EXPECT_TRUE(ctl::SameProviderDevice(running, running));
+
+  ctl::StartProviderRequest remoded = running;
+  remoded.provide_mode = "network";
+  UR_EXPECT_TRUE(ctl::SameProviderDevice(running, remoded));
+
+  ctl::StartProviderRequest doh = running;
+  doh.network_space_json = R"({"values":{"control_doh_urls_ipv4":["https://223.5.5.5/"]}})";
+  UR_EXPECT_FALSE(ctl::SameProviderDevice(running, doh));
+
+  ctl::StartProviderRequest jwt = running;
+  jwt.by_jwt = "another jwt";
+  UR_EXPECT_FALSE(ctl::SameProviderDevice(running, jwt));
+  ctl::StartProviderRequest instance = running;
+  instance.instance_id = "another instance";
+  UR_EXPECT_FALSE(ctl::SameProviderDevice(running, instance));
+  ctl::StartProviderRequest version = running;
+  version.app_version = "2026.10.6";
+  UR_EXPECT_FALSE(ctl::SameProviderDevice(running, version));
+  ctl::StartProviderRequest policy = running;
+  policy.provider_transport_settings_json.clear();
+  UR_EXPECT_FALSE(ctl::SameProviderDevice(running, policy));
+}
+
+// ---- provider_stats: the provider-only device's statistics -----------------
+
+UR_TEST(controlProviderStatsRoundTrip) {
+  ctl::ProviderStatsRequest req;
+  req.poll_status = true;
+  const auto reqBack = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeRequest(ctl::Verb::ProviderStats, 11, nlohmann::json(req))));
+  UR_EXPECT_TRUE(ctl::RequestVerb(*reqBack) == ctl::Verb::ProviderStats);
+  UR_EXPECT_TRUE(reqBack->get<ctl::ProviderStatsRequest>().poll_status);
+  // absent asks for no polling
+  UR_EXPECT_FALSE(nlohmann::json::object().get<ctl::ProviderStatsRequest>().poll_status);
+
+  ctl::ProviderStatsReply stats;
+  stats.running = true;
+  stats.has_provider_stats = true;
+  stats.provider_throughput_points_json = R"([{"Time":1,"Remote":{"EgressByteCount":2048}}])";
+  stats.provider_transport_distribution_json = R"({"ByteCount":2048,"Active":true})";
+  stats.status_open = true;
+  stats.status_loaded = true;
+  stats.status_last_fetch_error = "timeout";
+  stats.provider_status_json = R"({"reason":"reliability_warming_up"})";
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(12, true, nlohmann::json(stats))))->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_TRUE(back.running);
+  UR_EXPECT_TRUE(back.has_provider_stats);
+  UR_EXPECT_TRUE(back.provider_throughput_points_json == stats.provider_throughput_points_json);
+  UR_EXPECT_TRUE(back.provider_transport_distribution_json ==
+                 stats.provider_transport_distribution_json);
+  UR_EXPECT_TRUE(back.status_open && back.status_loaded);
+  UR_EXPECT_TRUE(back.status_last_fetch_error == "timeout");
+  UR_EXPECT_TRUE(back.provider_status_json == stats.provider_status_json);
+  // the SDK payloads stay strings, so the frame is still one line
+  const std::string frame = ctl::EncodeFrame(ctl::MakeReply(12, true, nlohmann::json(stats)));
+  UR_EXPECT_TRUE(frame.find('\n') == frame.size() - 1);
+}
+
+// An empty reply (no provider-only device, a foreign uid, a field the daemon
+// did not send) reads as nothing running and nothing to draw.
+UR_TEST(controlProviderStatsAbsentFieldsMeanNothingRuns) {
+  const auto empty = ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeReply(13, true)))
+                         ->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_FALSE(empty.running);
+  UR_EXPECT_FALSE(empty.has_provider_stats);
+  UR_EXPECT_TRUE(empty.provider_throughput_points_json.empty());
+  UR_EXPECT_TRUE(empty.provider_transport_distribution_json.empty());
+  UR_EXPECT_FALSE(empty.status_open);
+  UR_EXPECT_FALSE(empty.status_loaded);
+  UR_EXPECT_TRUE(empty.provider_status_json.empty());
+  const nlohmann::json defaults = nlohmann::json(ctl::ProviderStatsReply());
+  UR_EXPECT_FALSE(defaults.at("running").get<bool>());
+}
+
+// Answered like status: polled, so no polkit check and no prompt. A daemon
+// that predates the verb says so with the one error every daemon gives.
+UR_TEST(controlProviderStatsIsUngatedAndNeverPrompts) {
+  UR_EXPECT_TRUE(ctl::ActionIdForVerb(ctl::Verb::ProviderStats, false, false) == nullptr);
+  UR_EXPECT_TRUE(ctl::ActionIdForVerb(ctl::Verb::ProviderStats, false, true) == nullptr);
+  UR_EXPECT_FALSE(ctl::VerbWantsInteraction(ctl::Verb::ProviderStats, /*is_log_tail=*/false));
+  UR_EXPECT_TRUE(std::string(ctl::kErrorUnknownVerb) == "unknown verb");
+  const auto older =
+      ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(14, ctl::kErrorUnknownVerb)));
+  UR_EXPECT_FALSE(ctl::ReplyOk(*older));
+  UR_EXPECT_TRUE(ctl::ReplyError(*older) == ctl::kErrorUnknownVerb);
 }
 
 UR_TEST(controlLocationOverrideRoundTrips) {
