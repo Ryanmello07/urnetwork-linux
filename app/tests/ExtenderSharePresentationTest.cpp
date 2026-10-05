@@ -1,15 +1,32 @@
-// The account section's extender logic: the settings form's fields, the share
-// screen's reading of build_share and the import screen's decision from
-// decode_share (EXTENDER.md K6/K7).
+// The account section's extender logic: the settings form's fields, the
+// bootstrap DNS-over-HTTPS servers box and its messages, the share screen's
+// reading of build_share and the import screen's decision from decode_share
+// (EXTENDER.md K6/K7). The servers' texts are pinned against po/en.po.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "ExtenderSharePresentation.hpp"
 
+#ifndef UR_SRC_DIR
+#define UR_SRC_DIR ""
+#endif
+
 using urnw::extender::ApplySettingsField;
+using urnw::extender::ControlDohErrorText;
+using urnw::extender::ControlDohImportArg;
+using urnw::extender::ControlDohSaveOutcomeFor;
+using urnw::extender::kControlDohChinaCountryCode;
+using urnw::extender::kControlDohErrorHttpsRequired;
+using urnw::extender::kControlDohErrorIpRequired;
+using urnw::extender::kControlDohErrorTooMany;
+using urnw::extender::kControlDohErrorUrlInvalid;
+using urnw::extender::kSdkErrorIdInternal;
+using urnw::extender::SplitControlDohLines;
 using urnw::extender::ImportDecision;
 using urnw::extender::ImportPresentation;
 using urnw::extender::ImportPresentationFor;
@@ -89,6 +106,139 @@ UR_TEST(ExtenderHosts_EmptyTextIsAnEmptyList) {
 UR_TEST(ExtenderHosts_RoundTrip) {
   const std::vector<std::string> hosts = {"a.example.test", "2001:db8::1", "192.0.2.9"};
   UR_EXPECT_TRUE(SplitHostLines(JoinHostLines(hosts)) == hosts);
+}
+
+// ---- the bootstrap DNS-over-HTTPS servers ---------------------------------------
+
+namespace {
+// the sdk's China preset (connect RegionalControlDohUrls("cn")), v4 first
+const std::vector<std::string> kChinaServers = {
+    "https://223.5.5.5/dns-query",
+    "https://223.6.6.6/dns-query",
+    "https://1.12.12.12/dns-query",
+    "https://120.53.53.53/dns-query",
+};
+}  // namespace
+
+// Line breaks only: a CRLF, a bare CR and an LF each end a line, blanks drop,
+// lines are trimmed, and a comma stays inside its url -- the hosts box's comma
+// split would cut it in two.
+UR_TEST(ControlDohLines_SplitOnLineBreaksOnly) {
+  const auto lines =
+      SplitControlDohLines("https://223.5.5.5/q\r\n  https://1.12.12.12/q \rhttps://1.2.3.4/a,b\n\n");
+  UR_EXPECT_EQ(3, static_cast<int>(lines.size()));
+  if (lines.size() != 3) return;
+  UR_EXPECT_TRUE(lines[0] == "https://223.5.5.5/q");
+  UR_EXPECT_TRUE(lines[1] == "https://1.12.12.12/q");
+  UR_EXPECT_TRUE(lines[2] == "https://1.2.3.4/a,b");
+}
+
+// The order typed, repeats kept: dropping them is the SDK's, with the
+// normalizing, so every platform hands it the same list.
+UR_TEST(ControlDohLines_OrderAndRepeatsAreTheSdks) {
+  const auto lines = SplitControlDohLines(
+      "https://223.6.6.6/dns-query\nhttps://223.5.5.5/dns-query\nhttps://223.6.6.6/dns-query");
+  UR_EXPECT_TRUE(lines == std::vector<std::string>({"https://223.6.6.6/dns-query",
+                                                    "https://223.5.5.5/dns-query",
+                                                    "https://223.6.6.6/dns-query"}));
+}
+
+// An empty box is the built-in servers alone.
+UR_TEST(ControlDohLines_AnEmptyBoxIsTheBuiltInServers) {
+  UR_EXPECT_EQ(0, static_cast<int>(SplitControlDohLines("").size()));
+  UR_EXPECT_EQ(0, static_cast<int>(SplitControlDohLines(" \r\n\t\n\r").size()));
+}
+
+// "Use China resolvers" fills the box one server per line, and a save sends
+// the same list back.
+UR_TEST(ControlDohLines_ThePresetIsOnePerLine) {
+  UR_EXPECT_TRUE(std::string(kControlDohChinaCountryCode) == "cn");
+  UR_EXPECT_TRUE(JoinHostLines(kChinaServers) == R"(https://223.5.5.5/dns-query
+https://223.6.6.6/dns-query
+https://1.12.12.12/dns-query
+https://120.53.53.53/dns-query)");
+  UR_EXPECT_TRUE(SplitControlDohLines(JoinHostLines(kChinaServers)) == kChinaServers);
+}
+
+// Every SDK id is its own key (the sdk's literal ids), each with its message.
+UR_TEST(ControlDohErrors_EveryIdHasItsMessage) {
+  UR_EXPECT_TRUE(std::string(kControlDohErrorUrlInvalid) == "control_doh_error_url_invalid");
+  UR_EXPECT_TRUE(std::string(kControlDohErrorHttpsRequired) == "control_doh_error_https_required");
+  UR_EXPECT_TRUE(std::string(kControlDohErrorIpRequired) == "control_doh_error_ip_required");
+  UR_EXPECT_TRUE(std::string(kControlDohErrorTooMany) == "control_doh_error_too_many");
+  for (const char* id : {kControlDohErrorUrlInvalid, kControlDohErrorHttpsRequired,
+                         kControlDohErrorIpRequired, kControlDohErrorTooMany}) {
+    UR_EXPECT_TRUE_MSG(id, ControlDohErrorText(id).key == id);
+    UR_EXPECT_TRUE_MSG(id, !ControlDohErrorText(id).english.empty());
+  }
+}
+
+// Any other id -- the SDK's internal_error for a call that could not run, an
+// id this build does not know -- is still a refusal, and none of them is about
+// the url typed: "Something went wrong.", never a raw key.
+UR_TEST(ControlDohErrors_AnyOtherIdIsSomethingWentWrong) {
+  UR_EXPECT_TRUE(std::string(kSdkErrorIdInternal) == "internal_error");
+  for (const char* id : {kSdkErrorIdInternal, "control_doh_error_from_a_newer_sdk",
+                         "vless_error_link_invalid", ""}) {
+    UR_EXPECT_TRUE_MSG(id, ControlDohErrorText(id).key == "something_went_wrong");
+    UR_EXPECT_TRUE_MSG(id, ControlDohErrorText(id).english == "Something went wrong.");
+  }
+}
+
+// Saved is the saved line and the next-connect note (urnetworkd takes the
+// space at its next tunnel start); an id is its message alone.
+UR_TEST(ControlDohSave_TheResultLines) {
+  const auto saved = ControlDohSaveOutcomeFor("");
+  UR_EXPECT_TRUE(saved.saved);
+  UR_EXPECT_TRUE(saved.message.key == "control_doh_urls_saved");
+  UR_EXPECT_TRUE(saved.note.key == "control_doh_urls_next_connect");
+  const auto refused = ControlDohSaveOutcomeFor(kControlDohErrorIpRequired);
+  UR_EXPECT_FALSE(refused.saved);
+  UR_EXPECT_TRUE(refused.message.key == kControlDohErrorIpRequired);
+  UR_EXPECT_TRUE(refused.note.key.empty());
+  // only "" is a save: a call that could not run, or an id this build does
+  // not know, saved nothing
+  for (const char* id : {kSdkErrorIdInternal, "control_doh_error_from_a_newer_sdk"}) {
+    const auto failed = ControlDohSaveOutcomeFor(id);
+    UR_EXPECT_TRUE_MSG(id, !failed.saved);
+    UR_EXPECT_TRUE_MSG(id, failed.message.key == "something_went_wrong");
+    UR_EXPECT_TRUE_MSG(id, failed.note.key.empty());
+  }
+}
+
+// Every text is the catalog's own entry, key and English byte for byte: the
+// English is the msgid T_ looks the translation up by.
+UR_TEST(ControlDohText_KeysAreTheCatalogs) {
+  std::ifstream in(std::string(UR_SRC_DIR) + "/../po/en.po", std::ios::binary);
+  UR_EXPECT_TRUE(in.good());
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+  const std::string catalog = buffer.str();
+  std::vector<urnw::extender::Text> texts;
+  for (const char* id : {kControlDohErrorUrlInvalid, kControlDohErrorHttpsRequired,
+                         kControlDohErrorIpRequired, kControlDohErrorTooMany,
+                         kSdkErrorIdInternal}) {
+    texts.push_back(ControlDohErrorText(id));
+  }
+  const auto saved = ControlDohSaveOutcomeFor("");
+  texts.push_back(saved.message);
+  texts.push_back(saved.note);
+  for (const auto& text : texts) {
+    const std::string entry = "msgctxt \"" + std::string(text.key) + "\"\nmsgid \"" +
+                              std::string(text.english) + "\"\n";
+    UR_EXPECT_TRUE_MSG(entry, catalog.find(entry) != std::string::npos);
+  }
+}
+
+// The import screen names the servers a code's settings would set, whether or
+// not the switch is on yet; a code without settings, or whose settings name
+// none, says nothing and leaves this device's servers alone.
+UR_TEST(ControlDohImport_TheSettingsServersAreNamed) {
+  UR_EXPECT_TRUE(ControlDohImportArg(true, {"https://223.5.5.5/dns-query",
+                                            "https://1.12.12.12/dns-query"}) ==
+                 "https://223.5.5.5/dns-query, https://1.12.12.12/dns-query");
+  UR_EXPECT_TRUE(ControlDohImportArg(true, {}).empty());
+  UR_EXPECT_TRUE(ControlDohImportArg(false, kChinaServers).empty());
 }
 
 // ---- the share screen -------------------------------------------------------

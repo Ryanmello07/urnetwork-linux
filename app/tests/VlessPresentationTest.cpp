@@ -95,6 +95,8 @@ struct NetworkSpaceValues {
   std::optional<std::vector<std::string>> extender_root_public_keys;
   std::optional<std::vector<std::string>> extender_hosts;
   std::optional<VlessSettings> vless;
+  std::optional<std::vector<std::string>> control_doh_urls_ipv4;
+  std::optional<std::vector<std::string>> control_doh_urls_ipv6;
 };
 
 template <class T>
@@ -225,6 +227,8 @@ void to_json(nlohmann::json& j, const NetworkSpaceValues& v) {
   Put(j, "extender_root_public_keys", v.extender_root_public_keys);
   Put(j, "extender_hosts", v.extender_hosts);
   Put(j, "vless", v.vless);
+  Put(j, "control_doh_urls_ipv4", v.control_doh_urls_ipv4);
+  Put(j, "control_doh_urls_ipv6", v.control_doh_urls_ipv6);
 }
 
 void from_json(const nlohmann::json& j, NetworkSpaceValues& v) {
@@ -248,6 +252,8 @@ void from_json(const nlohmann::json& j, NetworkSpaceValues& v) {
   Take(j, "extender_root_public_keys", v.extender_root_public_keys);
   Take(j, "extender_hosts", v.extender_hosts);
   Take(j, "vless", v.vless);
+  Take(j, "control_doh_urls_ipv4", v.control_doh_urls_ipv4);
+  Take(j, "control_doh_urls_ipv6", v.control_doh_urls_ipv6);
 }
 
 // A manager that holds at most one space, as its toJson() document.
@@ -263,6 +269,27 @@ struct OneSpaceManager {
   Space getNetworkSpace(const std::optional<NetworkSpaceKey>& key) const {
     if (key && key->host_name == hostName && !json.empty()) return Space{json};
     return Space{};
+  }
+};
+
+// The launch bootstrap's manager (NetworkSpaceBootstrap.hpp): nothing stored
+// under the retired key to move, the bundled space it holds, and the values
+// the bootstrap writes for it.
+struct BundledSpaceManager {
+  std::string json;  // the bundled space's toJson()
+  std::optional<NetworkSpaceValues> written;
+  bool migrateNetworkSpace(const std::optional<NetworkSpaceKey>&,
+                           const std::optional<NetworkSpaceKey>&) {
+    return false;
+  }
+  Space getNetworkSpace(const std::optional<NetworkSpaceKey>& key) const {
+    if (key && key->host_name == std::optional<std::string>(urnw::kUrHostName)) return Space{json};
+    return Space{};
+  }
+  Space updateNetworkSpaceValues(const std::optional<NetworkSpaceKey>&,
+                                 const std::optional<NetworkSpaceValues>& values) {
+    written = values;
+    return Space{json};
   }
 };
 
@@ -780,6 +807,69 @@ UR_TEST(StoredSpace_ReapplyingTheServerKeepsVless) {
   UR_EXPECT_TRUE(values.migration_host_name == std::optional<std::string>(""));
   UR_EXPECT_TRUE(values.api_url == std::optional<std::string>(""));
   UR_EXPECT_TRUE(values.platform_url == std::optional<std::string>("wss://connect2.example.test"));
+}
+
+// The bootstrap DNS-over-HTTPS servers survive all three writers: the launch
+// bootstrap of the bundled space, the network-server switch and the private
+// extender. None of them names the servers, and updateNetworkSpaceValues
+// replaces the whole value set, so each keeps them only because it starts from
+// what the space stores. A space that dropped them on a network blocking the
+// built-in DoH servers could no longer resolve its own api.
+UR_TEST(StoredSpace_ControlDohUrlsSurviveTheThreeWriters) {
+  const std::vector<std::string> v4 = {"https://223.5.5.5/dns-query",
+                                       "https://1.12.12.12/dns-query"};
+  const std::vector<std::string> v6 = {"https://[2001:db8::53]/dns-query"};
+  auto stored = [&](const char* hostName) {
+    nlohmann::json document = nlohmann::json::parse(kStoredSpaceJson);
+    document["key"]["host_name"] = hostName;
+    document["values"]["control_doh_urls_ipv4"] = v4;
+    document["values"]["control_doh_urls_ipv6"] = v6;
+    return document.dump();
+  };
+
+  // BootstrapUrNetworkSpace, at every launch: the official values over the
+  // bundled space's own, the url overrides cleared
+  sdkshape::BundledSpaceManager bundled{stored(urnw::kUrHostName), std::nullopt};
+  urnw::BootstrapUrNetworkSpace<sdkshape::NetworkSpaceKey, sdkshape::NetworkSpaceValues>(bundled);
+  UR_EXPECT_TRUE(bundled.written.has_value());
+  if (bundled.written) {
+    UR_EXPECT_TRUE_MSG("the launch dropped the v4 servers",
+                       bundled.written->control_doh_urls_ipv4 == std::optional(v4));
+    UR_EXPECT_TRUE_MSG("the launch dropped the v6 servers",
+                       bundled.written->control_doh_urls_ipv6 == std::optional(v6));
+  }
+
+  // SdkHost::ApplyNetworkServer: the host's values over what the manager
+  // stores under the key it writes
+  const sdkshape::OneSpaceManager manager{"example.test", stored("example.test")};
+  sdkshape::NetworkSpaceKey key;
+  key.host_name = "example.test";
+  key.env_name = "main";
+  auto applied = urnw::UrNetworkSpaceValuesOver(
+      urnw::StoredNetworkSpaceValues<sdkshape::NetworkSpaceKey, sdkshape::NetworkSpaceValues>(
+          manager, key),
+      false, "example.test");
+  applied.bundled = false;
+  applied.api_url = "";
+  applied.platform_url = "wss://connect2.example.test";
+  UR_EXPECT_TRUE_MSG("the server switch dropped the v4 servers",
+                     applied.control_doh_urls_ipv4 == std::optional(v4));
+  UR_EXPECT_TRUE_MSG("the server switch dropped the v6 servers",
+                     applied.control_doh_urls_ipv6 == std::optional(v6));
+
+  // SdkHost::SetPrivateExtender: the space's own toJson, the private extender
+  // changed
+  const auto space = Parse(stored("example.test"));
+  UR_EXPECT_TRUE(space.has_value());
+  if (!space) return;
+  auto values = space->values;
+  values.net_extender = sdkshape::NetExtender{"192.0.2.7", "s3cret"};
+  const nlohmann::json written = values;
+  UR_EXPECT_TRUE_MSG("the private extender write dropped the servers: " + written.dump(),
+                     written.value("control_doh_urls_ipv4", nlohmann::json()) ==
+                             nlohmann::json(v4) &&
+                         written.value("control_doh_urls_ipv6", nlohmann::json()) ==
+                             nlohmann::json(v6));
 }
 
 // A document that does not read, or names no host, refuses: a default key

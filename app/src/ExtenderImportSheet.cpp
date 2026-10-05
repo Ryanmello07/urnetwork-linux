@@ -41,6 +41,12 @@ const char* MessageText(const std::string& key) {
   return T_("import_extenders_invalid", "This code is not an extender share.");
 }
 
+// The line that names the bootstrap DNS-over-HTTPS servers a code's settings
+// would set (extender::ControlDohImportArg): they will see URnetwork's lookups.
+Glib::ustring ControlDohLineText(const std::string& servers) {
+  return Format(T_("import_extenders_control_doh_urls", "This code also sets bootstrap DNS-over-HTTPS servers. They will see URnetwork's server lookups: {}"), servers);
+}
+
 #if defined(UR_HAVE_ZXING)
 // Reads the first QR code out of an image file. nullopt covers both "the file
 // is not an image this build can decode" and "there is no QR code in it" --
@@ -164,6 +170,13 @@ ExtenderImportSheet::ExtenderImportSheet(Gtk::Window& parent, SdkHost& host) : h
   useSettingsRow_ = useSettingsRow.root;
   useSettingsRow_->set_visible(false);
   box->append(*useSettingsRow_);
+
+  controlDohLine_ = Gtk::make_managed<Gtk::Label>();
+  controlDohLine_->add_css_class("ur-caption");
+  controlDohLine_->set_xalign(0);
+  controlDohLine_->set_wrap(true);
+  controlDohLine_->set_visible(false);
+  box->append(*controlDohLine_);
 
   auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
   actions->set_halign(Gtk::Align::END);
@@ -304,6 +317,14 @@ void ExtenderImportSheet::Refresh() {
     // next code pasted into the same sheet
     useSettings_->set_active(false);
   }
+  // The servers the code's settings would set, named whether or not the
+  // switch is on yet: they will see URnetwork's lookups. A code whose settings
+  // name none leaves this device's own servers alone and says nothing.
+  controlDohServers_ = extender::ControlDohImportArg(
+      decoded && decoded->Ok && decoded->HasSettings,
+      decoded ? decoded->ControlDohUrls.value_or(urnet::StringList()) : urnet::StringList());
+  controlDohLine_->set_visible(!controlDohServers_.empty());
+  if (!controlDohServers_.empty()) controlDohLine_->set_text(ControlDohLineText(controlDohServers_));
   import_->set_sensitive(view_.canImport);
   refreshing_ = false;
 }
@@ -337,6 +358,13 @@ void ExtenderImportSheet::ConfirmThenImport() {
   line->set_wrap(true);
   line->set_xalign(0);
   box->append(*line);
+  // ...and so is handing these servers URnetwork's lookups
+  if (!controlDohServers_.empty()) {
+    auto* servers = Gtk::make_managed<Gtk::Label>(ControlDohLineText(controlDohServers_));
+    servers->set_wrap(true);
+    servers->set_xalign(0);
+    box->append(*servers);
+  }
 
   auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
   actions->set_halign(Gtk::Align::END);

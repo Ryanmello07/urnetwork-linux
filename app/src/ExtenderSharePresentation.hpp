@@ -1,7 +1,8 @@
 // The account section's extender logic (connect/EXTENDER.md K6/K7): the
-// settings form's fields, the share screen's reading of build_share, and the
-// import screen's decision from decode_share -- all as pure functions so the
-// rules are pinned by tests and the dialogs only render what these decided.
+// settings form's fields, the bootstrap DNS-over-HTTPS servers box and its
+// messages, the share screen's reading of build_share, and the import screen's
+// decision from decode_share -- all as pure functions so the rules are pinned
+// by tests and the dialogs only render what these decided.
 //
 // Encoding, decoding and applying a share live in the SDK
 // (ExtenderViewController), one implementation for every app. NOTHING here
@@ -15,6 +16,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace urnw::extender {
@@ -88,6 +90,102 @@ inline std::string JoinHostLines(const std::vector<std::string>& hosts) {
     if (!out.empty()) out.push_back('\n');
     out += host;
   }
+  return out;
+}
+
+// ---- the bootstrap DNS-over-HTTPS servers (sdk control_doh_ui.go) -----------
+//
+// `https://<ip literal>/<path>` servers the space's own names (api, connect,
+// extender) are looked up through ahead of the built-in ones, for networks
+// that block those. A value of the GUI's own network space, so the box works
+// with or without a tunnel; the daemon takes the space at its next
+// start_tunnel.
+
+// A store key and its English (the gettext msgid), as VlessPresentation.hpp's.
+struct Text {
+  std::string_view key;
+  std::string_view english;
+};
+
+// sdk ControlDohError* (URNET_CONTROL_DOH_ERROR_*): each id IS the
+// localization key of its message, the vless_error_* pattern.
+inline constexpr const char* kControlDohErrorUrlInvalid = "control_doh_error_url_invalid";
+inline constexpr const char* kControlDohErrorHttpsRequired = "control_doh_error_https_required";
+inline constexpr const char* kControlDohErrorIpRequired = "control_doh_error_ip_required";
+inline constexpr const char* kControlDohErrorTooMany = "control_doh_error_too_many";
+
+// The id an SDK error-id function answers when the call could not run at all
+// (urnet::ErrorIdInternal, URNET_ERROR_ID_INTERNAL: a handle that did not
+// resolve, json that did not decode). Not a store key: it reads as "Something
+// went wrong.", like any id this build does not know.
+inline constexpr const char* kSdkErrorIdInternal = "internal_error";
+
+// The country whose preset "Use China resolvers" asks the SDK for
+// (urnet::regionalControlDohUrls), the one source of the preset's servers.
+inline constexpr const char* kControlDohChinaCountryCode = "cn";
+
+// The servers box back into the list set_control_doh_urls takes: split on line
+// breaks (\n and \r), trimmed, blank lines dropped, in order. NOT on commas and
+// NOT de-duplicated, unlike the hosts box: every platform splits this box the
+// same way, and the SDK drops repeats and normalizes the rest. Shown back one
+// per line (JoinHostLines).
+inline std::vector<std::string> SplitControlDohLines(const std::string& text) {
+  std::vector<std::string> out;
+  size_t start = 0;
+  while (start <= text.size()) {
+    size_t end = text.find_first_of("\r\n", start);
+    const bool last = end == std::string::npos;
+    if (last) end = text.size();
+    size_t a = start, b = end;
+    auto space = [](char c) { return c == ' ' || c == '\t'; };
+    while (a < b && space(text[a])) ++a;
+    while (b > a && space(text[b - 1])) --b;
+    if (a < b) out.emplace_back(text, a, b - a);
+    if (last) break;
+    start = end + 1;
+  }
+  return out;
+}
+
+// The message of an SDK error id: its own for the four the SDK names, and
+// "Something went wrong." for anything else -- an id this build does not know
+// (a newer SDK) and kSdkErrorIdInternal alike, neither of which is about the
+// url the user typed -- never a raw key on screen.
+inline Text ControlDohErrorText(std::string_view errorId) {
+  static constexpr Text kErrors[] = {
+      {kControlDohErrorUrlInvalid, "Enter a full URL, such as https://223.5.5.5/dns-query."},
+      {kControlDohErrorHttpsRequired, "The URL must start with https://."},
+      {kControlDohErrorIpRequired,
+       "Use an IP address, not a host name, such as https://223.5.5.5/dns-query."},
+      {kControlDohErrorTooMany, "Too many servers. Remove some and save again."},
+  };
+  for (const Text& error : kErrors) {
+    if (error.key == errorId) return error;
+  }
+  return {"something_went_wrong", "Something went wrong."};
+}
+
+// What the lines under Save say for the SDK's answer to set_control_doh_urls.
+// Only an empty answer is saved, and on this platform the VPN runs in
+// urnetworkd, which imports the network space at its next tunnel start, so the
+// next-connect note goes with it. Any id, kSdkErrorIdInternal included, is that
+// error's message, and nothing was saved.
+struct ControlDohSaveOutcome {
+  bool saved = false;
+  Text message;
+  Text note;  // an empty key: no second line
+};
+
+inline ControlDohSaveOutcome ControlDohSaveOutcomeFor(std::string_view errorId) {
+  ControlDohSaveOutcome out;
+  if (!errorId.empty()) {
+    out.message = ControlDohErrorText(errorId);
+    return out;
+  }
+  out.saved = true;
+  out.message = {"control_doh_urls_saved", "Bootstrap DNS-over-HTTPS servers saved"};
+  out.note = {"control_doh_urls_next_connect",
+              "The VPN uses the new bootstrap servers the next time it connects."};
   return out;
 }
 
@@ -257,6 +355,22 @@ inline ImportPresentation ImportPresentationFor(bool haveResult, bool ok, const 
   }
   out.decision = ImportDecision::Ready;
   out.canImport = true;
+  return out;
+}
+
+// The argument of import_extenders_control_doh_urls: the bootstrap
+// DNS-over-HTTPS servers a code's settings block names, joined with ", ".
+// Empty, and the line hidden, when the code carries no settings block or its
+// block names none -- such a code leaves this device's own servers alone. The
+// servers are taken only with the settings, and they are named before the
+// switch is turned on, because they will see URnetwork's lookups.
+inline std::string ControlDohImportArg(bool hasSettings, const std::vector<std::string>& urls) {
+  std::string out;
+  if (!hasSettings) return out;
+  for (const auto& url : urls) {
+    if (!out.empty()) out += ", ";
+    out += url;
+  }
   return out;
 }
 

@@ -8,7 +8,9 @@
 // done underneath a live session.
 //
 // Its VLESS row opens the VLESS editor for the ACTIVE space -- the one the
-// sign-in will use -- which saves on its own; Apply never touches it.
+// sign-in will use -- which saves on its own; Apply never touches it. Its
+// bootstrap DNS-over-HTTPS row opens that space's servers the same way: on a
+// network that blocks the built-in DoH servers, a sign-in needs them first.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -22,6 +24,7 @@
 
 namespace urnw {
 
+class ControlDohSheet;
 class VlessSheet;
 
 class NetworkServerSheet : public Gtk::Window {
@@ -40,6 +43,7 @@ class NetworkServerSheet : public Gtk::Window {
              const std::string& connectUrl);
   void UseDefault();
   void OpenVless();
+  void OpenControlDoh();
   std::string DefaultHost() const;
   void SetStatus(const Glib::ustring& text, bool error);
 
@@ -51,6 +55,7 @@ class NetworkServerSheet : public Gtk::Window {
   Gtk::Label* insecureText_ = nullptr;
   Gtk::Label* statusText_ = nullptr;
   std::unique_ptr<VlessSheet> vlessSheet_;  // created on first use
+  std::unique_ptr<ControlDohSheet> controlDohSheet_;  // created on first use
 };
 
 }  // namespace urnw

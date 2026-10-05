@@ -1,6 +1,7 @@
 // The Extenders section of the Account destination (connect/EXTENDER.md K6):
-// the network space's extender settings, the legacy private extender behind an
-// Advanced expander, and the share / import entry points.
+// the network space's extender settings, the bootstrap DNS-over-HTTPS servers
+// (ControlDohSection), the legacy private extender behind an Advanced
+// expander, and the share / import entry points.
 //
 // Three values are edited through the SDK's ExtenderViewController, which owns
 // the write and restarts the space's network client and node in place: the
@@ -28,6 +29,7 @@
 
 #include <gtkmm.h>
 
+#include "ControlDohSection.hpp"
 #include "ExtenderSharePresentation.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
@@ -53,6 +55,7 @@ class ExtenderSection : public Gtk::Box {
 
  private:
   void BuildForm(Gtk::Box& host);
+  void BuildControlDoh(Gtk::Box& host);
   void BuildAdvanced(Gtk::Box& host);
   void BuildActions(Gtk::Box& host);
   void ApplySettings(const std::optional<urnet::ExtenderSettings>& settings);
@@ -69,6 +72,7 @@ class ExtenderSection : public Gtk::Box {
   Gtk::TextView* hosts_ = nullptr;
   Gtk::Button* save_ = nullptr;
   Gtk::Label* status_ = nullptr;
+  ControlDohSection* controlDoh_ = nullptr;
   Gtk::Entry* privateIp_ = nullptr;
   Gtk::Entry* privateSecret_ = nullptr;
   Gtk::Button* savePrivate_ = nullptr;

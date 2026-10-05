@@ -70,6 +70,7 @@ ExtenderSection::ExtenderSection(SdkHost& host)
   set_hexpand(true);
   append(*kit::MakePaneGroupHeader(T_("extenders", "Extenders")).root);
   BuildForm(*this);
+  BuildControlDoh(*this);
   BuildAdvanced(*this);
   BuildActions(*this);
   ApplyEnabled();
@@ -126,6 +127,16 @@ void ExtenderSection::BuildForm(Gtk::Box& host) {
   status_->set_wrap(true);
   row.content->append(*status_);
 
+  host.append(*row.root);
+}
+
+void ExtenderSection::BuildControlDoh(Gtk::Box& host) {
+  // Its own row under the extender settings, with its own Save and result:
+  // the servers are written to the GUI's own space through SdkHost, not
+  // through the view controller.
+  auto row = MakePaddedRow(kPadY);
+  controlDoh_ = Gtk::make_managed<ControlDohSection>(host_, /*withTitle=*/true);
+  row.content->append(*controlDoh_);
   host.append(*row.root);
 }
 
@@ -191,8 +202,10 @@ void ExtenderSection::BuildActions(Gtk::Box& host) {
 void ExtenderSection::Load() {
   ApplySettings(host_.GetExtenderSettings());
 
-  // The legacy private extender reads off the GUI's own network space, which
-  // exists with or without a tunnel -- unlike everything above it.
+  // The bootstrap DNS-over-HTTPS servers and the legacy private extender read
+  // off the GUI's own network space, which exists with or without a tunnel --
+  // unlike the settings above them.
+  controlDoh_->Load();
   const auto netExtender = host_.GetPrivateExtender();
   privateIp_->set_text(netExtender ? netExtender->ip : std::string());
   privateSecret_->set_text(netExtender ? netExtender->secret : std::string());
@@ -219,8 +232,10 @@ void ExtenderSection::ApplyEnabled() {
   // With no device there is no view controller, so the three settings, the
   // share and the import have nowhere to go. They are DISABLED rather than
   // absent: a section that vanishes reads as a feature this build does not
-  // have. The private extender is not gated -- it is written to the GUI's own
-  // space and does not need a tunnel.
+  // have. The private extender and the bootstrap DNS-over-HTTPS servers are not
+  // gated -- they are written to the GUI's own space and need no tunnel, and a
+  // network that blocks the built-in DoH servers keeps the tunnel from
+  // bootstrapping until the servers are set.
   const bool enabled = haveSettings_;
   dnsName_->set_sensitive(enabled);
   gossipUrl_->set_sensitive(enabled);

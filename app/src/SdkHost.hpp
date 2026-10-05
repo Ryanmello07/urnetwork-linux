@@ -462,6 +462,26 @@ class SdkHost {
   static std::string VlessSettingsLink(const urnet::VlessSettings& settings);
   static std::string ValidateVlessSettings(const urnet::VlessSettings& settings);
 
+  // ---- bootstrap DNS-over-HTTPS servers (sdk control_doh_ui.go) ---------------
+  // `https://<ip literal>/<path>` servers in the ACTIVE network space, tried
+  // ahead of the built-in DoH servers for the lookups of the space's own names,
+  // for networks that block the built-in ones. Account > Extenders and the
+  // login screen's network sheet (before sign-in: a fresh install behind such a
+  // network cannot sign in without them) both edit them here. Like VLESS they
+  // need no tunnel; the daemon imports the space at its next tunnel start.
+  //
+  // The servers, v4 then v6, normalized; empty is the built-in servers alone.
+  // nullopt only with no space, or when the read threw.
+  std::optional<std::vector<std::string>> GetControlDohUrls();
+  // "" when saved -- applied in place, so the space and everything derived
+  // from it stay valid; an empty list clears them. A control_doh_error_* id
+  // when a line does not validate or there are too many; nothing was saved
+  // then. nullopt with no space to save to, or when the call threw.
+  std::optional<std::string> SetControlDohUrls(const std::vector<std::string>& urls);
+  // The SDK's preset for a country (extender::kControlDohChinaCountryCode),
+  // v4 first; empty when there is none or the call threw. No host state.
+  static std::vector<std::string> RegionalControlDohUrls(const std::string& countryCode);
+
   // Sign in with a Solana wallet (Phantom/Solflare) via the ur.io/wallet-connect
   // browser bridge: connect -> sign a challenge -> authLogin{wallet_auth}. The
   // urnetwork:// callback must be routed back in via HandleDeepLink.

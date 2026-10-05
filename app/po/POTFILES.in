@@ -13,6 +13,7 @@ src/ConnectDrawer.cpp
 src/IpFamilyHistogram.cpp
 src/ExtenderPanel.cpp
 src/ExtenderSection.cpp
+src/ControlDohSection.cpp
 src/ExtenderShareSheet.cpp
 src/ExtenderImportSheet.cpp
 src/ConnectPage.cpp
