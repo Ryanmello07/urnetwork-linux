@@ -927,11 +927,14 @@ class SdkHost {
   // off the DEVICE like GetExtenderStatus, because the role runs in the
   // daemon's DeviceLocal. DeviceRemote reads it through the rpc with the last
   // value cached, and answers the unsupported status against a device process
-  // that lacks the method. nullopt with no device, which the extender rows
-  // render as hidden. Changes arrive as DrawerEvent::ExtenderProvideStatus: the
-  // SDK coalesces them to one callback per epoch (a second) after any change of
-  // the setting, the provide state or the role, and fires none on
-  // registration, so the pages re-read the status on DeviceLifecycle.
+  // that lacks the method. With no device, the daemon's provider-only device's
+  // as provider_stats last read it, only while the daemon takes the switch's
+  // write (provide::ExtenderSwitchSourceFor); nullopt otherwise, which the
+  // connect page's row renders as hidden. Changes arrive as
+  // DrawerEvent::ExtenderProvideStatus: the SDK coalesces them to one callback
+  // per epoch (a second) after any change of the setting, the provide state or
+  // the role, and fires none on registration, so the pages re-read the status
+  // on DeviceLifecycle; the provider_stats poll raises the same event.
   std::optional<urnet::ExtenderProvideStatus> GetExtenderProvideStatus();
   // The extender role of the device that provides, for the earnings page's
   // read-only row and the running state behind its extender statistics:
@@ -939,19 +942,24 @@ class SdkHost {
   // bound the daemon's provider-only device's, as provider_stats last read it
   // (a change there raises the same DrawerEvent::ExtenderProvideStatus).
   // nullopt with neither, and from a daemon that predates the field. The
-  // connect page's row keeps GetExtenderProvideStatus: its switch writes the
-  // setting through the device, so it must stay hidden without one (N1).
+  // connect page's row keeps GetExtenderProvideStatus: its switch must stay
+  // hidden over a daemon that cannot take its write (N1).
   std::optional<urnet::ExtenderProvideStatus> ProviderExtenderProvideStatus();
   // The provider extender setting of the daemon's space, through the device:
   // the queued or last-known value while the daemon is out of contact, so the
   // toggle never snaps back during a daemon restart (N2). With no device, the
-  // setting's default, on (N4) -- nothing draws it then, the row is hidden.
+  // provider-only device's as provider_stats last read it, while the daemon
+  // takes the switch's write; otherwise the setting's default, on (N4) --
+  // nothing draws it then, the row is hidden.
   bool GetProvideExtender();
   // Writes the setting through the device, which persists and applies it at
   // once; queued and replayed at the next sync while the daemon is unreachable
-  // (N2, N4). The GUI's own LocalState is not the daemon's space and is never
-  // written. With no device the write is dropped: the row is hidden then, and
-  // the setter is never called while the row is hidden (N1).
+  // (N2, N4). With no device, to the daemon (set_provide_extender), which
+  // persists it in the same space a tunnel session's device reads, and the
+  // setting is read back at once, written or refused. The GUI's own LocalState
+  // is not the daemon's space and is never written. Otherwise the write is
+  // dropped: the row is hidden then, and the setter is never called while the
+  // row is hidden (N1).
   void SetProvideExtender(bool on);
 
   // The SDK's shared ExtenderViewController (K7: "encoding, decoding and
@@ -1016,6 +1024,10 @@ class SdkHost {
   // device's statistics from the daemon at once and then about once a second
   // while polling.
   void SetProviderStatusPolling(bool polling);
+  // provider_stats on the same pace while the connect destination is on
+  // screen, for its Extender switch over the provider-only device. It never
+  // keeps the provider status controller polling the API.
+  void SetProviderExtenderPolling(bool polling);
 
   // ---- reliability / exits (Home's Advanced inspector + the Developer page) --
   // The locked, BLOCKING read. Every field behind it is a synchronous device
@@ -1166,6 +1178,9 @@ class SdkHost {
   // The bound device's extender role, nullopt when the read throws. Requires
   // mutex_ and a device.
   std::optional<urnet::ExtenderProvideStatus> DeviceExtenderProvideStatusLocked();
+  // What the connect page's Extender switch reads and writes now
+  // (provide::ExtenderSwitchSourceFor). Requires mutex_.
+  provide::ExtenderSwitchSource ExtenderSwitchSourceLocked() const;
   void EmitDrawerEvent(DrawerEvent event);
   LiveStats ReadStats();  // read the current snapshot from the SDK getters
   void PublishStats();    // ReadStats() -> onStats_
@@ -1276,6 +1291,7 @@ class SdkHost {
   std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
   std::optional<urnet::Sub> providerStatusSub_;
   bool providerStatusPolling_ = false;  // the Earnings destination is on screen
+  bool providerExtenderPolling_ = false;  // the connect destination is on screen
   // control channel to urnetworkd (tunnel lifecycle + location override)
   ControlClient control_;
   std::string lastTunnelError_;
@@ -1315,8 +1331,10 @@ class SdkHost {
   // ExtenderThroughputPoints and ProviderExtenderProvideStatus read it while no
   // DeviceRemote is bound, so the Earnings page's plots, its "no traffic yet"
   // line, the provider status and the extender row describe the device that is
-  // providing. Fetched at once and then about once a second while the Earnings
-  // destination is on screen and the daemon's status says that device runs.
+  // providing, and the connect page's Extender switch reads it while the daemon
+  // takes its write. Fetched at once and then about once a second while the
+  // Earnings or the connect destination is on screen and the daemon's status
+  // says that device runs.
   struct DaemonProviderStats {
     bool hasProviderStats = false;
     std::optional<urnet::ThroughputPointList> providerPoints;
@@ -1330,9 +1348,17 @@ class SdkHost {
     std::optional<urnet::ThroughputPointList> extenderPoints;
     // the role's part as it arrived, for the same reason as statusJson
     std::string extenderProvideStatusJson;
+    // the provider extender setting beside the role, the connect page's
+    // switch, and that the daemon takes its write; false from a daemon that
+    // predates them, which keeps that switch hidden
+    bool provideExtender = false;
+    bool provideExtenderWritable = false;
   };
   // Requires mutex_. One tick of the poll (provide::DaemonProviderStatsStep).
   void PollDaemonProviderStatsLocked();
+  // Requires mutex_. Arms the poll's timer while a destination wants it, reading
+  // at once when `readNow`, and disarms it once none does.
+  void ScheduleProviderStatsPollLocked(bool readNow);
   // Requires mutex_. Forgets the snapshot and tells the pages when there was one.
   void DropDaemonProviderStatsLocked();
   std::optional<DaemonProviderStats> daemonProviderStats_;  // guarded by mutex_

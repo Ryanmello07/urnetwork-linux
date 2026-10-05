@@ -1706,6 +1706,27 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         reply(HandleStartProvider(conn, id, request, authorizedCrossUid));
         return;
 
+      case ctl::Verb::SetProvideExtender: {
+        // The connect page's Extender switch while no tunnel session's device
+        // takes it, behind the same owner gate as set_provide. A request
+        // without the value throws out of the get<> as an error reply.
+        nlohmann::json denied;
+        bool crossUid = false;
+        if (!CheckTunnelOwner(conn, id, &denied, &crossUid, authorizedCrossUid)) {
+          reply(std::move(denied));
+          return;
+        }
+        const auto req = request.get<ctl::SetProvideExtenderRequest>();
+        std::string error;
+        if (!tunnel_.SetProvideExtender(req.provide_extender, &error)) {
+          reply(ctl::MakeErrorReply(
+              id, error.empty() ? "the provide extender setting could not be written" : error));
+          return;
+        }
+        reply(ctl::MakeReply(id, true));
+        return;
+      }
+
       case ctl::Verb::SetKillSwitch: {
         nlohmann::json denied;
         bool crossUid = false;

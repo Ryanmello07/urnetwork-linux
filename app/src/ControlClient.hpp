@@ -181,6 +181,7 @@ inline bool VerbNeedsAuthorization(ctl::Verb verb) {
     case ctl::Verb::StopTunnel:
     case ctl::Verb::SetProvide:
     case ctl::Verb::StartProvider:
+    case ctl::Verb::SetProvideExtender:
     case ctl::Verb::SetKillSwitch:
     case ctl::Verb::LocationOverrideWrite:
     case ctl::Verb::LocationOverrideClear:
@@ -412,6 +413,11 @@ class ControlClient {
   // that predates the verb answers ctl::kErrorUnknownVerb.
   std::optional<ctl::ProviderStatsReply> ProviderStats(const ctl::ProviderStatsRequest& request,
                                                        std::string* error = nullptr);
+  // The connect page's Extender switch while no tunnel session's device takes
+  // it (ControlProtocol.hpp set_provide_extender). False with `error` for a
+  // refusal or a transport failure. Sent only to a daemon whose provider_stats
+  // said it takes it.
+  bool SetProvideExtender(bool on, std::string* error = nullptr);
   // Asks the daemon to install (or lift) the nftables kill switch. `out`
   // receives the status whose kill_switch field is what is REALLY in force —
   // Failed is a distinct state from Off and must be rendered as such.

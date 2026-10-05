@@ -220,3 +220,57 @@ UR_TEST(provideStatusLeaseStartsANewControllerAfterARelease) {
   UR_EXPECT_FALSE(lease.Expire(1000000));
   UR_EXPECT_TRUE(lease.Renew(1500));
 }
+
+// The connect page's Extender switch while disconnected writes the setting
+// where the next start reads it: through the device that runs, and with none
+// into the space the last device ran in. Only a daemon with nothing to keep it
+// in refuses, and never says it wrote.
+UR_TEST(provideExtenderSettingGoesWhereTheNextStartReadsIt) {
+  struct Row {
+    bool providerDevice;
+    bool sessionDevice;
+    bool lastSpace;
+    provide::ExtenderSettingTarget want;
+  };
+  const Row kRows[] = {
+      {true, false, true, provide::ExtenderSettingTarget::ProviderDevice},
+      {true, false, false, provide::ExtenderSettingTarget::ProviderDevice},
+      {false, true, true, provide::ExtenderSettingTarget::SessionDevice},
+      {false, true, false, provide::ExtenderSettingTarget::SessionDevice},
+      {false, false, true, provide::ExtenderSettingTarget::NetworkSpace},
+      {false, false, false, provide::ExtenderSettingTarget::None},
+      // never both in the daemon; the provider-only device wins the tie
+      {true, true, true, provide::ExtenderSettingTarget::ProviderDevice},
+  };
+  for (const Row& row : kRows) {
+    const provide::ExtenderSettingTarget got =
+        provide::ExtenderSettingTargetFor(row.providerDevice, row.sessionDevice, row.lastSpace);
+    UR_EXPECT_TRUE_MSG(provide::ToString(row.want), got == row.want);
+  }
+  for (const provide::ExtenderSettingTarget target :
+       {provide::ExtenderSettingTarget::ProviderDevice,
+        provide::ExtenderSettingTarget::SessionDevice,
+        provide::ExtenderSettingTarget::NetworkSpace, provide::ExtenderSettingTarget::None}) {
+    UR_EXPECT_TRUE(std::string(provide::ToString(target)).size() > 5);
+  }
+}
+
+// The switch reads and writes a bound device whenever there is one, and with
+// none the provider-only device only while the daemon said it takes the write:
+// a daemon that predates the verb leaves the switch hidden (N1).
+UR_TEST(provideExtenderSwitchShowsOnlyWhereItsWriteIsTaken) {
+  for (const bool reading : {false, true}) {
+    for (const bool writes : {false, true}) {
+      UR_EXPECT_TRUE(provide::ExtenderSwitchSourceFor(/*sessionDevice=*/true, reading, writes) ==
+                     provide::ExtenderSwitchSource::Device);
+    }
+  }
+  UR_EXPECT_TRUE(provide::ExtenderSwitchSourceFor(false, true, true) ==
+                 provide::ExtenderSwitchSource::Daemon);
+  UR_EXPECT_TRUE(provide::ExtenderSwitchSourceFor(false, true, false) ==
+                 provide::ExtenderSwitchSource::None);
+  UR_EXPECT_TRUE(provide::ExtenderSwitchSourceFor(false, false, true) ==
+                 provide::ExtenderSwitchSource::None);
+  UR_EXPECT_TRUE(provide::ExtenderSwitchSourceFor(false, false, false) ==
+                 provide::ExtenderSwitchSource::None);
+}

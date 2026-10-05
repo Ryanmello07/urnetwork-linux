@@ -13,8 +13,10 @@
 //     derived while either device runs;
 //   * the device's extender role travels with them, read where the connected
 //     path reads it (the device's status, the contract controller's extender
-//     series), so the Earnings extender row and plot show while disconnected,
-//     while the connect page's row, whose switch needs a device, stays hidden;
+//     series), so the Earnings extender row and plot show while disconnected;
+//   * the connect page's Extender switch shows over that role while the daemon
+//     says it takes the switch's write (set_provide_extender), which it writes
+//     where the next start reads it, and the page polls while it shows;
 //   * a saved network space value (DoH servers, VLESS, the private extender,
 //     the server) sends start_provider again, and the daemon replaces a device
 //     whose request changed.
@@ -62,6 +64,17 @@ bool Precedes(const std::string& text, const std::string& first, const std::stri
   const size_t a = text.find(first);
   const size_t b = text.find(second);
   return a != std::string::npos && b != std::string::npos && a < b;
+}
+
+// From `from` up to the first `to` after it, or to the end when `to` is empty;
+// empty when either is missing, which the callers check.
+std::string Between(const std::string& text, const std::string& from, const std::string& to) {
+  const size_t start = text.find(from);
+  if (start == std::string::npos) return std::string();
+  if (to.empty()) return text.substr(start);
+  const size_t end = text.find(to, start + from.size());
+  if (end == std::string::npos) return std::string();
+  return text.substr(start, end - start);
 }
 
 }  // namespace
@@ -143,18 +156,26 @@ UR_TEST(ProviderOnlyStatus_TheControlServerAnswersItLikeStatus) {
 UR_TEST(ProviderOnlyStatus_TheGuiPollsWhileTheEarningsDestinationShows) {
   const std::string host = ReadProviderOnlySource("SdkHost.cpp");
   const std::string polling = ProviderOnlyBody(host, "void SdkHost::SetProviderStatusPolling(");
-  UR_EXPECT_TRUE(Precedes(polling, "providerStatsPollId_ = g_timeout_add(",
+  UR_EXPECT_TRUE(Precedes(polling, "providerStatusPolling_ = polling;",
+                          "ScheduleProviderStatsPollLocked(/*readNow=*/polling);"));
+  const std::string schedule =
+      ProviderOnlyBody(host, "void SdkHost::ScheduleProviderStatsPollLocked(bool readNow)");
+  UR_EXPECT_TRUE(Precedes(schedule, "providerStatsPollId_ = g_timeout_add(",
                           "self->PollDaemonProviderStatsLocked();"));
   // at once, not a second later
-  UR_EXPECT_TRUE(Precedes(polling, "providerStatsPollId_ = g_timeout_add(",
-                          "\n    PollDaemonProviderStatsLocked();"));
-  UR_EXPECT_TRUE(Contains(polling, "g_source_remove(providerStatsPollId_);"));
+  UR_EXPECT_TRUE(Precedes(schedule, "providerStatsPollId_ = g_timeout_add(",
+                          "if (readNow) PollDaemonProviderStatsLocked();"));
+  UR_EXPECT_TRUE(Contains(schedule, "g_source_remove(providerStatsPollId_);"));
+  // armed while either destination wants it, and only then
+  UR_EXPECT_TRUE(Precedes(schedule, "if (providerStatusPolling_ || providerExtenderPolling_) {",
+                          "providerStatsPollId_ = g_timeout_add("));
 
   const std::string poll = ProviderOnlyBody(host, "void SdkHost::PollDaemonProviderStatsLocked()");
   UR_EXPECT_TRUE(Contains(
       poll, "provide::DaemonProviderStatsStep(device_.has_value(), daemonProviderRunning_.load(),"));
   UR_EXPECT_TRUE(Precedes(poll, "DropDaemonProviderStatsLocked();", "control_.ProviderStats("));
-  UR_EXPECT_TRUE(Precedes(poll, "request.poll_status = true;", "control_.ProviderStats(request, &error)"));
+  UR_EXPECT_TRUE(Precedes(poll, "request.poll_status = providerStatusPolling_;",
+                          "control_.ProviderStats(request, &error)"));
   UR_EXPECT_TRUE(Precedes(poll, "error == ctl::kErrorUnknownVerb",
                           "providerStatsUnsupportedGeneration_ = control_.SessionGeneration();"));
   UR_EXPECT_TRUE(Precedes(poll, "if (!reply->running) {", "daemonProviderStats_ = std::move(stats);"));
@@ -301,11 +322,14 @@ UR_TEST(ProviderOnlyStatus_TheEarningsExtenderReadsTheDaemonWithoutADevice) {
       host, "std::optional<urnet::ExtenderProvideStatus> SdkHost::ProviderExtenderProvideStatus()");
   UR_EXPECT_TRUE(Precedes(role, "if (device_) return DeviceExtenderProvideStatusLocked();",
                           "if (daemonProviderStats_) return daemonProviderStats_->extenderProvideStatus;"));
-  const std::string deviceOnly = ProviderOnlyBody(
+  // the connect page's row, the switch, reads the snapshot only while the
+  // daemon takes its write (ProviderOnlyStatus_TheConnectSwitch...)
+  const std::string switchRow = ProviderOnlyBody(
       host, "std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus()");
-  UR_EXPECT_TRUE(Precedes(deviceOnly, "if (!device_) return std::nullopt;",
+  UR_EXPECT_TRUE(Precedes(switchRow, "switch (ExtenderSwitchSourceLocked()) {",
                           "return DeviceExtenderProvideStatusLocked();"));
-  UR_EXPECT_TRUE(!Contains(deviceOnly, "daemonProviderStats_"));
+  UR_EXPECT_TRUE(Precedes(switchRow, "case provide::ExtenderSwitchSource::Daemon:",
+                          "return daemonProviderStats_->extenderProvideStatus;"));
 
   const std::string page = ReadProviderOnlySource("EarningsPage.cpp");
   const std::string apply = ProviderOnlyBody(page, "void EarningsPage::ApplyExtenderProvideState()");
@@ -321,4 +345,130 @@ UR_TEST(ProviderOnlyStatus_TheEarningsExtenderReadsTheDaemonWithoutADevice) {
                                                "void ConnectPage::ApplyExtenderProvideState()");
   UR_EXPECT_TRUE(Contains(connect, "host_.GetExtenderProvideStatus()"));
   UR_EXPECT_TRUE(!Contains(connect, "ProviderExtenderProvideStatus"));
+}
+
+// The daemon takes the connect page's Extender switch behind set_provide's
+// owner gate, writes it where the next start reads it, and says so beside the
+// setting it reports.
+UR_TEST(ProviderOnlyStatus_TheDaemonTakesTheExtenderSwitch) {
+  const std::string server = ReadProviderOnlySource("daemon/ControlServer.cpp");
+  // polkit first: nothing answers it before the gate, as status is answered
+  const std::string dispatch = ProviderOnlyBody(server, "void ControlServer::Dispatch(");
+  UR_EXPECT_TRUE(Contains(dispatch, "ctl::ActionIdForVerb(verb, isLogTail, crossUid)"));
+  UR_EXPECT_TRUE(!Contains(dispatch, "Verb::SetProvideExtender"));
+  const std::string authorized = ProviderOnlyBody(server, "void ControlServer::DispatchAuthorized(");
+  const std::string branch = Between(authorized, "case ctl::Verb::SetProvideExtender: {",
+                                     "case ctl::Verb::SetKillSwitch: {");
+  UR_EXPECT_TRUE(Precedes(branch, "CheckTunnelOwner(conn, id, &denied, &crossUid, authorizedCrossUid)",
+                          "tunnel_.SetProvideExtender(req.provide_extender, &error)"));
+  UR_EXPECT_TRUE(Precedes(branch, "request.get<ctl::SetProvideExtenderRequest>()",
+                          "tunnel_.SetProvideExtender(req.provide_extender, &error)"));
+  // a write nothing took is an error reply, never ok
+  UR_EXPECT_TRUE(Precedes(branch, "if (!tunnel_.SetProvideExtender(req.provide_extender, &error)) {",
+                          "ctl::MakeErrorReply("));
+  UR_EXPECT_TRUE(Precedes(branch, "ctl::MakeErrorReply(", "reply(ctl::MakeReply(id, true));"));
+
+  const std::string host = ReadProviderOnlySource("daemon/TunnelHost.cpp");
+  const std::string write =
+      ProviderOnlyBody(host, "bool TunnelHost::SetProvideExtender(bool on, std::string* error)");
+  // never behind a bring-up, which owns the session
+  UR_EXPECT_TRUE(Precedes(write, "std::try_to_lock", "provide::ExtenderSettingTargetFor("));
+  UR_EXPECT_TRUE(Contains(
+      write, "providerDevice_.has_value(), device_.has_value(), networkSpace_.has_value())"));
+  for (const char* target :
+       {"providerDevice_->setProvideExtender(on);", "device_->setProvideExtender(on);",
+        "networkSpace_->getAsyncLocalState().getLocalState().setProvideExtender(on);"}) {
+    UR_EXPECT_TRUE_MSG(target, Contains(write, target));
+  }
+  // nothing to keep it in is refused, never reported as written
+  const std::string refused =
+      Between(write, "case provide::ExtenderSettingTarget::None:", "} catch (");
+  UR_EXPECT_TRUE(Precedes(refused, "*error = ", "return false;"));
+  UR_EXPECT_TRUE(!Contains(refused, "return true;"));
+  // Where the next start reads it: both starts import the GUI's space into
+  // networkSpace_ and build their device in it, and neither teardown drops it,
+  // so a write through either device, or into that space with neither
+  // running, is what the other device reads when it starts.
+  const std::string run = ProviderOnlyBody(host, "void TunnelHost::RunStart(");
+  UR_EXPECT_TRUE(Precedes(run, "LoadNetworkSpaceLocked(config.network_space_json);",
+                          "device_ = NewDeviceLocked("));
+  const std::string start =
+      ProviderOnlyBody(host, "TunnelHost::ProviderStartResult TunnelHost::StartProvider(");
+  UR_EXPECT_TRUE(Precedes(start, "LoadNetworkSpaceLocked(request.network_space_json);",
+                          "providerDevice_ = NewDeviceLocked("));
+  const std::string build = ProviderOnlyBody(host, "urnet::DeviceLocal TunnelHost::NewDeviceLocked(");
+  UR_EXPECT_TRUE(Contains(build, "*networkSpace_, byJwt"));
+  for (const char* teardown :
+       {"void TunnelHost::StopInternalLocked(", "void TunnelHost::RetireProviderDeviceLocked()"}) {
+    const std::string body = ProviderOnlyBody(host, teardown);
+    UR_EXPECT_TRUE_MSG(teardown, !body.empty() && !Contains(body, "networkSpace_.reset()"));
+  }
+
+  const std::string stats = ProviderOnlyBody(host, "ctl::ProviderStatsReply TunnelHost::ProviderStats(");
+  UR_EXPECT_TRUE(Precedes(stats, "reply.running = true;",
+                          "reply.provide_extender = providerDevice_->getProvideExtender();"));
+  // the writer is said only beside a setting to show
+  UR_EXPECT_TRUE(Precedes(stats, "reply.provide_extender = providerDevice_->getProvideExtender();",
+                          "reply.provide_extender_writable = true;"));
+
+  const std::string client = ReadProviderOnlySource("ControlClient.cpp");
+  UR_EXPECT_TRUE(Contains(ProviderOnlyBody(client, "bool ControlClient::SetProvideExtender("),
+                          "CallLocked(ctl::Verb::SetProvideExtender, nlohmann::json(req), error,"));
+}
+
+// With no DeviceRemote the connect page's Extender switch reads and writes the
+// daemon's provider-only device, only while the daemon takes the write, and
+// reads the setting back at once after the write.
+UR_TEST(ProviderOnlyStatus_TheConnectSwitchReadsAndWritesTheDaemonWithoutADevice) {
+  const std::string host = ReadProviderOnlySource("SdkHost.cpp");
+  const std::string source =
+      ProviderOnlyBody(host, "provide::ExtenderSwitchSource SdkHost::ExtenderSwitchSourceLocked() const");
+  UR_EXPECT_TRUE(Contains(source, "provide::ExtenderSwitchSourceFor("));
+  UR_EXPECT_TRUE(Contains(source, "daemonProviderStats_ && daemonProviderStats_->provideExtenderWritable"));
+  const std::string get = ProviderOnlyBody(host, "bool SdkHost::GetProvideExtender()");
+  UR_EXPECT_TRUE(Precedes(get, "switch (ExtenderSwitchSourceLocked()) {",
+                          "return daemonProviderStats_->provideExtender;"));
+  const std::string set = ProviderOnlyBody(host, "void SdkHost::SetProvideExtender(bool on)");
+  UR_EXPECT_TRUE(Contains(set, "switch (ExtenderSwitchSourceLocked()) {"));
+  UR_EXPECT_TRUE(Contains(set, "case provide::ExtenderSwitchSource::Device:\n      device_->setProvideExtender(on);"));
+  const std::string daemonWrite = Between(set, "case provide::ExtenderSwitchSource::Daemon: {",
+                                          "case provide::ExtenderSwitchSource::None:");
+  UR_EXPECT_TRUE(Precedes(daemonWrite, "control_.SetProvideExtender(on, &error)",
+                          "PollDaemonProviderStatsLocked();"));
+  UR_EXPECT_TRUE(Precedes(daemonWrite, "PollDaemonProviderStatsLocked();",
+                          "EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);"));
+
+  // the snapshot keeps the setting and the writer, and a change of either
+  // redraws the switch
+  const std::string poll = ProviderOnlyBody(host, "void SdkHost::PollDaemonProviderStatsLocked()");
+  UR_EXPECT_TRUE(Contains(poll, "stats.provideExtender = reply->provide_extender;"));
+  UR_EXPECT_TRUE(Contains(poll, "stats.provideExtenderWritable = reply->provide_extender_writable;"));
+  UR_EXPECT_TRUE(Contains(poll, "daemonProviderStats_->provideExtender != stats.provideExtender"));
+  UR_EXPECT_TRUE(
+      Contains(poll, "daemonProviderStats_->provideExtenderWritable != stats.provideExtenderWritable"));
+
+  // the page reads the switch through these, and writes only a shown row
+  const std::string page = ReadProviderOnlySource("ConnectPage.cpp");
+  const std::string apply = ProviderOnlyBody(page, "void ConnectPage::ApplyExtenderProvideState()");
+  UR_EXPECT_TRUE(Contains(apply, "host_.GetExtenderProvideStatus()"));
+  UR_EXPECT_TRUE(Contains(apply, "host_.GetProvideExtender()"));
+  const std::string toggled = ProviderOnlyBody(page, "void ConnectPage::OnExtenderToggled()");
+  UR_EXPECT_TRUE(Precedes(toggled, "if (!extenderRowDrawn_.visible) return;", "host_.SetProvideExtender(on);"));
+}
+
+// The connect destination keeps provider_stats coming while it shows, read at
+// once before its re-seed, and never keeps the API polling for it.
+UR_TEST(ProviderOnlyStatus_TheConnectPagePollsWhileItShows) {
+  const std::string host = ReadProviderOnlySource("SdkHost.cpp");
+  const std::string want = ProviderOnlyBody(host, "void SdkHost::SetProviderExtenderPolling(bool polling)");
+  UR_EXPECT_TRUE(Precedes(want, "providerExtenderPolling_ = polling;",
+                          "ScheduleProviderStatsPollLocked(/*readNow=*/polling);"));
+  const std::string page = ReadProviderOnlySource("ConnectPage.cpp");
+  const std::string map = Between(page, "signal_map().connect([this] {", "});");
+  UR_EXPECT_TRUE(Precedes(map, "host_.SetProviderExtenderPolling(true);", "Resync();"));
+  const std::string unmap = Between(page, "signal_unmap().connect([this] {", "});");
+  UR_EXPECT_TRUE(Contains(unmap, "host_.SetProviderExtenderPolling(false);"));
+  const std::string poll = ProviderOnlyBody(host, "void SdkHost::PollDaemonProviderStatsLocked()");
+  UR_EXPECT_TRUE(Contains(poll, "request.poll_status = providerStatusPolling_;"));
+  UR_EXPECT_TRUE(!Contains(poll, "providerExtenderPolling_"));
 }

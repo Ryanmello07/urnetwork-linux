@@ -1520,6 +1520,15 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
   } catch (const std::exception& e) {
     noteReadFailure("extender status", e);
   }
+  // The setting beside it, the connect page's Extender switch, and that this
+  // daemon takes the switch's write (SetProvideExtender): never said without a
+  // setting to show.
+  try {
+    reply.provide_extender = providerDevice_->getProvideExtender();
+    reply.provide_extender_writable = true;
+  } catch (const std::exception& e) {
+    noteReadFailure("extender setting", e);
+  }
   if (providerContractVc_) {
     try {
       if (auto points = providerContractVc_->getProviderThroughputPoints()) {
@@ -1561,6 +1570,52 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
     }
   }
   return reply;
+}
+
+bool TunnelHost::SetProvideExtender(bool on, std::string* error) {
+  std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    // A bring-up owns the session. The GUI reads the setting again, so the
+    // switch shows it as it stands.
+    if (error) *error = "a tunnel start is in progress";
+    return false;
+  }
+  const provide::ExtenderSettingTarget target = provide::ExtenderSettingTargetFor(
+      providerDevice_.has_value(), device_.has_value(), networkSpace_.has_value());
+  try {
+    switch (target) {
+      case provide::ExtenderSettingTarget::ProviderDevice:
+        // persisted in its space and applied at once: the role starts or stops
+        providerDevice_->setProvideExtender(on);
+        break;
+      case provide::ExtenderSettingTarget::SessionDevice:
+        // the GUI's DeviceRemote hears it through its status listener
+        device_->setProvideExtender(on);
+        break;
+      case provide::ExtenderSettingTarget::NetworkSpace:
+        // The next import of this key reuses this space, or replaces it with
+        // one that reads the file this writes.
+        networkSpace_->getAsyncLocalState().getLocalState().setProvideExtender(on);
+        break;
+      case provide::ExtenderSettingTarget::None:
+        if (error) {
+          *error = "no device has run in this daemon yet, so there is no network space to keep "
+                   "the setting in";
+        }
+        return false;
+    }
+  } catch (const std::exception& e) {
+    if (error) {
+      *error = std::string("the provide extender setting could not be written to ") +
+               provide::ToString(target);
+    }
+    DaemonLogf("[provide] writing the provide extender setting to %s failed: %s\n",
+               provide::ToString(target), e.what());
+    return false;
+  }
+  DaemonLogf("[provide] provide extender %s (%s)\n", on ? "on" : "off",
+             provide::ToString(target));
+  return true;
 }
 
 void TunnelHost::OpenProviderViewControllersLocked() {
