@@ -846,6 +846,34 @@ std::optional<ctl::ProviderStatsReply> ControlClient::ProviderStats(
   return reply->get<ctl::ProviderStatsReply>();
 }
 
+bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request, std::string* carrier,
+                               std::string* error, std::string* code, int64_t* uploadId) {
+  std::scoped_lock lock(mutex_);
+  if (const auto invalid = ctl::ValidateUploadLogsRequest(request)) {
+    ResetAuthLocked();
+    if (error) *error = invalid->message;
+    if (code) *code = invalid->code == nullptr ? std::string() : std::string(invalid->code);
+    return false;
+  }
+  // Not re-sent once delivered: a second frame would start a second upload,
+  // which the server refuses (one per network per 5 minutes). The caller falls
+  // back to its own path instead.
+  const auto reply = CallLocked(ctl::Verb::UploadLogs, nlohmann::json(request), error,
+                                /*allowRetry=*/false);
+  if (!reply) return false;
+  if (!ctl::ReplyOk(*reply)) {
+    if (error) *error = ctl::ReplyError(*reply);
+    if (code) *code = ctl::ReplyCode(*reply);
+    return false;
+  }
+  if (reply->is_object()) {
+    const auto payload = reply->get<ctl::UploadLogsReply>();
+    if (carrier) *carrier = payload.carrier;
+    if (uploadId) *uploadId = payload.upload_id;
+  }
+  return true;
+}
+
 bool ControlClient::LocationOverrideAvailable(bool* available, std::string* reason) {
   std::scoped_lock lock(mutex_);
   std::string error;

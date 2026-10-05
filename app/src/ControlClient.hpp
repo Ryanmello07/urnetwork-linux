@@ -184,6 +184,8 @@ inline bool VerbNeedsAuthorization(ctl::Verb verb) {
     case ctl::Verb::SetKillSwitch:
     case ctl::Verb::LocationOverrideWrite:
     case ctl::Verb::LocationOverrideClear:
+    // read-log, the action log_tail is checked against
+    case ctl::Verb::UploadLogs:
       return true;
     case ctl::Verb::Hello:
     case ctl::Verb::Status:
@@ -412,6 +414,17 @@ class ControlClient {
   // that predates the verb answers ctl::kErrorUnknownVerb.
   std::optional<ctl::ProviderStatsReply> ProviderStats(const ctl::ProviderStatsRequest& request,
                                                        std::string* error = nullptr);
+  // Asks the daemon to upload its own logs for a feedback the server accepted
+  // (ControlProtocol.hpp upload_logs). ctl::ValidateUploadLogsRequest runs
+  // before anything is sent. True when the daemon admitted the upload, running
+  // or queued behind a tunnel start, with `carrier` naming the device and
+  // `uploadId` the id status reports its outcome under; false on a transport
+  // failure, a refusal (`code`, ctl::kCodeLogUploadBusy while one is in
+  // flight) or a daemon that predates the verb (`error` is
+  // ctl::kErrorUnknownVerb).
+  bool UploadLogs(const ctl::UploadLogsRequest& request, std::string* carrier = nullptr,
+                  std::string* error = nullptr, std::string* code = nullptr,
+                  int64_t* uploadId = nullptr);
   // Asks the daemon to install (or lift) the nftables kill switch. `out`
   // receives the status whose kill_switch field is what is REALLY in force —
   // Failed is a distinct state from Off and must be rendered as such.

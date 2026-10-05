@@ -150,7 +150,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | Verb | Payload | Reply |
 |---|---|---|
 | `hello` | `protocol_version`, `sdk_version` | `protocol_version`, `sdk_version`, `daemon_version` |
-| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode`, `network_country_code` |
+| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode`, `network_country_code`, `log_upload_id`, `log_upload_state`, `log_upload_carrier` |
 | `start_tunnel` | `by_jwt`, `instance_id`, `app_version` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `attach_tunnel` | `instance_id`, `rpc_session_id` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `stop_tunnel` | — | `ok` |
@@ -160,6 +160,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | `location_override_available` | — | `available`, `reason` |
 | `location_override_write` | `lat`, `lon`, `accuracy_m` | `ok` |
 | `location_override_clear` | — | `ok` |
+| `upload_logs` | `feedback_id`, `by_jwt`, `instance_id`, `app_version`, `network_space_json` | `ok`, `carrier`, `upload_id` |
 
 `attach_tunnel` re-adopts a tunnel that is already up by NAMING the live session
 (`instance_id` + `rpc_session_id`) instead of re-describing it, and answers with the
@@ -203,6 +204,37 @@ status would be redacted. `poll_status` keeps the provider status controller pol
 asked, so nothing polls the API once no GUI shows it. A daemon that predates the verb
 answers `unknown verb`, and the GUI then shows no provider statistics while
 disconnected, as before.
+
+`upload_logs` is "send feedback with logs" with the tunnel down (support inbox 2090). The
+logs support reads are the daemon's (the SDK's `UploadLogs` zips the glog files of the
+process it runs in), and the GUI's `DeviceRemote` reaches the daemon's `DeviceLocal` only
+while a tunnel session runs, so a report sent while disconnected, held by the kill switch
+or failing to connect carried none. The GUI now asks the daemon, after the server has
+accepted the feedback and only when the box is ticked, with the server's `feedback_id`
+and the credentials `start_provider` carries. The daemon calls the SDK's `UploadLogs` on
+the tunnel session's device, else on the provider-only device, else on a standalone
+device built for the upload exactly as the provider-only device is (provide mode never,
+no tun, routes, DNS, nftables or listener), retired once the upload reports, after 30
+minutes, or before any other device under the identity is built; a request that finds a
+bring-up running is queued until it ends. `carrier` names the device (`tunnel`,
+`provider`, `standalone`, `queued`), and the daemon writes it into the uploaded log. The
+daemon answers once the upload is admitted: the SDK's call zips the log directory, up to
+the upload's cap read from disk, so it runs on a thread of its own and never on the main
+loop that serves every other request, the reaper and the kill switch; the device it runs
+on stays alive until the call returns. One upload at a time: a request while one is in
+flight (queued or running) is refused with `log_upload_busy`, and the GUI does not fall
+back for it, since the server would refuse a second upload. The outcome reaches the GUI
+through `status`: `log_upload_id` is the reply's `upload_id`, and `log_upload_state` says
+where that upload is (`queued`, `running`, `uploaded`, `refused`, `failed`; an upload that
+never reports is failed after 30 minutes). The GUI follows it from its health poll and logs
+it. These status fields are additive within v1 (absent parses 0 and "") and dropped from a
+redacted status. The upload itself is the SDK's, unchanged: the same zip,
+`POST /log/{feedback_id}/upload`, the server's 100 MB cap and its one upload per network
+per 5 minutes; the server keeps one file per feedback, so the GUI's own logs do not ride
+along. It is gated like `log_tail`:
+`read-log`, without a prompt, and refused (`auth_not_tunnel_owner`) when the log belongs
+to another uid. A daemon that predates the verb answers `unknown verb`, and the GUI falls
+back to the `DeviceRemote`'s `UploadLogs` while a tunnel session is bound, as before.
 
 `status.network_country_code` is the country of the mobile network this machine is on
 (P052): the daemon reads it from ModemManager on the system bus while the default

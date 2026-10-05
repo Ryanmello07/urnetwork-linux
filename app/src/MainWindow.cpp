@@ -965,6 +965,8 @@ bool MainWindow::PollDaemonHealth() {
     // The network country the daemon reads (P052), for this process's own
     // dials: from the sign-in screen on, signed in or not.
     host_.FollowDaemonNetworkCountry();
+    // The outcome of a feedback's log upload, while one is pending.
+    host_.FollowDaemonLogUpload();
     // Disconnected is when the provider-only device is the provider: start it
     // after a launch without auto-connect, bring it back after a service
     // restart or an unexpected drop, and stop one the mode no longer wants.
@@ -974,6 +976,7 @@ bool MainWindow::PollDaemonHealth() {
   const auto status = host_.Control().Status();
   if (!status) return true;      // unreachable is StartTunnelUi's business
   host_.FollowDaemonNetworkCountry(*status);
+  host_.FollowDaemonLogUpload(*status);
   // Feed the drawer the daemon's own DNS verdict. Until this existed, the DNS
   // card was drawn entirely from the SDK's resolver PREFERENCES and could sit
   // green while dns_applied was false — the daemon knew, said so in

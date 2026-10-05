@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -16,6 +17,7 @@
 #include <gio/gio.h>
 
 #include "IoLoopFd.hpp"
+#include "LogUpload.hpp"
 #include "NetworkSpaceConfig.hpp"
 #include "ProvideLifecycle.hpp"
 #include "TunnelPolicy.hpp"
@@ -75,6 +77,74 @@ int64_t UnixMillis() { return g_get_real_time() / 1000; }
 int64_t MonotonicSeconds() { return g_get_monotonic_time() / G_USEC_PER_SEC; }
 int64_t MonotonicMillis() { return g_get_monotonic_time() / 1000; }
 
+// How long the daemon's teardown waits for a log upload's thread to come out
+// of the sdk's call (the zip): past it the process exits around it.
+constexpr std::chrono::milliseconds kLogUploadReturnBudget{2000};
+
+// What the sdk's upload callback needs to end the upload in the flight. Owned
+// by the call once the sdk took it, freed by the callback.
+struct LogUploadReport {
+  std::shared_ptr<logupload::Flight> flight;
+  int64_t uploadId = 0;
+  const char* carrierName = "";
+};
+
+// The sdk's upload callback (urnet_upload_logs_cb), on an SDK thread: the
+// server's answer or the post's error ends the upload in the flight.
+void OnLogUploadReport(void* userData, const char* resultJson, const char* error) {
+  std::unique_ptr<LogUploadReport> report(static_cast<LogUploadReport*>(userData));
+  logupload::FlightState state = logupload::FlightState::Uploaded;
+  if (error != nullptr) {
+    state = logupload::FlightState::Failed;
+    DaemonLogf("[support] the log upload (%s device) failed: %s\n", report->carrierName, error);
+  } else if (resultJson != nullptr) {
+    try {
+      const auto result = nlohmann::json::parse(resultJson).get<urnet::UploadLogsResult>();
+      if (result.error) {
+        state = logupload::FlightState::Refused;
+        DaemonLogf("[support] the log upload (%s device) was refused: %s\n",
+                   report->carrierName, result.error->message.c_str());
+      }
+    } catch (const std::exception& e) {
+      state = logupload::FlightState::Failed;
+      DaemonLogf("[support] the log upload's (%s device) answer did not parse: %s\n",
+                 report->carrierName, e.what());
+    }
+  }
+  if (state == logupload::FlightState::Uploaded) {
+    DaemonLogf("[support] the log upload (%s device) finished\n", report->carrierName);
+  }
+  report->flight->Finish(report->uploadId, state);
+}
+
+// The upload's own thread (logupload::Flight::Run). The line naming the carrier
+// goes into the files the zip takes, before it; then the sdk zips this
+// process's log files and starts the post to /log/{feedback_id}/upload. The
+// call goes through the c abi by the device's handle, which the flight keeps
+// valid until it returns, so that nothing of TunnelHost is touched here.
+void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_t uploadId,
+                        uint64_t deviceHandle, const std::string& feedbackId,
+                        const char* carrierName) {
+  urnet::logAppInfo("log-upload", std::string("carrier=") + carrierName);
+  auto report = std::make_unique<LogUploadReport>();
+  report->flight = flight;
+  report->uploadId = uploadId;
+  report->carrierName = carrierName;
+  char* error = nullptr;
+  const bool started = urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),
+                                                &OnLogUploadReport, report.get(), &error);
+  if (started) {
+    // the callback owns it now
+    report.release();
+    return;
+  }
+  const std::string message = error != nullptr ? error : "the device is gone";
+  if (error != nullptr) urnet_free_string(error);
+  DaemonLogf("[support] the log upload (%s device) did not start: %s\n", carrierName,
+             message.c_str());
+  flight->Finish(uploadId, logupload::FlightState::Failed);
+}
+
 std::vector<uint8_t> ReadFileBytes(const std::string& path) {
   std::ifstream f(path, std::ios::binary);
   if (!f) return {};
@@ -125,7 +195,9 @@ const std::string& PlannedTunName() {
 
 }  // namespace
 
-TunnelHost::TunnelHost(std::string storageRoot) : storageRoot_(std::move(storageRoot)) {
+TunnelHost::TunnelHost(std::string storageRoot)
+    : storageRoot_(std::move(storageRoot)),
+      logUploadFlight_(std::make_shared<logupload::Flight>(UnixMillis())) {
   cgroup_ = SelfCgroupV2();
   // urnetwork-exclude needs the unified hierarchy alone; ReportPreflight says
   // which this host is.
@@ -170,6 +242,12 @@ TunnelHost::~TunnelHost() {
     resolvedWatchId_ = 0;
   }
   Stop("daemon_shutdown");
+  // A log upload still zipping is given a moment to come out of the sdk's
+  // call, and no more: it holds nothing of this object, and the exit must not
+  // wait on a disk.
+  if (!logUploadFlight_->WaitReturned(kLogUploadReturnBudget)) {
+    DaemonLogf("[support] a log upload was still zipping at shutdown\n");
+  }
 }
 
 // ---- key material ----------------------------------------------------------
@@ -211,8 +289,13 @@ void TunnelHost::PublishError(const std::string& message, const std::string& cod
 }
 
 ctl::StatusReply TunnelHost::Status() const {
+  // The log upload in flight, off the flight's own lock and before this one.
+  const logupload::Flight::Reading upload = logUploadFlight_->Read(MonotonicMillis());
   std::scoped_lock lock(statusMutex_);
   ctl::StatusReply s = status_;
+  s.log_upload_id = upload.id;
+  s.log_upload_state = logupload::ToString(upload.state);
+  s.log_upload_carrier = upload.id == 0 ? "" : logupload::ToString(upload.carrier);
   s.owner_connected = ownerConnected_.load();
   // The live session's identity, published on EVERY status — this is what
   // attach_tunnel compares against and what a relaunching GUI matches its
@@ -1140,6 +1223,9 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
   // routes or the session's own DeviceLocal (the same identity) exist. A
   // no-op when there is none, which is every teardown of a tunnel session.
   RetireProviderDeviceLocked();
+  // The standalone device a log upload ran on, for the same reason. Its upload
+  // goes on: the POST runs on the network space's API, not on the device.
+  RetireUploadDeviceLocked();
 
   const bool hadSession = device_.has_value() || tunnel_ || ioLoop_.has_value();
   if (hadSession) {
@@ -1189,7 +1275,7 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
   tunnel_.reset();  // closes the fd: the tun, its routes and the policy rules go
   if (device_) {
     device_->close();
-    device_.reset();
+    ReleaseDeviceLocked(device_);
   }
   networkQualityTracker_.Reset();
   // AFTER the device is gone, so no SDK socket is ever created unmarked while
@@ -1491,6 +1577,9 @@ TunnelHost::ProviderStartResult TunnelHost::StartProvider(
   }
 
   RetireProviderDeviceLocked();
+  // A standalone log upload device runs under the same identity; its upload
+  // goes on without it (StopInternalLocked says why).
+  RetireUploadDeviceLocked();
   try {
     // RunStart's steps 2 and 3 and nothing after them: no egress marker, no
     // nftables transaction, no setRpcServer, no tun, no IoLoop, no DNS. The
@@ -1638,7 +1727,7 @@ void TunnelHost::RetireProviderDeviceLocked() {
     } catch (const std::exception& e) {
       DaemonLogf("[provide] closing the provider device failed: %s\n", e.what());
     }
-    providerDevice_.reset();
+    ReleaseDeviceLocked(providerDevice_);
     DaemonLogf("[provide] stopped providing without a tunnel\n");
   }
   providerConfig_ = ctl::StartProviderRequest();
@@ -1671,6 +1760,161 @@ void TunnelHost::RefreshProviderStatusLocked() {
   status_.provider_control_mode = providerConfig_.provide_mode;
   status_.provider_mode = tier;
   status_.provider_network_key = networkKey;
+}
+
+// ---- the log upload (upload_logs) -------------------------------------------
+//
+// "Send feedback with logs" uploads this process's glog files, which is where
+// everything support reads about the tunnel, the provider and the network is.
+// It used to reach them only through the GUI's DeviceRemote, i.e. only while a
+// tunnel session ran. Now the GUI asks here, connected or not. The sdk's
+// upload zips the log directory inside its call, so the call runs on the
+// upload's own thread (logupload::Flight), never on the main loop that serves
+// every control request, the reaper and the kill switch.
+
+TunnelHost::LogUploadResult TunnelHost::UploadLogs(const ctl::UploadLogsRequest& request) {
+  LogUploadResult result;
+  // Re-validated here as start_provider is: this process is root, and the
+  // feedback id becomes part of the url its device posts to.
+  if (const auto invalid = ctl::ValidateUploadLogsRequest(request)) {
+    result.error = invalid->message;
+    result.code = invalid->code;
+    return result;
+  }
+  std::unique_lock<std::mutex> lock(opMutex_, std::defer_lock);
+  if (busy_.load() || !lock.try_lock()) {
+    // A bring-up owns the session. Once it is over, the device it leaves
+    // behind carries the upload (the session's; after a failed start, a
+    // standalone one): the reaper starts it then. It is in flight from now on.
+    const int64_t nowMillis = MonotonicMillis();
+    const int64_t uploadId =
+        logUploadFlight_->Begin(/*queued=*/true, logupload::Carrier::Queued, nowMillis);
+    if (uploadId == 0) {
+      result.error = "a log upload is in flight already";
+      result.code = ctl::kCodeLogUploadBusy;
+      return result;
+    }
+    queuedUpload_ = request;
+    queuedUploadMillis_ = nowMillis;
+    queuedUploadId_ = uploadId;
+    DaemonLogf("[support] a log upload waits for the tunnel start in progress\n");
+    result.ok = true;
+    result.carrier = logupload::ToString(logupload::Carrier::Queued);
+    result.uploadId = uploadId;
+    return result;
+  }
+  return StartLogUploadLocked(request, /*queuedUploadId=*/0);
+}
+
+TunnelHost::LogUploadResult TunnelHost::StartLogUploadLocked(
+    const ctl::UploadLogsRequest& request, int64_t queuedUploadId) {
+  LogUploadResult result;
+  const int64_t nowMillis = MonotonicMillis();
+  const logupload::Carrier carrier =
+      logupload::CarrierFor(device_.has_value(), providerDevice_.has_value());
+  const char* carrierName = logupload::ToString(carrier);
+  // Admitted before anything is built: one upload at a time.
+  int64_t uploadId = 0;
+  if (queuedUploadId != 0) {
+    if (logUploadFlight_->Start(queuedUploadId, carrier, nowMillis)) uploadId = queuedUploadId;
+  } else {
+    uploadId = logUploadFlight_->Begin(/*queued=*/false, carrier, nowMillis);
+  }
+  if (uploadId == 0) {
+    result.error = "a log upload is in flight already";
+    result.code = ctl::kCodeLogUploadBusy;
+    return result;
+  }
+  uint64_t deviceHandle = 0;
+  try {
+    if (carrier == logupload::Carrier::Tunnel) {
+      deviceHandle = device_->handle();
+    } else if (carrier == logupload::Carrier::Provider) {
+      deviceHandle = providerDevice_->handle();
+    } else {
+      // Neither runs: a device for the upload alone, built as StartProvider
+      // builds the provider-only device (the persisted identity, the request's
+      // credentials and network space) and nothing after that: no egress
+      // marker, no nftables transaction, no setRpcServer, no tun, no IoLoop, no
+      // DNS. It provides to nobody. One at a time, under the one identity.
+      RetireUploadDeviceLocked();
+      LoadNetworkSpaceLocked(request.network_space_json);
+      uploadDevice_ = NewDeviceLocked(request.by_jwt, request.instance_id, request.app_version);
+      uploadDevice_->setProvideControlMode("never");
+      uploadDeviceBuiltMillis_ = nowMillis;
+      deviceHandle = uploadDevice_->handle();
+    }
+  } catch (const std::exception& e) {
+    if (carrier == logupload::Carrier::Standalone) RetireUploadDeviceLocked();
+    logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
+    result.error = std::string("the logs could not be uploaded: ") + e.what();
+    result.code = ctl::kCodeLogUploadFailed;
+    DaemonLogf("[support] %s\n", result.error.c_str());
+    return result;
+  }
+  // The zip and the post, on the upload's own thread. It holds the flight and
+  // the device's handle and nothing else of this object; the flight keeps the
+  // device alive until the call returns (ReleaseDeviceLocked), and the call's
+  // callback ends the upload in it, which status reports.
+  logUploadFlight_->Run(uploadId, deviceHandle,
+                        [flight = logUploadFlight_, uploadId, deviceHandle,
+                         feedbackId = request.feedback_id, carrierName] {
+                          UploadLogsOnDevice(flight, uploadId, deviceHandle, feedbackId,
+                                             carrierName);
+                        });
+  DaemonLogf("[support] uploading this daemon's logs for a feedback (%s device)\n",
+             carrierName);
+  result.ok = true;
+  result.carrier = carrierName;
+  result.uploadId = uploadId;
+  return result;
+}
+
+void TunnelHost::RetireUploadDeviceLocked() {
+  uploadDeviceBuiltMillis_ = 0;
+  if (!uploadDevice_) return;
+  try {
+    uploadDevice_->close();
+    if (!uploadDevice_->waitForClose(kProviderCloseWaitMillis)) {
+      DaemonLogf("[support] the log upload device had not finished closing after %lld ms; "
+                 "releasing it\n",
+                 static_cast<long long>(kProviderCloseWaitMillis));
+    }
+  } catch (const std::exception& e) {
+    DaemonLogf("[support] closing the log upload device failed: %s\n", e.what());
+  }
+  ReleaseDeviceLocked(uploadDevice_);
+}
+
+void TunnelHost::ReleaseDeviceLocked(std::optional<urnet::DeviceLocal>& device) {
+  if (!device) return;
+  const uint64_t deviceHandle = device->handle();
+  // Handed back unless the upload's call is on it; released here then.
+  std::shared_ptr<void> released = logUploadFlight_->KeepUntilReturned(
+      deviceHandle, std::make_shared<urnet::DeviceLocal>(std::move(*device)));
+  device.reset();
+  released.reset();
+}
+
+void TunnelHost::MaintainLogUploadLocked() {
+  const int64_t nowMillis = MonotonicMillis();
+  const logupload::Flight::Reading upload = logUploadFlight_->Read(nowMillis);
+  if (uploadDevice_ &&
+      logupload::RetireStandaloneDevice(logupload::IsFinished(upload.state),
+                                        uploadDeviceBuiltMillis_, nowMillis)) {
+    RetireUploadDeviceLocked();
+  }
+  if (!queuedUpload_) return;
+  const ctl::UploadLogsRequest request = std::move(*queuedUpload_);
+  const int64_t uploadId = queuedUploadId_;
+  queuedUpload_.reset();
+  queuedUploadId_ = 0;
+  if (logupload::QueuedUploadExpired(queuedUploadMillis_, nowMillis)) {
+    logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
+    DaemonLogf("[support] a log upload waited too long for a tunnel start and was dropped\n");
+    return;
+  }
+  StartLogUploadLocked(request, uploadId);
 }
 
 bool TunnelHost::SetKillSwitch(bool enabled, std::string* error) {
@@ -2048,6 +2292,10 @@ void TunnelHost::Reap() {
 
   std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
   if (!lock.owns_lock()) return;  // next tick
+
+  // The log upload's standalone device once its upload has reported, and a
+  // request that waited for a bring-up which is now over.
+  MaintainLogUploadLocked();
 
   // The tunnel session's device or the provider-only device, whichever is live
   // (never both): a provider's transports follow a path change too.

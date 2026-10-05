@@ -1706,6 +1706,10 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         reply(HandleStartProvider(conn, id, request, authorizedCrossUid));
         return;
 
+      case ctl::Verb::UploadLogs:
+        reply(HandleUploadLogs(conn, id, request));
+        return;
+
       case ctl::Verb::SetKillSwitch: {
         nlohmann::json denied;
         bool crossUid = false;
@@ -2004,6 +2008,42 @@ nlohmann::json ControlServer::HandleStartProvider(Connection* conn, int64_t id,
   }
   ClaimTunnelOwnership(conn);
   return ctl::MakeReply(id, true, nlohmann::json(tunnel_.Status()));
+}
+
+// upload_logs — this daemon's logs to URnetwork for a feedback the server
+// accepted (ControlProtocol.hpp, TunnelHost::UploadLogs), connected or not.
+// Answered once the upload is admitted: the zip and the post run on their own
+// thread, and status reports the outcome under the reply's upload_id.
+//
+// The log's gate, not the tunnel's: what leaves is the daemon's glog files,
+// which describe every session this daemon has run, so the upload asks what
+// log_tail asks: read-log (checked in Dispatch) and a log that is this caller's
+// (or root). Another uid's log is refused, not escalated, and nothing is
+// claimed: sending logs owns no session.
+nlohmann::json ControlServer::HandleUploadLogs(Connection* conn, int64_t id,
+                                               const nlohmann::json& request) {
+  if (conn->peer.uid != 0 && LogBelongsToOtherUid(conn)) {
+    const std::string reason =
+        logMixedUids_ ? std::string("the session log holds more than one user's sessions")
+                      : "the session log belongs to uid " + std::to_string(logOwnerUid_);
+    LogAuthOutcome("refused", conn->peer.uid, conn->peer.pid, ctl::kActionReadLog,
+                   ctl::kCodeAuthNotTunnelOwner, reason);
+    return ctl::MakeErrorReply(
+        id, "another user on this device owns this URnetwork session, so its log is not sent "
+            "from this account",
+        ctl::kCodeAuthNotTunnelOwner);
+  }
+  const auto req = request.get<ctl::UploadLogsRequest>();
+  const TunnelHost::LogUploadResult result = tunnel_.UploadLogs(req);
+  if (!result.ok) {
+    return ctl::MakeErrorReply(id, result.error.empty() ? "the logs could not be uploaded"
+                                                        : result.error,
+                               result.code);
+  }
+  ctl::UploadLogsReply payload;
+  payload.carrier = result.carrier;
+  payload.upload_id = result.uploadId;
+  return ctl::MakeReply(id, true, nlohmann::json(payload));
 }
 
 // attach_tunnel — re-adopt the running session by NAMING it.
