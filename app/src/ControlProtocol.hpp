@@ -361,6 +361,7 @@ enum class Verb {
   LocationOverrideAvailable,
   LocationOverrideWrite,
   LocationOverrideClear,
+  UploadLogs,
   Unknown,
 };
 
@@ -378,6 +379,7 @@ inline const char* ToString(Verb v) {
     case Verb::LocationOverrideAvailable: return "location_override_available";
     case Verb::LocationOverrideWrite: return "location_override_write";
     case Verb::LocationOverrideClear: return "location_override_clear";
+    case Verb::UploadLogs: return "upload_logs";
     case Verb::Unknown: break;
   }
   return "unknown";
@@ -396,6 +398,7 @@ inline Verb VerbFromString(const std::string& s) {
   if (s == "location_override_available") return Verb::LocationOverrideAvailable;
   if (s == "location_override_write") return Verb::LocationOverrideWrite;
   if (s == "location_override_clear") return Verb::LocationOverrideClear;
+  if (s == "upload_logs") return Verb::UploadLogs;
   return Verb::Unknown;
 }
 
@@ -455,6 +458,13 @@ inline const char* ActionIdForVerb(Verb verb, bool is_log_tail, bool cross_uid) 
       // not for Connect. Same defaults as control-tunnel, so it costs no extra
       // prompt on the normal path.
       return cross_uid ? kActionTakeOverTunnel : kActionManageKillSwitch;
+    // upload_logs sends the daemon's log to URnetwork, so it asks for what
+    // log_tail asks for, whoever runs the tunnel. Another uid's log is refused
+    // outright, as log_tail refuses it (ControlServer::LogBelongsToOtherUid),
+    // never escalated to the take-over action: that action decides who may
+    // control a session, and a log is not something to take over.
+    case Verb::UploadLogs:
+      return kActionReadLog;
     case Verb::Hello:
     case Verb::Status:
     case Verb::ProviderStats:
@@ -487,6 +497,12 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     // challenge code (and the GUI backs off) instead of raising a dialog every
     // few seconds. At the console control-tunnel is allow_active=yes anyway.
     case Verb::StartProvider:
+    // A press, but one the user has already been thanked for: the log upload
+    // rides on feedback the server accepted, and its failure is silent by
+    // design. A password dialog arriving after "Thanks for the feedback!" would
+    // be a surprise, so a check that needs one answers with a challenge code
+    // and the GUI falls back to its own path. read-log is allow_active=yes.
+    case Verb::UploadLogs:
     case Verb::Hello:
     case Verb::Status:
     case Verb::ProviderStats:
@@ -1333,6 +1349,103 @@ inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
   detail::Get(j, "provider_status_json", v.provider_status_json);
 }
 
+// ---- upload_logs -----------------------------------------------------------
+// "Send feedback with logs" with the tunnel down (support inbox 2090). The logs
+// support reads are this daemon's: the sdk's UploadLogs zips the glog files of
+// the process it runs in, and the GUI's DeviceRemote reaches the daemon's
+// DeviceLocal only while a tunnel session runs. So a report sent while
+// disconnected, held by the kill switch or failing to connect — when support
+// needs the logs most — carried none. This verb asks the daemon to upload its
+// own logs for a feedback the server has accepted, connected or not.
+//
+// The daemon calls the sdk's UploadLogs on the device that runs, or on a
+// standalone device built from this request's credentials when none does
+// (LogUpload.hpp carries the lifecycle). Everything about the upload itself is
+// the sdk's, unchanged: the zip of this process's glog files (flushed first),
+// POST /log/{feedback_id}/upload on the space's API with the device's client
+// credentials, the server's 100 MB cap and its rate limit of one upload per
+// network per 5 minutes. Nothing goes anywhere it did not go before.
+//
+// The reply comes once the upload has started (the zip is made and the POST is
+// on its way) or is queued behind a tunnel start in progress; its outcome is
+// the daemon's to log, as it was the GUI's when the DeviceRemote carried it.
+//
+// A new verb, additive within protocol v1: a daemon that predates it answers
+// kErrorUnknownVerb, and the GUI falls back to what it did before — the
+// DeviceRemote's UploadLogs while a tunnel session is bound, nothing otherwise.
+//
+// One set of logs: the server keeps one file per feedback and admits one upload
+// per network per 5 minutes, and the sdk zips one process's log directory, so
+// the GUI's own glog files cannot ride along: this carries the daemon's.
+struct UploadLogsRequest {
+  // The server-issued feedback id the logs attach to.
+  std::string feedback_id;
+  // The same four as StartProviderRequest, with the same meaning. The daemon
+  // builds a device from them only when none runs.
+  std::string by_jwt;
+  std::string instance_id;
+  std::string app_version;
+  std::string network_space_json;
+};
+inline void to_json(nlohmann::json& j, const UploadLogsRequest& v) {
+  j["feedback_id"] = v.feedback_id;
+  j["by_jwt"] = v.by_jwt;
+  j["instance_id"] = v.instance_id;
+  j["app_version"] = v.app_version;
+  if (!v.network_space_json.empty()) j["network_space_json"] = v.network_space_json;
+}
+inline void from_json(const nlohmann::json& j, UploadLogsRequest& v) {
+  detail::Get(j, "feedback_id", v.feedback_id);
+  detail::Get(j, "by_jwt", v.by_jwt);
+  detail::Get(j, "instance_id", v.instance_id);
+  detail::Get(j, "app_version", v.app_version);
+  detail::Get(j, "network_space_json", v.network_space_json);
+}
+
+// The device that carries it (logupload::ToString: "tunnel", "provider",
+// "standalone", or "queued" behind a tunnel start in progress).
+struct UploadLogsReply {
+  std::string carrier;
+};
+inline void to_json(nlohmann::json& j, const UploadLogsReply& v) { j["carrier"] = v.carrier; }
+inline void from_json(const nlohmann::json& j, UploadLogsReply& v) {
+  detail::Get(j, "carrier", v.carrier);
+}
+
+// The daemon could not start the upload: the standalone device could not be
+// built, or the sdk could not zip the log directory. The message carries the
+// SDK's error.
+inline constexpr const char* kCodeLogUploadFailed = "log_upload_failed";
+
+// The server's feedback ids are uuids, and this one becomes a path segment of
+// the API url root's device posts to (/log/<feedback_id>/upload). Anything
+// else — a '/', a "..", a query — is refused before it reaches the SDK.
+inline bool LooksLikeFeedbackId(const std::string& id) {
+  if (id.size() != 36) return false;
+  for (size_t i = 0; i < id.size(); ++i) {
+    const char c = id[i];
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (c != '-') return false;
+    } else if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Both halves apply it, the GUI before a frame is sent and the daemon before
+// anything is built. The credentials are required although a running device
+// does not need them: the daemon cannot know in advance which case it is in.
+inline std::optional<StartTunnelRejection> ValidateUploadLogsRequest(
+    const UploadLogsRequest& req) {
+  if (!LooksLikeFeedbackId(req.feedback_id)) {
+    return StartTunnelRejection{"feedback_id must be the server's feedback id", nullptr};
+  }
+  if (req.by_jwt.empty()) return StartTunnelRejection{"by_jwt is required", nullptr};
+  if (req.instance_id.empty()) return StartTunnelRejection{"instance_id is required", nullptr};
+  return std::nullopt;
+}
+
 struct LocationOverrideAvailableReply {
   bool available = false;
   std::string reason;  // "" when available; short reason otherwise
@@ -1514,7 +1627,8 @@ inline constexpr const char* kCodeDnsApplyFailed = "dns_apply_failed";
 // returns them: kCodeRpcPinRequired, kCodeRpcPinInvalid, kCodeRpcListenFailed
 // (see the device-RPC mTLS pinning section near the top of this header). And
 // the start_provider refusals, declared with that verb: kCodeProvideModeOff,
-// kCodeTunnelSessionActive, kCodeKillSwitchArmed, kCodeProviderStartFailed.
+// kCodeTunnelSessionActive, kCodeKillSwitchArmed, kCodeProviderStartFailed;
+// and upload_logs' kCodeLogUploadFailed.
 
 // {"verb":…,"id":N,…payload}
 inline nlohmann::json MakeRequest(Verb verb, int64_t id,

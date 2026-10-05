@@ -712,6 +712,17 @@ class SdkHost {
   void FollowDaemonNetworkCountry();
   void FollowDaemonNetworkCountry(const ctl::StatusReply& status);
 
+  // "Send feedback with logs" while disconnected (support inbox 2090). The
+  // logs that matter are urnetworkd's, and the DeviceRemote reaches them only
+  // while a tunnel session runs. This asks the daemon to upload its own logs
+  // for `feedbackId` (ControlProtocol.hpp upload_logs), connected or not, with
+  // this session's client credentials as start_provider carries them. True when
+  // the daemon took it; false when it cannot be asked, predates the verb or
+  // refused, and the caller then falls back to the DeviceRemote as before
+  // (logupload::GuiStepAfterDaemon). Blocking, bounded by the control client's
+  // receive timeout, and never holding mutex_ across the call. Main loop.
+  bool UploadDaemonLogs(const std::string& feedbackId);
+
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
   // atomic (surfaces may build ~25s later), authority readable any time,

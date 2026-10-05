@@ -69,6 +69,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
       ctl::Verb::StartProvider,  ctl::Verb::ProviderStats,
       ctl::Verb::LocationOverrideAvailable,
       ctl::Verb::LocationOverrideWrite, ctl::Verb::LocationOverrideClear,
+      ctl::Verb::UploadLogs,
   };
   for (const ctl::Verb v : verbs) {
     UR_EXPECT_TRUE_MSG(ctl::ToString(v), ctl::VerbFromString(ctl::ToString(v)) == v);
@@ -88,6 +89,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
                  ctl::Verb::LocationOverrideWrite);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_clear") ==
                  ctl::Verb::LocationOverrideClear);
+  UR_EXPECT_TRUE(ctl::VerbFromString("upload_logs") == ctl::Verb::UploadLogs);
 }
 
 UR_TEST(controlTunnelStateNamesRoundTrip) {
@@ -697,6 +699,101 @@ UR_TEST(controlProviderStatsIsUngatedAndNeverPrompts) {
   const auto older =
       ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(14, ctl::kErrorUnknownVerb)));
   UR_EXPECT_FALSE(ctl::ReplyOk(*older));
+  UR_EXPECT_TRUE(ctl::ReplyError(*older) == ctl::kErrorUnknownVerb);
+}
+
+// ---- upload_logs: the daemon's logs for a feedback, connected or not ---------
+
+namespace {
+ctl::UploadLogsRequest SampleUploadLogs() {
+  ctl::UploadLogsRequest req;
+  // synthetic, shaped like the server's ids
+  req.feedback_id = "f00dfeed-0000-4000-8000-000000000001";
+  req.by_jwt = "client jwt";
+  req.instance_id = "instance-1";
+  req.app_version = "2026.10.5";
+  req.network_space_json = R"({"host_name":"network.example","env_name":"test"})";
+  return req;
+}
+}  // namespace
+
+UR_TEST(controlUploadLogsRoundTrip) {
+  const ctl::UploadLogsRequest req = SampleUploadLogs();
+  const auto reqBack = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeRequest(ctl::Verb::UploadLogs, 15, nlohmann::json(req))));
+  UR_EXPECT_TRUE(ctl::RequestVerb(*reqBack) == ctl::Verb::UploadLogs);
+  const auto back = reqBack->get<ctl::UploadLogsRequest>();
+  UR_EXPECT_TRUE(back.feedback_id == req.feedback_id);
+  UR_EXPECT_TRUE(back.by_jwt == req.by_jwt);
+  UR_EXPECT_TRUE(back.instance_id == req.instance_id);
+  UR_EXPECT_TRUE(back.app_version == req.app_version);
+  UR_EXPECT_TRUE(back.network_space_json == req.network_space_json);
+  // the compiled-in default space travels as silence, as start_provider's does
+  ctl::UploadLogsRequest defaultSpace = req;
+  defaultSpace.network_space_json.clear();
+  UR_EXPECT_FALSE(nlohmann::json(defaultSpace).contains("network_space_json"));
+
+  ctl::UploadLogsReply reply;
+  reply.carrier = "standalone";
+  const auto replyBack = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(16, true, nlohmann::json(reply))))->get<ctl::UploadLogsReply>();
+  UR_EXPECT_TRUE(replyBack.carrier == "standalone");
+  // absent says nothing about the device
+  UR_EXPECT_TRUE(nlohmann::json::object().get<ctl::UploadLogsReply>().carrier.empty());
+}
+
+// The feedback id becomes a path segment of the url root's device posts to, so
+// only the server's own ids (uuids) pass; credentials are required because the
+// daemon may have to build a device from them.
+UR_TEST(controlUploadLogsValidation) {
+  UR_EXPECT_FALSE(ctl::ValidateUploadLogsRequest(SampleUploadLogs()).has_value());
+  ctl::UploadLogsRequest upper = SampleUploadLogs();
+  upper.feedback_id = "F00DFEED-0000-4000-8000-000000000001";
+  UR_EXPECT_FALSE(ctl::ValidateUploadLogsRequest(upper).has_value());
+  ctl::UploadLogsRequest defaultSpace = SampleUploadLogs();
+  defaultSpace.network_space_json.clear();
+  UR_EXPECT_FALSE(ctl::ValidateUploadLogsRequest(defaultSpace).has_value());
+
+  for (const char* id : {
+           "",
+           "not-a-feedback-id",
+           "../../network/provider-status",
+           "f00dfeed-0000-4000-8000-00000000000",    // one short
+           "f00dfeed-0000-4000-8000-0000000000012",  // one long
+           "f00dfeed/0000-4000-8000-000000000001",   // a path separator for a dash
+           "f00dfeed-0000-4000-8000-00000000000?",   // a query
+           "f00dfeed-0000-4000-8000-00000000000 ",   // whitespace
+           "{00dfeed-0000-4000-8000-00000000000}",   // braces
+           "f00dfeed0000040000800000000000000001",   // no dashes
+           "g00dfeed-0000-4000-8000-000000000001",   // not hex
+       }) {
+    ctl::UploadLogsRequest bad = SampleUploadLogs();
+    bad.feedback_id = id;
+    UR_EXPECT_TRUE_MSG(id, ctl::ValidateUploadLogsRequest(bad).has_value());
+    UR_EXPECT_FALSE(ctl::LooksLikeFeedbackId(id));
+  }
+  ctl::UploadLogsRequest noJwt = SampleUploadLogs();
+  noJwt.by_jwt.clear();
+  UR_EXPECT_TRUE(ctl::ValidateUploadLogsRequest(noJwt).has_value());
+  ctl::UploadLogsRequest noInstance = SampleUploadLogs();
+  noInstance.instance_id.clear();
+  UR_EXPECT_TRUE(ctl::ValidateUploadLogsRequest(noInstance).has_value());
+}
+
+// The log's gate, whoever runs the tunnel: read-log as for log_tail, never the
+// take-over action, and never a prompt after "Thanks for the feedback!".
+UR_TEST(controlUploadLogsIsGatedLikeTheLogAndNeverPrompts) {
+  for (const bool crossUid : {false, true}) {
+    // nullptr would mean "no polkit check", which the daemon answers as an
+    // unknown verb
+    const char* action = ctl::ActionIdForVerb(ctl::Verb::UploadLogs, false, crossUid);
+    UR_EXPECT_TRUE(action != nullptr && std::string(action) == ctl::kActionReadLog);
+  }
+  UR_EXPECT_FALSE(ctl::VerbWantsInteraction(ctl::Verb::UploadLogs, /*is_log_tail=*/false));
+  UR_EXPECT_TRUE(std::string(ctl::kCodeLogUploadFailed) == "log_upload_failed");
+  // a daemon that predates the verb says so with the one error every daemon gives
+  const auto older =
+      ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(17, ctl::kErrorUnknownVerb)));
   UR_EXPECT_TRUE(ctl::ReplyError(*older) == ctl::kErrorUnknownVerb);
 }
 

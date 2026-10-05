@@ -36,6 +36,10 @@
 //     every teardown, and so the head of every bring-up, retires it first.
 //     ProviderStats, which reads that device's view controllers for the GUI,
 //     only try-locks it as well.
+//   * UploadLogs runs on the main loop and only try-locks opMutex_; a request
+//     that finds a bring-up is queued and the reaper starts it. Its standalone
+//     device's upload callback runs on an SDK thread and only sets a flag; the
+//     reaper retires the device.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -166,6 +170,24 @@ class TunnelHost {
   // blocks, and never throws across the wire.
   ctl::ProviderStatsReply ProviderStats(bool pollStatus);
 
+  // upload_logs (ControlProtocol.hpp; LogUpload.hpp carries the lifecycle):
+  // "send feedback with logs" uploads this process's glog files, connected or
+  // not. The sdk's UploadLogs runs on the tunnel session's device, else on the
+  // provider-only device, else on a standalone device built from the request's
+  // credentials exactly as the provider-only device is (provide mode never,
+  // and no tun, route, DNS, nftables or listener), which is retired once its
+  // upload reports, after logupload::kStandaloneDeviceMaxMillis, or before any
+  // other device under this identity is built. While a bring-up owns the
+  // session the request is queued and the reaper starts it once the bring-up
+  // is over. `carrier` is logupload::ToString of the device. Main loop only.
+  struct LogUploadResult {
+    bool ok = false;
+    const char* carrier = "";
+    std::string error;
+    const char* code = nullptr;  // a ctl::kCode* when !ok
+  };
+  LogUploadResult UploadLogs(const ctl::UploadLogsRequest& request);
+
   // The kill switch the CLIENT asked for. Semantics follow the Windows source
   // of truth (docs/linux_agent_help.md §6.3): a user disconnect always lifts
   // the policy, and turning the switch on while nothing is connected does NOT
@@ -233,6 +255,15 @@ class TunnelHost {
   // Publishes the provider-only device's live tier and network key into
   // status_. Requires opMutex_.
   void RefreshProviderStatusLocked();
+  // UploadLogs' body once no bring-up owns the session: the upload on the
+  // device that runs, or on a standalone one built for it. Requires opMutex_.
+  LogUploadResult StartLogUploadLocked(const ctl::UploadLogsRequest& request);
+  // Closes the standalone upload device, waiting a bounded time as the
+  // provider-only device's retire does. A no-op without one. Requires opMutex_.
+  void RetireUploadDeviceLocked();
+  // Reaper duty: retire the standalone device whose upload reported or ran out
+  // of time, then start a queued request. Requires opMutex_.
+  void MaintainLogUploadLocked();
   // Requires opMutex_. A reason means "somebody asked for this stop": it lifts
   // the nftables policy on the way out (ApplyFilterLocked(Off)) and REPLACES
   // status_.error/error_code with the reason. An EMPTY reason means "the caller
@@ -373,6 +404,18 @@ class TunnelHost {
   std::optional<urnet::ContractViewController> providerContractVc_;
   std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
   provide::ProviderStatusLease providerStatusLease_;
+  // The standalone device a log upload runs on while neither device above
+  // exists (UploadLogs), when it was built, and the flag its upload callback
+  // sets on an SDK thread; the reaper retires it on the main loop. A third slot,
+  // never engaged beside device_ or providerDevice_: both are built only after
+  // RetireUploadDeviceLocked. Guarded by opMutex_.
+  std::optional<urnet::DeviceLocal> uploadDevice_;
+  int64_t uploadDeviceBuiltMillis_ = 0;
+  std::shared_ptr<std::atomic<bool>> uploadReported_;
+  // A request that arrived while a bring-up owned the session, and when.
+  // Main loop only (UploadLogs and the reaper), so it needs no lock.
+  std::optional<ctl::UploadLogsRequest> queuedUpload_;
+  int64_t queuedUploadMillis_ = 0;
   std::optional<urnet::IoLoop> ioLoop_;
   // Set by the LIVE loop's done callback; a retired loop carries its own copy
   // (see retiredLoops_) so the two can never be confused.

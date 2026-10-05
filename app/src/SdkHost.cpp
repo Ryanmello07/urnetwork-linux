@@ -4384,6 +4384,40 @@ void SdkHost::FollowDaemonNetworkCountry(const ctl::StatusReply& status) {
   g_message("sdkhost: network country = \"%s\" (urnetworkd)", countryCode.c_str());
 }
 
+bool SdkHost::UploadDaemonLogs(const std::string& feedbackId) {
+  // The request start_provider sends, so a daemon with no device builds the
+  // same one (client jwt, instance id, app version, the active network space).
+  ctl::UploadLogsRequest request;
+  request.feedback_id = feedbackId;
+  {
+    std::scoped_lock lock(mutex_);
+    if (!localState_) return false;
+    request.by_jwt = localState_->getByClientJwt();
+    request.instance_id = localState_->getInstanceId();
+    request.app_version = kAppVersion;
+    try {
+      if (networkSpace_) request.network_space_json = networkSpace_->toJson();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] network space toJson failed: %s\n", e.what());
+    }
+  }
+  std::string carrier;
+  std::string error;
+  std::string code;
+  if (control_.UploadLogs(request, &carrier, &error, &code)) {
+    g_message("support: urnetworkd is uploading its logs (%s device)", carrier.c_str());
+    return true;
+  }
+  if (error == ctl::kErrorUnknownVerb) {
+    g_message("support: the system service predates upload_logs; the logs go up only through "
+              "a connected tunnel");
+  } else {
+    g_warning("support: urnetworkd did not upload its logs (code=%s): %s",
+              code.empty() ? "none" : code.c_str(), error.empty() ? "no detail" : error.c_str());
+  }
+  return false;
+}
+
 void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {
   // A redacted status names nothing of ours.
   const bool running = status.provider_running && !status.redacted;

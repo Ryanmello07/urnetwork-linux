@@ -227,6 +227,9 @@ class ControlServer {
   // start_provider: the provider-only device, behind the same owner gate.
   nlohmann::json HandleStartProvider(Connection* conn, int64_t id,
                                      const nlohmann::json& request, bool authorizedCrossUid);
+  // upload_logs: this daemon's logs to URnetwork for a feedback, behind the
+  // log's gate (read-log, checked in Dispatch, and LogBelongsToOtherUid).
+  nlohmann::json HandleUploadLogs(Connection* conn, int64_t id, const nlohmann::json& request);
   // Frame-rate bucket; false => the peer is flooding and is dropped.
   bool AllowFrame(Connection* conn);
   // Only under polkit, and only for a peer that is neither root nor the uid

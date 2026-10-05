@@ -11,6 +11,7 @@
 #include "ClientEvents.hpp"
 #include "FeedbackSendState.hpp"
 #include "I18n.hpp"
+#include "LogUpload.hpp"
 #include "PaneKit.hpp"
 #include "Ui.hpp"
 
@@ -395,8 +396,21 @@ void SupportPage::SetSending(bool sending) {
 void SupportPage::UploadLogs(const std::string& feedbackId) {
   // The include-logs contract (apple FeedbackView parity): only from here,
   // only when the box was ticked, only with the server's feedback id.
-  if (feedbackId.empty() || !host_.hasDevice()) {
-    g_message("support: skipping log upload (no feedback id or no device)");
+  if (feedbackId.empty()) {
+    g_message("support: skipping log upload (no feedback id)");
+    return;
+  }
+  // The daemon first. The logs support reads are urnetworkd's, and it uploads
+  // them itself whether or not a tunnel runs, which is when a report about a
+  // connection that will not come up has to carry them. The DeviceRemote below
+  // reaches the same files only through a running tunnel's device; it is what
+  // a daemon that predates upload_logs (or refuses it) still gets.
+  const bool daemonAccepted = host_.UploadDaemonLogs(feedbackId);
+  const logupload::GuiStep step = logupload::GuiStepAfterDaemon(daemonAccepted, host_.hasDevice());
+  if (step == logupload::GuiStep::Done) return;
+  if (step == logupload::GuiStep::Skip) {
+    g_message("support: skipping log upload (the system service did not take it and no "
+              "device is bound)");
     return;
   }
   try {

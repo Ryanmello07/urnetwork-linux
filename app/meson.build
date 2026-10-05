@@ -538,7 +538,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # reason, status line, demand histogram and ranking rows, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
-# lines and their filters, and the daemon control protocol: framing,
+# lines and their filters, which device carries a feedback's log upload and
+# for how long, and the daemon control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
 # authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this
@@ -631,6 +632,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/NetworkCountryWiringTest.cpp',
     'tests/DiagnosticLinesTest.cpp',
     'tests/DiagnosticLogWiringTest.cpp',
+    'tests/LogUploadTest.cpp',
+    'tests/LogUploadWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -659,6 +662,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and
               # GUI call sites the same way, and DiagnosticLogWiringTest the support log's.
+              # LogUploadWiringTest reads the log upload's daemon and GUI call sites the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

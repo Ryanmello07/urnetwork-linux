@@ -16,6 +16,7 @@
 #include <gio/gio.h>
 
 #include "IoLoopFd.hpp"
+#include "LogUpload.hpp"
 #include "NetworkSpaceConfig.hpp"
 #include "ProvideLifecycle.hpp"
 #include "TunnelPolicy.hpp"
@@ -1140,6 +1141,9 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
   // routes or the session's own DeviceLocal (the same identity) exist. A
   // no-op when there is none, which is every teardown of a tunnel session.
   RetireProviderDeviceLocked();
+  // The standalone device a log upload ran on, for the same reason. Its upload
+  // goes on: the POST runs on the network space's API, not on the device.
+  RetireUploadDeviceLocked();
 
   const bool hadSession = device_.has_value() || tunnel_ || ioLoop_.has_value();
   if (hadSession) {
@@ -1491,6 +1495,9 @@ TunnelHost::ProviderStartResult TunnelHost::StartProvider(
   }
 
   RetireProviderDeviceLocked();
+  // A standalone log upload device runs under the same identity; its upload
+  // goes on without it (StopInternalLocked says why).
+  RetireUploadDeviceLocked();
   try {
     // RunStart's steps 2 and 3 and nothing after them: no egress marker, no
     // nftables transaction, no setRpcServer, no tun, no IoLoop, no DNS. The
@@ -1671,6 +1678,136 @@ void TunnelHost::RefreshProviderStatusLocked() {
   status_.provider_control_mode = providerConfig_.provide_mode;
   status_.provider_mode = tier;
   status_.provider_network_key = networkKey;
+}
+
+// ---- the log upload (upload_logs) -------------------------------------------
+//
+// "Send feedback with logs" uploads this process's glog files, which is where
+// everything support reads about the tunnel, the provider and the network is.
+// It used to reach them only through the GUI's DeviceRemote, i.e. only while a
+// tunnel session ran. Now the GUI asks here, connected or not.
+
+TunnelHost::LogUploadResult TunnelHost::UploadLogs(const ctl::UploadLogsRequest& request) {
+  LogUploadResult result;
+  // Re-validated here as start_provider is: this process is root, and the
+  // feedback id becomes part of the url its device posts to.
+  if (const auto invalid = ctl::ValidateUploadLogsRequest(request)) {
+    result.error = invalid->message;
+    result.code = invalid->code;
+    return result;
+  }
+  std::unique_lock<std::mutex> lock(opMutex_, std::defer_lock);
+  if (busy_.load() || !lock.try_lock()) {
+    // A bring-up owns the session. Once it is over, the device it leaves
+    // behind carries the upload (the session's; after a failed start, a
+    // standalone one): the reaper starts it then. A newer request replaces an
+    // older one.
+    queuedUpload_ = request;
+    queuedUploadMillis_ = MonotonicMillis();
+    DaemonLogf("[support] a log upload waits for the tunnel start in progress\n");
+    result.ok = true;
+    result.carrier = logupload::ToString(logupload::Carrier::Queued);
+    return result;
+  }
+  // This request supersedes one still waiting.
+  queuedUpload_.reset();
+  return StartLogUploadLocked(request);
+}
+
+TunnelHost::LogUploadResult TunnelHost::StartLogUploadLocked(
+    const ctl::UploadLogsRequest& request) {
+  LogUploadResult result;
+  const logupload::Carrier carrier =
+      logupload::CarrierFor(device_.has_value(), providerDevice_.has_value());
+  const char* carrierName = logupload::ToString(carrier);
+  try {
+    urnet::DeviceLocal* device = nullptr;
+    std::shared_ptr<std::atomic<bool>> reported = std::make_shared<std::atomic<bool>>(false);
+    if (carrier == logupload::Carrier::Tunnel) {
+      device = &*device_;
+    } else if (carrier == logupload::Carrier::Provider) {
+      device = &*providerDevice_;
+    } else {
+      // Neither runs: a device for the upload alone, built as StartProvider
+      // builds the provider-only device (the persisted identity, the request's
+      // credentials and network space) and nothing after that: no egress
+      // marker, no nftables transaction, no setRpcServer, no tun, no IoLoop, no
+      // DNS. It provides to nobody. One at a time, under the one identity.
+      RetireUploadDeviceLocked();
+      LoadNetworkSpaceLocked(request.network_space_json);
+      uploadDevice_ = NewDeviceLocked(request.by_jwt, request.instance_id, request.app_version);
+      uploadDevice_->setProvideControlMode("never");
+      uploadDeviceBuiltMillis_ = MonotonicMillis();
+      uploadReported_ = reported;
+      device = &*uploadDevice_;
+    }
+    // Into the files being uploaded, before the sdk zips them: which device
+    // carried the upload tells support whether a tunnel was up when it was sent.
+    urnet::logAppInfo("log-upload", std::string("carrier=") + carrierName);
+    // The sdk flushes glog, zips this process's log files and posts them to
+    // POST /log/{feedback_id}/upload with the device's client credentials. The
+    // callback runs on an SDK thread: it logs and sets the flag the reaper
+    // retires a standalone device on, and touches nothing else.
+    device->uploadLogs(request.feedback_id,
+                       [reported, carrierName](std::optional<urnet::UploadLogsResult> uploaded,
+                                               std::optional<std::string> err) {
+                         if (err.has_value()) {
+                           DaemonLogf("[support] the log upload (%s device) failed: %s\n",
+                                      carrierName, err->c_str());
+                         } else if (uploaded && uploaded->error) {
+                           DaemonLogf("[support] the log upload (%s device) was refused: %s\n",
+                                      carrierName, uploaded->error->message.c_str());
+                         } else {
+                           DaemonLogf("[support] the log upload (%s device) finished\n",
+                                      carrierName);
+                         }
+                         reported->store(true);
+                       });
+    DaemonLogf("[support] uploading this daemon's logs for a feedback (%s device)\n",
+               carrierName);
+    result.ok = true;
+    result.carrier = carrierName;
+  } catch (const std::exception& e) {
+    if (carrier == logupload::Carrier::Standalone) RetireUploadDeviceLocked();
+    result.error = std::string("the logs could not be uploaded: ") + e.what();
+    result.code = ctl::kCodeLogUploadFailed;
+    DaemonLogf("[support] %s\n", result.error.c_str());
+  }
+  return result;
+}
+
+void TunnelHost::RetireUploadDeviceLocked() {
+  uploadReported_.reset();
+  uploadDeviceBuiltMillis_ = 0;
+  if (!uploadDevice_) return;
+  try {
+    uploadDevice_->close();
+    if (!uploadDevice_->waitForClose(kProviderCloseWaitMillis)) {
+      DaemonLogf("[support] the log upload device had not finished closing after %lld ms; "
+                 "releasing it\n",
+                 static_cast<long long>(kProviderCloseWaitMillis));
+    }
+  } catch (const std::exception& e) {
+    DaemonLogf("[support] closing the log upload device failed: %s\n", e.what());
+  }
+  uploadDevice_.reset();
+}
+
+void TunnelHost::MaintainLogUploadLocked() {
+  const int64_t nowMillis = MonotonicMillis();
+  if (uploadDevice_ &&
+      logupload::RetireStandaloneDevice(uploadReported_ && uploadReported_->load(),
+                                        uploadDeviceBuiltMillis_, nowMillis)) {
+    RetireUploadDeviceLocked();
+  }
+  if (!queuedUpload_) return;
+  const ctl::UploadLogsRequest request = std::move(*queuedUpload_);
+  queuedUpload_.reset();
+  if (logupload::QueuedUploadExpired(queuedUploadMillis_, nowMillis)) {
+    DaemonLogf("[support] a log upload waited too long for a tunnel start and was dropped\n");
+    return;
+  }
+  StartLogUploadLocked(request);
 }
 
 bool TunnelHost::SetKillSwitch(bool enabled, std::string* error) {
@@ -2048,6 +2185,10 @@ void TunnelHost::Reap() {
 
   std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
   if (!lock.owns_lock()) return;  // next tick
+
+  // The log upload's standalone device once its upload has reported, and a
+  // request that waited for a bring-up which is now over.
+  MaintainLogUploadLocked();
 
   // The tunnel session's device or the provider-only device, whichever is live
   // (never both): a provider's transports follow a path change too.
