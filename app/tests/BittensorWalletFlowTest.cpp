@@ -372,3 +372,39 @@ UR_TEST(BittensorWalletFlow_ChoosersAndSessionCarryWalletConnect) {
   UR_EXPECT_TRUE_MSG("the project id goes to the WalletConnect session only",
                      guard != std::string::npos && set != std::string::npos && guard < set);
 }
+
+// POST /sn/wallet refuses a pasted signature that is not from the entered
+// address (signature_mismatch, kept by the sdk in SnError.code): after a
+// manual entry the page says to sign again in that wallet, in the catalog's
+// words; a bridge signature and every other refusal read as before.
+UR_TEST(BittensorWalletFlow_ASignatureFromAnotherAccountNamesTheManualWallet) {
+  const bt::ErrorText text = bt::ConnectErrorTextFor("signature_mismatch", bt::kTransportManual);
+  UR_EXPECT_TRUE(text.key == "bittensor_error_signature_mismatch");
+  UR_EXPECT_TRUE(text.english ==
+                 "This signature isn't from the address you entered. In {}, sign the message "
+                 "with that address, then paste the signature again.");
+  UR_EXPECT_TRUE(bt::ConnectErrorTextFor("signature_mismatch", bt::kTransportBrowserBridge).key.empty());
+  UR_EXPECT_TRUE(bt::ConnectErrorTextFor("signature_mismatch", "").key.empty());
+  UR_EXPECT_TRUE(bt::ConnectErrorTextFor("server_error", bt::kTransportManual).key.empty());
+  UR_EXPECT_TRUE(bt::ConnectErrorTextFor("", bt::kTransportManual).key.empty());
+
+  // the key with its English as msgid (g_dpgettext2 matches both)
+  const std::string pot = ReadFile("../po/urnetwork.pot");
+  if (pot.empty()) {
+    UR_FAIL("could not read po/urnetwork.pot");
+    return;
+  }
+  const std::string entry = "msgctxt \"" + std::string(text.key) + "\"\nmsgid \"" +
+                            std::string(text.english) + "\"";
+  UR_EXPECT_TRUE_MSG(std::string(text.key), pot.find(entry) != std::string::npos);
+
+  // a refused connect asks it with the wallet the connect signed with
+  const std::string earnings = ReadFile("EarningsPage.cpp");
+  const std::string apply = FunctionBody(earnings, "void EarningsPage::ApplyWalletConnectResult(");
+  UR_EXPECT_TRUE(apply.find("bittensor::ConnectErrorTextFor(") != std::string::npos);
+  const std::string start = FunctionBody(earnings, "void EarningsPage::StartWalletSignature(");
+  UR_EXPECT_TRUE(start.find("connectWalletId_ = walletId;") != std::string::npos);
+  // the Api fallback (no bound device) keeps the refusal's code, as the device does
+  const std::string setWallet = FunctionBody(earnings, "void SetWallet(SdkHost& host,");
+  UR_EXPECT_TRUE(setWallet.find("result->error->code.value_or(std::string())") != std::string::npos);
+}

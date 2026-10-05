@@ -970,7 +970,11 @@ void SetWallet(SdkHost& host, const std::string& address, const std::string& cli
                                       std::optional<std::string> err) {
     if (err || !result || result->error) {
       std::string detail = err.value_or(std::string());
-      if (detail.empty() && result && result->error) detail = result->error->message;
+      if (detail.empty() && result && result->error) {
+        // "code: message" for a coded refusal, as ErrorText reads the device's
+        const std::string code = result->error->code.value_or(std::string());
+        detail = code.empty() ? result->error->message : code + ": " + result->error->message;
+      }
       done(false, detail.empty() ? std::string("no result") : detail);
       return;
     }
@@ -3214,6 +3218,7 @@ void EarningsPage::StartWalletSignature(const std::string& walletId,
                                         const std::string& expectedAddress) {
   if (connecting_) return;
   connecting_ = true;
+  connectWalletId_ = walletId;
   RebuildWalletBlock();
   // minutes, not 20s: the bridge reports errors only when a deep link comes
   // BACK, and a closed browser tab produces nothing, ever; the manual sheet
@@ -3369,6 +3374,21 @@ void EarningsPage::ApplyWalletConnectResult(uint32_t generation, bool ok,
   if (!SettleFlow(setWalletFlow_, generation, "wallet connect")) return;
   if (!ok) {
     FinishConnecting();
+    // a signature pasted from the manual wallet that is not from the entered
+    // address: say so, and what to do in that wallet
+    const bittensor::ErrorText mismatch = bittensor::ConnectErrorTextFor(
+        SnErrorCode(serverError),
+        connectWalletId_.empty() ? std::string()
+                                 : urnet::bittensorWalletTransportFor(
+                                       connectWalletId_, std::string(bittensor::kPlatform)));
+    if (!mismatch.key.empty()) {
+      const std::string key(mismatch.key);
+      const std::string english(mismatch.english);
+      Notify(Format(g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str()),
+                    urnet::bittensorWalletDisplayName(connectWalletId_)),
+             kit::Snackbar::Severity::Error);
+      return;
+    }
     // a coded refusal in the store's words (wallet_blocked, invalid address),
     // else the raw server error VERBATIM (often the only diagnostic); Error
     // severity persists until dismissed

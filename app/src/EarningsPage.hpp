@@ -686,6 +686,8 @@ class EarningsPage : public Gtk::Box {
 
   // in-flight gates
   bool connecting_ = false;      // bridge / set-wallet in flight
+  // the wallet the current coldkey connect signs with (its refusal names it)
+  std::string connectWalletId_;
   bool changingWallet_ = false;  // "Change" opened the connect affordances
   bool manualEntryOpen_ = false;
   bool claiming_ = false;

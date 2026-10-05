@@ -236,4 +236,25 @@ constexpr uint32_t TimeoutMsFor(std::string_view transport,
   return kBridgeTimeoutMs;
 }
 
+// POST /sn/wallet refuses a well-formed signature that does not verify for the
+// entered address with this SnError code (sdk SnErrorCodeSignatureMismatch): the
+// wallet signed with another account (or other text), and the server cannot
+// say which.
+inline constexpr std::string_view kSnErrorSignatureMismatch = "signature_mismatch";
+
+// The words for a refused coldkey connect when the page has its own, with one
+// {} for the wallet's product name. Only a manual entry pastes a signature, so
+// only then does the page say to sign again in that wallet; empty otherwise
+// (the SDK's error text, as before). A browser-bridge wallet signed with the
+// account it returned.
+constexpr ErrorText ConnectErrorTextFor(std::string_view snErrorCode,
+                                        std::string_view transport) noexcept {
+  if (snErrorCode == kSnErrorSignatureMismatch && transport == kTransportManual) {
+    return {"bittensor_error_signature_mismatch",
+            "This signature isn't from the address you entered. In {}, sign the message with "
+            "that address, then paste the signature again."};
+  }
+  return {"", ""};
+}
+
 }  // namespace urnw::bittensor
