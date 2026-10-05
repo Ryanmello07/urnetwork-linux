@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "AuthViews.hpp"
 
-#include "ReferralRoyalty.hpp"
-
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "Ui.hpp"
@@ -172,57 +170,11 @@ void CreateNetworkPage::BuildUi() {
   updatesRow->append(*updatesLabel);
   card->append(*updatesRow);
 
-  // bonus referral code: a flat toggle revealing the entry + apply button
-  referralToggle_ = Gtk::make_managed<Gtk::Button>(T_("add_referral_code", "Add referral code"));
-  referralToggle_->add_css_class("flat");
-  referralToggle_->set_halign(Gtk::Align::START);
-  referralToggle_->signal_clicked().connect([this] {
-    referralRevealer_->set_reveal_child(!referralRevealer_->get_reveal_child());
-  });
-  card->append(*referralToggle_);
-
-  referralRevealer_ = Gtk::make_managed<Gtk::Revealer>();
-  auto* referralBox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
-  referralBox->append(*MakePageCaption(
-      T_("add_referral_extra_rewards", "Add referral code to earn extra rewards")));
-  auto* referralRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  referralEntry_ = Gtk::make_managed<Gtk::Entry>();
-  referralEntry_->set_placeholder_text(
-      T_("enter_a_bonus_referral_code", "Enter a bonus referral code"));
-  referralEntry_->set_hexpand(true);
-  referralEntry_->signal_changed().connect([this] {
-    // retyping invalidates the previous validation (mac didSet)
-    referralValid_ = false;
-    referralCapped_ = false;
-    referralSupporting_->set_text("");
-    referralAppliedRow_->set_visible(false);
-    referralApply_->set_sensitive(!validatingReferral_ &&
-                                  !TrimWhitespace(referralEntry_->get_text()).empty());
-  });
-  referralRow->append(*referralEntry_);
-  referralApply_ = Gtk::make_managed<Gtk::Button>(T_("apply_bonus", "Apply bonus"));
-  referralApply_->set_sensitive(false);
-  referralApply_->signal_clicked().connect([this] { OnValidateReferral(); });
-  referralRow->append(*referralApply_);
-  referralBox->append(*referralRow);
-  referralSupporting_ = MakePageCaption("");
-  referralSupporting_->add_css_class("ur-error-text");
-  referralBox->append(*referralSupporting_);
-  referralRevealer_->set_child(*referralBox);
-  card->append(*referralRevealer_);
-
-  // referral accepted: the gold king-frog line (referral royalty, matching
-  // the ur.io referral panel and the android/apple gold chips)
-  referralAppliedRow_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
-  auto* appliedLabel = Gtk::make_managed<Gtk::Label>();
-  appliedLabel->set_markup("<span foreground='" + HexForMarkup(kReferralGoldLight) + "'>" +
-                           Glib::Markup::escape_text(
-                               T_("referral_bonus_applied_2", "Referral Bonus applied")) +
-                           "</span>");
-  appliedLabel->add_css_class("caption");
-  referralAppliedRow_->append(*appliedLabel);
-  referralAppliedRow_->set_visible(false);
-  card->append(*referralAppliedRow_);
+  // the optional referral code, always visible above Continue (the Windows
+  // sign-up's bonus code box): typing checks it, Continue carries it
+  referralCode_ = Gtk::make_managed<ReferralCodeBox>(host_);
+  referralCode_->on_edit = [this] { errorLabel_->set_text(""); };
+  card->append(*referralCode_);
 
   continueBtn_ = Gtk::make_managed<Gtk::Button>();
   auto* continueContent = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
@@ -248,19 +200,13 @@ void CreateNetworkPage::Configure(Mode mode, const std::string& userAuth) {
   ++*epoch_;
   mode_ = mode;
   creating_ = false;
-  referralValid_ = false;
-  referralCapped_ = false;
-  validatingReferral_ = false;
   nameChecker_.Clear();
 
   email_->set_text(userAuth);
   networkName_->set_text("");
   password_->set_text("");
   termsSwitch_->set_active(false);
-  referralEntry_->set_text("");
-  referralRevealer_->set_reveal_child(false);
-  referralSupporting_->set_text("");
-  referralAppliedRow_->set_visible(false);
+  referralCode_->Reset();
   errorLabel_->set_text("");
   SetNameSupporting(T_("network_name_length_error", "Network names must be 6 characters or more"),
                     nullptr);
@@ -326,46 +272,6 @@ void CreateNetworkPage::OnNameStateChanged(NetworkNameState state) {
   UpdateFormValid();
 }
 
-void CreateNetworkPage::OnValidateReferral() {
-  if (validatingReferral_) return;
-  const std::string code = TrimWhitespace(referralEntry_->get_text());
-  if (code.empty()) return;
-  validatingReferral_ = true;
-  referralApply_->set_sensitive(false);
-  referralSupporting_->set_text("");
-
-  auto epoch = epoch_;
-  const uint64_t issued = *epoch;
-  host_.ValidateReferralCode(code, [this, epoch, issued](bool ok, bool valid, bool capped) {
-    PostToMain([this, epoch, issued, ok, valid, capped] {
-      if (*epoch != issued) return;
-      validatingReferral_ = false;
-      referralApply_->set_sensitive(!TrimWhitespace(referralEntry_->get_text()).empty());
-      referralValid_ = ok && valid;
-      referralCapped_ = ok && capped;
-      if (referralValid_ && !referralCapped_) {
-        referralRevealer_->set_reveal_child(false);
-        referralAppliedRow_->set_visible(true);
-        referralToggle_->set_label(T_("edit_referral_code", "Edit referral code"));
-        // the royal welcome: the gold king-frog moment for the referred
-        if (auto* root = dynamic_cast<Gtk::Window*>(get_root())) {
-          ShowRoyalWelcomeSheet(*root);
-        }
-      } else if (referralCapped_) {
-        referralSupporting_->set_text(
-            T_("referral_code_capped", "This code has been used up"));
-      } else if (ok) {
-        referralSupporting_->set_text(T_("invalid_referral_code", "This code is not valid"));
-      } else {
-        // the check itself failed (no response, or the api refused the call):
-        // say so instead of calling a code the server never judged
-        referralSupporting_->set_text(
-            T_("something_went_wrong", "Something went wrong."));
-      }
-    });
-  });
-}
-
 void CreateNetworkPage::UpdateFormValid() {
   // mac validateForm: name available (or its check failed; the server
   // re-checks on create), terms agreed, and (for the password auth type) a
@@ -390,7 +296,7 @@ void CreateNetworkPage::SetCreating(bool creating) {
   email_->set_sensitive(!creating);
   password_->set_sensitive(!creating);
   termsSwitch_->set_sensitive(!creating);
-  referralToggle_->set_sensitive(!creating);
+  referralCode_->set_sensitive(!creating);
   UpdateFormValid();
 }
 
@@ -402,9 +308,7 @@ void CreateNetworkPage::OnContinue() {
   const std::string userAuth = TrimWhitespace(email_->get_text());
   const std::string password(password_->get_text());
   const std::string networkName = TrimWhitespace(networkName_->get_text());
-  const std::string referralCode =
-      (referralValid_ && !referralCapped_) ? TrimWhitespace(referralEntry_->get_text())
-                                           : std::string();
+  const std::string referralCode = referralCode_->CreateCode();
 
   // the marketing opt-out rides on the create call (absent = opted in)
   host_.SetProductUpdatesOptOut(productUpdates_ && !productUpdates_->get_active());

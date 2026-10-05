@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "Referentiecode toevoegen"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "Voeg een referentiecode toe en verdien extra beloningen"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "Inlogmethode toevoegen"
@@ -524,11 +519,6 @@ msgstr "App-versie"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Apple-inlogmethode toegevoegd"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "Bonus toepassen"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1951,11 +1941,6 @@ msgstr "Netwerknaam bewerken"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "Profiel bewerken"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "Referentiecode bewerken"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3904,6 +3889,11 @@ msgstr "Deze code is al gebruikt"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "Je verwijzingscode kon niet worden geladen."
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "Referentiecode (optioneel)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

@@ -104,11 +104,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "إضافة رمز الإحالة"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "أضف رمز الإحالة لكسب مكافآت إضافية"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "إضافة طريقة تسجيل دخول"
@@ -549,11 +544,6 @@ msgstr "Apple"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "تمت إضافة طريقة تسجيل الدخول عبر Apple"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "تطبيق المكافأة"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -3088,11 +3078,6 @@ msgstr "تعديل اسم الشبكة"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "تعديل الملف الشخصي"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "تعديل رمز الإحالة"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -5636,6 +5621,11 @@ msgstr "تم استخدام هذا الرمز بالكامل"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "تعذّر تحميل رمز الإحالة الخاص بك."
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "رمز الإحالة (اختياري)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

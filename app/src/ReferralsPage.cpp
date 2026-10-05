@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "I18n.hpp"
+#include "ReferralCodeField.hpp"
 #include "ReferralPanel.hpp"
 #include "ReferralTotalsState.hpp"
 #include "Ui.hpp"
@@ -499,12 +500,23 @@ void ReferralsPage::BuildPane() {
     content->append(*row.root);
   }
 
-  // 3. the referral network (opens the sheet)
+  // 3. the referral network (opens the sheet). With none linked, the row is
+  //    the code entry itself: a friend who missed the field at sign-up adds
+  //    the code here (support inbox 1698)
   referralNetworkRow_ =
       kit::MakePaneTwoLineRowButton(T_("referral_network", "Referral network"), {}, kRowTall);
   referralNetworkRow_.value->set_max_width_chars(kReferralValueChars);
   referralNetworkRow_.root->signal_clicked().connect([this] { ShowReferralNetworkSheet(); });
   content->append(*referralNetworkRow_.root);
+
+  addReferralCode_ = Gtk::make_managed<Gtk::Button>(T_("add_referral_code", "Add referral code"));
+  addReferralCode_->add_css_class("suggested-action");
+  addReferralCode_->add_css_class("pill");
+  addReferralCode_->set_halign(Gtk::Align::START);
+  addReferralCode_->set_margin(kCardPad);
+  addReferralCode_->set_visible(false);
+  addReferralCode_->signal_clicked().connect([this] { ShowReferralNetworkSheet(); });
+  content->append(*addReferralCode_);
 }
 
 // ---- gates -------------------------------------------------------------------
@@ -601,6 +613,9 @@ void ReferralsPage::ApplyPoints(AccountFieldState state, double points) {
 void ReferralsPage::ApplyReferralNetworkValue(AccountFieldState state,
                                               const std::string& name) {
   ApplyFieldState(*referralNetworkRow_.value, state, name);
+  const bool addCode = ReferralNetworkOffersAddCode(state == AccountFieldState::Empty, name);
+  referralNetworkRow_.root->set_visible(!addCode);
+  if (addReferralCode_) addReferralCode_->set_visible(addCode);
 }
 
 // ---- loads -------------------------------------------------------------------

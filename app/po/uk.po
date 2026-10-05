@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "Додати реферальний код"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "Додайте реферальний код, щоб отримати додаткові винагороди"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "Додати спосіб входу"
@@ -524,11 +519,6 @@ msgstr "Версія застосунку"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Спосіб входу через Apple додано"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "Застосувати бонус"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1955,11 +1945,6 @@ msgstr "Редагувати назву мережі"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "Редагувати профіль"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "Редагувати реферальний код"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3920,6 +3905,11 @@ msgstr "Цей код вже використано"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "Не вдалося завантажити ваш реферальний код."
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "Реферальний код (необов'язково)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

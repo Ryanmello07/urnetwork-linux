@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "Ajouter un code de parrainage"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "Ajouter un code de parrainage pour gagner des récompenses supplémentaires"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "Ajouter une méthode de connexion"
@@ -524,11 +519,6 @@ msgstr "Version de l’application"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Méthode de connexion Apple ajoutée"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "Appliquer le bonus"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1951,11 +1941,6 @@ msgstr "Modifier le nom du réseau"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "Modifier le profil"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "Modifier le code de parrainage"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3904,6 +3889,11 @@ msgstr "Ce code a déjà été utilisé"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "Impossible de charger votre code de parrainage."
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "Code de parrainage (facultatif)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

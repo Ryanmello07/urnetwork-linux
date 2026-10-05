@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "Thêm mã giới thiệu"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "Thêm mã giới thiệu để nhận thêm phần thưởng"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "Thêm phương thức đăng nhập"
@@ -524,11 +519,6 @@ msgstr "Phiên bản ứng dụng"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Đã thêm phương thức đăng nhập Apple"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "Áp dụng tiền thưởng"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1947,11 +1937,6 @@ msgstr "Sửa tên mạng"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "Sửa hồ sơ"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "Chỉnh sửa mã giới thiệu"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3888,6 +3873,11 @@ msgstr "Mã này đã được sử dụng hết"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "Không thể tải mã giới thiệu của bạn."
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "Mã giới thiệu (không bắt buộc)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"

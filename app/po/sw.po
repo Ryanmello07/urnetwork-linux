@@ -89,11 +89,6 @@ msgctxt "add_referral_code"
 msgid "Add referral code"
 msgstr "Ongeza msimbo wa rufaa"
 
-#. Call to action
-msgctxt "add_referral_extra_rewards"
-msgid "Add referral code to earn extra rewards"
-msgstr "Ongeza msimbo wa rufaa ili kupata zawadi za ziada"
-
 msgctxt "add_sign_in_method"
 msgid "Add sign-in method"
 msgstr "Ongeza njia ya kuingia"
@@ -524,11 +519,6 @@ msgstr "Toleo la programu"
 msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Njia ya kuingia ya Apple imeongezwa"
-
-#. Call to action
-msgctxt "apply_bonus"
-msgid "Apply bonus"
-msgstr "Tumia bonasi"
 
 #. transfer stats and split rules
 msgctxt "apps"
@@ -1951,11 +1941,6 @@ msgstr "Hariri jina la mtandao"
 msgctxt "edit_profile"
 msgid "Edit Profile"
 msgstr "Hariri Wasifu"
-
-#. Call to action
-msgctxt "edit_referral_code"
-msgid "Edit referral code"
-msgstr "Hariri msimbo wa rufaa"
 
 #. A label displayed above the split rule editor.
 msgctxt "edit_split_rule"
@@ -3904,6 +3889,11 @@ msgstr "Msimbo huu umetumika tayari"
 msgctxt "referral_code_load_failed"
 msgid "Your referral code could not be loaded."
 msgstr "Msimbo wako wa rufaa haukuweza kupakiwa."
+
+#. Sign-up: label of the optional referral code field above Continue.
+msgctxt "referral_code_optional"
+msgid "Referral code (optional)"
+msgstr "Msimbo wa rufaa (si lazima)"
 
 #. Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).
 msgctxt "referral_crowned_congrats"
