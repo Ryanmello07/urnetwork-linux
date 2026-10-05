@@ -170,3 +170,53 @@ UR_TEST(provideStepBackoffDoublesToFiveMinutesAndResets) {
   UR_EXPECT_EQ(0, backoff.DelayMillis());
   UR_EXPECT_TRUE(backoff.Allows(20000));
 }
+
+// ---- the provider-only device's statistics (provider_stats) ----------------
+
+// Disconnected, the provider statistics come from the daemon's provider-only
+// device; a tunnel session's DeviceRemote is the source while one is bound,
+// and with no provider-only device (or a daemon that predates the verb) there
+// is nothing to read.
+UR_TEST(provideStatsFetchedOnlyFromARunningProviderWithoutASession) {
+  UR_EXPECT_TRUE(provide::DaemonProviderStatsStep(/*sessionDevice=*/false,
+                                                  /*providerRunning=*/true,
+                                                  /*verbUnsupported=*/false) ==
+                 provide::ProviderStatsStep::Fetch);
+  UR_EXPECT_TRUE(provide::DaemonProviderStatsStep(true, true, false) ==
+                 provide::ProviderStatsStep::Drop);
+  UR_EXPECT_TRUE(provide::DaemonProviderStatsStep(false, false, false) ==
+                 provide::ProviderStatsStep::Drop);
+  UR_EXPECT_TRUE(provide::DaemonProviderStatsStep(false, true, true) ==
+                 provide::ProviderStatsStep::Drop);
+  UR_EXPECT_TRUE(provide::DaemonProviderStatsStep(true, false, true) ==
+                 provide::ProviderStatsStep::Drop);
+}
+
+// The daemon polls the provider status only while a GUI that shows it keeps
+// asking: the first ask starts the controller, later asks only renew, and the
+// controller stops once, after a lease with no ask.
+UR_TEST(provideStatusLeaseStartsOnceAndStopsAfterTheLastAsk) {
+  provide::ProviderStatusLease lease;
+  UR_EXPECT_FALSE(lease.Held());
+  UR_EXPECT_FALSE(lease.Expire(0));  // nothing to stop
+  UR_EXPECT_TRUE(lease.Renew(1000));
+  UR_EXPECT_TRUE(lease.Held());
+  UR_EXPECT_FALSE(lease.Renew(2000));  // already polling
+  const int64_t lastAsk = 2000;
+  UR_EXPECT_FALSE(lease.Expire(lastAsk + provide::ProviderStatusLease::kLeaseMillis - 1));
+  UR_EXPECT_TRUE(lease.Expire(lastAsk + provide::ProviderStatusLease::kLeaseMillis));
+  UR_EXPECT_FALSE(lease.Held());
+  UR_EXPECT_FALSE(lease.Expire(lastAsk + 10 * provide::ProviderStatusLease::kLeaseMillis));
+  // the next ask starts it again
+  UR_EXPECT_TRUE(lease.Renew(60000));
+}
+
+// A rebuilt device has a new controller, which polls only once asked again.
+UR_TEST(provideStatusLeaseStartsANewControllerAfterARelease) {
+  provide::ProviderStatusLease lease;
+  UR_EXPECT_TRUE(lease.Renew(1000));
+  lease.Release();
+  UR_EXPECT_FALSE(lease.Held());
+  UR_EXPECT_FALSE(lease.Expire(1000000));
+  UR_EXPECT_TRUE(lease.Renew(1500));
+}

@@ -834,6 +834,18 @@ std::optional<ctl::StatusReply> ControlClient::Status(std::string* error) {
   return reply->get<ctl::StatusReply>();
 }
 
+std::optional<ctl::ProviderStatsReply> ControlClient::ProviderStats(
+    const ctl::ProviderStatsRequest& request, std::string* error) {
+  std::scoped_lock lock(mutex_);
+  // A read, so re-sent once on a dead socket like status.
+  const auto reply = CallLocked(ctl::Verb::ProviderStats, nlohmann::json(request), error);
+  if (!reply || !ctl::ReplyOk(*reply)) {
+    if (reply && error) *error = ctl::ReplyError(*reply);
+    return std::nullopt;
+  }
+  return reply->get<ctl::ProviderStatsReply>();
+}
+
 bool ControlClient::LocationOverrideAvailable(bool* available, std::string* reason) {
   std::scoped_lock lock(mutex_);
   std::string error;

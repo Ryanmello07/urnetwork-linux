@@ -72,6 +72,7 @@ constexpr int kDnsRepairAttempts = 3;
 
 int64_t UnixMillis() { return g_get_real_time() / 1000; }
 int64_t MonotonicSeconds() { return g_get_monotonic_time() / G_USEC_PER_SEC; }
+int64_t MonotonicMillis() { return g_get_monotonic_time() / 1000; }
 
 std::vector<uint8_t> ReadFileBytes(const std::string& path) {
   std::ifstream f(path, std::ios::binary);
@@ -1388,14 +1389,6 @@ namespace {
 // tunnel) out of the capture routes a Connect installs moments later.
 constexpr int64_t kProviderCloseWaitMillis = 2000;
 
-// The same session: a device built from these credentials, in this space and
-// with this provider policy can keep running and only take a new mode.
-bool SameProviderSession(const ctl::StartProviderRequest& a, const ctl::StartProviderRequest& b) {
-  return a.by_jwt == b.by_jwt && a.instance_id == b.instance_id &&
-         a.app_version == b.app_version && a.network_space_json == b.network_space_json &&
-         a.provider_transport_settings_json == b.provider_transport_settings_json;
-}
-
 }  // namespace
 
 TunnelHost::ProviderStartResult TunnelHost::StartProvider(
@@ -1436,8 +1429,9 @@ TunnelHost::ProviderStartResult TunnelHost::StartProvider(
   }
 
   // The same request again (a relaunched GUI adopting the provider, or a
-  // retried frame): keep the device, apply the mode.
-  if (providerDevice_ && SameProviderSession(providerConfig_, request)) {
+  // retried frame): keep the device, apply the mode. A changed network space
+  // (a saved DoH server list, say) is a different device.
+  if (providerDevice_ && ctl::SameProviderDevice(providerConfig_, request)) {
     try {
       providerDevice_->setProvideControlMode(request.provide_mode);
     } catch (const std::exception& e) {
@@ -1474,6 +1468,7 @@ TunnelHost::ProviderStartResult TunnelHost::StartProvider(
       std::scoped_lock statusLock(statusMutex_);
       pendingProvideMode_ = request.provide_mode;
     }
+    OpenProviderViewControllersLocked();
     RefreshProviderStatusLocked();
     DaemonLogf("[provide] providing without a tunnel (mode %s, tier %lld); this machine's own "
                "traffic is not routed through URnetwork\n",
@@ -1494,7 +1489,103 @@ bool TunnelHost::ProviderRunning() const {
   return status_.provider_running;
 }
 
+ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
+  ctl::ProviderStatsReply reply;
+  std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
+  // A bring-up owns the session, and it retired the provider-only device first.
+  if (!lock.owns_lock() || !providerDevice_) return reply;
+  reply.running = true;
+  // Every read is local to this process (the controllers sample the device and
+  // keep the last answer), and each one is guarded on its own: an SDK error
+  // costs its own field, never the reply. Asked about once a second, so a
+  // failing read is logged the first time and then once a minute.
+  static int readFailures = 0;
+  auto noteReadFailure = [](const char* what, const std::exception& e) {
+    if ((readFailures++ % 60) == 0) {
+      DaemonLogf("[provide] reading the provider %s failed: %s\n", what, e.what());
+    }
+  };
+  try {
+    reply.has_provider_stats = providerDevice_->getProviderPacketStats().has_value();
+  } catch (const std::exception& e) {
+    noteReadFailure("packet stats", e);
+  }
+  if (providerContractVc_) {
+    try {
+      if (auto points = providerContractVc_->getProviderThroughputPoints()) {
+        reply.provider_throughput_points_json = nlohmann::json(*points).dump();
+      }
+      if (auto distribution = providerContractVc_->getProviderTransportDistribution()) {
+        reply.provider_transport_distribution_json = nlohmann::json(*distribution).dump();
+      }
+    } catch (const std::exception& e) {
+      reply.provider_throughput_points_json.clear();
+      reply.provider_transport_distribution_json.clear();
+      noteReadFailure("series", e);
+    }
+  }
+  if (providerStatusVc_) {
+    reply.status_open = true;
+    try {
+      // Started by the first ask (one poll at once, then about once a minute)
+      // and kept polling only while a GUI that shows it keeps asking.
+      if (pollStatus && providerStatusLease_.Renew(MonotonicMillis())) providerStatusVc_->start();
+      reply.status_loaded = providerStatusVc_->getIsLoaded();
+      reply.status_last_fetch_error = providerStatusVc_->getLastFetchError();
+      if (auto status = providerStatusVc_->getProviderStatus()) {
+        reply.provider_status_json = nlohmann::json(*status).dump();
+      }
+    } catch (const std::exception& e) {
+      // a malformed document reads as a failed poll, as the GUI's own read
+      // of its controller does
+      reply.status_loaded = false;
+      reply.status_last_fetch_error = e.what();
+      reply.provider_status_json.clear();
+    }
+  }
+  return reply;
+}
+
+void TunnelHost::OpenProviderViewControllersLocked() {
+  if (!providerDevice_) return;
+  try {
+    providerContractVc_ = providerDevice_->openContractViewController();
+  } catch (const std::exception& e) {
+    providerContractVc_.reset();
+    DaemonLogf("[provide] the provider series could not be opened: %s\n", e.what());
+  }
+  try {
+    providerStatusVc_ = providerDevice_->openProviderStatusViewController();
+  } catch (const std::exception& e) {
+    providerStatusVc_.reset();
+    DaemonLogf("[provide] the provider status could not be opened: %s\n", e.what());
+  }
+}
+
+void TunnelHost::CloseProviderViewControllersLocked() {
+  // a new controller polls only once asked again
+  providerStatusLease_.Release();
+  if (providerDevice_ && providerStatusVc_) {
+    try {
+      providerDevice_->closeProviderStatusViewController(*providerStatusVc_);
+    } catch (const std::exception& e) {
+      DaemonLogf("[provide] closing the provider status failed: %s\n", e.what());
+    }
+  }
+  if (providerDevice_ && providerContractVc_) {
+    try {
+      providerDevice_->closeContractViewController(*providerContractVc_);
+    } catch (const std::exception& e) {
+      DaemonLogf("[provide] closing the provider series failed: %s\n", e.what());
+    }
+  }
+  providerStatusVc_.reset();
+  providerContractVc_.reset();
+}
+
 void TunnelHost::RetireProviderDeviceLocked() {
+  // The controllers read the device, so they close before it does.
+  CloseProviderViewControllersLocked();
   if (providerDevice_) {
     try {
       providerDevice_->close();
@@ -1939,6 +2030,15 @@ void TunnelHost::Reap() {
   // The provider-only device's tier and keys are the sdk's to change, so
   // `status` re-reads them once a second (a no-op without that device).
   RefreshProviderStatusLocked();
+  // ...and its provider status controller stops polling the API once no GUI
+  // that shows it has asked for a while (provider_stats with poll_status).
+  if (providerStatusVc_ && providerStatusLease_.Expire(MonotonicMillis())) {
+    try {
+      providerStatusVc_->stop();
+    } catch (const std::exception& e) {
+      DaemonLogf("[provide] stopping the provider status failed: %s\n", e.what());
+    }
+  }
 
   const bool died = ioLoopDied_.load();
   const int orphanTimeout = orphanTimeoutSeconds_.load();

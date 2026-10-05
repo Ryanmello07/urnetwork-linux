@@ -5601,8 +5601,9 @@ void EarningsPage::PullProviderThroughput(bool forced) {
   providerDistributionKnown_ = distribution.has_value();
   if (providerTransportBar_) providerTransportBar_->SetDistribution(distribution);
   // the provider bytes of the window, which tell the idle line that a public
-  // provider has carried no traffic yet (P008)
-  const int64_t recentBytes = distribution ? distribution->ByteCount : 0;
+  // provider has carried no traffic yet (P008); none read, nothing is said
+  const std::optional<int64_t> recentBytes =
+      distribution ? std::optional<int64_t>(distribution->ByteCount) : std::nullopt;
   if (recentBytes != recentProviderBytes_) {
     recentProviderBytes_ = recentBytes;
     ApplyStatusLine();
@@ -5695,12 +5696,13 @@ void EarningsPage::OpenProviderTransportSheet() {
 
 // The local reason comes from the live stats and the throughput window and is
 // immediate; the server's reason joins it once the controller has a status
-// for this device. The desktop has no Wi-Fi-only setting, and Linux provides
-// only while the tunnel is up (SessionIdleReasonFor).
+// for this device. The desktop has no Wi-Fi-only setting, and Linux derives a
+// reason only while a provider device runs: the tunnel session's, or the
+// daemon's provider-only device while disconnected (SessionIdleReasonFor).
 void EarningsPage::ApplyStatusLine() {
   if (statusLineRow_ == nullptr) return;
   const providerstatus::ProviderIdleReason idle =
-      providerstatus::SessionIdleReasonFor(host_.hasDevice(), controlMode_, liveProvideMode_,
+      providerstatus::SessionIdleReasonFor(host_.ProviderRuns(), controlMode_, liveProvideMode_,
                                            providePaused_, recentProviderBytes_);
   const providerstatus::StatusLine line =
       providerstatus::StatusLineFor(idle, providerStatus_.reason, providerStatus_.reasonText);

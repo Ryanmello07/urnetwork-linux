@@ -1561,6 +1561,20 @@ void ControlServer::Dispatch(uint64_t connId, const nlohmann::json& request, Rep
     return;
   }
 
+  // provider_stats on the same terms: polled about once a second while the
+  // GUI's Earnings destination shows, so never gated, and EMPTY for a caller
+  // whose status is redacted, since the series and the provider status
+  // describe another user's provider. Only a caller who may read the answer
+  // renews the provider status controller's polling.
+  if (!isLogTail && verb == ctl::Verb::ProviderStats) {
+    ctl::ProviderStatsReply stats;
+    if (!StatusMustBeRedactedFor(conn)) {
+      stats = tunnel_.ProviderStats(request.get<ctl::ProviderStatsRequest>().poll_status);
+    }
+    reply(ctl::MakeReply(id, true, nlohmann::json(stats)));
+    return;
+  }
+
   // A capability query that changes nothing and reveals nothing about a session.
   if (!isLogTail && verb == ctl::Verb::LocationOverrideAvailable) {
     ctl::LocationOverrideAvailableReply payload;
@@ -1573,7 +1587,7 @@ void ControlServer::Dispatch(uint64_t connId, const nlohmann::json& request, Rep
   const bool crossUid = TunnelOwnedByOtherUid(conn);
   const char* actionId = ctl::ActionIdForVerb(verb, isLogTail, crossUid);
   if (actionId == nullptr) {
-    reply(ctl::MakeErrorReply(id, "unknown verb"));
+    reply(ctl::MakeErrorReply(id, ctl::kErrorUnknownVerb));
     return;
   }
   const bool interactive = ctl::VerbWantsInteraction(verb, isLogTail);
@@ -1742,6 +1756,7 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
 
       case ctl::Verb::Hello:
       case ctl::Verb::Status:
+      case ctl::Verb::ProviderStats:
       case ctl::Verb::LocationOverrideAvailable:
       case ctl::Verb::Unknown:
         break;
@@ -1750,7 +1765,7 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
     reply(ctl::MakeErrorReply(id, e.what()));
     return;
   }
-  reply(ctl::MakeErrorReply(id, "unknown verb"));
+  reply(ctl::MakeErrorReply(id, ctl::kErrorUnknownVerb));
 }
 
 nlohmann::json ControlServer::HandleHello(Connection* conn, int64_t id,

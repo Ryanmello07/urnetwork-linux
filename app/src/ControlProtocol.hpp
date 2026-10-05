@@ -356,6 +356,7 @@ enum class Verb {
   StopTunnel,
   SetProvide,
   StartProvider,
+  ProviderStats,
   SetKillSwitch,
   LocationOverrideAvailable,
   LocationOverrideWrite,
@@ -372,6 +373,7 @@ inline const char* ToString(Verb v) {
     case Verb::StopTunnel: return "stop_tunnel";
     case Verb::SetProvide: return "set_provide";
     case Verb::StartProvider: return "start_provider";
+    case Verb::ProviderStats: return "provider_stats";
     case Verb::SetKillSwitch: return "set_kill_switch";
     case Verb::LocationOverrideAvailable: return "location_override_available";
     case Verb::LocationOverrideWrite: return "location_override_write";
@@ -389,6 +391,7 @@ inline Verb VerbFromString(const std::string& s) {
   if (s == "stop_tunnel") return Verb::StopTunnel;
   if (s == "set_provide") return Verb::SetProvide;
   if (s == "start_provider") return Verb::StartProvider;
+  if (s == "provider_stats") return Verb::ProviderStats;
   if (s == "set_kill_switch") return Verb::SetKillSwitch;
   if (s == "location_override_available") return Verb::LocationOverrideAvailable;
   if (s == "location_override_write") return Verb::LocationOverrideWrite;
@@ -401,8 +404,10 @@ inline Verb VerbFromString(const std::string& s) {
 // version/SDK skew still renders — a peer that cannot authorize must still be
 // TOLD WHY rather than dropped), status (polled at ~4 Hz during async bring-up;
 // a round trip there would be intolerable, and it is redacted for a foreign uid
-// instead — see RedactStatusForForeignUid) and location_override_available,
-// which is a capability query that changes nothing.
+// instead — see RedactStatusForForeignUid), provider_stats (polled about once a
+// second while the Earnings destination shows, and empty for a foreign uid on
+// the same terms) and location_override_available, which is a capability
+// query that changes nothing.
 //
 // cross_uid: a tunnel is live or starting and is owned by a DIFFERENT uid than
 // the caller. That is the case the `urnetwork` group could not express at all —
@@ -452,6 +457,7 @@ inline const char* ActionIdForVerb(Verb verb, bool is_log_tail, bool cross_uid) 
       return cross_uid ? kActionTakeOverTunnel : kActionManageKillSwitch;
     case Verb::Hello:
     case Verb::Status:
+    case Verb::ProviderStats:
     case Verb::LocationOverrideAvailable:
     case Verb::Unknown:
       break;
@@ -483,6 +489,7 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     case Verb::StartProvider:
     case Verb::Hello:
     case Verb::Status:
+    case Verb::ProviderStats:
     case Verb::LocationOverrideAvailable:
     case Verb::Unknown:
       break;
@@ -1026,6 +1033,19 @@ inline std::optional<StartTunnelRejection> ValidateStartProviderRequest(
   return std::nullopt;
 }
 
+// The same provider device: one built from these credentials, in this network
+// space and with this provider policy keeps running and only takes the mode
+// (the idempotent start above); any other request replaces it. That is how a
+// saved network space value reaches a running provider: the bootstrap DoH
+// servers (P216), the VLESS server, the private extender and the server itself
+// all live in network_space_json, and the GUI sends start_provider again when
+// one is saved (SdkHost::ReconcileProvider with settingsChanged).
+inline bool SameProviderDevice(const StartProviderRequest& a, const StartProviderRequest& b) {
+  return a.by_jwt == b.by_jwt && a.instance_id == b.instance_id &&
+         a.app_version == b.app_version && a.network_space_json == b.network_space_json &&
+         a.provider_transport_settings_json == b.provider_transport_settings_json;
+}
+
 // The daemon's whole feedback channel. Every field beyond the original four is
 // additive within protocol v1 and answers a question the UI previously had no
 // way to ask: "routes are in but DNS is not", "the kill switch is holding this
@@ -1222,6 +1242,81 @@ inline StatusReply RedactStatusForForeignUid(const StatusReply& full) {
   out.owner_connected = full.owner_connected;
   out.redacted = true;
   return out;
+}
+
+// ---- provider_stats --------------------------------------------------------
+// What the GUI's provider statistics read while no tunnel session runs: the
+// provider-only device's (start_provider) provider series, transport share and
+// provider status, as the SDK's own view controllers in the daemon publish them
+// (support inbox 1521, P008). With a tunnel session the GUI reads the same
+// facts off its DeviceRemote, whose controllers run in the GUI; the
+// provider-only device has no DeviceRemote, so the daemon reads them for it.
+// They are the Earnings page's provider plots and their gate, its "no traffic
+// yet" line, and the provider status behind the reason line, the demand
+// histogram and "Why?".
+//
+// Polled, about once a second while the Earnings destination is on screen, so
+// it is answered like `status`: no polkit check, and an empty reply for a
+// caller whose status would be redacted (another uid's session; the series and
+// the status describe that user's provider). A NEW VERB, additive within
+// protocol v1: a daemon that predates it answers kErrorUnknownVerb, and the GUI
+// then shows no provider statistics while disconnected, as before.
+struct ProviderStatsRequest {
+  // The Earnings destination is on screen: keep the provider status controller
+  // polling GET /network/provider-status (about once a minute). The daemon
+  // stops it once requests that ask stop arriving (provide::ProviderStatusLease),
+  // so a GUI that goes away leaves nothing polling the API.
+  bool poll_status = false;
+};
+inline void to_json(nlohmann::json& j, const ProviderStatsRequest& v) {
+  j["poll_status"] = v.poll_status;
+}
+inline void from_json(const nlohmann::json& j, ProviderStatsRequest& v) {
+  detail::Get(j, "poll_status", v.poll_status);
+}
+
+// The SDK payloads travel as the SDK's own JSON (its generated to_json and
+// from_json), the way provider_transport_settings_json does, so this header
+// stays free of SDK types.
+struct ProviderStatsReply {
+  // A provider-only device runs. Every other field is empty without one.
+  bool running = false;
+  // The device reports provider packet stats (its getProviderPacketStats is
+  // not nil): with the provide control mode, the provider plots' gate.
+  bool has_provider_stats = false;
+  // The contract view controller's provider series (urnet::ThroughputPointList)
+  // and its transport distribution (urnet::TransportDistribution, whose
+  // ByteCount is the window's provider bytes); "" while it has none.
+  std::string provider_throughput_points_json;
+  std::string provider_transport_distribution_json;
+  // The provider status controller: one is open, a poll has succeeded, the
+  // last failed poll's error ("" once one succeeds), and this device's status
+  // (urnet::ProviderStatus; "" before a poll, or while the network lists no
+  // status for this device).
+  bool status_open = false;
+  bool status_loaded = false;
+  std::string status_last_fetch_error;
+  std::string provider_status_json;
+};
+inline void to_json(nlohmann::json& j, const ProviderStatsReply& v) {
+  j["running"] = v.running;
+  j["has_provider_stats"] = v.has_provider_stats;
+  j["provider_throughput_points_json"] = v.provider_throughput_points_json;
+  j["provider_transport_distribution_json"] = v.provider_transport_distribution_json;
+  j["status_open"] = v.status_open;
+  j["status_loaded"] = v.status_loaded;
+  j["status_last_fetch_error"] = v.status_last_fetch_error;
+  j["provider_status_json"] = v.provider_status_json;
+}
+inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
+  detail::Get(j, "running", v.running);  // absent = nothing runs
+  detail::Get(j, "has_provider_stats", v.has_provider_stats);
+  detail::Get(j, "provider_throughput_points_json", v.provider_throughput_points_json);
+  detail::Get(j, "provider_transport_distribution_json", v.provider_transport_distribution_json);
+  detail::Get(j, "status_open", v.status_open);
+  detail::Get(j, "status_loaded", v.status_loaded);
+  detail::Get(j, "status_last_fetch_error", v.status_last_fetch_error);
+  detail::Get(j, "provider_status_json", v.provider_status_json);
 }
 
 struct LocationOverrideAvailableReply {
@@ -1422,6 +1517,11 @@ inline nlohmann::json MakeReply(int64_t id, bool ok,
   payload["ok"] = ok;
   return payload;
 }
+
+// What every daemon answers for a verb it does not know, so a client can tell a
+// daemon that predates a verb from a refusal (a new verb is additive within
+// v1; see the version comment at the top).
+inline constexpr const char* kErrorUnknownVerb = "unknown verb";
 
 inline nlohmann::json MakeErrorReply(int64_t id, const std::string& error,
                                      const char* code = nullptr) {

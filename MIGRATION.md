@@ -156,6 +156,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | `stop_tunnel` | — | `ok` |
 | `set_provide` | `mode` | `ok` |
 | `start_provider` | `by_jwt`, `instance_id`, `app_version`, `network_space_json`, `provide_mode`, `provider_transport_settings_json` | `ok` + the status |
+| `provider_stats` | `poll_status` | `running`, `has_provider_stats`, `provider_throughput_points_json`, `provider_transport_distribution_json`, `status_open`, `status_loaded`, `status_last_fetch_error`, `provider_status_json` |
 | `location_override_available` | — | `available`, `reason` |
 | `location_override_write` | `lat`, `lon`, `accuracy_m` | `ok` |
 | `location_override_clear` | — | `ok` |
@@ -184,7 +185,24 @@ not provide while disconnected (`provide_mode_off`; `app/src/ProvideLifecycle.hp
 the rule both halves apply). Every teardown, and so every `start_tunnel`, retires it
 first; `set_provide` with a mode that does not provide retires it; `stop_tunnel` stops
 it with everything else. It is authorized like `set_provide`, without a prompt, because
-the GUI's health poll sends it as well as Disconnect.
+the GUI's health poll sends it as well as Disconnect. A request that differs from the
+running device's (`ctl::SameProviderDevice`) replaces it, which is how a saved network
+space value (the bootstrap DoH servers, VLESS, the private extender) reaches a running
+provider: the GUI sends `start_provider` again when one is saved.
+
+`provider_stats` is what the GUI's provider statistics read while there is no tunnel
+session, because the provider-only device has no `DeviceRemote`: the daemon runs the
+SDK's contract and provider status view controllers on that device and answers with its
+provider series and transport distribution (the Earnings plots and the "no traffic yet"
+line), whether it reports provider packet stats (the plots' gate), and its provider
+status (the reason line, the demand histogram and "Why?"). The SDK payloads travel as
+the SDK's own JSON. It is polled about once a second while the Earnings destination is
+on screen, so it is answered like `status`: never gated, and empty for a caller whose
+status would be redacted. `poll_status` keeps the provider status controller polling
+`GET /network/provider-status`; the daemon stops it 15 s after the last request that
+asked, so nothing polls the API once no GUI shows it. A daemon that predates the verb
+answers `unknown verb`, and the GUI then shows no provider statistics while
+disconnected, as before.
 
 **`sdk_version` must match EXACTLY, and this is a second, independent check.**
 `protocol_version` guards *our* JSON control socket; the **device RPC has no version

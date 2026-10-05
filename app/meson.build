@@ -622,6 +622,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProviderStatusWiringTest.cpp',
     'tests/ProvideLifecycleTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
+    'tests/ProviderOnlyStatusWiringTest.cpp',
     'tests/ExcludeLauncherTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
@@ -646,7 +647,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # ProviderStatusWiringTest reads SdkHost.cpp, EarningsPage.cpp and
               # po/en.po the same way.
               # ProvideWhileDisconnectedWiringTest reads the provider-only device's
-              # daemon and GUI call sites the same way.
+              # daemon and GUI call sites the same way, and
+              # ProviderOnlyStatusWiringTest its statistics and settings call sites.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
