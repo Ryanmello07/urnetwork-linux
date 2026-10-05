@@ -67,6 +67,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
       ctl::Verb::StartTunnel,    ctl::Verb::AttachTunnel,
       ctl::Verb::StopTunnel,     ctl::Verb::SetProvide,
       ctl::Verb::StartProvider,  ctl::Verb::ProviderStats,
+      ctl::Verb::SetProvideExtender,
       ctl::Verb::LocationOverrideAvailable,
       ctl::Verb::LocationOverrideWrite, ctl::Verb::LocationOverrideClear,
       ctl::Verb::UploadLogs,
@@ -83,6 +84,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
   UR_EXPECT_TRUE(ctl::VerbFromString("set_provide") == ctl::Verb::SetProvide);
   UR_EXPECT_TRUE(ctl::VerbFromString("start_provider") == ctl::Verb::StartProvider);
   UR_EXPECT_TRUE(ctl::VerbFromString("provider_stats") == ctl::Verb::ProviderStats);
+  UR_EXPECT_TRUE(ctl::VerbFromString("set_provide_extender") == ctl::Verb::SetProvideExtender);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_available") ==
                  ctl::Verb::LocationOverrideAvailable);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_write") ==
@@ -885,6 +887,83 @@ UR_TEST(controlUploadLogsIsGatedLikeTheLogAndNeverPrompts) {
   const auto older =
       ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(17, ctl::kErrorUnknownVerb)));
   UR_EXPECT_TRUE(ctl::ReplyError(*older) == ctl::kErrorUnknownVerb);
+}
+
+// ---- set_provide_extender: the Extender switch while disconnected ------------
+
+UR_TEST(controlSetProvideExtenderRoundTrip) {
+  for (const bool on : {false, true}) {
+    ctl::SetProvideExtenderRequest req;
+    req.provide_extender = on;
+    const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+        ctl::MakeRequest(ctl::Verb::SetProvideExtender, 21, nlohmann::json(req))));
+    UR_EXPECT_TRUE(ctl::RequestVerb(*back) == ctl::Verb::SetProvideExtender);
+    UR_EXPECT_TRUE(back->get<ctl::SetProvideExtenderRequest>().provide_extender == on);
+  }
+}
+
+// A write whose value did not arrive writes nothing, not a default the user
+// never chose: the daemon answers the throw as an error reply.
+UR_TEST(controlSetProvideExtenderWithoutAValueIsRefused) {
+  for (const char* malformed : {R"({})", R"({"provide_extender":null})",
+                                R"({"provide_extender":"false"})", R"({"provide_extender":0})"}) {
+    bool threw = false;
+    try {
+      (void)nlohmann::json::parse(malformed).get<ctl::SetProvideExtenderRequest>();
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    UR_EXPECT_TRUE_MSG(malformed, threw);
+  }
+}
+
+// Priced like set_provide, whose provider-only session it writes into
+// (control-tunnel, take-over across uids), and a press of the switch, so it
+// may prompt.
+UR_TEST(controlSetProvideExtenderIsGatedLikeSetProvide) {
+  for (const bool crossUid : {false, true}) {
+    UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetProvideExtender, false,
+                                                    crossUid)) ==
+                   ctl::ActionIdForVerb(ctl::Verb::SetProvide, false, crossUid));
+  }
+  UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetProvideExtender, false, false)) ==
+                 ctl::kActionControlTunnel);
+  UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetProvideExtender, false, true)) ==
+                 ctl::kActionTakeOverTunnel);
+  UR_EXPECT_TRUE(ctl::VerbWantsInteraction(ctl::Verb::SetProvideExtender, /*is_log_tail=*/false));
+}
+
+// provider_stats carries the setting beside the role, and the daemon's word
+// that it takes the switch's write.
+UR_TEST(controlProviderStatsCarriesTheExtenderSwitch) {
+  ctl::ProviderStatsReply stats;
+  stats.running = true;
+  stats.extender_provide_status_json = R"({"Supported":true,"State":"off","Enabled":false})";
+  stats.provide_extender = false;
+  stats.provide_extender_writable = true;
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeReply(22, true, nlohmann::json(stats))))
+                        ->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_TRUE(back.provide_extender_writable);
+  UR_EXPECT_FALSE(back.provide_extender);
+  stats.provide_extender = true;
+  UR_EXPECT_TRUE(nlohmann::json(stats).get<ctl::ProviderStatsReply>().provide_extender);
+}
+
+// A daemon from before the verb sends the role without the setting or the
+// writer: the GUI reads no writer, and the switch stays hidden while
+// disconnected, as before.
+UR_TEST(controlProviderStatsFromAnOlderDaemonHasNoExtenderWriter) {
+  const nlohmann::json older = {
+      {"running", true},
+      {"extender_provide_status_json", R"({"Supported":true,"State":"active","Enabled":true})"},
+      {"extender_throughput_points_json", "[]"},
+  };
+  const auto back =
+      ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeReply(23, true, older)))->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_FALSE(back.extender_provide_status_json.empty());
+  UR_EXPECT_FALSE(back.provide_extender_writable);
+  UR_EXPECT_FALSE(back.provide_extender);
+  UR_EXPECT_FALSE(ctl::ProviderStatsReply().provide_extender_writable);
 }
 
 UR_TEST(controlLocationOverrideRoundTrips) {

@@ -37,7 +37,8 @@
 // runs it on any host, ControlProtocol.hpp validates start_provider with it and
 // TunnelHost retires the provider-only device with it. The tail of the file
 // paces how the GUI reads that device's statistics (provider_stats) and how
-// long the daemon keeps polling its provider status.
+// long the daemon keeps polling its provider status, and decides where the
+// Extender switch reads and writes its setting while disconnected.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -181,11 +182,11 @@ class ProviderStepBackoff {
 // statistics (the Earnings plots, the "no traffic yet" line, the provider
 // status) come from the daemon, which runs the SDK's view controllers on it.
 
-// What the GUI's poll does on a tick, while the Earnings destination is on
-// screen. A tunnel session's DeviceRemote is the source while one is bound, and
-// with no provider-only device there is nothing to read, so the daemon's
-// snapshot is dropped then. A daemon that answered that it predates the verb is
-// not asked again on the same connection.
+// What the GUI's poll does on a tick, while the Earnings or the connect
+// destination is on screen. A tunnel session's DeviceRemote is the source while
+// one is bound, and with no provider-only device there is nothing to read, so
+// the daemon's snapshot is dropped then. A daemon that answered that it
+// predates the verb is not asked again on the same connection.
 enum class ProviderStatsStep {
   Drop,   // forget the daemon's snapshot
   Fetch,  // provider_stats
@@ -233,5 +234,59 @@ class ProviderStatusLease {
   bool held_ = false;
   int64_t untilMillis_ = 0;
 };
+
+// ---- the extender switch while disconnected --------------------------------
+// The provider extender setting belongs to the network space
+// (`.provide_extender` in the daemon's storage), and every device reads it from
+// its space when it starts.
+
+// Where set_provide_extender writes it (TunnelHost::SetProvideExtender):
+// through the device that runs, which persists it and applies it at once, and
+// with none into the space the last device ran in, which the next start of
+// either imports. The two devices never run side by side.
+enum class ExtenderSettingTarget {
+  ProviderDevice,  // the provider-only device: the switch's own case
+  SessionDevice,   // a tunnel session's device that came up after the GUI asked
+  NetworkSpace,    // no device: the space the last device ran in
+  None,            // no device has run in this daemon: refused
+};
+
+constexpr ExtenderSettingTarget ExtenderSettingTargetFor(bool providerDevice, bool sessionDevice,
+                                                         bool lastSpace) {
+  if (providerDevice) return ExtenderSettingTarget::ProviderDevice;
+  if (sessionDevice) return ExtenderSettingTarget::SessionDevice;
+  if (lastSpace) return ExtenderSettingTarget::NetworkSpace;
+  return ExtenderSettingTarget::None;
+}
+
+// For logs.
+constexpr const char* ToString(ExtenderSettingTarget target) {
+  switch (target) {
+    case ExtenderSettingTarget::ProviderDevice: return "the provider-only device";
+    case ExtenderSettingTarget::SessionDevice: return "the session's device";
+    case ExtenderSettingTarget::NetworkSpace: return "the last device's network space";
+    case ExtenderSettingTarget::None: break;
+  }
+  return "nothing";
+}
+
+// What the connect page's Extender switch reads and writes
+// (SdkHost::GetExtenderProvideStatus, GetProvideExtender, SetProvideExtender):
+// a bound DeviceRemote over the device rpc; with none, the provider-only
+// device as provider_stats read it, written with set_provide_extender, when
+// that reply said the daemon takes the write; otherwise nothing, and the
+// switch hides (N1: never a dead switch).
+enum class ExtenderSwitchSource {
+  Device,
+  Daemon,
+  None,
+};
+
+constexpr ExtenderSwitchSource ExtenderSwitchSourceFor(bool sessionDevice, bool providerOnlyRead,
+                                                       bool daemonWrites) {
+  if (sessionDevice) return ExtenderSwitchSource::Device;
+  if (providerOnlyRead && daemonWrites) return ExtenderSwitchSource::Daemon;
+  return ExtenderSwitchSource::None;
+}
 
 }  // namespace urnw::provide

@@ -874,6 +874,22 @@ bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request, std::strin
   return true;
 }
 
+bool ControlClient::SetProvideExtender(bool on, std::string* error) {
+  std::scoped_lock lock(mutex_);
+  ctl::SetProvideExtenderRequest req;
+  req.provide_extender = on;
+  // Re-sent once on a dead socket like set_provide: the same value written
+  // twice changes nothing.
+  const auto reply = CallLocked(ctl::Verb::SetProvideExtender, nlohmann::json(req), error,
+                                /*allowRetry=*/true, PolkitAwareTimeoutLocked());
+  if (!reply) return false;
+  if (!ctl::ReplyOk(*reply)) {
+    if (error) *error = ctl::ReplyError(*reply);
+    return false;
+  }
+  return true;
+}
+
 bool ControlClient::LocationOverrideAvailable(bool* available, std::string* reason) {
   std::scoped_lock lock(mutex_);
   std::string error;

@@ -3189,8 +3189,9 @@ void SdkHost::PollDaemonProviderStatsLocked() {
     return;
   }
   ctl::ProviderStatsRequest request;
-  // asked only while the Earnings destination shows the provider status
-  request.poll_status = true;
+  // asked only while the Earnings destination shows the provider status, never
+  // for the connect page's switch alone
+  request.poll_status = providerStatusPolling_;
   std::string error;
   std::optional<ctl::ProviderStatsReply> reply;
   try {
@@ -3234,6 +3235,10 @@ void SdkHost::PollDaemonProviderStatsLocked() {
   stats.extenderPoints = ProviderStatsPart<urnet::ThroughputPointList>(
       reply->extender_throughput_points_json, "extender series");
   stats.extenderProvideStatusJson = reply->extender_provide_status_json;
+  // the setting beside the role and the daemon's word that it takes the
+  // switch's write; a daemon that predates them sends neither
+  stats.provideExtender = reply->provide_extender;
+  stats.provideExtenderWritable = reply->provide_extender_writable;
   const bool statusChanged = !daemonProviderStats_ ||
                              daemonProviderStats_->status.open != stats.status.open ||
                              daemonProviderStats_->status.loaded != stats.status.loaded ||
@@ -3242,7 +3247,9 @@ void SdkHost::PollDaemonProviderStatsLocked() {
                              daemonProviderStats_->statusJson != stats.statusJson;
   const bool extenderChanged =
       !daemonProviderStats_ ||
-      daemonProviderStats_->extenderProvideStatusJson != stats.extenderProvideStatusJson;
+      daemonProviderStats_->extenderProvideStatusJson != stats.extenderProvideStatusJson ||
+      daemonProviderStats_->provideExtender != stats.provideExtender ||
+      daemonProviderStats_->provideExtenderWritable != stats.provideExtenderWritable;
   daemonProviderStats_ = std::move(stats);
   // the events the DeviceRemote and its controllers raise for the same facts
   EmitDrawerEvent(DrawerEvent::Throughput);
@@ -3258,14 +3265,11 @@ void SdkHost::DropDaemonProviderStatsLocked() {
   EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
 }
 
-void SdkHost::SetProviderStatusPolling(bool polling) {
-  std::scoped_lock lock(mutex_);
-  if (providerStatusPolling_ == polling) return;
-  providerStatusPolling_ = polling;
-  // The provider-only device's statistics follow the same schedule: read at
-  // once, then about once a second, while polling. Stopping keeps the last
-  // snapshot, as the controller below keeps its own.
-  if (polling) {
+void SdkHost::ScheduleProviderStatsPollLocked(bool readNow) {
+  // The provider-only device's statistics: read at once, then about once a
+  // second, while a destination wants them. Stopping keeps the last snapshot,
+  // as the provider status controller keeps its own.
+  if (providerStatusPolling_ || providerExtenderPolling_) {
     if (providerStatsPollId_ == 0) {
       providerStatsPollId_ = g_timeout_add(
           kProviderStatsPollMillis,
@@ -3277,11 +3281,25 @@ void SdkHost::SetProviderStatusPolling(bool polling) {
           },
           this);
     }
-    PollDaemonProviderStatsLocked();
+    if (readNow) PollDaemonProviderStatsLocked();
   } else if (providerStatsPollId_ != 0) {
     g_source_remove(providerStatsPollId_);
     providerStatsPollId_ = 0;
   }
+}
+
+void SdkHost::SetProviderExtenderPolling(bool polling) {
+  std::scoped_lock lock(mutex_);
+  if (providerExtenderPolling_ == polling) return;
+  providerExtenderPolling_ = polling;
+  ScheduleProviderStatsPollLocked(/*readNow=*/polling);
+}
+
+void SdkHost::SetProviderStatusPolling(bool polling) {
+  std::scoped_lock lock(mutex_);
+  if (providerStatusPolling_ == polling) return;
+  providerStatusPolling_ = polling;
+  ScheduleProviderStatsPollLocked(/*readNow=*/polling);
   if (!providerStatusVc_) return;
   if (polling) {
     providerStatusVc_->start();
@@ -3869,10 +3887,25 @@ std::optional<urnet::ExtenderProvideStatus> SdkHost::DeviceExtenderProvideStatus
   }
 }
 
+provide::ExtenderSwitchSource SdkHost::ExtenderSwitchSourceLocked() const {
+  return provide::ExtenderSwitchSourceFor(
+      device_.has_value(), daemonProviderStats_.has_value(),
+      daemonProviderStats_ && daemonProviderStats_->provideExtenderWritable);
+}
+
 std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
   std::scoped_lock lock(mutex_);
-  if (!device_) return std::nullopt;  // no session: the connect page's row hides
-  return DeviceExtenderProvideStatusLocked();
+  switch (ExtenderSwitchSourceLocked()) {
+    case provide::ExtenderSwitchSource::Device:
+      return DeviceExtenderProvideStatusLocked();
+    case provide::ExtenderSwitchSource::Daemon:
+      // no session: the provider-only device's role, whose switch the daemon
+      // writes
+      return daemonProviderStats_->extenderProvideStatus;
+    case provide::ExtenderSwitchSource::None:
+      break;
+  }
+  return std::nullopt;  // nothing takes the switch's write: the row hides
 }
 
 std::optional<urnet::ExtenderProvideStatus> SdkHost::ProviderExtenderProvideStatus() {
@@ -3885,18 +3918,40 @@ std::optional<urnet::ExtenderProvideStatus> SdkHost::ProviderExtenderProvideStat
 
 bool SdkHost::GetProvideExtender() {
   std::scoped_lock lock(mutex_);
-  // the setting's default with no device (N4); the row is hidden then
-  if (!device_) return true;
-  return device_->getProvideExtender();
+  switch (ExtenderSwitchSourceLocked()) {
+    case provide::ExtenderSwitchSource::Device:
+      return device_->getProvideExtender();
+    case provide::ExtenderSwitchSource::Daemon:
+      return daemonProviderStats_->provideExtender;
+    case provide::ExtenderSwitchSource::None:
+      break;
+  }
+  // the setting's default (N4); the row is hidden then
+  return true;
 }
 
 void SdkHost::SetProvideExtender(bool on) {
   std::scoped_lock lock(mutex_);
-  if (!device_) {
-    g_warning("extender: dropping a provide extender write with no device");
-    return;
+  switch (ExtenderSwitchSourceLocked()) {
+    case provide::ExtenderSwitchSource::Device:
+      device_->setProvideExtender(on);
+      return;
+    case provide::ExtenderSwitchSource::Daemon: {
+      std::string error;
+      if (!control_.SetProvideExtender(on, &error)) {
+        g_warning("extender: the system service did not write the provide extender setting: %s",
+                  error.empty() ? "no detail" : error.c_str());
+      }
+      // Read back at once, written or refused, and redrawn after the switch's
+      // guess: the row shows the setting as it stands.
+      PollDaemonProviderStatsLocked();
+      EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
+      return;
+    }
+    case provide::ExtenderSwitchSource::None:
+      break;
   }
-  device_->setProvideExtender(on);
+  g_warning("extender: dropping a provide extender write with no device");
 }
 
 std::optional<urnet::ExtenderSettings> SdkHost::GetExtenderSettings() {

@@ -156,7 +156,8 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | `stop_tunnel` | — | `ok` |
 | `set_provide` | `mode` | `ok` |
 | `start_provider` | `by_jwt`, `instance_id`, `app_version`, `network_space_json`, `provide_mode`, `provider_transport_settings_json` | `ok` + the status |
-| `provider_stats` | `poll_status` | `running`, `has_provider_stats`, `provider_throughput_points_json`, `provider_transport_distribution_json`, `status_open`, `status_loaded`, `status_last_fetch_error`, `provider_status_json`, `extender_provide_status_json`, `extender_throughput_points_json` |
+| `provider_stats` | `poll_status` | `running`, `has_provider_stats`, `provider_throughput_points_json`, `provider_transport_distribution_json`, `status_open`, `status_loaded`, `status_last_fetch_error`, `provider_status_json`, `extender_provide_status_json`, `extender_throughput_points_json`, `provide_extender`, `provide_extender_writable` |
+| `set_provide_extender` | `provide_extender` | `ok` |
 | `location_override_available` | — | `available`, `reason` |
 | `location_override_write` | `lat`, `lon`, `accuracy_m` | `ok` |
 | `location_override_clear` | — | `ok` |
@@ -251,6 +252,22 @@ applies the same value to its own process from its health poll. Absent (an older
 daemon) parses `""`, and a redacted status carries none. ModemManager is asked only
 while its bus name has an owner and never with auto-start, so a disabled ModemManager
 stays stopped.
+
+`set_provide_extender` is the connect page's Extender switch while there is no tunnel
+session. The provider extender setting belongs to the network space
+(`.provide_extender` in the daemon's storage), and every device reads it from its space
+when it starts, so the daemon writes it through the device that runs (the provider-only
+device, which persists it and applies it at once, or a tunnel session's device that came
+up meanwhile), or with neither into the space the last device ran in, which the next
+start imports (`provide::ExtenderSettingTargetFor`). A change made while disconnected
+therefore holds after a Connect, and one made while connected holds after a Disconnect.
+It is authorized like `set_provide` (a press, so interactive), refused while a bring-up
+owns the session, and a request without a boolean `provide_extender` is refused rather
+than written as a default. `provider_stats` carries the setting (`provide_extender`) and
+`provide_extender_writable`, and the GUI shows the switch over the provider-only device
+only when that is true, polling `provider_stats` while the connect destination is on
+screen too (without `poll_status`). A daemon that predates the verb sends neither field,
+so the switch stays hidden while disconnected, as before.
 
 **`sdk_version` must match EXACTLY, and this is a second, independent check.**
 `protocol_version` guards *our* JSON control socket; the **device RPC has no version

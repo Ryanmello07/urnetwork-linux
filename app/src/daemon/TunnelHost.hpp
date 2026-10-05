@@ -168,11 +168,24 @@ class TunnelHost {
   bool ProviderRunning() const;
   // What the provider-only device's own view controllers say (provider_stats):
   // its provider series, transport share and packet-stats bit, its provider
-  // status, and its extender role's status and series. `pollStatus` renews the
-  // status controller's polling lease (provide::ProviderStatusLease). Empty
-  // without that device, and while a bring-up owns the session (which retires
-  // it first). MAIN LOOP ONLY; never blocks, and never throws across the wire.
+  // status, its extender role's status and series, and the provider extender
+  // setting with this daemon's word that it takes its write. `pollStatus`
+  // renews the status controller's polling lease (provide::ProviderStatusLease).
+  // Empty without that device, and while a bring-up owns the session (which
+  // retires it first). MAIN LOOP ONLY; never blocks, and never throws across
+  // the wire.
   ctl::ProviderStatsReply ProviderStats(bool pollStatus);
+  // The connect page's Extender switch while no tunnel session's device takes
+  // it (set_provide_extender): writes the provider extender setting where
+  // provide::ExtenderSettingTargetFor says — through the provider-only device
+  // (persisted in its space and applied at once), a session's device that came
+  // up meanwhile, or with neither networkSpace_, the space the last device ran
+  // in, which the next start imports again. Refused while a bring-up owns the
+  // session, never waited behind. False with `error` when nothing took the
+  // write. Main loop only; the write itself is local to this process (the
+  // space's setting file, and the role's start or stop, as set_provide's mode
+  // change does).
+  bool SetProvideExtender(bool on, std::string* error);
 
   // upload_logs (ControlProtocol.hpp; LogUpload.hpp carries the lifecycle):
   // "send feedback with logs" uploads this process's glog files, connected or

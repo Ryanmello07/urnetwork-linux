@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -357,6 +358,7 @@ enum class Verb {
   SetProvide,
   StartProvider,
   ProviderStats,
+  SetProvideExtender,
   SetKillSwitch,
   LocationOverrideAvailable,
   LocationOverrideWrite,
@@ -375,6 +377,7 @@ inline const char* ToString(Verb v) {
     case Verb::SetProvide: return "set_provide";
     case Verb::StartProvider: return "start_provider";
     case Verb::ProviderStats: return "provider_stats";
+    case Verb::SetProvideExtender: return "set_provide_extender";
     case Verb::SetKillSwitch: return "set_kill_switch";
     case Verb::LocationOverrideAvailable: return "location_override_available";
     case Verb::LocationOverrideWrite: return "location_override_write";
@@ -394,6 +397,7 @@ inline Verb VerbFromString(const std::string& s) {
   if (s == "set_provide") return Verb::SetProvide;
   if (s == "start_provider") return Verb::StartProvider;
   if (s == "provider_stats") return Verb::ProviderStats;
+  if (s == "set_provide_extender") return Verb::SetProvideExtender;
   if (s == "set_kill_switch") return Verb::SetKillSwitch;
   if (s == "location_override_available") return Verb::LocationOverrideAvailable;
   if (s == "location_override_write") return Verb::LocationOverrideWrite;
@@ -450,6 +454,9 @@ inline const char* ActionIdForVerb(Verb verb, bool is_log_tail, bool cross_uid) 
     // the uid that started it, so another uid's start costs the take-over
     // action exactly as replacing their tunnel would.
     case Verb::StartProvider:
+    // set_provide_extender too: it writes that session's provider extender
+    // setting, the switch beside the provide mode.
+    case Verb::SetProvideExtender:
     case Verb::LocationOverrideWrite:
     case Verb::LocationOverrideClear:
       return cross_uid ? kActionTakeOverTunnel : kActionControlTunnel;
@@ -488,6 +495,8 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     case Verb::AttachTunnel:
     case Verb::StopTunnel:
     case Verb::SetProvide:
+    // a press of the connect page's Extender switch
+    case Verb::SetProvideExtender:
     case Verb::SetKillSwitch:
     case Verb::LocationOverrideWrite:
     case Verb::LocationOverrideClear:
@@ -952,6 +961,33 @@ inline void from_json(const nlohmann::json& j, SetProvideRequest& v) {
   detail::Get(j, "mode", v.mode);
 }
 
+// set_provide_extender: the connect page's Extender switch while no tunnel
+// session's device takes it (support inbox 1521, P008). The setting belongs to
+// the network space (`.provide_extender` in the daemon's storage), and every
+// device reads it from its space when it starts, so the daemon writes it
+// through the device that runs, or with none into the space the last device
+// ran in (provide::ExtenderSettingTargetFor). A Connect after the change reads
+// it, and so does a provider-only device after a change made while connected.
+// Gated like set_provide. A new verb, additive within protocol v1: the GUI
+// sends it only to a daemon whose provider_stats said it takes it, so a daemon
+// that predates it is never asked (it would answer kErrorUnknownVerb).
+struct SetProvideExtenderRequest {
+  bool provide_extender = true;
+};
+inline void to_json(nlohmann::json& j, const SetProvideExtenderRequest& v) {
+  j["provide_extender"] = v.provide_extender;
+}
+// Strict, unlike the tolerant reads: a write whose value did not arrive must
+// not write a default the user never chose. The daemon answers the throw as an
+// error reply.
+inline void from_json(const nlohmann::json& j, SetProvideExtenderRequest& v) {
+  auto it = j.find("provide_extender");
+  if (it == j.end() || !it->is_boolean()) {
+    throw std::runtime_error("set_provide_extender requires provide_extender (a boolean)");
+  }
+  v.provide_extender = it->get<bool>();
+}
+
 // ---- start_provider --------------------------------------------------------
 // Keep providing while disconnected (support inbox 1521, P008). The daemon
 // builds a provider-only DeviceLocal: the persisted device identity, this
@@ -1301,14 +1337,16 @@ inline StatusReply RedactStatusForForeignUid(const StatusReply& full) {
 // GUI; the provider-only device has no DeviceRemote, so the daemon reads them
 // for it. They are the Earnings page's provider plots and their gate, its "no
 // traffic yet" line, the provider status behind the reason line, the demand
-// histogram and "Why?", and its read-only extender row and extender plot.
+// histogram and "Why?", its read-only extender row and extender plot, and the
+// connect page's Extender switch.
 //
-// Polled, about once a second while the Earnings destination is on screen, so
-// it is answered like `status`: no polkit check, and an empty reply for a
-// caller whose status would be redacted (another uid's session; the series and
-// the status describe that user's provider). A NEW VERB, additive within
-// protocol v1: a daemon that predates it answers kErrorUnknownVerb, and the GUI
-// then shows no provider statistics while disconnected, as before.
+// Polled, about once a second while the Earnings or the connect destination is
+// on screen, so it is answered like `status`: no polkit check, and an empty
+// reply for a caller whose status would be redacted (another uid's session;
+// the series and the status describe that user's provider). A NEW VERB,
+// additive within protocol v1: a daemon that predates it answers
+// kErrorUnknownVerb, and the GUI then shows no provider statistics while
+// disconnected, as before.
 struct ProviderStatsRequest {
   // The Earnings destination is on screen: keep the provider status controller
   // polling GET /network/provider-status (about once a minute). The daemon
@@ -1354,6 +1392,13 @@ struct ProviderStatsReply {
   // the extender row and plot stay hidden while disconnected, as before.
   std::string extender_provide_status_json;
   std::string extender_throughput_points_json;
+  // The provider extender setting read beside the role (getProvideExtender),
+  // the connect page's Extender switch, and that this daemon takes the
+  // switch's write (set_provide_extender). A daemon that predates them sends
+  // neither, which reads as no writer: the switch stays hidden while
+  // disconnected, as before.
+  bool provide_extender = false;
+  bool provide_extender_writable = false;
 };
 inline void to_json(nlohmann::json& j, const ProviderStatsReply& v) {
   j["running"] = v.running;
@@ -1366,6 +1411,8 @@ inline void to_json(nlohmann::json& j, const ProviderStatsReply& v) {
   j["provider_status_json"] = v.provider_status_json;
   j["extender_provide_status_json"] = v.extender_provide_status_json;
   j["extender_throughput_points_json"] = v.extender_throughput_points_json;
+  j["provide_extender"] = v.provide_extender;
+  j["provide_extender_writable"] = v.provide_extender_writable;
 }
 inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
   detail::Get(j, "running", v.running);  // absent = nothing runs
@@ -1378,6 +1425,8 @@ inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
   detail::Get(j, "provider_status_json", v.provider_status_json);
   detail::Get(j, "extender_provide_status_json", v.extender_provide_status_json);
   detail::Get(j, "extender_throughput_points_json", v.extender_throughput_points_json);
+  detail::Get(j, "provide_extender", v.provide_extender);
+  detail::Get(j, "provide_extender_writable", v.provide_extender_writable);  // absent = no writer
 }
 
 // ---- upload_logs -----------------------------------------------------------

@@ -323,12 +323,16 @@ ConnectPage::ConnectPage(SdkHost& host)
   signal_map().connect([this] {
     pageVisible_ = true;
     UpdateClock();
+    // the provider-only device's extender role, for the Extender switch while
+    // disconnected; read at once, so the re-seed below draws it
+    host_.SetProviderExtenderPolling(true);
     // a destination that was hidden while feeds moved re-seeds on entry
     if (presenting_) Resync();
   });
   signal_unmap().connect([this] {
     pageVisible_ = false;
     UpdateClock();
+    host_.SetProviderExtenderPolling(false);
   });
 }
 
@@ -2174,8 +2178,10 @@ void ConnectPage::ApplyKillSwitchUi() {
 // ---- the provider extender row (EXTENDER.md N7) -------------------------------
 
 // Re-reads the status, and beside a status that shows, the setting the switch
-// takes its position from. No status (no device) and an unsupported role both
-// hide the row, and a row that will not show reads nothing else.
+// takes its position from: the bound device's, or while disconnected the
+// provider-only device's when the daemon takes the switch's write. No status
+// and an unsupported role both hide the row, and a row that will not show
+// reads nothing else.
 void ConnectPage::ApplyExtenderProvideState() {
   DrawExtenderRow(extender::ProvideRowOf(host_.GetExtenderProvideStatus(),
                                          [this] { return host_.GetProvideExtender(); }));
