@@ -46,7 +46,7 @@ ControlDohSection::ControlDohSection(SdkHost& host, bool withTitle)
   // The privacy disclosure is part of the description, so it is always shown.
   append(*MakeHint(T_("control_doh_urls_description", "URnetwork looks up the names of its own servers over DNS-over-HTTPS. If the built-in servers are blocked on your network, add servers that work there. URnetwork tries them first, and they can see these lookups.")));
 
-  // One server per line. No placeholder: an empty box MEANS the built-in
+  // One server per line. No placeholder: an empty box means the built-in
   // servers alone, and the hint under it shows the shape of a line.
   urls_ = Gtk::make_managed<Gtk::TextView>();
   urls_->set_monospace(true);
@@ -87,7 +87,7 @@ ControlDohSection::ControlDohSection(SdkHost& host, bool withTitle)
   actions->append(*save_);
   append(*actions);
 
-  // A result line is a PLAIN label, as the extender form's status is: its tone
+  // A result line is a plain label, as the extender form's status is: its tone
   // comes from kit::ApplySupportingText.
   status_ = Gtk::make_managed<Gtk::Label>();
   status_->set_xalign(0);
@@ -141,7 +141,7 @@ void ControlDohSection::Save(const std::vector<std::string>& urls) {
     ShowResult(Tr(outcome.message), {}, true);
     return;
   }
-  // Read back what the SDK STORED -- normalized, repeats dropped, v4 before v6
+  // Read back what the SDK stored -- normalized, repeats dropped, v4 before v6
   // -- so the box shows what is in force and the next open agrees with it.
   if (const auto stored = host_.GetControlDohUrls()) SetBox(extender::JoinHostLines(*stored));
   ShowResult(Tr(outcome.message), Tr(outcome.note), false);

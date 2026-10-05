@@ -98,7 +98,7 @@ ExcludeAppsSheet::ExcludeAppsSheet(Gtk::Window& parent) {
 
   search_ = Gtk::make_managed<Gtk::SearchEntry>();
   search_->set_placeholder_text(T_("search_apps_placeholder", "Search apps"));
-  // a placeholder is NOT an accessible name
+  // a placeholder is not an accessible name
   kit::SetAccessibleLabel(*search_, T_("search_apps_placeholder", "Search apps"));
   search_->signal_search_changed().connect([this] { Render(); });
   intro->append(*search_);

@@ -1,4 +1,4 @@
-// The bootstrap DNS-over-HTTPS servers of the ACTIVE network space (sdk
+// The bootstrap DNS-over-HTTPS servers of the active network space (sdk
 // control_doh_ui.go): `https://<ip literal>/<path>` servers the space's own
 // names (api, connect, extender) are looked up through ahead of the built-in
 // ones, for a network that blocks those -- mainland China blocks all four. The
@@ -8,7 +8,7 @@
 // the extender settings. The login screen's "Change Network API" sheet opens it
 // in a sheet of its own (ControlDohSheet), before sign-in: a fresh install
 // behind such a network cannot resolve the api to sign in at all, so that door
-// is the one it needs. Either way it edits the ACTIVE space through SdkHost,
+// is the one it needs. Either way it edits the active space through SdkHost,
 // with or without a tunnel: the servers are a value of the GUI's own space,
 // which urnetworkd imports at its next tunnel start.
 //

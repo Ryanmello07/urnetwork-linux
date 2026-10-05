@@ -114,7 +114,7 @@ NetworkServerSheet::NetworkServerSheet(Gtk::Window& parent, SdkHost& sdk) : sdk_
   vlessRow.root->set_sensitive(current_.managerAvailable);
   vlessRow.root->signal_clicked().connect([this] { OpenVless(); });
   box->append(*vlessRow.root);
-  // The ACTIVE space's bootstrap DNS-over-HTTPS servers, the section Account >
+  // The active space's bootstrap DNS-over-HTTPS servers, the section Account >
   // Extenders shows, saved on their own like VLESS. On a network that blocks
   // the built-in DoH servers a fresh install cannot resolve the api to sign in,
   // so this is the door it needs.
@@ -173,7 +173,7 @@ void NetworkServerSheet::OpenVless() {
 }
 
 void NetworkServerSheet::OpenControlDoh() {
-  // transient for THIS sheet, as the VLESS sheet is
+  // transient for this sheet, as the VLESS sheet is
   if (!controlDohSheet_) controlDohSheet_ = std::make_unique<ControlDohSheet>(*this, sdk_);
   controlDohSheet_->Open();
 }

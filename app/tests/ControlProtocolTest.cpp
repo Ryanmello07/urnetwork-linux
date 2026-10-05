@@ -598,7 +598,7 @@ UR_TEST(controlSameProviderDeviceReplacesOnAChangedSpace) {
   UR_EXPECT_TRUE(ctl::SameProviderDevice(running, remoded));
 
   ctl::StartProviderRequest doh = running;
-  doh.network_space_json = R"({"values":{"control_doh_urls_ipv4":["https://223.5.5.5/"]}})";
+  doh.network_space_json = R"({"values":{"control_doh_urls_ipv4":["https://192.0.2.53/"]}})";
   UR_EXPECT_FALSE(ctl::SameProviderDevice(running, doh));
 
   ctl::StartProviderRequest jwt = running;

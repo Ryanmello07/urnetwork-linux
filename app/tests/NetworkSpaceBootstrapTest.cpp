@@ -360,7 +360,7 @@ UR_TEST(aNewlyCreatedBundledSpaceIsActivated) {
   UR_EXPECT_TRUE(space.key.host_name == std::optional<std::string>("bringyour.com"));
 }
 
-// The ORDER: the legacy move first, the bundled space's existence sampled
+// The order: the legacy move first, the bundled space's existence sampled
 // before the refresh can create it, and the selection read after the refresh.
 UR_TEST(theLaunchSamplesTheBundledSpaceBeforeTheRefresh) {
   RecordingManager manager;

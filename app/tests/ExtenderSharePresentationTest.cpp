@@ -111,12 +111,13 @@ UR_TEST(ExtenderHosts_RoundTrip) {
 // ---- the bootstrap DNS-over-HTTPS servers ---------------------------------------
 
 namespace {
-// the sdk's China preset (connect RegionalControlDohUrls("cn")), v4 first
-const std::vector<std::string> kChinaServers = {
-    "https://223.5.5.5/dns-query",
-    "https://223.6.6.6/dns-query",
-    "https://1.12.12.12/dns-query",
-    "https://120.53.53.53/dns-query",
+// a regional preset in the shape of the sdk's (connect RegionalControlDohUrls),
+// v4 first, on documentation addresses
+const std::vector<std::string> kPresetServers = {
+    "https://192.0.2.53/dns-query",
+    "https://192.0.2.54/dns-query",
+    "https://198.51.100.53/dns-query",
+    "https://203.0.113.53/dns-query",
 };
 }  // namespace
 
@@ -125,22 +126,22 @@ const std::vector<std::string> kChinaServers = {
 // split would cut it in two.
 UR_TEST(ControlDohLines_SplitOnLineBreaksOnly) {
   const auto lines =
-      SplitControlDohLines("https://223.5.5.5/q\r\n  https://1.12.12.12/q \rhttps://1.2.3.4/a,b\n\n");
+      SplitControlDohLines("https://192.0.2.53/q\r\n  https://198.51.100.53/q \rhttps://203.0.113.4/a,b\n\n");
   UR_EXPECT_EQ(3, static_cast<int>(lines.size()));
   if (lines.size() != 3) return;
-  UR_EXPECT_TRUE(lines[0] == "https://223.5.5.5/q");
-  UR_EXPECT_TRUE(lines[1] == "https://1.12.12.12/q");
-  UR_EXPECT_TRUE(lines[2] == "https://1.2.3.4/a,b");
+  UR_EXPECT_TRUE(lines[0] == "https://192.0.2.53/q");
+  UR_EXPECT_TRUE(lines[1] == "https://198.51.100.53/q");
+  UR_EXPECT_TRUE(lines[2] == "https://203.0.113.4/a,b");
 }
 
 // The order typed, repeats kept: dropping them is the SDK's, with the
 // normalizing, so every platform hands it the same list.
 UR_TEST(ControlDohLines_OrderAndRepeatsAreTheSdks) {
   const auto lines = SplitControlDohLines(
-      "https://223.6.6.6/dns-query\nhttps://223.5.5.5/dns-query\nhttps://223.6.6.6/dns-query");
-  UR_EXPECT_TRUE(lines == std::vector<std::string>({"https://223.6.6.6/dns-query",
-                                                    "https://223.5.5.5/dns-query",
-                                                    "https://223.6.6.6/dns-query"}));
+      "https://192.0.2.54/dns-query\nhttps://192.0.2.53/dns-query\nhttps://192.0.2.54/dns-query");
+  UR_EXPECT_TRUE(lines == std::vector<std::string>({"https://192.0.2.54/dns-query",
+                                                    "https://192.0.2.53/dns-query",
+                                                    "https://192.0.2.54/dns-query"}));
 }
 
 // An empty box is the built-in servers alone.
@@ -153,11 +154,11 @@ UR_TEST(ControlDohLines_AnEmptyBoxIsTheBuiltInServers) {
 // the same list back.
 UR_TEST(ControlDohLines_ThePresetIsOnePerLine) {
   UR_EXPECT_TRUE(std::string(kControlDohChinaCountryCode) == "cn");
-  UR_EXPECT_TRUE(JoinHostLines(kChinaServers) == R"(https://223.5.5.5/dns-query
-https://223.6.6.6/dns-query
-https://1.12.12.12/dns-query
-https://120.53.53.53/dns-query)");
-  UR_EXPECT_TRUE(SplitControlDohLines(JoinHostLines(kChinaServers)) == kChinaServers);
+  UR_EXPECT_TRUE(JoinHostLines(kPresetServers) == R"(https://192.0.2.53/dns-query
+https://192.0.2.54/dns-query
+https://198.51.100.53/dns-query
+https://203.0.113.53/dns-query)");
+  UR_EXPECT_TRUE(SplitControlDohLines(JoinHostLines(kPresetServers)) == kPresetServers);
 }
 
 // Every SDK id is its own key (the sdk's literal ids), each with its message.
@@ -234,11 +235,11 @@ UR_TEST(ControlDohText_KeysAreTheCatalogs) {
 // not the switch is on yet; a code without settings, or whose settings name
 // none, says nothing and leaves this device's servers alone.
 UR_TEST(ControlDohImport_TheSettingsServersAreNamed) {
-  UR_EXPECT_TRUE(ControlDohImportArg(true, {"https://223.5.5.5/dns-query",
-                                            "https://1.12.12.12/dns-query"}) ==
-                 "https://223.5.5.5/dns-query, https://1.12.12.12/dns-query");
+  UR_EXPECT_TRUE(ControlDohImportArg(true, {"https://192.0.2.53/dns-query",
+                                            "https://198.51.100.53/dns-query"}) ==
+                 "https://192.0.2.53/dns-query, https://198.51.100.53/dns-query");
   UR_EXPECT_TRUE(ControlDohImportArg(true, {}).empty());
-  UR_EXPECT_TRUE(ControlDohImportArg(false, kChinaServers).empty());
+  UR_EXPECT_TRUE(ControlDohImportArg(false, kPresetServers).empty());
 }
 
 // ---- the share screen -------------------------------------------------------

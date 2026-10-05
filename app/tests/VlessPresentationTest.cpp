@@ -827,8 +827,8 @@ UR_TEST(StoredSpace_ReapplyingTheServerKeepsVless) {
 // what the space stores. A space that dropped them on a network blocking the
 // built-in DoH servers could no longer resolve its own api.
 UR_TEST(StoredSpace_ControlDohUrlsSurviveTheThreeWriters) {
-  const std::vector<std::string> v4 = {"https://223.5.5.5/dns-query",
-                                       "https://1.12.12.12/dns-query"};
+  const std::vector<std::string> v4 = {"https://192.0.2.53/dns-query",
+                                       "https://198.51.100.53/dns-query"};
   const std::vector<std::string> v6 = {"https://[2001:db8::53]/dns-query"};
   auto stored = [&](const char* hostName) {
     nlohmann::json document = nlohmann::json::parse(kStoredSpaceJson);

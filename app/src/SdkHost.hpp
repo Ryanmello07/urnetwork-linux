@@ -469,7 +469,7 @@ class SdkHost {
   static std::string ValidateVlessSettings(const urnet::VlessSettings& settings);
 
   // ---- bootstrap DNS-over-HTTPS servers (sdk control_doh_ui.go) ---------------
-  // `https://<ip literal>/<path>` servers in the ACTIVE network space, tried
+  // `https://<ip literal>/<path>` servers in the active network space, tried
   // ahead of the built-in DoH servers for the lookups of the space's own names,
   // for networks that block the built-in ones. Account > Extenders and the
   // login screen's network sheet (before sign-in: a fresh install behind such a
@@ -679,7 +679,7 @@ class SdkHost {
   std::string GetProvideControlMode();
   bool ProvideEnabled();
 
-  // KEEP PROVIDING WHILE DISCONNECTED (ProvideLifecycle.hpp). With no tunnel
+  // Keep providing while disconnected (ProvideLifecycle.hpp). With no tunnel
   // session the daemon's provider-only device is the provider; this keeps it in
   // step with the stored provide mode — started, re-moded, or stopped
   // (provide::DisconnectedProviderStep) — and drops a device bound to a
@@ -969,7 +969,7 @@ class SdkHost {
   // the same path ApplyNetworkServer uses -- over what the space stores, so no
   // other value moves. Empty ip AND secret clears it.
   //
-  // This writes the GUI's OWN space, the one its api/auth calls dial. urnetworkd
+  // This writes the GUI's own space, the one its api/auth calls dial. urnetworkd
   // builds its devices from the space the GUI sends with start_tunnel and
   // start_provider, so a tunnel takes a private extender set here at its next
   // connect, and a running provider-only device at once (the save sends

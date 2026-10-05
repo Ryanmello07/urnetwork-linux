@@ -604,7 +604,7 @@ constexpr bool CaptureV6Claims(std::string_view address) {
 //
 // `urnetwork-exclude <command>` (app/packaging/urnetwork-exclude) runs a
 // command in the user's systemd slice urnetwork-exclude.slice. While a ruleset
-// is installed, urnetworkd lets the sockets in the TUNNEL OWNER's slice leave
+// is installed, urnetworkd lets the sockets in the tunnel owner's slice leave
 // outside the tunnel, and nothing else:
 //   * urnw_mark_out marks their packets with kBypassMark (`socket cgroupv2`,
 //     the same match the daemon uses for its own sockets);

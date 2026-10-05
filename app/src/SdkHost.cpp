@@ -828,8 +828,8 @@ std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::str
   try {
     // Through the space's own setter, not the values write SetPrivateExtender
     // makes: the setter validates every line (an https url on an ip literal),
-    // drops repeats, normalizes and answers the error id, and it applies IN
-    // PLACE (sdk updateInPlaceValues) -- the strategy's DoH cache is swapped
+    // drops repeats, normalizes and answers the error id, and it applies in
+    // place (sdk updateInPlaceValues) -- the strategy's DoH cache is swapped
     // and networkSpace_, with everything derived from it, stays valid.
     std::optional<std::string> answer = networkSpace_->setControlDohUrls(urnet::StringList(urls));
     // "" is a save. The tunnel takes the servers at the next connect (the
@@ -4203,7 +4203,7 @@ void SdkHost::Disconnect() {
   // teardown the SDK can simply stop publishing, and a reading nobody
   // refreshes is exactly how the row used to latch on its last word.
   PublishConnectReading();
-  // AND KEEP PROVIDING. stop_tunnel ended the daemon's DeviceLocal along with
+  // And keep providing. stop_tunnel ended the daemon's DeviceLocal along with
   // the tunnel, which is how a Linux "Always" provider used to stop earning
   // the moment it disconnected. When the provide mode still provides while
   // disconnected, the provider-only device takes over — no tun, no routes, no
@@ -4292,7 +4292,7 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
   providerStateKnown_ = true;
 
   if (device_) {
-    // A live tunnel session's device IS the provider. One in flux is decided
+    // A live tunnel session's device is the provider. One in flux is decided
     // on the next call.
     const bool live = status->tunnel_state == ctl::TunnelState::Up && status->rpc_pinned &&
                       deviceControlGeneration_ == control_.SessionGeneration();

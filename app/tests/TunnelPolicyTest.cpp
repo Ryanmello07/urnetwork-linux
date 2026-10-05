@@ -720,7 +720,7 @@ UR_TEST(excludeSliceIsTheOwnersSliceBelowTheirUserManager) {
   UR_EXPECT_EQ(0, urnw::CgroupPathLevel(""));
 }
 
-// THE v1 DETECTION. The exclusion is hidden unless /proc/self/cgroup describes
+// The v1 detection. The exclusion is hidden unless /proc/self/cgroup describes
 // the unified hierarchy alone.
 UR_TEST(cgroupV1OnlyAndHybridHostsHideTheExclusion) {
   UR_EXPECT_TRUE(urnw::IsCgroupV2Only("0::/user.slice/user-1000.slice/session-2.scope\n"));
@@ -756,8 +756,8 @@ UR_TEST(excludeRulesRenderTheBypassMark) {
 }
 
 // The rules are only as safe as where BuildNftRuleset puts them: marked in the
-// mark chain, accepted in urnw_out BEFORE the blocks that would refuse them and
-// AFTER the metadata drop, masqueraded only while a tun exists, and all of it
+// mark chain, accepted in urnw_out before the blocks that would refuse them and
+// after the metadata drop, masqueraded only while a tun exists, and all of it
 // from the derived (cgroup-matched, quotable) list, never the raw config.
 UR_TEST(buildNftRulesetPlacesTheExclusionRules) {
   const std::string body = FunctionBody(ReadTunnelSource(),
@@ -811,7 +811,7 @@ UR_TEST(buildNftRulesetPlacesTheExclusionRules) {
                      gate != std::string::npos && fill != std::string::npos && gate < fill);
 }
 
-// AN EXCLUSION NEVER COSTS THE FLOOR: absent slices are dropped before the load,
+// An exclusion never costs the floor: absent slices are dropped before the load,
 // a refused load is retried without the exclusion, and the launcher's slice list
 // follows what is actually in force.
 UR_TEST(netFilterApplyNeverLetsTheExclusionCostTheFloor) {
