@@ -1140,7 +1140,7 @@ struct StatusReply {
   // while the default route leaves through a registered modem, "" on every
   // other network. The daemon applies it to the devices it builds; the GUI
   // applies it to its own process, whose sign-in and api dials draw their
-  // extender names from the same spoof list. ADDITIVE within v1; absent parses
+  // extender names from the same spoof list. Additive within v1; absent parses
   // "", which is what a daemon predating it is and what "no country" means
   // anyway. RedactStatusForForeignUid drops it like every field it does not
   // list, so another uid's GUI reports no country rather than this one.

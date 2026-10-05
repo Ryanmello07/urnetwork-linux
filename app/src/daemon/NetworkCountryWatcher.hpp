@@ -3,7 +3,7 @@
 // while ModemManager runs, which interfaces its modems carry data on and which
 // operator each is registered to.
 //
-// WHY THE DAEMON READS IT, AND NOT THE GUI. The value is process-wide in the
+// Why the daemon reads it, and not the GUI. The value is process-wide in the
 // sdk and has to be in force where the devices dial: the daemon builds both
 // DeviceLocals (the tunnel's and the provider-only one) and keeps them running
 // after the GUI quits, across network changes nobody in the GUI would see.
@@ -12,7 +12,7 @@
 // `status` (network_country_code), and the GUI applies the same value to its
 // own sign-in and api dials.
 //
-// MAIN LOOP ONLY, and it never blocks the loop: every ModemManager call is
+// Main loop only, and it never blocks the loop: every ModemManager call is
 // asynchronous, carries G_DBUS_CALL_FLAGS_NO_AUTO_START (an installed but
 // disabled ModemManager is never started by being asked something), and is
 // made only while its bus name has an owner. The default route is two /proc

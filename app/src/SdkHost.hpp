@@ -700,7 +700,7 @@ class SdkHost {
   // (providerstatus::SessionIdleReasonFor).
   bool ProviderRuns();
 
-  // THE NETWORK COUNTRY (P052). urnetworkd reads the country of the mobile
+  // The network country (P052). urnetworkd reads the country of the mobile
   // network this machine is on from ModemManager and publishes it in `status`
   // (network_country_code). The sdk's value is per process, so this applies it
   // here too: this process's own sign-in and api dials draw their extender

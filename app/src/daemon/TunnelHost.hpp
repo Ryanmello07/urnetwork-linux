@@ -193,7 +193,7 @@ class TunnelHost {
   // Process-wide in the sdk, so it is in force for every device built after
   // this and applies in place to a running one from its next extender dial.
   // Published in status for the GUI, which applies it to its own dials too.
-  // MAIN LOOP ONLY.
+  // Main loop only.
   void SetNetworkCountryCode(const std::string& countryCode);
 
   // Seconds a tunnel may keep running with no owning client before the daemon
