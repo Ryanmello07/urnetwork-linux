@@ -3430,12 +3430,16 @@ void EarningsPage::OnRemoveSolanaWallet() {
   }
   // The app's confirmation idiom (MainWindow::OnSolanaChooser). AdwMessageDialog
   // is deprecated from libadwaita 1.6 in favour of AdwAlertDialog; it stays the
-  // one idiom this app uses, so its warnings are silenced here only.
+  // one idiom this app uses, so its warnings are silenced here only. The body
+  // covers both outcomes of removing the payout wallet: another of the network's
+  // Solana or Polygon wallets takes over when there is one (the server picks it),
+  // and USDC payouts are held when there is none.
   G_GNUC_BEGIN_IGNORE_DEPRECATIONS
   GtkWidget* dialog = adw_message_dialog_new(
       GTK_WINDOW(root->gobj()), T_("remove_wallet", "Remove wallet"),
-      T_("remove_wallet_holds_payouts",
-         "USDC payouts are held until another wallet is connected."));
+      T_("remove_wallet_moves_or_holds_payouts",
+         "USDC payouts move to another of your Solana or Polygon wallets, or are held until "
+         "you connect one."));
   adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
                                    "remove", T_("remove", "Remove"), nullptr);
   adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "remove",

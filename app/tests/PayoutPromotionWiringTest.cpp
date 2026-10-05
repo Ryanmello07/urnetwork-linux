@@ -3,6 +3,8 @@
 // fix/remove-wallet-promote). The Earnings page keeps a removal that landed
 // for the round of reads it starts, and that round's commit says "Payouts now
 // go to <short address>." (payouts_now_go_to, from the localizations store).
+// Before the removal, the confirmation says payouts move to another such wallet
+// or are held while there is none (remove_wallet_moves_or_holds_payouts).
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -55,6 +57,22 @@ std::string PoTranslation(const std::string& po, const std::string& key) {
   return po.substr(begin, end - begin);
 }
 
+// The English fallback of the T_(key, ...) call in `source`: its adjacent
+// string literals joined, or "" when there is no such call.
+std::string Fallback(const std::string& source, const std::string& key) {
+  const size_t at = source.find("T_(\"" + key + "\",");
+  if (at == std::string::npos) return std::string();
+  const size_t close = source.find(')', at);
+  std::string english;
+  size_t quote = source.find('"', source.find(',', at));
+  while (quote != std::string::npos && quote < close) {
+    const size_t end = source.find('"', quote + 1);
+    english += source.substr(quote + 1, end - quote - 1);
+    quote = source.find('"', end + 1);
+  }
+  return english;
+}
+
 }  // namespace
 
 UR_TEST(PayoutPromotion_TheRoundAfterARemovalNamesThePromotedWallet) {
@@ -78,5 +96,42 @@ UR_TEST(PayoutPromotion_TheLineIsInTheCatalogAndTranslated) {
   for (const char* locale : {"ar", "de", "es", "fr", "ja", "ru", "uk", "zh_CN", "zh_HK"}) {
     const std::string value = PoTranslation(ReadAppFile(std::string("po/") + locale + ".po"), "payouts_now_go_to");
     UR_EXPECT_TRUE_MSG(locale, Has(value, "{}") && value != "Payouts now go to {}.");
+  }
+}
+
+namespace {
+
+const std::string kRemoveConfirmation =
+    "USDC payouts move to another of your Solana or Polygon wallets, or are held until you "
+    "connect one.";
+
+}  // namespace
+
+// Which wallet takes over is the server's choice, and with none left USDC
+// payouts are held, so the confirmation covers both. The retired
+// remove_wallet_holds_payouts said they were always held.
+UR_TEST(PayoutPromotion_TheRemoveConfirmationSaysPayoutsMoveOrAreHeld) {
+  const std::string page = ReadAppFile("src/EarningsPage.cpp");
+  const std::string confirm = FunctionBody(page, "void EarningsPage::OnRemoveSolanaWallet(");
+  // the fallback is the catalog's msgid, or no translation is found
+  UR_EXPECT_TRUE(Fallback(confirm, "remove_wallet_moves_or_holds_payouts") == kRemoveConfirmation);
+  UR_EXPECT_FALSE(Has(page, "remove_wallet_holds_payouts"));
+}
+
+UR_TEST(PayoutPromotion_TheRemoveConfirmationIsInTheCatalogAndTranslated) {
+  const std::string pot = ReadAppFile("po/urnetwork.pot");
+  UR_EXPECT_TRUE(Has(pot, "msgctxt \"remove_wallet_moves_or_holds_payouts\"\nmsgid \"" +
+                              kRemoveConfirmation + "\""));
+  UR_EXPECT_FALSE(Has(pot, "msgctxt \"remove_wallet_holds_payouts\""));
+  UR_EXPECT_TRUE(PoTranslation(ReadAppFile("po/en.po"), "remove_wallet_moves_or_holds_payouts") ==
+                 kRemoveConfirmation);
+  for (const char* locale : {"ar", "cs", "de", "el", "es", "es_419", "es_MX", "fr", "he",
+                             "hi", "id", "it", "ja", "ko", "nl", "pl", "pt", "pt_BR",
+                             "pt_PT", "ru", "sv", "sw", "th", "uk", "vi", "zh_CN", "zh_HK"}) {
+    const std::string po = ReadAppFile(std::string("po/") + locale + ".po");
+    const std::string value = PoTranslation(po, "remove_wallet_moves_or_holds_payouts");
+    UR_EXPECT_TRUE_MSG(locale, !value.empty() && value != kRemoveConfirmation);
+    UR_EXPECT_TRUE_MSG(locale, Has(value, "USDC") && Has(value, "Solana") && Has(value, "Polygon"));
+    UR_EXPECT_TRUE_MSG(locale, !Has(po, "msgctxt \"remove_wallet_holds_payouts\""));
   }
 }
