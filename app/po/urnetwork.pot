@@ -3458,6 +3458,31 @@ msgctxt "exclude_app_description"
 msgid "This app bypasses the tunnel."
 msgstr ""
 
+#. Exclude apps from the VPN sheet: error when a launcher copy could not be written or removed in the user's applications folder.
+msgctxt "exclude_app_launcher_failed"
+msgid "Couldn't change the launcher. Check that your applications folder can be written."
+msgstr ""
+
+#. Exclude apps from the VPN: the name of an app's launcher copy in the user's app menu. {app} is the app's own name.
+msgctxt "exclude_app_launcher_name"
+msgid "{} (outside VPN)"
+msgstr ""
+
+#. Settings, Connections: row and sheet title for the apps that get a launcher copy that starts them outside the VPN tunnel (urnetwork-exclude).
+msgctxt "exclude_apps_from_vpn"
+msgid "Exclude apps from the VPN"
+msgstr ""
+
+#. Settings, Connections: note under the Exclude apps from the VPN row.
+msgctxt "exclude_apps_from_vpn_note"
+msgid "Adds a launcher to your app menu that opens the app outside the VPN."
+msgstr ""
+
+#. Exclude apps from the VPN sheet: how the launcher copies work and what stays in the VPN. The suffix in parentheses must match exclude_app_launcher_name.
+msgctxt "exclude_apps_launcher_note"
+msgid "Each app you turn on gets a second launcher in your app menu, with (outside VPN) after its name. An app opened from that launcher bypasses the VPN and the kill switch. An app that is already running stays in the VPN until you quit it, and Flatpak and Snap apps are not listed."
+msgstr ""
+
 #. transfer stats and split rules
 msgctxt "excluded"
 msgid "Excluded"

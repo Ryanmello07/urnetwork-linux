@@ -70,6 +70,9 @@ class LicensesSheet;
 // The VLESS editor (VlessSheet.hpp); the login screen's network sheet opens
 // its own instance for the same space.
 class VlessSheet;
+// The apps excluded from the tunnel through urnetwork-exclude
+// (ExcludeAppsSheet.hpp).
+class ExcludeAppsSheet;
 
 // §2.1 — the six terminal states of every async field on this destination and
 // its sheets. NoDevice is NOT a nicety: "signed in but the service is not up"
@@ -162,6 +165,7 @@ class SettingsPage : public Gtk::Box {
   Gtk::Window* RootWindow();  // the transient parent, resolved lazily
   void ShowDeviceNameSheet();
   void ShowAppSplitRulesSheet();
+  void ShowExcludeAppsSheet();
   void ShowIdentitySheet();
   void ShowLicensesSheet();
   void ShowVlessSheet();
@@ -239,6 +243,7 @@ class SettingsPage : public Gtk::Box {
   std::unique_ptr<ProviderIdentitiesSheet> identitiesSheet_;
   std::unique_ptr<LicensesSheet> licensesSheet_;
   std::unique_ptr<VlessSheet> vlessSheet_;
+  std::unique_ptr<ExcludeAppsSheet> excludeAppsSheet_;
   std::unique_ptr<Gtk::Window> confirmDialog_;  // the uninstall confirmation
 };
 

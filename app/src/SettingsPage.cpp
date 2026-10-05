@@ -15,6 +15,7 @@
 
 #include "AppPrefs.hpp"
 #include "CloudProxyLink.hpp"
+#include "ExcludeAppsSheet.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
 #include "LicensesSheet.hpp"
@@ -1268,6 +1269,19 @@ void SettingsPage::BuildConnectionsSection(Gtk::Box& host) {
                    T_("manage_apps", "Manage apps"));
   manage->signal_clicked().connect([this] { ShowAppSplitRulesSheet(); });
 
+  // Row 5a — apps outside the tunnel: a launcher copy per app that starts it
+  // through urnetwork-exclude (ExcludeAppsSheet.hpp). Hidden where the daemon
+  // cannot exclude anything: not the cgroup v2 unified hierarchy alone (its
+  // own check), or no urnetwork-exclude installed.
+  if (HostCanExcludeApps()) {
+    auto* excludeApps = AddButtonRow(
+        host, T_("exclude_apps_from_vpn", "Exclude apps from the VPN"),
+        T_("exclude_apps_from_vpn_note",
+           "Adds a launcher to your app menu that opens the app outside the VPN."),
+        T_("manage_apps", "Manage apps"));
+    excludeApps->signal_clicked().connect([this] { ShowExcludeAppsSheet(); });
+  }
+
   // Row 5b — cloud proxies. The app has no protocol switch, so WireGuard, SOCKS
   // and HTTPS proxies are created on ur.io, and this row opens that page in the
   // browser (CloudProxyLink.hpp).
@@ -1773,6 +1787,13 @@ void SettingsPage::ShowAppSplitRulesSheet() {
     splitRulesSheet_ = std::make_unique<SplitRulesSheet>(*root, host_);
   }
   splitRulesSheet_->Open();
+}
+
+void SettingsPage::ShowExcludeAppsSheet() {
+  Gtk::Window* root = RootWindow();
+  if (root == nullptr) return;
+  if (!excludeAppsSheet_) excludeAppsSheet_ = std::make_unique<ExcludeAppsSheet>(*root);
+  excludeAppsSheet_->Open();
 }
 
 void SettingsPage::ShowIdentitySheet() {
