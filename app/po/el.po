@@ -4996,6 +4996,11 @@ msgctxt "site_app_strong_anon"
 msgid "Strong Anonymization"
 msgstr "Ισχυρή ανωνυμοποίηση"
 
+#. Connect drawer: note under the Strong Anonymization toggle, which is locked on in the browser. Strong Anonymization means no direct connection to a provider (a direct connection would show the provider your IP). The browser's connection always goes through URnetwork's hosted device, which never connects to a provider directly, so the option cannot be turned off there.
+msgctxt "site_app_strong_anon_note"
+msgid "Always on in the browser, which never connects to providers directly."
+msgstr "Πάντα ενεργή στο πρόγραμμα περιήγησης, το οποίο δεν συνδέεται ποτέ απευθείας με παρόχους."
+
 #. Connect drawer: live transfer timeseries section
 msgctxt "site_app_throughput"
 msgid "Transfer"
