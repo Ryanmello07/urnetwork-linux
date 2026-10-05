@@ -961,11 +961,6 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "對端"
 
-#. Used in Main/Account/Settings/SettingsView.swift.
-msgctxt "confirm_seeker_token"
-msgid "Confirm Seeker Token"
-msgstr "確認 Seeker 代幣"
-
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"
@@ -1122,6 +1117,66 @@ msgstr "提供數據時，合約會在此顯示。"
 msgctxt "contribute_bandwidth"
 msgid "Contribute Bandwidth"
 msgstr "貢獻頻寬"
+
+#. Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.
+msgctxt "control_doh_error_https_required"
+msgid "The URL must start with https://."
+msgstr "URL 必須以 https:// 開頭。"
+
+#. Bootstrap DNS-over-HTTPS server error: the URL names a host name where an IP address is needed. The example URL is literal and is not translated.
+msgctxt "control_doh_error_ip_required"
+msgid "Use an IP address, not a host name, such as https://223.5.5.5/dns-query."
+msgstr "請使用 IP 位址而不是主機名稱，例如 https://223.5.5.5/dns-query。"
+
+#. Bootstrap DNS-over-HTTPS server error: the list has more servers of one IP version than the app accepts.
+msgctxt "control_doh_error_too_many"
+msgid "Too many servers. Remove some and save again."
+msgstr "伺服器過多。請刪除一些後再儲存。"
+
+#. Bootstrap DNS-over-HTTPS server error: the line is not a complete URL the app can query (no path, a query or fragment, user info or a bad port). The example URL is literal and is not translated.
+msgctxt "control_doh_error_url_invalid"
+msgid "Enter a full URL, such as https://223.5.5.5/dns-query."
+msgstr "請輸入完整的 URL，例如 https://223.5.5.5/dns-query。"
+
+#. Extender settings: the title of the list of bootstrap DNS-over-HTTPS servers a user can add for the lookups of URnetwork's own server names. DNS-over-HTTPS is a protocol name and is not translated.
+msgctxt "control_doh_urls"
+msgid "Bootstrap DNS-over-HTTPS servers"
+msgstr "引導 DNS-over-HTTPS 伺服器"
+
+#. Extender settings: explains the bootstrap DNS-over-HTTPS server list. It must say that URnetwork looks up its own server names through the added servers first, and that those servers can see these lookups.
+msgctxt "control_doh_urls_description"
+msgid "URnetwork looks up the names of its own servers over DNS-over-HTTPS. If the built-in servers are blocked on your network, add servers that work there. URnetwork tries them first, and they can see these lookups."
+msgstr "URnetwork 會透過 DNS-over-HTTPS 查找其伺服器的名稱。如果內建伺服器在你的網絡上被封鎖，請加入在該網絡上可用的伺服器。URnetwork 會優先使用它們，而這些伺服器能夠看到這些查詢。"
+
+#. Extender settings: help text under the bootstrap DNS-over-HTTPS server list. https:// and the example URL are literal and are not translated.
+msgctxt "control_doh_urls_hint"
+msgid "One URL per line, starting with https:// and an IP address, such as https://223.5.5.5/dns-query."
+msgstr "每行一個 URL，以 https:// 和 IP 位址開頭，例如 https://223.5.5.5/dns-query。"
+
+#. Bootstrap DNS-over-HTTPS servers: note after saving where the VPN runs separately from the app (the iOS tunnel extension, the desktop service). It reads the servers at its next start.
+msgctxt "control_doh_urls_next_connect"
+msgid "The VPN uses the new bootstrap servers the next time it connects."
+msgstr "VPN 將在下次連線時使用新的引導伺服器。"
+
+#. Extender settings: button that clears the bootstrap DNS-over-HTTPS server list, so only the built-in servers are used.
+msgctxt "control_doh_urls_reset"
+msgid "Use built-in servers only"
+msgstr "只使用內建伺服器"
+
+#. Confirmation after the bootstrap DNS-over-HTTPS servers are saved.
+msgctxt "control_doh_urls_saved"
+msgid "Bootstrap DNS-over-HTTPS servers saved"
+msgstr "引導 DNS-over-HTTPS 伺服器已儲存"
+
+#. Extender settings: button that fills the bootstrap DNS-over-HTTPS server list with resolvers that are reachable in mainland China.
+msgctxt "control_doh_use_china"
+msgid "Use China resolvers"
+msgstr "使用中國解析伺服器"
+
+#. Extender settings: note under the Use China resolvers button naming the operators it fills in. AliDNS and DNSPod are product names and are not translated.
+msgctxt "control_doh_use_china_hint"
+msgid "Fills in the AliDNS and DNSPod servers, which are reachable in mainland China."
+msgstr "填入在中國內地可連線的 AliDNS 和 DNSPod 伺服器。"
 
 #. Text for a button that copies the seedphrase to the clipboard.
 msgctxt "copied"
@@ -1317,6 +1372,36 @@ msgstr "數據"
 msgctxt "data_bar_explanation"
 msgid "This bar in the app shows you how much free data you are earning from your provider. You can check in any time and adjust your settings to maximize your earnings."
 msgstr "應用程式中的這條狀態列顯示您從供應商賺取了多少免費數據。您可以隨時查看，並調整設定以最大化您的收益。"
+
+#. "About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.
+msgctxt "data_info_available"
+msgid "Data you can still use."
+msgstr "你仍可使用的數據。"
+
+#. "About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.
+msgctxt "data_info_pending"
+msgid "Data reserved for your open connections. What they don't use is returned when they close."
+msgstr "為你目前開啟的連線預留的數據。未使用的部分會在連線關閉時退回。"
+
+#. "About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).
+msgctxt "data_info_refresh_at"
+msgid "Free data refreshes daily at 00:00 UTC (in {})."
+msgstr "免費數據每天 00:00 UTC 更新（尚餘 {}）。"
+
+#. Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.
+msgctxt "data_info_title"
+msgid "About your data"
+msgstr "關於你的數據"
+
+#. "About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.
+msgctxt "data_info_used"
+msgid "Data you've used so far."
+msgstr "你目前已使用的數據。"
+
+#. Link under the out-of-balance notice that opens the "About your data" sheet.
+msgctxt "data_info_why"
+msgid "Why?"
+msgstr "為什麼？"
 
 #. Call to action
 msgctxt "data_usage"
@@ -2400,6 +2485,11 @@ msgctxt "ignore_battery_optimizations"
 msgid "Ignore battery optimizations"
 msgstr "忽略電池優化"
 
+#. Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.
+msgctxt "import_extenders_control_doh_urls"
+msgid "This code also sets bootstrap DNS-over-HTTPS servers. They will see URnetwork's server lookups: {}"
+msgstr "此代碼亦會設定引導 DNS-over-HTTPS 伺服器。它們將能看到 URnetwork 對其伺服器的查詢：{}"
+
 #. Guest mode overlay
 msgctxt "in_guest_mode"
 msgid "You're in guest mode"
@@ -2459,6 +2549,11 @@ msgstr "在你升級或斷開連接之前，你的流量會保留在隧道中。
 msgctxt "insufficient_balance_message"
 msgid "Add balance or a plan to keep connecting."
 msgstr "新增餘額或方案以繼續連接。"
+
+#. Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).
+msgctxt "insufficient_balance_refreshes_in"
+msgid "Free data refreshes in {}."
+msgstr "免費數據將於 {} 後更新。"
 
 #. Circle Wallet Transfer Screen
 msgctxt "insufficient_funds"
@@ -3232,7 +3327,7 @@ msgctxt "no_wallets_found_alert_content"
 msgid "No Solana wallets were found installed on this device. Please install a wallet and try again."
 msgstr "在此裝置上找不到已安裝的 Solana 錢包。請安裝錢包後再試一次。"
 
-#. Empty value: the Referrals section shows it when no referral network is linked (apple), and the android referral network row.
+#. Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.
 msgctxt "none"
 msgid "None"
 msgstr "無"
@@ -3596,6 +3691,16 @@ msgctxt "post_quantum_identity_explanation"
 msgid "Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
 msgstr "你的供應商身份密鑰儲存在本裝置。如果任何對等節點的密鑰與本機儲存的密鑰不同，即表示網絡營運者不可信。"
 
+#. Button under the strict Private DNS notice that opens the Android wireless/network settings screen (there is no public Private DNS intent).
+msgctxt "private_dns_open_settings"
+msgid "Open network settings"
+msgstr "打開網絡設定"
+
+#. Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.
+msgctxt "private_dns_strict_notice"
+msgid "Private DNS is set to {}. Android sends lookups there directly instead of through URnetwork. If sites stop loading, set Private DNS to Automatic."
+msgstr "私人 DNS 已設定為 {}。Android 會直接向其傳送查詢，而不經過 URnetwork。如果網站無法載入，請將私人 DNS 設定為「自動」。"
+
 #. Network name when privacy is enabled
 msgctxt "private_network"
 msgid "Private Network"
@@ -3672,6 +3777,31 @@ msgctxt "provider_identities"
 msgid "Provider Identities"
 msgstr "供應商身份"
 
+#. Provider card, under the provide mode row: why an enabled provider gets no traffic. The device is in Auto mode and not connected, so it shares only with the user's own devices. 'Always' is the provide mode label (key always).
+msgctxt "provider_idle_auto_not_connected"
+msgid "Auto shares with everyone only while you're connected. Choose Always to earn while idle."
+msgstr "「自動」只會在你連接時與所有人分享。選擇「始終」，未連接時也能賺取收益。"
+
+#. Provider card, under the provide mode row: the provide mode is Network, so the device shares only with the user's own devices. 'Always' is the provide mode label (key always).
+msgctxt "provider_idle_network_only"
+msgid "Shared only with your own devices. Choose Always to share with everyone."
+msgstr "只與你自己的裝置分享。選擇「始終」即可與所有人分享。"
+
+#. Provider card, under the provide mode row: the device provides to everyone but has carried no traffic yet.
+msgctxt "provider_idle_no_traffic_yet"
+msgid "New providers need several hours of steady uptime and a speed test before clients are sent to them. Traffic also depends on demand in your region."
+msgstr "新供應商需要數小時的穩定在線時間並完成速度測試，才會有客戶端被分配給它們。流量亦取決於你所在地區的需求。"
+
+#. Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).
+msgctxt "provider_idle_paused_no_network"
+msgid "Paused: this device can't provide on its current network."
+msgstr "已暫停：此裝置無法在目前網絡上提供。"
+
+#. Provider card, under the provide mode row: providing is paused because it is limited to Wi-Fi and the device is on another network.
+msgctxt "provider_idle_paused_wifi_only"
+msgid "Paused: providing is set to Wi-Fi only, and this device isn't on Wi-Fi."
+msgstr "已暫停：提供功能設定為只限 Wi-Fi，而此裝置未連接 Wi-Fi。"
+
 #. Row subtitle in the provider locations list when a provider's location is not known.
 msgctxt "provider_location_unknown"
 msgid "Location unknown"
@@ -3696,6 +3826,237 @@ msgstr "連接後才能查看供應商詳情"
 msgctxt "provider_statistics"
 msgid "Provider statistics"
 msgstr "供應商統計"
+
+#. Title of the provider chart, shown with the other provider plots, of how many times clients were offered this device each minute over the last hour.
+msgctxt "provider_status_demand"
+msgid "Demand"
+msgstr "需求"
+
+#. Provider status 'Why?' list: explanation under the country the device is offered in.
+msgctxt "provider_status_help_country"
+msgid "Clients who choose this country can be offered this device."
+msgstr "選擇此國家的客戶端可能會被推薦此裝置。"
+
+#. Provider status 'Why?' list: explanation under the delay.
+msgctxt "provider_status_help_latency"
+msgid "Delay measured above what is expected for this location. Lower delay is offered more often."
+msgstr "測得的延遲高於此位置的預期值。延遲越低，被推薦的次數越多。"
+
+#. Provider status 'Why?' list: explanation under the 12-hour reliability.
+msgctxt "provider_status_help_reliability_12h"
+msgid "How steadily this device stayed connected over the last 12 hours. It must reach the minimum to be offered to clients; from a fresh start this takes about 8 hours of steady uptime."
+msgstr "此裝置在過去 12 小時內保持連接的穩定程度。必須達到最低要求才會被推薦給客戶端；從頭開始大約需要 8 小時的穩定在線時間。"
+
+#. Provider status 'Why?' list: explanation under the 1-hour reliability.
+msgctxt "provider_status_help_reliability_1h"
+msgid "How steadily this device stayed connected over the last hour. It must reach the minimum to be offered to clients; disconnects lower it and steady uptime raises it."
+msgstr "此裝置在過去一小時內保持連接的穩定程度。必須達到最低要求才會被推薦給客戶端；中斷連接會降低它，穩定在線會提高它。"
+
+#. Provider status 'Why?' list: explanation under the 5-minute reliability.
+msgctxt "provider_status_help_reliability_5m"
+msgid "How steadily this device stayed connected over the last 5 minutes. It scales how often clients are offered this device; staying connected raises it."
+msgstr "此裝置在過去 5 分鐘內保持連接的穩定程度。它影響此裝置被推薦給客戶端的頻率；保持連接可以提高它。"
+
+#. Provider status 'Why?' list: explanation under a reliability measured over another window.
+msgctxt "provider_status_help_reliability_other"
+msgid "How steadily this device stayed connected over a longer window. It must reach the minimum to be offered to clients."
+msgstr "此裝置在更長時間段內保持連接的穩定程度。必須達到最低要求才會被推薦給客戶端。"
+
+#. Provider status 'Why?' list: explanation under the speed test.
+msgctxt "provider_status_help_speed_test"
+msgid "Speed measured through this device. Faster connections are offered more often."
+msgstr "透過此裝置測得的速度。速度越快的連接被推薦的次數越多。"
+
+#. Provider status 'Why?' list: explanation under both tiers.
+msgctxt "provider_status_help_tier"
+msgid "Clients try lower tiers first. 0 is best; 3 means past the speed or delay cutoff."
+msgstr "客戶端會先嘗試較低的層級。0 為最佳；3 表示超出速度或延遲限制。"
+
+#. Provider status 'Why?' list: explanation under the network checks.
+msgctxt "provider_status_help_url_checks"
+msgid "Test sites that loaded through this connection in the last 8 hours. Most must load; filtering by your internet provider lowers it."
+msgstr "過去 8 小時內透過此連接成功載入的測試網站。大部分必須能夠載入；你的互聯網服務供應商進行過濾會降低結果。"
+
+#. Provider status 'Why?' list: explanation under both selection weights.
+msgctxt "provider_status_help_weight"
+msgid "Combines reliability, speed and passed network checks. Clients are offered providers with a higher weight more often."
+msgstr "綜合可靠性、速度和已通過的網絡檢查。權重越高的供應商，被推薦給客戶端的次數越多。"
+
+#. Provider card chart: shown when every bar is zero.
+msgctxt "provider_status_histogram_empty"
+msgid "Not offered to clients in the last hour"
+msgstr "過去一小時內未被推薦給客戶端"
+
+#. Provider card chart: label under the right (current minute) end of the axis.
+msgctxt "provider_status_histogram_end"
+msgid "Now"
+msgstr "現在"
+
+#. Provider card chart: label under the left (oldest) end of the 60-minute axis.
+msgctxt "provider_status_histogram_start"
+msgid "60 min ago"
+msgstr "60 分鐘前"
+
+#. Provider card: title of a 60-bar chart of how many times the network offered this device to clients in each minute of the last hour.
+msgctxt "provider_status_histogram_title"
+msgid "Times clients were offered this device, per minute, last hour"
+msgstr "過去一小時內此裝置每分鐘被推薦給客戶端的次數"
+
+#. Provider card chart: total of the 60 bars. The argument is the number of times this device was offered to clients in the last hour.
+msgctxt "provider_status_histogram_total"
+msgid "{} time in the last hour"
+msgid_plural "{} times in the last hour"
+msgstr[0] "過去一小時內 {} 次"
+
+#. Provider status 'Why?' list: label of the measured delay (latency) in milliseconds.
+msgctxt "provider_status_number_latency"
+msgid "Delay"
+msgstr "延遲"
+
+#. Provider status 'Why?' list: label of the reliability over the last 12 hours.
+msgctxt "provider_status_number_reliability_12h"
+msgid "Reliability, last 12 hours"
+msgstr "可靠性（過去 12 小時）"
+
+#. Provider status 'Why?' list: label of the reliability over the last hour.
+msgctxt "provider_status_number_reliability_1h"
+msgid "Reliability, last hour"
+msgstr "可靠性（過去 1 小時）"
+
+#. Provider status 'Why?' list: label of the reliability over the last 5 minutes (a share of steady uptime).
+msgctxt "provider_status_number_reliability_5m"
+msgid "Reliability, last 5 minutes"
+msgstr "可靠性（過去 5 分鐘）"
+
+#. Provider status 'Why?' list: label of the measured speed.
+msgctxt "provider_status_number_speed_test"
+msgid "Speed test"
+msgstr "速度測試"
+
+#. Provider status 'Why?' list: label of the device's tier for quality-ranked requests (0 is best).
+msgctxt "provider_status_number_tier_quality"
+msgid "Tier (quality)"
+msgstr "層級（質素）"
+
+#. Provider status 'Why?' list: label of the device's tier for speed-ranked requests.
+msgctxt "provider_status_number_tier_speed"
+msgid "Tier (speed)"
+msgstr "層級（速度）"
+
+#. Provider status 'Why?' list: label of the network check result (test sites loaded through the device).
+msgctxt "provider_status_number_url_checks"
+msgid "Network checks"
+msgstr "網絡檢查"
+
+#. Provider status 'Why?' list: label of the device's selection weight for quality-ranked requests (a relative number).
+msgctxt "provider_status_number_weight_quality"
+msgid "Selection weight (quality)"
+msgstr "選擇權重（質素）"
+
+#. Provider status 'Why?' list: label of the device's selection weight for speed-ranked requests.
+msgctxt "provider_status_number_weight_speed"
+msgid "Selection weight (speed)"
+msgstr "選擇權重（速度）"
+
+#. Provider status reason (egress_failing): too many test sites failed to load through the device.
+msgctxt "provider_status_reason_egress_failing"
+msgid "Too many test sites failed to load through this connection in the last 8 hours. Clients are offered this device only when checked providers run out."
+msgstr "過去 8 小時內，透過此連接載入失敗的測試網站過多。只有在已檢查的供應商用完時，此裝置才會被推薦給客戶端。"
+
+#. Provider status reason (egress_unprobed): the network check (loading test sites through the device) has not run yet.
+msgctxt "provider_status_reason_egress_unprobed"
+msgid "The network check hasn't run on this connection yet. Until it passes, clients are offered this device only when checked providers run out."
+msgstr "此連接尚未進行網絡檢查。在檢查通過之前，只有在已檢查的供應商用完時，此裝置才會被推薦給客戶端。"
+
+#. Provider status reason (location_invalid): the device was seen at more than one IP address, or its location is unknown.
+msgctxt "provider_status_reason_location_invalid"
+msgid "This device is connecting from more than one address, or its location is unknown. Clients are offered only devices with one address and a known location."
+msgstr "此裝置正從多個地址連接，或其位置未知。只有單一地址且位置已知的裝置才會被推薦給客戶端。"
+
+#. Provider status reason (network_only). 'Always' is the provide mode label (key always).
+msgctxt "provider_status_reason_network_only"
+msgid "This device provides only to your own devices. Choose Always to share with everyone."
+msgstr "此裝置只向你自己的裝置提供。選擇「始終」即可與所有人分享。"
+
+#. Provider status reason (none): passes every check.
+msgctxt "provider_status_reason_none"
+msgid "Everything checks out. How often clients are offered this device depends on demand in its region and on how it ranks against nearby providers."
+msgstr "一切正常。此裝置被推薦給客戶端的頻率取決於所在地區的需求，以及與附近供應商相比的排名。"
+
+#. Provider status reason (not_connected).
+msgctxt "provider_status_reason_not_connected"
+msgid "This device isn't connected right now. Clients are offered only connected devices."
+msgstr "此裝置目前未連接。只有已連接的裝置才會被推薦給客戶端。"
+
+#. Provider status reason (not_eligible): one generic reason for every anti-abuse check. Keep it generic; do not add detail.
+msgctxt "provider_status_reason_not_eligible"
+msgid "This connection isn't eligible to provide right now."
+msgstr "此連接目前不符合提供條件。"
+
+#. Provider status reason (not_providing): the device is not set to provide.
+msgctxt "provider_status_reason_not_providing"
+msgid "This device isn't set to share its connection."
+msgstr "此裝置未設定為分享其連接。"
+
+#. Provider status reason (reliability_low): the last hour's reliability is below the minimum.
+msgctxt "provider_status_reason_reliability_low"
+msgid "Reliability over the last hour is below what clients need. It rises with every minute this device stays connected; disconnects lower it."
+msgstr "過去一小時的可靠性低於客戶端所需。此裝置每保持連接一分鐘，可靠性就會提升；中斷連接會降低可靠性。"
+
+#. Provider status reason (reliability_warming_up): steady for the last hour, but the 12-hour reliability is still below the minimum.
+msgctxt "provider_status_reason_reliability_warming_up"
+msgid "Building reliability. This device has been steady for the last hour; clients are offered it once its 12-hour reliability reaches the minimum, about 8 hours after a fresh start."
+msgstr "正在建立可靠性。此裝置在過去一小時內運行穩定；當其 12 小時可靠性達到最低要求後，就會被推薦給客戶端，從頭開始大約需要 8 小時。"
+
+#. Provider status reason (slow): past the speed or delay cutoff.
+msgctxt "provider_status_reason_slow"
+msgid "This connection measured slower than clients need, so it is offered much less often."
+msgstr "此連接的測速低於客戶端所需，因此被推薦的頻率會低很多。"
+
+#. Provider status reason (speed_test_missing).
+msgctxt "provider_status_reason_speed_test_missing"
+msgid "No speed test yet. Until one completes, clients are offered this device much less often."
+msgstr "尚未進行速度測試。在完成測試之前，此裝置被推薦給客戶端的頻率會低很多。"
+
+#. Provider card: shown instead of the chart and reason when the status could not be loaded.
+msgctxt "provider_status_unavailable"
+msgid "Provider status isn't available right now."
+msgstr "供應商狀態暫時無法使用。"
+
+#. Provider status 'Why?' list: how many test sites loaded through the device out of all that were tried, e.g. '19 of 20 loaded'.
+msgctxt "provider_status_value_count_of_total"
+msgid "{0} of {1} loaded"
+msgstr "已載入 {0}/{1}"
+
+#. Provider status 'Why?' list: value of a reliability with no history yet (which does not count against the device).
+msgctxt "provider_status_value_no_history"
+msgid "No history yet"
+msgstr "暫無歷史記錄"
+
+#. Provider status 'Why?' list: value of a selection weight when the device is not in that pool right now.
+msgctxt "provider_status_value_not_in_pool"
+msgid "Not in this pool"
+msgstr "不在此池中"
+
+#. Provider status 'Why?' list: value shown when a measurement (speed test, delay, network check) has not happened yet.
+msgctxt "provider_status_value_not_yet"
+msgid "Not yet"
+msgstr "尚未有"
+
+#. Provider status 'Why?' list: a value with the most the network allows, e.g. '35 ms (at most 200 ms)'. Both arguments are already formatted text.
+msgctxt "provider_status_value_with_maximum"
+msgid "{0} (at most {1})"
+msgstr "{0}（最多 {1}）"
+
+#. Provider status 'Why?' list: a value with the minimum the network requires, e.g. '82% (needs 95%)'. Both arguments are already formatted text.
+msgctxt "provider_status_value_with_minimum"
+msgid "{0} (needs {1})"
+msgstr "{0}（需要 {1}）"
+
+#. Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.
+msgctxt "provider_status_why"
+msgid "Why?"
+msgstr "為甚麼？"
 
 #. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "providing"
@@ -4840,6 +5201,16 @@ msgctxt "split_rule_host_placeholder"
 msgid "example.com, *.example.com, 10.0.0.0/8"
 msgstr "example.com, *.example.com, 10.0.0.0/8"
 
+#. Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.
+msgctxt "split_rule_preset_google_meet_calls"
+msgid "Google Meet calls"
+msgstr "Google Meet 通話"
+
+#. Split rules preset: Microsoft Teams call media, from the address ranges Microsoft publishes for routing it outside a VPN. Keep the product name Microsoft Teams unchanged.
+msgctxt "split_rule_preset_microsoft_teams_calls"
+msgid "Microsoft Teams calls"
+msgstr "Microsoft Teams 通話"
+
 #. transfer stats and split rules
 msgctxt "split_rules"
 msgid "Split rules"
@@ -4864,6 +5235,21 @@ msgstr "在上方新增主機，或點擊下方流量，將其改走本地路由
 msgctxt "split_rules_info_note"
 msgid "Exclusions apply to the whole co-associated network cluster, so related traffic is caught together."
 msgstr "排除會套用至整個關聯網絡叢集，因此相關流量會一併排除。"
+
+#. Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.
+msgctxt "split_rules_match_sites_not_apps"
+msgid "Split rules match sites and addresses, not apps: Apple allows per-app VPN only on devices managed by an organization (MDM). To keep an app off the VPN, route the sites it uses locally, or start from a preset. Local network addresses already bypass the VPN."
+msgstr "分流規則針對的是網站和地址，而不是應用程式：Apple 只允許在由機構管理的裝置（MDM）上使用按應用程式 VPN。如要讓某個應用程式不經 VPN，請將它使用的網站設為本地路由，或從預設開始。本地網絡地址本來就不經過 VPN。"
+
+#. Split rules screen: header of the preset menu. Each preset holds the address ranges its service publishes for routing that service's traffic outside a VPN.
+msgctxt "split_rules_preset_ranges_header"
+msgid "Ranges each service publishes for use outside a VPN"
+msgstr "各服務公佈、供在 VPN 以外使用的地址範圍"
+
+#. Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.
+msgctxt "split_rules_start_from_preset"
+msgid "Start from a preset"
+msgstr "從預設開始"
 
 #. Guest mode overlay
 msgctxt "start_earning_join"
@@ -5345,6 +5731,16 @@ msgctxt "usdc_wallet_address"
 msgid "USDC wallet address"
 msgstr "USDC 錢包地址"
 
+#. Settings row (Connections) that opens the ur.io cloud proxies page so the user can run URnetwork as a proxy without taking the Android VPN slot.
+msgctxt "use_as_proxy_no_vpn"
+msgid "Use as a proxy instead (no VPN)"
+msgstr "改為用作代理（無 VPN）"
+
+#. Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.
+msgctxt "use_as_proxy_no_vpn_detail"
+msgid "Opens ur.io to run URnetwork as an HTTPS proxy without the VPN. SOCKS and WireGuard are available on Pro."
+msgstr "打開 ur.io，在不使用 VPN 的情況下將 URnetwork 用作 HTTPS 代理。SOCKS 和 WireGuard 需要 Pro。"
+
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"
 msgid "Use most stable provider"
@@ -5687,6 +6083,11 @@ msgstr "短 ID"
 msgctxt "vless_user_id"
 msgid "User ID (UUID)"
 msgstr "用戶 ID（UUID）"
+
+#. Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.
+msgctxt "wait_for_refresh"
+msgid "Wait for refresh"
+msgstr "等待更新"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "waiting_for_approval"

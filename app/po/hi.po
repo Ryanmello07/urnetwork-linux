@@ -963,11 +963,6 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "साथी"
 
-#. Used in Main/Account/Settings/SettingsView.swift.
-msgctxt "confirm_seeker_token"
-msgid "Confirm Seeker Token"
-msgstr "सीकर टोकन की पुष्टि करें"
-
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"
@@ -1126,6 +1121,66 @@ msgstr "प्रदान करते समय कॉन्ट्रैक्
 msgctxt "contribute_bandwidth"
 msgid "Contribute Bandwidth"
 msgstr "बैंडविड्थ में योगदान दें"
+
+#. Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.
+msgctxt "control_doh_error_https_required"
+msgid "The URL must start with https://."
+msgstr "URL https:// से शुरू होना चाहिए।"
+
+#. Bootstrap DNS-over-HTTPS server error: the URL names a host name where an IP address is needed. The example URL is literal and is not translated.
+msgctxt "control_doh_error_ip_required"
+msgid "Use an IP address, not a host name, such as https://223.5.5.5/dns-query."
+msgstr "होस्ट नाम के बजाय IP पता इस्तेमाल करें, जैसे https://223.5.5.5/dns-query।"
+
+#. Bootstrap DNS-over-HTTPS server error: the list has more servers of one IP version than the app accepts.
+msgctxt "control_doh_error_too_many"
+msgid "Too many servers. Remove some and save again."
+msgstr "बहुत ज़्यादा सर्वर हैं। कुछ हटाएँ और फिर से सहेजें।"
+
+#. Bootstrap DNS-over-HTTPS server error: the line is not a complete URL the app can query (no path, a query or fragment, user info or a bad port). The example URL is literal and is not translated.
+msgctxt "control_doh_error_url_invalid"
+msgid "Enter a full URL, such as https://223.5.5.5/dns-query."
+msgstr "पूरा URL दर्ज करें, जैसे https://223.5.5.5/dns-query।"
+
+#. Extender settings: the title of the list of bootstrap DNS-over-HTTPS servers a user can add for the lookups of URnetwork's own server names. DNS-over-HTTPS is a protocol name and is not translated.
+msgctxt "control_doh_urls"
+msgid "Bootstrap DNS-over-HTTPS servers"
+msgstr "बूटस्ट्रैप DNS-over-HTTPS सर्वर"
+
+#. Extender settings: explains the bootstrap DNS-over-HTTPS server list. It must say that URnetwork looks up its own server names through the added servers first, and that those servers can see these lookups.
+msgctxt "control_doh_urls_description"
+msgid "URnetwork looks up the names of its own servers over DNS-over-HTTPS. If the built-in servers are blocked on your network, add servers that work there. URnetwork tries them first, and they can see these lookups."
+msgstr "URnetwork अपने सर्वरों के नाम DNS-over-HTTPS के ज़रिए खोजता है। अगर आपके नेटवर्क पर बिल्ट-इन सर्वर ब्लॉक हैं, तो ऐसे सर्वर जोड़ें जो वहाँ काम करते हों। URnetwork पहले उन्हें आज़माता है, और वे इन खोजों को देख सकते हैं।"
+
+#. Extender settings: help text under the bootstrap DNS-over-HTTPS server list. https:// and the example URL are literal and are not translated.
+msgctxt "control_doh_urls_hint"
+msgid "One URL per line, starting with https:// and an IP address, such as https://223.5.5.5/dns-query."
+msgstr "हर पंक्ति में एक URL, जो https:// और किसी IP पते से शुरू हो, जैसे https://223.5.5.5/dns-query।"
+
+#. Bootstrap DNS-over-HTTPS servers: note after saving where the VPN runs separately from the app (the iOS tunnel extension, the desktop service). It reads the servers at its next start.
+msgctxt "control_doh_urls_next_connect"
+msgid "The VPN uses the new bootstrap servers the next time it connects."
+msgstr "VPN अगली बार कनेक्ट होने पर नए बूटस्ट्रैप सर्वर का उपयोग करेगा।"
+
+#. Extender settings: button that clears the bootstrap DNS-over-HTTPS server list, so only the built-in servers are used.
+msgctxt "control_doh_urls_reset"
+msgid "Use built-in servers only"
+msgstr "केवल बिल्ट-इन सर्वर इस्तेमाल करें"
+
+#. Confirmation after the bootstrap DNS-over-HTTPS servers are saved.
+msgctxt "control_doh_urls_saved"
+msgid "Bootstrap DNS-over-HTTPS servers saved"
+msgstr "बूटस्ट्रैप DNS-over-HTTPS सर्वर सहेजे गए"
+
+#. Extender settings: button that fills the bootstrap DNS-over-HTTPS server list with resolvers that are reachable in mainland China.
+msgctxt "control_doh_use_china"
+msgid "Use China resolvers"
+msgstr "चीन के DNS रिज़ॉल्वर इस्तेमाल करें"
+
+#. Extender settings: note under the Use China resolvers button naming the operators it fills in. AliDNS and DNSPod are product names and are not translated.
+msgctxt "control_doh_use_china_hint"
+msgid "Fills in the AliDNS and DNSPod servers, which are reachable in mainland China."
+msgstr "AliDNS और DNSPod के सर्वर भर देता है, जो मुख्यभूमि चीन में उपलब्ध हैं।"
 
 #. Text for a button that copies the seedphrase to the clipboard.
 msgctxt "copied"
@@ -1321,6 +1376,36 @@ msgstr "डेटा"
 msgctxt "data_bar_explanation"
 msgid "This bar in the app shows you how much free data you are earning from your provider. You can check in any time and adjust your settings to maximize your earnings."
 msgstr "ऐप में यह बार आपको दिखाता है कि आप अपने प्रदाता से कितने मुफ्त डेटा कमा रहे हैं। आप कभी भी जांच सकते हैं और अपनी सेटिंग्स समायोजित कर सकते हैं ताकि अपनी कमाई अधिकतम कर सकें।"
+
+#. "About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.
+msgctxt "data_info_available"
+msgid "Data you can still use."
+msgstr "वह डेटा जिसे आप अभी भी उपयोग कर सकते हैं।"
+
+#. "About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.
+msgctxt "data_info_pending"
+msgid "Data reserved for your open connections. What they don't use is returned when they close."
+msgstr "आपके खुले कनेक्शनों के लिए आरक्षित डेटा। वे जो उपयोग नहीं करते, वह उनके बंद होने पर वापस मिल जाता है।"
+
+#. "About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).
+msgctxt "data_info_refresh_at"
+msgid "Free data refreshes daily at 00:00 UTC (in {})."
+msgstr "निःशुल्क डेटा हर दिन 00:00 UTC पर रीफ़्रेश होता है ({} में)।"
+
+#. Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.
+msgctxt "data_info_title"
+msgid "About your data"
+msgstr "आपके डेटा के बारे में"
+
+#. "About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.
+msgctxt "data_info_used"
+msgid "Data you've used so far."
+msgstr "अब तक आपके द्वारा उपयोग किया गया डेटा।"
+
+#. Link under the out-of-balance notice that opens the "About your data" sheet.
+msgctxt "data_info_why"
+msgid "Why?"
+msgstr "क्यों?"
 
 #. Call to action
 msgctxt "data_usage"
@@ -2405,6 +2490,11 @@ msgctxt "ignore_battery_optimizations"
 msgid "Ignore battery optimizations"
 msgstr "बैटरी ऑप्टिमाइज़ेशन को अनदेखा करें"
 
+#. Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.
+msgctxt "import_extenders_control_doh_urls"
+msgid "This code also sets bootstrap DNS-over-HTTPS servers. They will see URnetwork's server lookups: {}"
+msgstr "यह कोड बूटस्ट्रैप DNS-over-HTTPS सर्वर भी सेट करता है। वे URnetwork के सर्वर लुकअप देख पाएँगे: {}"
+
 #. Guest mode overlay
 msgctxt "in_guest_mode"
 msgid "You're in guest mode"
@@ -2464,6 +2554,11 @@ msgstr "जब तक आप अपग्रेड या डिस्कने�
 msgctxt "insufficient_balance_message"
 msgid "Add balance or a plan to keep connecting."
 msgstr "कनेक्ट करना जारी रखने के लिए शेष राशि या कोई प्लान जोड़ें।"
+
+#. Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).
+msgctxt "insufficient_balance_refreshes_in"
+msgid "Free data refreshes in {}."
+msgstr "निःशुल्क डेटा {} में रीफ़्रेश होगा।"
 
 #. Circle Wallet Transfer Screen
 msgctxt "insufficient_funds"
@@ -3240,7 +3335,7 @@ msgctxt "no_wallets_found_alert_content"
 msgid "No Solana wallets were found installed on this device. Please install a wallet and try again."
 msgstr "इस डिवाइस पर कोई Solana वॉलेट इंस्टॉल नहीं मिला. कृपया एक वॉलेट इंस्टॉल करें और फिर से प्रयास करें."
 
-#. Empty value: the Referrals section shows it when no referral network is linked (apple), and the android referral network row.
+#. Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.
 msgctxt "none"
 msgid "None"
 msgstr "कोई नहीं"
@@ -3609,6 +3704,16 @@ msgctxt "post_quantum_identity_explanation"
 msgid "Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
 msgstr "आपकी प्रदाता पहचान कुंजी इस डिवाइस पर स्थानीय रूप से संग्रहीत होती है। अगर किसी पीयर की कुंजी स्थानीय रूप से संग्रहीत कुंजी से अलग दिखती है, तो इसका मतलब है कि नेटवर्क ऑपरेटर पर भरोसा नहीं किया जा सकता।"
 
+#. Button under the strict Private DNS notice that opens the Android wireless/network settings screen (there is no public Private DNS intent).
+msgctxt "private_dns_open_settings"
+msgid "Open network settings"
+msgstr "नेटवर्क सेटिंग खोलें"
+
+#. Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.
+msgctxt "private_dns_strict_notice"
+msgid "Private DNS is set to {}. Android sends lookups there directly instead of through URnetwork. If sites stop loading, set Private DNS to Automatic."
+msgstr "निजी DNS {} पर सेट है. Android, URnetwork के बजाय सीधे वहीं लुकअप भेजता है. अगर साइटें लोड होना बंद हो जाएं, तो निजी DNS को Automatic पर सेट करें."
+
 #. Network name when privacy is enabled
 msgctxt "private_network"
 msgid "Private Network"
@@ -3686,6 +3791,31 @@ msgctxt "provider_identities"
 msgid "Provider Identities"
 msgstr "प्रदाताओं की पहचान"
 
+#. Provider card, under the provide mode row: why an enabled provider gets no traffic. The device is in Auto mode and not connected, so it shares only with the user's own devices. 'Always' is the provide mode label (key always).
+msgctxt "provider_idle_auto_not_connected"
+msgid "Auto shares with everyone only while you're connected. Choose Always to earn while idle."
+msgstr "स्वचालित केवल तभी सभी के साथ साझा करता है जब आप कनेक्ट हों। कनेक्ट न होने पर भी कमाने के लिए हमेशा चुनें।"
+
+#. Provider card, under the provide mode row: the provide mode is Network, so the device shares only with the user's own devices. 'Always' is the provide mode label (key always).
+msgctxt "provider_idle_network_only"
+msgid "Shared only with your own devices. Choose Always to share with everyone."
+msgstr "केवल आपके अपने डिवाइस के साथ साझा किया गया। सभी के साथ साझा करने के लिए हमेशा चुनें।"
+
+#. Provider card, under the provide mode row: the device provides to everyone but has carried no traffic yet.
+msgctxt "provider_idle_no_traffic_yet"
+msgid "New providers need several hours of steady uptime and a speed test before clients are sent to them. Traffic also depends on demand in your region."
+msgstr "नए प्रदाताओं को क्लाइंट भेजे जाने से पहले कई घंटों का स्थिर अपटाइम और एक स्पीड टेस्ट चाहिए। ट्रैफ़िक आपके क्षेत्र में मांग पर भी निर्भर करता है।"
+
+#. Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).
+msgctxt "provider_idle_paused_no_network"
+msgid "Paused: this device can't provide on its current network."
+msgstr "रुका हुआ: यह डिवाइस अपने मौजूदा नेटवर्क पर प्रदान नहीं कर सकता।"
+
+#. Provider card, under the provide mode row: providing is paused because it is limited to Wi-Fi and the device is on another network.
+msgctxt "provider_idle_paused_wifi_only"
+msgid "Paused: providing is set to Wi-Fi only, and this device isn't on Wi-Fi."
+msgstr "रुका हुआ: प्रदान करना केवल Wi-Fi पर सेट है, और यह डिवाइस Wi-Fi पर नहीं है।"
+
 #. Row subtitle in the provider locations list when a provider's location is not known.
 msgctxt "provider_location_unknown"
 msgid "Location unknown"
@@ -3710,6 +3840,238 @@ msgstr "कनेक्ट होने तक प्रदाता का व�
 msgctxt "provider_statistics"
 msgid "Provider statistics"
 msgstr "प्रदाता आँकड़े"
+
+#. Title of the provider chart, shown with the other provider plots, of how many times clients were offered this device each minute over the last hour.
+msgctxt "provider_status_demand"
+msgid "Demand"
+msgstr "मांग"
+
+#. Provider status 'Why?' list: explanation under the country the device is offered in.
+msgctxt "provider_status_help_country"
+msgid "Clients who choose this country can be offered this device."
+msgstr "यह देश चुनने वाले क्लाइंट को यह डिवाइस पेश किया जा सकता है।"
+
+#. Provider status 'Why?' list: explanation under the delay.
+msgctxt "provider_status_help_latency"
+msgid "Delay measured above what is expected for this location. Lower delay is offered more often."
+msgstr "इस स्थान के लिए अपेक्षित से अधिक मापा गया विलंब। कम विलंब वाले कनेक्शन अधिक बार पेश किए जाते हैं।"
+
+#. Provider status 'Why?' list: explanation under the 12-hour reliability.
+msgctxt "provider_status_help_reliability_12h"
+msgid "How steadily this device stayed connected over the last 12 hours. It must reach the minimum to be offered to clients; from a fresh start this takes about 8 hours of steady uptime."
+msgstr "पिछले 12 घंटों में यह डिवाइस कितनी स्थिरता से कनेक्ट रहा। क्लाइंट को पेश किए जाने के लिए इसे न्यूनतम तक पहुँचना होगा; नई शुरुआत से इसमें लगभग 8 घंटे का स्थिर अपटाइम लगता है।"
+
+#. Provider status 'Why?' list: explanation under the 1-hour reliability.
+msgctxt "provider_status_help_reliability_1h"
+msgid "How steadily this device stayed connected over the last hour. It must reach the minimum to be offered to clients; disconnects lower it and steady uptime raises it."
+msgstr "पिछले एक घंटे में यह डिवाइस कितनी स्थिरता से कनेक्ट रहा। क्लाइंट को पेश किए जाने के लिए इसे न्यूनतम तक पहुँचना होगा; डिस्कनेक्ट होने से यह घटती है और स्थिर अपटाइम से बढ़ती है।"
+
+#. Provider status 'Why?' list: explanation under the 5-minute reliability.
+msgctxt "provider_status_help_reliability_5m"
+msgid "How steadily this device stayed connected over the last 5 minutes. It scales how often clients are offered this device; staying connected raises it."
+msgstr "पिछले 5 मिनट में यह डिवाइस कितनी स्थिरता से कनेक्ट रहा। इससे तय होता है कि इसे क्लाइंट को कितनी बार पेश किया जाए; कनेक्ट बने रहने से यह बढ़ती है।"
+
+#. Provider status 'Why?' list: explanation under a reliability measured over another window.
+msgctxt "provider_status_help_reliability_other"
+msgid "How steadily this device stayed connected over a longer window. It must reach the minimum to be offered to clients."
+msgstr "लंबी अवधि में यह डिवाइस कितनी स्थिरता से कनेक्ट रहा। क्लाइंट को पेश किए जाने के लिए इसे न्यूनतम तक पहुँचना होगा।"
+
+#. Provider status 'Why?' list: explanation under the speed test.
+msgctxt "provider_status_help_speed_test"
+msgid "Speed measured through this device. Faster connections are offered more often."
+msgstr "इस डिवाइस के ज़रिए मापी गई गति। तेज़ कनेक्शन अधिक बार पेश किए जाते हैं।"
+
+#. Provider status 'Why?' list: explanation under both tiers.
+msgctxt "provider_status_help_tier"
+msgid "Clients try lower tiers first. 0 is best; 3 means past the speed or delay cutoff."
+msgstr "क्लाइंट पहले निचले स्तर आज़माते हैं। 0 सबसे अच्छा है; 3 का मतलब गति या विलंब की सीमा से बाहर है।"
+
+#. Provider status 'Why?' list: explanation under the network checks.
+msgctxt "provider_status_help_url_checks"
+msgid "Test sites that loaded through this connection in the last 8 hours. Most must load; filtering by your internet provider lowers it."
+msgstr "पिछले 8 घंटों में इस कनेक्शन से लोड हुई टेस्ट साइटें। अधिकांश का लोड होना ज़रूरी है; आपके इंटरनेट प्रदाता की फ़िल्टरिंग इसे घटाती है।"
+
+#. Provider status 'Why?' list: explanation under both selection weights.
+msgctxt "provider_status_help_weight"
+msgid "Combines reliability, speed and passed network checks. Clients are offered providers with a higher weight more often."
+msgstr "विश्वसनीयता, गति और पास हुई नेटवर्क जाँचों को मिलाता है। अधिक भार वाले प्रदाता क्लाइंट को अधिक बार पेश किए जाते हैं।"
+
+#. Provider card chart: shown when every bar is zero.
+msgctxt "provider_status_histogram_empty"
+msgid "Not offered to clients in the last hour"
+msgstr "पिछले एक घंटे में क्लाइंट को पेश नहीं किया गया"
+
+#. Provider card chart: label under the right (current minute) end of the axis.
+msgctxt "provider_status_histogram_end"
+msgid "Now"
+msgstr "अभी"
+
+#. Provider card chart: label under the left (oldest) end of the 60-minute axis.
+msgctxt "provider_status_histogram_start"
+msgid "60 min ago"
+msgstr "60 मिनट पहले"
+
+#. Provider card: title of a 60-bar chart of how many times the network offered this device to clients in each minute of the last hour.
+msgctxt "provider_status_histogram_title"
+msgid "Times clients were offered this device, per minute, last hour"
+msgstr "पिछले एक घंटे में प्रति मिनट यह डिवाइस क्लाइंट को कितनी बार पेश किया गया"
+
+#. Provider card chart: total of the 60 bars. The argument is the number of times this device was offered to clients in the last hour.
+msgctxt "provider_status_histogram_total"
+msgid "{} time in the last hour"
+msgid_plural "{} times in the last hour"
+msgstr[0] "पिछले एक घंटे में {} बार"
+msgstr[1] "पिछले एक घंटे में {} बार"
+
+#. Provider status 'Why?' list: label of the measured delay (latency) in milliseconds.
+msgctxt "provider_status_number_latency"
+msgid "Delay"
+msgstr "विलंब"
+
+#. Provider status 'Why?' list: label of the reliability over the last 12 hours.
+msgctxt "provider_status_number_reliability_12h"
+msgid "Reliability, last 12 hours"
+msgstr "विश्वसनीयता, पिछले 12 घंटे"
+
+#. Provider status 'Why?' list: label of the reliability over the last hour.
+msgctxt "provider_status_number_reliability_1h"
+msgid "Reliability, last hour"
+msgstr "विश्वसनीयता, पिछला एक घंटा"
+
+#. Provider status 'Why?' list: label of the reliability over the last 5 minutes (a share of steady uptime).
+msgctxt "provider_status_number_reliability_5m"
+msgid "Reliability, last 5 minutes"
+msgstr "विश्वसनीयता, पिछले 5 मिनट"
+
+#. Provider status 'Why?' list: label of the measured speed.
+msgctxt "provider_status_number_speed_test"
+msgid "Speed test"
+msgstr "स्पीड टेस्ट"
+
+#. Provider status 'Why?' list: label of the device's tier for quality-ranked requests (0 is best).
+msgctxt "provider_status_number_tier_quality"
+msgid "Tier (quality)"
+msgstr "स्तर (गुणवत्ता)"
+
+#. Provider status 'Why?' list: label of the device's tier for speed-ranked requests.
+msgctxt "provider_status_number_tier_speed"
+msgid "Tier (speed)"
+msgstr "स्तर (गति)"
+
+#. Provider status 'Why?' list: label of the network check result (test sites loaded through the device).
+msgctxt "provider_status_number_url_checks"
+msgid "Network checks"
+msgstr "नेटवर्क जाँच"
+
+#. Provider status 'Why?' list: label of the device's selection weight for quality-ranked requests (a relative number).
+msgctxt "provider_status_number_weight_quality"
+msgid "Selection weight (quality)"
+msgstr "चयन भार (गुणवत्ता)"
+
+#. Provider status 'Why?' list: label of the device's selection weight for speed-ranked requests.
+msgctxt "provider_status_number_weight_speed"
+msgid "Selection weight (speed)"
+msgstr "चयन भार (गति)"
+
+#. Provider status reason (egress_failing): too many test sites failed to load through the device.
+msgctxt "provider_status_reason_egress_failing"
+msgid "Too many test sites failed to load through this connection in the last 8 hours. Clients are offered this device only when checked providers run out."
+msgstr "पिछले 8 घंटों में इस कनेक्शन से बहुत सी टेस्ट साइटें लोड नहीं हो सकीं। यह डिवाइस क्लाइंट को तभी पेश किया जाता है जब जाँचे गए प्रदाता खत्म हो जाएँ।"
+
+#. Provider status reason (egress_unprobed): the network check (loading test sites through the device) has not run yet.
+msgctxt "provider_status_reason_egress_unprobed"
+msgid "The network check hasn't run on this connection yet. Until it passes, clients are offered this device only when checked providers run out."
+msgstr "इस कनेक्शन पर नेटवर्क जाँच अभी नहीं चली है। इसके पास होने तक, यह डिवाइस क्लाइंट को तभी पेश किया जाता है जब जाँचे गए प्रदाता खत्म हो जाएँ।"
+
+#. Provider status reason (location_invalid): the device was seen at more than one IP address, or its location is unknown.
+msgctxt "provider_status_reason_location_invalid"
+msgid "This device is connecting from more than one address, or its location is unknown. Clients are offered only devices with one address and a known location."
+msgstr "यह डिवाइस एक से अधिक पते से कनेक्ट हो रहा है, या इसका स्थान अज्ञात है। क्लाइंट को केवल एक पते और ज्ञात स्थान वाले डिवाइस पेश किए जाते हैं।"
+
+#. Provider status reason (network_only). 'Always' is the provide mode label (key always).
+msgctxt "provider_status_reason_network_only"
+msgid "This device provides only to your own devices. Choose Always to share with everyone."
+msgstr "यह डिवाइस केवल आपके अपने डिवाइस को प्रदान करता है। सभी के साथ साझा करने के लिए हमेशा चुनें।"
+
+#. Provider status reason (none): passes every check.
+msgctxt "provider_status_reason_none"
+msgid "Everything checks out. How often clients are offered this device depends on demand in its region and on how it ranks against nearby providers."
+msgstr "सब ठीक है। यह डिवाइस क्लाइंट को कितनी बार पेश किया जाता है, यह इसके क्षेत्र की मांग और आस-पास के प्रदाताओं की तुलना में इसकी रैंकिंग पर निर्भर करता है।"
+
+#. Provider status reason (not_connected).
+msgctxt "provider_status_reason_not_connected"
+msgid "This device isn't connected right now. Clients are offered only connected devices."
+msgstr "यह डिवाइस अभी कनेक्ट नहीं है। क्लाइंट को केवल कनेक्ट किए गए डिवाइस पेश किए जाते हैं।"
+
+#. Provider status reason (not_eligible): one generic reason for every anti-abuse check. Keep it generic; do not add detail.
+msgctxt "provider_status_reason_not_eligible"
+msgid "This connection isn't eligible to provide right now."
+msgstr "यह कनेक्शन अभी प्रदान करने के योग्य नहीं है।"
+
+#. Provider status reason (not_providing): the device is not set to provide.
+msgctxt "provider_status_reason_not_providing"
+msgid "This device isn't set to share its connection."
+msgstr "यह डिवाइस अपना कनेक्शन साझा करने के लिए सेट नहीं है।"
+
+#. Provider status reason (reliability_low): the last hour's reliability is below the minimum.
+msgctxt "provider_status_reason_reliability_low"
+msgid "Reliability over the last hour is below what clients need. It rises with every minute this device stays connected; disconnects lower it."
+msgstr "पिछले एक घंटे की विश्वसनीयता क्लाइंट की ज़रूरत से कम है। यह डिवाइस जितनी देर कनेक्ट रहता है, हर मिनट के साथ यह बढ़ती है; डिस्कनेक्ट होने से घटती है।"
+
+#. Provider status reason (reliability_warming_up): steady for the last hour, but the 12-hour reliability is still below the minimum.
+msgctxt "provider_status_reason_reliability_warming_up"
+msgid "Building reliability. This device has been steady for the last hour; clients are offered it once its 12-hour reliability reaches the minimum, about 8 hours after a fresh start."
+msgstr "विश्वसनीयता बन रही है। यह डिवाइस पिछले एक घंटे से स्थिर है; इसकी 12 घंटे की विश्वसनीयता न्यूनतम तक पहुँचते ही इसे क्लाइंट को पेश किया जाएगा, नई शुरुआत के लगभग 8 घंटे बाद।"
+
+#. Provider status reason (slow): past the speed or delay cutoff.
+msgctxt "provider_status_reason_slow"
+msgid "This connection measured slower than clients need, so it is offered much less often."
+msgstr "इस कनेक्शन की गति क्लाइंट की ज़रूरत से धीमी मापी गई, इसलिए इसे बहुत कम बार पेश किया जाता है।"
+
+#. Provider status reason (speed_test_missing).
+msgctxt "provider_status_reason_speed_test_missing"
+msgid "No speed test yet. Until one completes, clients are offered this device much less often."
+msgstr "अभी तक कोई स्पीड टेस्ट नहीं हुआ। जब तक एक पूरा नहीं होता, यह डिवाइस क्लाइंट को बहुत कम बार पेश किया जाता है।"
+
+#. Provider card: shown instead of the chart and reason when the status could not be loaded.
+msgctxt "provider_status_unavailable"
+msgid "Provider status isn't available right now."
+msgstr "प्रदाता की स्थिति अभी उपलब्ध नहीं है।"
+
+#. Provider status 'Why?' list: how many test sites loaded through the device out of all that were tried, e.g. '19 of 20 loaded'.
+msgctxt "provider_status_value_count_of_total"
+msgid "{0} of {1} loaded"
+msgstr "{1} में से {0} लोड हुए"
+
+#. Provider status 'Why?' list: value of a reliability with no history yet (which does not count against the device).
+msgctxt "provider_status_value_no_history"
+msgid "No history yet"
+msgstr "अभी कोई इतिहास नहीं"
+
+#. Provider status 'Why?' list: value of a selection weight when the device is not in that pool right now.
+msgctxt "provider_status_value_not_in_pool"
+msgid "Not in this pool"
+msgstr "इस पूल में नहीं"
+
+#. Provider status 'Why?' list: value shown when a measurement (speed test, delay, network check) has not happened yet.
+msgctxt "provider_status_value_not_yet"
+msgid "Not yet"
+msgstr "अभी नहीं"
+
+#. Provider status 'Why?' list: a value with the most the network allows, e.g. '35 ms (at most 200 ms)'. Both arguments are already formatted text.
+msgctxt "provider_status_value_with_maximum"
+msgid "{0} (at most {1})"
+msgstr "{0} (अधिकतम {1})"
+
+#. Provider status 'Why?' list: a value with the minimum the network requires, e.g. '82% (needs 95%)'. Both arguments are already formatted text.
+msgctxt "provider_status_value_with_minimum"
+msgid "{0} (needs {1})"
+msgstr "{0} (आवश्यक {1})"
+
+#. Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.
+msgctxt "provider_status_why"
+msgid "Why?"
+msgstr "क्यों?"
 
 #. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "providing"
@@ -4861,6 +5223,16 @@ msgctxt "split_rule_host_placeholder"
 msgid "example.com, *.example.com, 10.0.0.0/8"
 msgstr "example.com, *.example.com, 10.0.0.0/8"
 
+#. Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.
+msgctxt "split_rule_preset_google_meet_calls"
+msgid "Google Meet calls"
+msgstr "Google Meet कॉल"
+
+#. Split rules preset: Microsoft Teams call media, from the address ranges Microsoft publishes for routing it outside a VPN. Keep the product name Microsoft Teams unchanged.
+msgctxt "split_rule_preset_microsoft_teams_calls"
+msgid "Microsoft Teams calls"
+msgstr "Microsoft Teams कॉल"
+
 #. transfer stats and split rules
 msgctxt "split_rules"
 msgid "Split rules"
@@ -4885,6 +5257,21 @@ msgstr "ऊपर एक होस्ट जोड़ें, या नीचे
 msgctxt "split_rules_info_note"
 msgid "Exclusions apply to the whole co-associated network cluster, so related traffic is caught together."
 msgstr "अपवाद पूरे संबद्ध नेटवर्क क्लस्टर पर लागू होते हैं, इसलिए संबंधित ट्रैफ़िक एक साथ शामिल हो जाता है।"
+
+#. Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.
+msgctxt "split_rules_match_sites_not_apps"
+msgid "Split rules match sites and addresses, not apps: Apple allows per-app VPN only on devices managed by an organization (MDM). To keep an app off the VPN, route the sites it uses locally, or start from a preset. Local network addresses already bypass the VPN."
+msgstr "स्प्लिट नियम साइटों और पतों पर लागू होते हैं, ऐप्स पर नहीं: Apple प्रति-ऐप VPN की अनुमति केवल उन डिवाइस पर देता है जिन्हें कोई संगठन प्रबंधित करता है (MDM)। किसी ऐप को VPN से बाहर रखने के लिए, वह जिन साइटों का उपयोग करता है उन्हें लोकल रूट करें, या किसी प्रीसेट से शुरू करें। लोकल नेटवर्क के पते पहले से VPN को बायपास करते हैं।"
+
+#. Split rules screen: header of the preset menu. Each preset holds the address ranges its service publishes for routing that service's traffic outside a VPN.
+msgctxt "split_rules_preset_ranges_header"
+msgid "Ranges each service publishes for use outside a VPN"
+msgstr "हर सेवा द्वारा VPN के बाहर उपयोग के लिए प्रकाशित रेंज"
+
+#. Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.
+msgctxt "split_rules_start_from_preset"
+msgid "Start from a preset"
+msgstr "किसी प्रीसेट से शुरू करें"
 
 #. Guest mode overlay
 msgctxt "start_earning_join"
@@ -5367,6 +5754,16 @@ msgctxt "usdc_wallet_address"
 msgid "USDC wallet address"
 msgstr "USDC वॉलेट पता"
 
+#. Settings row (Connections) that opens the ur.io cloud proxies page so the user can run URnetwork as a proxy without taking the Android VPN slot.
+msgctxt "use_as_proxy_no_vpn"
+msgid "Use as a proxy instead (no VPN)"
+msgstr "इसके बजाय प्रॉक्सी के रूप में उपयोग करें (कोई VPN नहीं)"
+
+#. Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.
+msgctxt "use_as_proxy_no_vpn_detail"
+msgid "Opens ur.io to run URnetwork as an HTTPS proxy without the VPN. SOCKS and WireGuard are available on Pro."
+msgstr "URnetwork को VPN के बिना HTTPS प्रॉक्सी के रूप में चलाने के लिए ur.io खोलता है. SOCKS और WireGuard, Pro में उपलब्ध हैं."
+
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"
 msgid "Use most stable provider"
@@ -5710,6 +6107,11 @@ msgstr "शॉर्ट आईडी"
 msgctxt "vless_user_id"
 msgid "User ID (UUID)"
 msgstr "यूज़र आईडी (UUID)"
+
+#. Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.
+msgctxt "wait_for_refresh"
+msgid "Wait for refresh"
+msgstr "रीफ़्रेश की प्रतीक्षा करें"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "waiting_for_approval"

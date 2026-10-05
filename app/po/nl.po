@@ -963,11 +963,6 @@ msgctxt "companion"
 msgid "Companion"
 msgstr "Tegenpartij"
 
-#. Used in Main/Account/Settings/SettingsView.swift.
-msgctxt "confirm_seeker_token"
-msgid "Confirm Seeker Token"
-msgstr "Bevestig Seeker Token"
-
 #. Settings: switch that connects automatically when the app starts.
 msgctxt "conn_connect_on_launch"
 msgid "Connect automatically when the app starts"
@@ -1126,6 +1121,66 @@ msgstr "Contracten verschijnen hier tijdens het leveren."
 msgctxt "contribute_bandwidth"
 msgid "Contribute Bandwidth"
 msgstr "Bandbreedte leveren"
+
+#. Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.
+msgctxt "control_doh_error_https_required"
+msgid "The URL must start with https://."
+msgstr "De URL moet beginnen met https://."
+
+#. Bootstrap DNS-over-HTTPS server error: the URL names a host name where an IP address is needed. The example URL is literal and is not translated.
+msgctxt "control_doh_error_ip_required"
+msgid "Use an IP address, not a host name, such as https://223.5.5.5/dns-query."
+msgstr "Gebruik een IP-adres in plaats van een hostnaam, zoals https://223.5.5.5/dns-query."
+
+#. Bootstrap DNS-over-HTTPS server error: the list has more servers of one IP version than the app accepts.
+msgctxt "control_doh_error_too_many"
+msgid "Too many servers. Remove some and save again."
+msgstr "Te veel servers. Verwijder er een paar en sla opnieuw op."
+
+#. Bootstrap DNS-over-HTTPS server error: the line is not a complete URL the app can query (no path, a query or fragment, user info or a bad port). The example URL is literal and is not translated.
+msgctxt "control_doh_error_url_invalid"
+msgid "Enter a full URL, such as https://223.5.5.5/dns-query."
+msgstr "Voer een volledige URL in, zoals https://223.5.5.5/dns-query."
+
+#. Extender settings: the title of the list of bootstrap DNS-over-HTTPS servers a user can add for the lookups of URnetwork's own server names. DNS-over-HTTPS is a protocol name and is not translated.
+msgctxt "control_doh_urls"
+msgid "Bootstrap DNS-over-HTTPS servers"
+msgstr "Bootstrap-servers voor DNS-over-HTTPS"
+
+#. Extender settings: explains the bootstrap DNS-over-HTTPS server list. It must say that URnetwork looks up its own server names through the added servers first, and that those servers can see these lookups.
+msgctxt "control_doh_urls_description"
+msgid "URnetwork looks up the names of its own servers over DNS-over-HTTPS. If the built-in servers are blocked on your network, add servers that work there. URnetwork tries them first, and they can see these lookups."
+msgstr "URnetwork zoekt de namen van zijn eigen servers op via DNS-over-HTTPS. Als de ingebouwde servers op je netwerk worden geblokkeerd, voeg dan servers toe die daar werken. URnetwork probeert ze eerst, en zij kunnen deze opzoekingen zien."
+
+#. Extender settings: help text under the bootstrap DNS-over-HTTPS server list. https:// and the example URL are literal and are not translated.
+msgctxt "control_doh_urls_hint"
+msgid "One URL per line, starting with https:// and an IP address, such as https://223.5.5.5/dns-query."
+msgstr "Eén URL per regel, beginnend met https:// en een IP-adres, zoals https://223.5.5.5/dns-query."
+
+#. Bootstrap DNS-over-HTTPS servers: note after saving where the VPN runs separately from the app (the iOS tunnel extension, the desktop service). It reads the servers at its next start.
+msgctxt "control_doh_urls_next_connect"
+msgid "The VPN uses the new bootstrap servers the next time it connects."
+msgstr "De VPN gebruikt de nieuwe bootstrap-servers bij de volgende verbinding."
+
+#. Extender settings: button that clears the bootstrap DNS-over-HTTPS server list, so only the built-in servers are used.
+msgctxt "control_doh_urls_reset"
+msgid "Use built-in servers only"
+msgstr "Alleen ingebouwde servers gebruiken"
+
+#. Confirmation after the bootstrap DNS-over-HTTPS servers are saved.
+msgctxt "control_doh_urls_saved"
+msgid "Bootstrap DNS-over-HTTPS servers saved"
+msgstr "Bootstrap-servers voor DNS-over-HTTPS opgeslagen"
+
+#. Extender settings: button that fills the bootstrap DNS-over-HTTPS server list with resolvers that are reachable in mainland China.
+msgctxt "control_doh_use_china"
+msgid "Use China resolvers"
+msgstr "Chinese resolvers gebruiken"
+
+#. Extender settings: note under the Use China resolvers button naming the operators it fills in. AliDNS and DNSPod are product names and are not translated.
+msgctxt "control_doh_use_china_hint"
+msgid "Fills in the AliDNS and DNSPod servers, which are reachable in mainland China."
+msgstr "Vult de servers van AliDNS en DNSPod in, die bereikbaar zijn op het Chinese vasteland."
 
 #. Text for a button that copies the seedphrase to the clipboard.
 msgctxt "copied"
@@ -1321,6 +1376,36 @@ msgstr "Data"
 msgctxt "data_bar_explanation"
 msgid "This bar in the app shows you how much free data you are earning from your provider. You can check in any time and adjust your settings to maximize your earnings."
 msgstr "Deze balk in de app laat zien hoeveel gratis data je van je provider verdient. Je kunt op elk moment kijken en je instellingen aanpassen om je verdiensten te maximaliseren."
+
+#. "About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.
+msgctxt "data_info_available"
+msgid "Data you can still use."
+msgstr "Data die je nog kunt gebruiken."
+
+#. "About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.
+msgctxt "data_info_pending"
+msgid "Data reserved for your open connections. What they don't use is returned when they close."
+msgstr "Data die is gereserveerd voor je open verbindingen. Wat ze niet gebruiken, krijg je terug wanneer ze worden gesloten."
+
+#. "About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).
+msgctxt "data_info_refresh_at"
+msgid "Free data refreshes daily at 00:00 UTC (in {})."
+msgstr "Gratis data wordt elke dag om 00:00 UTC vernieuwd (over {})."
+
+#. Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.
+msgctxt "data_info_title"
+msgid "About your data"
+msgstr "Over je data"
+
+#. "About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.
+msgctxt "data_info_used"
+msgid "Data you've used so far."
+msgstr "Data die je tot nu toe hebt gebruikt."
+
+#. Link under the out-of-balance notice that opens the "About your data" sheet.
+msgctxt "data_info_why"
+msgid "Why?"
+msgstr "Waarom?"
 
 #. Call to action
 msgctxt "data_usage"
@@ -2405,6 +2490,11 @@ msgctxt "ignore_battery_optimizations"
 msgid "Ignore battery optimizations"
 msgstr "Batterijoptimalisaties negeren"
 
+#. Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.
+msgctxt "import_extenders_control_doh_urls"
+msgid "This code also sets bootstrap DNS-over-HTTPS servers. They will see URnetwork's server lookups: {}"
+msgstr "Deze code stelt ook bootstrap-servers voor DNS-over-HTTPS in. Ze zien de serveropzoekingen van URnetwork: {}"
+
 #. Guest mode overlay
 msgctxt "in_guest_mode"
 msgid "You're in guest mode"
@@ -2464,6 +2554,11 @@ msgstr "Je verkeer wordt in de tunnel vastgehouden totdat je upgradet of de verb
 msgctxt "insufficient_balance_message"
 msgid "Add balance or a plan to keep connecting."
 msgstr "Voeg saldo of een abonnement toe om verbinding te blijven maken."
+
+#. Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).
+msgctxt "insufficient_balance_refreshes_in"
+msgid "Free data refreshes in {}."
+msgstr "Gratis data wordt over {} vernieuwd."
 
 #. Circle Wallet Transfer Screen
 msgctxt "insufficient_funds"
@@ -3240,7 +3335,7 @@ msgctxt "no_wallets_found_alert_content"
 msgid "No Solana wallets were found installed on this device. Please install a wallet and try again."
 msgstr "Er zijn geen Solana wallets geïnstalleerd op dit apparaat. Installeer een portemonnee en probeer het opnieuw."
 
-#. Empty value: the Referrals section shows it when no referral network is linked (apple), and the android referral network row.
+#. Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.
 msgctxt "none"
 msgid "None"
 msgstr "Geen"
@@ -3609,6 +3704,16 @@ msgctxt "post_quantum_identity_explanation"
 msgid "Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted."
 msgstr "Je provider-identiteitssleutel wordt lokaal op dit apparaat opgeslagen. Als de sleutel van een peer afwijkt van de lokaal opgeslagen sleutel, betekent dit dat de netwerkbeheerder niet te vertrouwen is."
 
+#. Button under the strict Private DNS notice that opens the Android wireless/network settings screen (there is no public Private DNS intent).
+msgctxt "private_dns_open_settings"
+msgid "Open network settings"
+msgstr "Netwerkinstellingen openen"
+
+#. Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.
+msgctxt "private_dns_strict_notice"
+msgid "Private DNS is set to {}. Android sends lookups there directly instead of through URnetwork. If sites stop loading, set Private DNS to Automatic."
+msgstr "Privé-DNS is ingesteld op {}. Android stuurt aanvragen rechtstreeks daarheen in plaats van via URnetwork. Als sites niet meer laden, stel Privé-DNS dan in op Automatisch."
+
 #. Network name when privacy is enabled
 msgctxt "private_network"
 msgid "Private Network"
@@ -3686,6 +3791,31 @@ msgctxt "provider_identities"
 msgid "Provider Identities"
 msgstr "Provideridentiteiten"
 
+#. Provider card, under the provide mode row: why an enabled provider gets no traffic. The device is in Auto mode and not connected, so it shares only with the user's own devices. 'Always' is the provide mode label (key always).
+msgctxt "provider_idle_auto_not_connected"
+msgid "Auto shares with everyone only while you're connected. Choose Always to earn while idle."
+msgstr "Auto deelt alleen met iedereen terwijl je verbonden bent. Kies Altijd om ook te verdienen wanneer je niet verbonden bent."
+
+#. Provider card, under the provide mode row: the provide mode is Network, so the device shares only with the user's own devices. 'Always' is the provide mode label (key always).
+msgctxt "provider_idle_network_only"
+msgid "Shared only with your own devices. Choose Always to share with everyone."
+msgstr "Alleen gedeeld met je eigen apparaten. Kies Altijd om met iedereen te delen."
+
+#. Provider card, under the provide mode row: the device provides to everyone but has carried no traffic yet.
+msgctxt "provider_idle_no_traffic_yet"
+msgid "New providers need several hours of steady uptime and a speed test before clients are sent to them. Traffic also depends on demand in your region."
+msgstr "Nieuwe providers hebben enkele uren stabiele uptime en een snelheidstest nodig voordat er clients naar hen worden gestuurd. Verkeer hangt ook af van de vraag in je regio."
+
+#. Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).
+msgctxt "provider_idle_paused_no_network"
+msgid "Paused: this device can't provide on its current network."
+msgstr "Gepauzeerd: dit apparaat kan op het huidige netwerk niet leveren."
+
+#. Provider card, under the provide mode row: providing is paused because it is limited to Wi-Fi and the device is on another network.
+msgctxt "provider_idle_paused_wifi_only"
+msgid "Paused: providing is set to Wi-Fi only, and this device isn't on Wi-Fi."
+msgstr "Gepauzeerd: leveren is ingesteld op alleen Wi-Fi, en dit apparaat is niet met Wi-Fi verbonden."
+
 #. Row subtitle in the provider locations list when a provider's location is not known.
 msgctxt "provider_location_unknown"
 msgid "Location unknown"
@@ -3710,6 +3840,238 @@ msgstr "Providergegevens zijn niet beschikbaar tot er verbinding is"
 msgctxt "provider_statistics"
 msgid "Provider statistics"
 msgstr "Providerstatistieken"
+
+#. Title of the provider chart, shown with the other provider plots, of how many times clients were offered this device each minute over the last hour.
+msgctxt "provider_status_demand"
+msgid "Demand"
+msgstr "Vraag"
+
+#. Provider status 'Why?' list: explanation under the country the device is offered in.
+msgctxt "provider_status_help_country"
+msgid "Clients who choose this country can be offered this device."
+msgstr "Dit apparaat kan worden aangeboden aan clients die dit land kiezen."
+
+#. Provider status 'Why?' list: explanation under the delay.
+msgctxt "provider_status_help_latency"
+msgid "Delay measured above what is expected for this location. Lower delay is offered more often."
+msgstr "Vertraging gemeten boven wat voor deze locatie wordt verwacht. Lagere vertraging wordt vaker aangeboden."
+
+#. Provider status 'Why?' list: explanation under the 12-hour reliability.
+msgctxt "provider_status_help_reliability_12h"
+msgid "How steadily this device stayed connected over the last 12 hours. It must reach the minimum to be offered to clients; from a fresh start this takes about 8 hours of steady uptime."
+msgstr "Hoe stabiel dit apparaat de afgelopen 12 uur verbonden bleef. Dit moet het minimum halen om aan clients te worden aangeboden; na een nieuwe start duurt dat ongeveer 8 uur stabiele uptime."
+
+#. Provider status 'Why?' list: explanation under the 1-hour reliability.
+msgctxt "provider_status_help_reliability_1h"
+msgid "How steadily this device stayed connected over the last hour. It must reach the minimum to be offered to clients; disconnects lower it and steady uptime raises it."
+msgstr "Hoe stabiel dit apparaat het afgelopen uur verbonden bleef. Dit moet het minimum halen om aan clients te worden aangeboden; verbroken verbindingen verlagen het en stabiele uptime verhoogt het."
+
+#. Provider status 'Why?' list: explanation under the 5-minute reliability.
+msgctxt "provider_status_help_reliability_5m"
+msgid "How steadily this device stayed connected over the last 5 minutes. It scales how often clients are offered this device; staying connected raises it."
+msgstr "Hoe stabiel dit apparaat de afgelopen 5 minuten verbonden bleef. Dit bepaalt mee hoe vaak het aan clients wordt aangeboden; verbonden blijven verhoogt het."
+
+#. Provider status 'Why?' list: explanation under a reliability measured over another window.
+msgctxt "provider_status_help_reliability_other"
+msgid "How steadily this device stayed connected over a longer window. It must reach the minimum to be offered to clients."
+msgstr "Hoe stabiel dit apparaat over een langere periode verbonden bleef. Dit moet het minimum halen om aan clients te worden aangeboden."
+
+#. Provider status 'Why?' list: explanation under the speed test.
+msgctxt "provider_status_help_speed_test"
+msgid "Speed measured through this device. Faster connections are offered more often."
+msgstr "Snelheid gemeten via dit apparaat. Snellere verbindingen worden vaker aangeboden."
+
+#. Provider status 'Why?' list: explanation under both tiers.
+msgctxt "provider_status_help_tier"
+msgid "Clients try lower tiers first. 0 is best; 3 means past the speed or delay cutoff."
+msgstr "Clients proberen eerst lagere niveaus. 0 is het best; 3 betekent voorbij de grens voor snelheid of vertraging."
+
+#. Provider status 'Why?' list: explanation under the network checks.
+msgctxt "provider_status_help_url_checks"
+msgid "Test sites that loaded through this connection in the last 8 hours. Most must load; filtering by your internet provider lowers it."
+msgstr "Testsites die de afgelopen 8 uur via deze verbinding laadden. De meeste moeten laden; filtering door je internetprovider verlaagt dit."
+
+#. Provider status 'Why?' list: explanation under both selection weights.
+msgctxt "provider_status_help_weight"
+msgid "Combines reliability, speed and passed network checks. Clients are offered providers with a higher weight more often."
+msgstr "Combineert betrouwbaarheid, snelheid en geslaagde netwerkcontroles. Providers met een hoger gewicht worden vaker aan clients aangeboden."
+
+#. Provider card chart: shown when every bar is zero.
+msgctxt "provider_status_histogram_empty"
+msgid "Not offered to clients in the last hour"
+msgstr "Het afgelopen uur niet aan clients aangeboden"
+
+#. Provider card chart: label under the right (current minute) end of the axis.
+msgctxt "provider_status_histogram_end"
+msgid "Now"
+msgstr "Nu"
+
+#. Provider card chart: label under the left (oldest) end of the 60-minute axis.
+msgctxt "provider_status_histogram_start"
+msgid "60 min ago"
+msgstr "60 min geleden"
+
+#. Provider card: title of a 60-bar chart of how many times the network offered this device to clients in each minute of the last hour.
+msgctxt "provider_status_histogram_title"
+msgid "Times clients were offered this device, per minute, last hour"
+msgstr "Aantal keer dat dit apparaat aan clients werd aangeboden, per minuut, afgelopen uur"
+
+#. Provider card chart: total of the 60 bars. The argument is the number of times this device was offered to clients in the last hour.
+msgctxt "provider_status_histogram_total"
+msgid "{} time in the last hour"
+msgid_plural "{} times in the last hour"
+msgstr[0] "{} keer in het afgelopen uur"
+msgstr[1] "{} keer in het afgelopen uur"
+
+#. Provider status 'Why?' list: label of the measured delay (latency) in milliseconds.
+msgctxt "provider_status_number_latency"
+msgid "Delay"
+msgstr "Vertraging"
+
+#. Provider status 'Why?' list: label of the reliability over the last 12 hours.
+msgctxt "provider_status_number_reliability_12h"
+msgid "Reliability, last 12 hours"
+msgstr "Betrouwbaarheid, laatste 12 uur"
+
+#. Provider status 'Why?' list: label of the reliability over the last hour.
+msgctxt "provider_status_number_reliability_1h"
+msgid "Reliability, last hour"
+msgstr "Betrouwbaarheid, afgelopen uur"
+
+#. Provider status 'Why?' list: label of the reliability over the last 5 minutes (a share of steady uptime).
+msgctxt "provider_status_number_reliability_5m"
+msgid "Reliability, last 5 minutes"
+msgstr "Betrouwbaarheid, laatste 5 minuten"
+
+#. Provider status 'Why?' list: label of the measured speed.
+msgctxt "provider_status_number_speed_test"
+msgid "Speed test"
+msgstr "Snelheidstest"
+
+#. Provider status 'Why?' list: label of the device's tier for quality-ranked requests (0 is best).
+msgctxt "provider_status_number_tier_quality"
+msgid "Tier (quality)"
+msgstr "Niveau (kwaliteit)"
+
+#. Provider status 'Why?' list: label of the device's tier for speed-ranked requests.
+msgctxt "provider_status_number_tier_speed"
+msgid "Tier (speed)"
+msgstr "Niveau (snelheid)"
+
+#. Provider status 'Why?' list: label of the network check result (test sites loaded through the device).
+msgctxt "provider_status_number_url_checks"
+msgid "Network checks"
+msgstr "Netwerkcontroles"
+
+#. Provider status 'Why?' list: label of the device's selection weight for quality-ranked requests (a relative number).
+msgctxt "provider_status_number_weight_quality"
+msgid "Selection weight (quality)"
+msgstr "Selectiegewicht (kwaliteit)"
+
+#. Provider status 'Why?' list: label of the device's selection weight for speed-ranked requests.
+msgctxt "provider_status_number_weight_speed"
+msgid "Selection weight (speed)"
+msgstr "Selectiegewicht (snelheid)"
+
+#. Provider status reason (egress_failing): too many test sites failed to load through the device.
+msgctxt "provider_status_reason_egress_failing"
+msgid "Too many test sites failed to load through this connection in the last 8 hours. Clients are offered this device only when checked providers run out."
+msgstr "In de afgelopen 8 uur konden te veel testsites niet via deze verbinding worden geladen. Dit apparaat wordt alleen aan clients aangeboden als gecontroleerde providers op zijn."
+
+#. Provider status reason (egress_unprobed): the network check (loading test sites through the device) has not run yet.
+msgctxt "provider_status_reason_egress_unprobed"
+msgid "The network check hasn't run on this connection yet. Until it passes, clients are offered this device only when checked providers run out."
+msgstr "De netwerkcontrole is voor deze verbinding nog niet uitgevoerd. Tot die slaagt, wordt dit apparaat alleen aan clients aangeboden als gecontroleerde providers op zijn."
+
+#. Provider status reason (location_invalid): the device was seen at more than one IP address, or its location is unknown.
+msgctxt "provider_status_reason_location_invalid"
+msgid "This device is connecting from more than one address, or its location is unknown. Clients are offered only devices with one address and a known location."
+msgstr "Dit apparaat maakt verbinding vanaf meer dan één adres, of de locatie is onbekend. Aan clients worden alleen apparaten met één adres en een bekende locatie aangeboden."
+
+#. Provider status reason (network_only). 'Always' is the provide mode label (key always).
+msgctxt "provider_status_reason_network_only"
+msgid "This device provides only to your own devices. Choose Always to share with everyone."
+msgstr "Dit apparaat levert alleen aan je eigen apparaten. Kies Altijd om met iedereen te delen."
+
+#. Provider status reason (none): passes every check.
+msgctxt "provider_status_reason_none"
+msgid "Everything checks out. How often clients are offered this device depends on demand in its region and on how it ranks against nearby providers."
+msgstr "Alles klopt. Hoe vaak dit apparaat aan clients wordt aangeboden, hangt af van de vraag in de regio en van hoe het scoort ten opzichte van providers in de buurt."
+
+#. Provider status reason (not_connected).
+msgctxt "provider_status_reason_not_connected"
+msgid "This device isn't connected right now. Clients are offered only connected devices."
+msgstr "Dit apparaat is nu niet verbonden. Aan clients worden alleen verbonden apparaten aangeboden."
+
+#. Provider status reason (not_eligible): one generic reason for every anti-abuse check. Keep it generic; do not add detail.
+msgctxt "provider_status_reason_not_eligible"
+msgid "This connection isn't eligible to provide right now."
+msgstr "Deze verbinding komt nu niet in aanmerking om te leveren."
+
+#. Provider status reason (not_providing): the device is not set to provide.
+msgctxt "provider_status_reason_not_providing"
+msgid "This device isn't set to share its connection."
+msgstr "Dit apparaat is niet ingesteld om zijn verbinding te delen."
+
+#. Provider status reason (reliability_low): the last hour's reliability is below the minimum.
+msgctxt "provider_status_reason_reliability_low"
+msgid "Reliability over the last hour is below what clients need. It rises with every minute this device stays connected; disconnects lower it."
+msgstr "De betrouwbaarheid over het afgelopen uur is lager dan clients nodig hebben. Die stijgt met elke minuut dat dit apparaat verbonden blijft; verbroken verbindingen verlagen haar."
+
+#. Provider status reason (reliability_warming_up): steady for the last hour, but the 12-hour reliability is still below the minimum.
+msgctxt "provider_status_reason_reliability_warming_up"
+msgid "Building reliability. This device has been steady for the last hour; clients are offered it once its 12-hour reliability reaches the minimum, about 8 hours after a fresh start."
+msgstr "Betrouwbaarheid wordt opgebouwd. Dit apparaat was het afgelopen uur stabiel; het wordt aan clients aangeboden zodra de betrouwbaarheid over 12 uur het minimum bereikt, ongeveer 8 uur na een nieuwe start."
+
+#. Provider status reason (slow): past the speed or delay cutoff.
+msgctxt "provider_status_reason_slow"
+msgid "This connection measured slower than clients need, so it is offered much less often."
+msgstr "Deze verbinding is trager gemeten dan clients nodig hebben, dus wordt ze veel minder vaak aangeboden."
+
+#. Provider status reason (speed_test_missing).
+msgctxt "provider_status_reason_speed_test_missing"
+msgid "No speed test yet. Until one completes, clients are offered this device much less often."
+msgstr "Nog geen snelheidstest. Tot er een is voltooid, wordt dit apparaat veel minder vaak aan clients aangeboden."
+
+#. Provider card: shown instead of the chart and reason when the status could not be loaded.
+msgctxt "provider_status_unavailable"
+msgid "Provider status isn't available right now."
+msgstr "De providerstatus is nu niet beschikbaar."
+
+#. Provider status 'Why?' list: how many test sites loaded through the device out of all that were tried, e.g. '19 of 20 loaded'.
+msgctxt "provider_status_value_count_of_total"
+msgid "{0} of {1} loaded"
+msgstr "{0} van {1} geladen"
+
+#. Provider status 'Why?' list: value of a reliability with no history yet (which does not count against the device).
+msgctxt "provider_status_value_no_history"
+msgid "No history yet"
+msgstr "Nog geen geschiedenis"
+
+#. Provider status 'Why?' list: value of a selection weight when the device is not in that pool right now.
+msgctxt "provider_status_value_not_in_pool"
+msgid "Not in this pool"
+msgstr "Niet in deze pool"
+
+#. Provider status 'Why?' list: value shown when a measurement (speed test, delay, network check) has not happened yet.
+msgctxt "provider_status_value_not_yet"
+msgid "Not yet"
+msgstr "Nog niet"
+
+#. Provider status 'Why?' list: a value with the most the network allows, e.g. '35 ms (at most 200 ms)'. Both arguments are already formatted text.
+msgctxt "provider_status_value_with_maximum"
+msgid "{0} (at most {1})"
+msgstr "{0} (hoogstens {1})"
+
+#. Provider status 'Why?' list: a value with the minimum the network requires, e.g. '82% (needs 95%)'. Both arguments are already formatted text.
+msgctxt "provider_status_value_with_minimum"
+msgid "{0} (needs {1})"
+msgstr "{0} (nodig: {1})"
+
+#. Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.
+msgctxt "provider_status_why"
+msgid "Why?"
+msgstr "Waarom?"
 
 #. Used in Main/Account/Wallets/WalletsView.swift.
 msgctxt "providing"
@@ -4861,6 +5223,16 @@ msgctxt "split_rule_host_placeholder"
 msgid "example.com, *.example.com, 10.0.0.0/8"
 msgstr "example.com, *.example.com, 10.0.0.0/8"
 
+#. Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.
+msgctxt "split_rule_preset_google_meet_calls"
+msgid "Google Meet calls"
+msgstr "Google Meet-gesprekken"
+
+#. Split rules preset: Microsoft Teams call media, from the address ranges Microsoft publishes for routing it outside a VPN. Keep the product name Microsoft Teams unchanged.
+msgctxt "split_rule_preset_microsoft_teams_calls"
+msgid "Microsoft Teams calls"
+msgstr "Microsoft Teams-gesprekken"
+
 #. transfer stats and split rules
 msgctxt "split_rules"
 msgid "Split rules"
@@ -4885,6 +5257,21 @@ msgstr "Voeg hierboven een host toe, of tik hieronder op verkeer om het lokaal t
 msgctxt "split_rules_info_note"
 msgid "Exclusions apply to the whole co-associated network cluster, so related traffic is caught together."
 msgstr "Uitsluitingen gelden voor het hele samenhangende netwerkcluster, zodat gerelateerd verkeer samen wordt meegenomen."
+
+#. Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.
+msgctxt "split_rules_match_sites_not_apps"
+msgid "Split rules match sites and addresses, not apps: Apple allows per-app VPN only on devices managed by an organization (MDM). To keep an app off the VPN, route the sites it uses locally, or start from a preset. Local network addresses already bypass the VPN."
+msgstr "Splitsregels gelden voor sites en adressen, niet voor apps: Apple staat VPN per app alleen toe op apparaten die door een organisatie worden beheerd (MDM). Om een app buiten de VPN te houden, routeer je de sites die de app gebruikt lokaal, of begin je met een voorinstelling. Adressen in het lokale netwerk omzeilen de VPN al."
+
+#. Split rules screen: header of the preset menu. Each preset holds the address ranges its service publishes for routing that service's traffic outside a VPN.
+msgctxt "split_rules_preset_ranges_header"
+msgid "Ranges each service publishes for use outside a VPN"
+msgstr "Bereiken die elke dienst publiceert voor gebruik buiten een VPN"
+
+#. Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.
+msgctxt "split_rules_start_from_preset"
+msgid "Start from a preset"
+msgstr "Beginnen met een voorinstelling"
 
 #. Guest mode overlay
 msgctxt "start_earning_join"
@@ -5367,6 +5754,16 @@ msgctxt "usdc_wallet_address"
 msgid "USDC wallet address"
 msgstr "USDC wallet address"
 
+#. Settings row (Connections) that opens the ur.io cloud proxies page so the user can run URnetwork as a proxy without taking the Android VPN slot.
+msgctxt "use_as_proxy_no_vpn"
+msgid "Use as a proxy instead (no VPN)"
+msgstr "In plaats daarvan als proxy gebruiken (geen VPN)"
+
+#. Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.
+msgctxt "use_as_proxy_no_vpn_detail"
+msgid "Opens ur.io to run URnetwork as an HTTPS proxy without the VPN. SOCKS and WireGuard are available on Pro."
+msgstr "Opent ur.io om URnetwork als HTTPS-proxy zonder de VPN te gebruiken. SOCKS en WireGuard zijn beschikbaar met Pro."
+
 #. Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.
 msgctxt "use_most_stable_provider"
 msgid "Use most stable provider"
@@ -5710,6 +6107,11 @@ msgstr "Korte ID"
 msgctxt "vless_user_id"
 msgid "User ID (UUID)"
 msgstr "Gebruikers-ID (UUID)"
+
+#. Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.
+msgctxt "wait_for_refresh"
+msgid "Wait for refresh"
+msgstr "Wachten op vernieuwing"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "waiting_for_approval"
