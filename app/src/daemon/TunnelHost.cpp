@@ -257,6 +257,15 @@ void TunnelHost::SetOwnerConnected(bool connected) {
 
 void TunnelHost::SetOwnerUid(int64_t uid) { ownerUid_.store(uid); }
 
+void TunnelHost::SetNetworkCountryCode(const std::string& countryCode) {
+  // The sdk's own setter, not a device's: the value belongs to the network,
+  // and the next device (a Connect, the provider-only device) must be built
+  // with it already in force.
+  urnet::setNetworkCountryCode(countryCode);
+  std::scoped_lock lock(statusMutex_);
+  status_.network_country_code = countryCode;
+}
+
 // ---- the nftables floor ----------------------------------------------------
 
 FilterConfig TunnelHost::FilterConfigForLocked(FilterState state, bool floor,

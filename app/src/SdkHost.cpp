@@ -4369,6 +4369,21 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
             static_cast<long long>(providerBackoff_.DelayMillis() / 1000));
 }
 
+void SdkHost::FollowDaemonNetworkCountry() {
+  if (const std::optional<ctl::StatusReply> status = control_.Status()) {
+    FollowDaemonNetworkCountry(*status);
+  }
+}
+
+void SdkHost::FollowDaemonNetworkCountry(const ctl::StatusReply& status) {
+  // Another user's session: the daemon names nothing of it, this included.
+  const std::string countryCode = status.redacted ? std::string() : status.network_country_code;
+  if (countryCode == followedNetworkCountry_) return;
+  followedNetworkCountry_ = countryCode;
+  urnet::setNetworkCountryCode(countryCode);
+  g_message("sdkhost: network country = \"%s\" (urnetworkd)", countryCode.c_str());
+}
+
 void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {
   // A redacted status names nothing of ours.
   const bool running = status.provider_running && !status.redacted;

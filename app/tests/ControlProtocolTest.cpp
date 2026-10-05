@@ -559,6 +559,26 @@ UR_TEST(controlStatusCarriesTheProviderOnlyDevice) {
   UR_EXPECT_FALSE(redacted.provider_network_key);
 }
 
+// The network country the daemon read (P052) reaches the GUI; a daemon that
+// predates it reports none, and another user's view names none.
+UR_TEST(controlStatusCarriesTheNetworkCountry) {
+  ctl::StatusReply status;
+  status.network_country_code = "ru";
+  const nlohmann::json wire = nlohmann::json(status);
+  UR_EXPECT_TRUE(wire.contains("network_country_code"));
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(8, true, wire)))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(back.network_country_code == "ru");
+
+  nlohmann::json older = wire;
+  older.erase("network_country_code");
+  const auto fromOlder = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(9, true, older)))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(fromOlder.network_country_code.empty());
+
+  UR_EXPECT_TRUE(ctl::RedactStatusForForeignUid(status).network_country_code.empty());
+}
+
 // A stopped or failed tunnel is no session; starting, up and stopping are.
 UR_TEST(controlProviderFactsReadOneStatus) {
   ctl::StatusReply status;

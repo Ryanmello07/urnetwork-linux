@@ -700,6 +700,18 @@ class SdkHost {
   // (providerstatus::SessionIdleReasonFor).
   bool ProviderRuns();
 
+  // THE NETWORK COUNTRY (P052). urnetworkd reads the country of the mobile
+  // network this machine is on from ModemManager and publishes it in `status`
+  // (network_country_code). The sdk's value is per process, so this applies it
+  // here too: this process's own sign-in and api dials draw their extender
+  // names from the same spoof list as the daemon's devices. A redacted status
+  // (another user's session) or a daemon that predates the field gives "".
+  // While the daemon cannot be asked, the last value stays. Main loop: the
+  // window's health poll calls it, with the status it already read when it has
+  // one.
+  void FollowDaemonNetworkCountry();
+  void FollowDaemonNetworkCountry(const ctl::StatusReply& status);
+
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
   // atomic (surfaces may build ~25s later), authority readable any time,
@@ -1297,6 +1309,9 @@ class SdkHost {
   std::atomic<bool> daemonProviderRunning_{false};
   std::atomic<int64_t> daemonProviderMode_{0};
   std::atomic<bool> daemonProviderNetworkKey_{false};
+  // The network country last applied to this process (FollowDaemonNetworkCountry).
+  // Main loop only.
+  std::string followedNetworkCountry_;
   // ---- the provider-only device's statistics (provider_stats) ---------------
   // What the daemon's view controllers on the provider-only device last said,
   // in the SDK's types. The provider statistics accessors and ProviderStatusNow
