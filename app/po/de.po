@@ -778,7 +778,7 @@ msgctxt "bittensor_continue_in_browser"
 msgid "Continue in your browser and approve the request in the {} extension."
 msgstr "Fahre in deinem Browser fort und bestätige die Anfrage in der {}-Erweiterung."
 
-#. ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
+#. Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
 msgctxt "bittensor_error_address_not_in_wallet"
 msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
 msgstr "Deine {}-Wallet enthält die eingegebene Adresse nicht. Füge das Konto in der Wallet hinzu oder verbinde es dort. Oder gib eine Adresse ein, die sie enthält."
@@ -788,7 +788,7 @@ msgctxt "bittensor_error_challenge_expired"
 msgid "This request expired. Start again to get a new message to sign."
 msgstr "Diese Anfrage ist abgelaufen. Starte erneut, um eine neue Nachricht zum Signieren zu erhalten."
 
-#. Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).
+#. Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).
 msgctxt "bittensor_error_extension_not_found"
 msgid "The {} extension was not found in this browser. Install it, then try again."
 msgstr "Die {}-Erweiterung wurde in diesem Browser nicht gefunden. Installiere sie und versuche es dann erneut."
@@ -802,6 +802,26 @@ msgstr "Das ist keine gültige Signatur. Füge die vollständige 0x-Signatur aus
 msgctxt "bittensor_error_message_mismatch"
 msgid "The wallet signed a different request. Start again."
 msgstr "Die Wallet hat eine andere Anfrage signiert. Starte erneut."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).
+msgctxt "bittensor_error_no_account"
+msgid "Your {} wallet has no account to sign with. Add or connect an account in the wallet, then try again."
+msgstr "Deine {}-Wallet hat kein Konto zum Signieren. Füge in der Wallet ein Konto hinzu oder verbinde eins und versuche es dann erneut."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.
+msgctxt "bittensor_error_user_rejected"
+msgid "The request was declined in your wallet. Start again and approve it to continue."
+msgstr "Die Anfrage wurde in deiner Wallet abgelehnt. Starte erneut und bestätige sie, um fortzufahren."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_expired: the WalletConnect pairing or the signature request ran out of time before the wallet answered. WalletConnect is a product name.
+msgctxt "bittensor_error_walletconnect_expired"
+msgid "The WalletConnect request expired before the wallet answered. Start again."
+msgstr "Die WalletConnect-Anfrage ist abgelaufen, bevor die Wallet geantwortet hat. Starte erneut."
+
+#. Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.
+msgctxt "bittensor_error_walletconnect_unavailable"
+msgid "WalletConnect is not available right now. Try again later, or enter your address manually."
+msgstr "WalletConnect ist gerade nicht verfügbar. Versuche es später erneut oder gib deine Adresse manuell ein."
 
 #. Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).
 msgctxt "bittensor_manual_sign_instructions"

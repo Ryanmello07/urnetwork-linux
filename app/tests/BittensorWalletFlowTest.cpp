@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "BittensorWalletFlow.hpp"
 
@@ -95,6 +96,121 @@ UR_TEST(BittensorWalletFlow_RefusalStringsAreInTheCatalog) {
   // the wallet's own words, or the generic failure
   UR_EXPECT_TRUE(bt::ErrorTextFor("wallet_error").key.empty());
   UR_EXPECT_TRUE(bt::ErrorTextFor("").key.empty());
+}
+
+// A wallet_error carries the bridge page's code for the failure
+// (BridgeErrorCode): a code this app knows reads in its own words, with the
+// wallet's name where the text has a {}; any other shows the page's text.
+UR_TEST(BittensorWalletFlow_BridgeCodesReadInTheAppsWords) {
+  struct Case {
+    const char* code;
+    const char* key;
+    bool takesWalletName;
+  };
+  for (const Case& c : {
+           Case{"address_not_in_wallet", "bittensor_error_address_not_in_wallet", true},
+           Case{"address_mismatch", "earnings_wallet_mismatch", false},
+           Case{"extension_not_found", "bittensor_error_extension_not_found", true},
+           Case{"no_account", "bittensor_error_no_account", true},
+           Case{"user_rejected", "bittensor_error_user_rejected", false},
+           Case{"walletconnect_expired", "bittensor_error_walletconnect_expired", false},
+           Case{"walletconnect_unavailable", "bittensor_error_walletconnect_unavailable", false},
+       }) {
+    const bt::BridgeErrorText text = bt::BridgeErrorTextFor(c.code);
+    UR_EXPECT_TRUE_MSG(c.code, text.key == c.key);
+    UR_EXPECT_TRUE_MSG(c.code, text.takesWalletName == c.takesWalletName);
+    UR_EXPECT_TRUE_MSG(c.code, (text.english.find("{}") != std::string_view::npos) ==
+                                   c.takesWalletName);
+  }
+  // a code this app does not know, the page's other failures, and a page
+  // before the codes (no code): the page's own text
+  for (const char* code : {"wallet_locked", "wallet_error", "invalid_request", ""}) {
+    UR_EXPECT_TRUE_MSG(code, bt::BridgeErrorTextFor(code).key.empty());
+  }
+  // only a wallet_error is the page's: the refusals with their own string keep it
+  UR_EXPECT_TRUE(bt::ErrorTextFor("wallet_error").key.empty());
+}
+
+// Every bridge code text is a key the linux catalog carries with its English
+// as the msgid, translated in every language the app ships.
+UR_TEST(BittensorWalletFlow_BridgeCodeStringsAreTranslated) {
+  const std::string pot = ReadFile("../po/urnetwork.pot");
+  const std::string linguas = ReadFile("../po/LINGUAS");
+  if (pot.empty() || linguas.empty()) {
+    UR_FAIL("could not read po/urnetwork.pot or po/LINGUAS");
+    return;
+  }
+  std::vector<std::string> languages;
+  std::istringstream lines(linguas);
+  for (std::string line; std::getline(lines, line);) {
+    if (!line.empty() && line[0] != '#') languages.push_back(line);
+  }
+  UR_EXPECT_TRUE(languages.size() >= 28);
+  int checked = 0;
+  for (const char* code : {"address_not_in_wallet", "extension_not_found", "no_account",
+                           "user_rejected", "walletconnect_expired",
+                           "walletconnect_unavailable"}) {
+    const bt::BridgeErrorText text = bt::BridgeErrorTextFor(code);
+    const std::string entry = "msgctxt \"" + std::string(text.key) + "\"\nmsgid \"" +
+                              std::string(text.english) + "\"\nmsgstr \"";
+    UR_EXPECT_TRUE_MSG(std::string(code) + " in the pot", pot.find(entry) != std::string::npos);
+    for (const auto& language : languages) {
+      const std::string po = ReadFile("../po/" + language + ".po");
+      const size_t at = po.find(entry);
+      UR_EXPECT_TRUE_MSG(std::string(code) + " in " + language, at != std::string::npos);
+      if (at == std::string::npos) continue;
+      const size_t start = at + entry.size();
+      const std::string translated = po.substr(start, po.find('"', start) - start);
+      UR_EXPECT_TRUE_MSG(std::string(code) + " translated in " + language, !translated.empty());
+      UR_EXPECT_TRUE_MSG(std::string(code) + " keeps {} in " + language,
+                         (translated.find("{}") != std::string::npos) == text.takesWalletName);
+    }
+    ++checked;
+  }
+  UR_EXPECT_TRUE(checked == 6);
+}
+
+// A failed answer shows its refusal's string, else (a wallet_error only) the
+// bridge page's code in this app's words, else the page's own words, else the
+// generic failure. Another refusal's detail is never shown as words: it is
+// the refused address or the session's transport.
+UR_TEST(BittensorWalletFlow_FailuresShowTheirOwnText) {
+  using bt::FailureText;
+  UR_EXPECT_TRUE(bt::FailureTextFor("challenge_expired", "", false) == FailureText::Refusal);
+  UR_EXPECT_TRUE(bt::FailureTextFor("address_mismatch", "", true) == FailureText::Refusal);
+  UR_EXPECT_TRUE(bt::FailureTextFor("wallet_error", "user_rejected", true) ==
+                 FailureText::BridgeCode);
+  UR_EXPECT_TRUE(bt::FailureTextFor("wallet_error", "address_not_in_wallet", false) ==
+                 FailureText::BridgeCode);
+  UR_EXPECT_TRUE(bt::FailureTextFor("wallet_error", "wallet_locked", true) ==
+                 FailureText::PageText);
+  UR_EXPECT_TRUE(bt::FailureTextFor("wallet_error", "", true) == FailureText::PageText);
+  UR_EXPECT_TRUE(bt::FailureTextFor("wallet_error", "", false) == FailureText::Generic);
+  // a session refusal's detail (here the transport name) is not for the user
+  UR_EXPECT_TRUE(bt::FailureTextFor("wrong_transport", "", true) == FailureText::Generic);
+  UR_EXPECT_TRUE(bt::FailureTextFor("wrong_transport", "user_rejected", true) ==
+                 FailureText::Generic);
+  UR_EXPECT_TRUE(bt::FailureTextFor("no_challenge", "", false) == FailureText::Generic);
+}
+
+// The bridge's failure goes through the page's code to the user: the
+// delivery picks its text by FailureTextFor and names the session's wallet.
+UR_TEST(BittensorWalletFlow_TheBridgeCodeReachesTheUser) {
+  const std::string wallet = ReadFile("WalletConnect.cpp");
+  if (wallet.empty()) {
+    UR_FAIL("could not read WalletConnect.cpp");
+    return;
+  }
+  const std::string deliver = FunctionBody(wallet, "void WalletConnect::DeliverBittensorResult(");
+  UR_EXPECT_TRUE_MSG("the text is chosen with the page's code",
+                     deliver.find("bittensor::FailureTextFor(result.ErrorCode, result.BridgeErrorCode,") !=
+                         std::string::npos);
+  UR_EXPECT_TRUE_MSG("the page's code reads in this app's words",
+                     deliver.find("bittensor::BridgeErrorTextFor(result.BridgeErrorCode)") !=
+                         std::string::npos);
+  UR_EXPECT_TRUE_MSG("with the session's wallet name",
+                     deliver.find("urnet::bittensorWalletDisplayName(bittensorSession_->walletId())") !=
+                         std::string::npos);
 }
 
 // The bridge returns on the scheme the .desktop file already registers; no

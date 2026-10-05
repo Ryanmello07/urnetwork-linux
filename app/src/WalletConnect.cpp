@@ -348,9 +348,10 @@ void WalletConnect::HandleSignMessage(Provider p, const std::string& query) {
 }
 
 // The bittensor bridge returns PLAIN query params -- no NaCl envelope, nothing to
-// decrypt (mmm/ur.io react/src/components/WalletConnect.jsx):
+// decrypt (mmm/ur.io react/src/components/BittensorConnect.jsx):
 //   urnetwork://bittensor-sign-message?address=<ss58>&signature=<0xhex>&message=…&purpose=…
-//   urnetwork://bittensor-sign-message?errorCode=-1&errorMessage=<text>&purpose=…
+//   urnetwork://bittensor-sign-message?errorCode=<code>&errorMessage=<text>&purpose=…
+// (errorCode=-1 from pages before the codes)
 // The session, not this class, decides whether it is a proof for the challenge
 // in flight.
 void WalletConnect::HandleBittensorReturn(const std::string& url) {
@@ -375,15 +376,33 @@ void WalletConnect::DeliverBittensorResult(const urnet::BittensorWalletResult& r
       return;  // the manual sheet shows it and stays open
     case bittensor::Outcome::Fail: {
       if (!on_error) return;
-      const bittensor::ErrorText text = bittensor::ErrorTextFor(result.ErrorCode);
-      if (!text.key.empty()) {
-        on_error(g_dpgettext2(GETTEXT_PACKAGE, std::string(text.key).c_str(),
-                              std::string(text.english).c_str()));
-      } else if (!result.ErrorMessage.empty()) {
-        on_error(result.ErrorMessage);  // the wallet's own words
-      } else {
-        on_error(T_("wallet_sign_in_failed", "Wallet sign-in failed"));
+      switch (bittensor::FailureTextFor(result.ErrorCode, result.BridgeErrorCode,
+                                        !result.ErrorMessage.empty())) {
+        case bittensor::FailureText::Refusal: {
+          const bittensor::ErrorText text = bittensor::ErrorTextFor(result.ErrorCode);
+          on_error(g_dpgettext2(GETTEXT_PACKAGE, std::string(text.key).c_str(),
+                                std::string(text.english).c_str()));
+          return;
+        }
+        case bittensor::FailureText::BridgeCode: {
+          // a wallet_error the bridge page handed back, in this app's words for its code
+          const bittensor::BridgeErrorText text =
+              bittensor::BridgeErrorTextFor(result.BridgeErrorCode);
+          const char* localized = g_dpgettext2(GETTEXT_PACKAGE, std::string(text.key).c_str(),
+                                               std::string(text.english).c_str());
+          const std::string walletName =
+              bittensorSession_ ? urnet::bittensorWalletDisplayName(bittensorSession_->walletId())
+                                : std::string();
+          on_error(text.takesWalletName ? Format(localized, walletName) : std::string(localized));
+          return;
+        }
+        case bittensor::FailureText::PageText:
+          on_error(result.ErrorMessage);  // the bridge page's own words
+          return;
+        case bittensor::FailureText::Generic:
+          break;
       }
+      on_error(T_("wallet_sign_in_failed", "Wallet sign-in failed"));
       return;
     }
     case bittensor::Outcome::Accept:
