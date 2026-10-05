@@ -525,7 +525,7 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # the route-locally offer), the VLESS editor's form, visibility rules,
 # settings mapping and messages and the stored network space values every
 # space write starts from, the per-app exclusion's slice, rules and call
-# sites, and the daemon
+# sites, what a network peer row connects to, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -603,6 +603,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/AddSignInFlowTest.cpp',
     'tests/AddSignInWiringTest.cpp',
     'tests/VlessPresentationTest.cpp',
+    'tests/PeerLocationTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "I18n.hpp"
-#include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
+#include "PeerLocation.hpp"  // PeerDisplayName, PeerConnectLocation — shared with the chooser
 #include "UrTheme.hpp"
 
 namespace urnw {
@@ -451,13 +451,9 @@ void NetworkPage::Render() {
                           IsPeerSelected(selected, peer), false, false, /*providing=*/true);
       const urnet::NetworkPeer copy = peer;
       row->signal_clicked().connect([this, copy] {
-        urnet::ConnectLocation location;
-        urnet::ConnectLocationId id;
-        id.client_id = copy.ClientId;
-        location.connect_location_id = id;
-        location.name = PeerDisplayName(copy);
+        // one of the user's own devices, reached as a network peer (PeerLocation.hpp)
         // TODO(sdk-wiring): SdkHost::ConnectFromRow (coalesced row click)
-        host_.Connect(location);
+        host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(copy));
         Render();
       });
       listHost_->append(*row);

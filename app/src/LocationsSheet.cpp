@@ -101,12 +101,6 @@ Gtk::Box* MakeRowShell(Gtk::Label* dot, const std::string& primary, const std::s
 
 }  // namespace
 
-std::string PeerDisplayName(const urnet::NetworkPeer& peer) {
-  if (!peer.DeviceName.empty()) return peer.DeviceName;
-  if (!peer.DeviceSpec.empty()) return peer.DeviceSpec;
-  return peer.ClientId.value_or(std::string());
-}
-
 LocationsSheet::LocationsSheet(Gtk::Window& parent, SdkHost& host) : host_(host) {
   EnsureDrawerCss();
   set_title(T_("browse_locations", "Browse Locations"));
@@ -207,12 +201,8 @@ Gtk::Box* LocationsSheet::MakePeerRow(const urnet::NetworkPeer& peer, bool selec
   auto gesture = Gtk::GestureClick::create();
   const urnet::NetworkPeer peerCopy = peer;
   gesture->signal_released().connect([this, peerCopy](int, double, double) {
-    urnet::ConnectLocation location;
-    urnet::ConnectLocationId id;
-    id.client_id = peerCopy.ClientId;
-    location.connect_location_id = id;
-    location.name = PeerDisplayName(peerCopy);
-    host_.Connect(location);
+    // one of the user's own devices, reached as a network peer (PeerLocation.hpp)
+    host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));
     set_visible(false);
   });
   row->add_controller(gesture);
