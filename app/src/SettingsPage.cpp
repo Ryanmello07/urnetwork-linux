@@ -23,6 +23,7 @@
 #include "SupportContact.hpp"
 #include "Ui.hpp"
 #include "UrTheme.hpp"
+#include "VlessSheet.hpp"
 
 // The build's compile-time stamp — meson passes it to both binaries
 // (-DUR_APP_VERSION); the fallback keeps this TU self-contained the way
@@ -1251,6 +1252,14 @@ void SettingsPage::BuildConnectionsSection(Gtk::Box& host) {
   blockedRow.root->signal_clicked().connect([this] { ShowBlockedLocationsSheet(); });
   host.append(*blockedRow.root);
 
+  // Row 4b — VLESS: a server of the user's own for the client strategy to dial
+  // through when direct connections are blocked. A local edit of the network
+  // space, readable and writable with no session (the login screen's network
+  // sheet edits the same space before sign-in).
+  auto vlessRow = kit::MakePaneTwoLineRowButton(T_("vless", "VLESS"), {}, kRowTall);
+  vlessRow.root->signal_clicked().connect([this] { ShowVlessSheet(); });
+  host.append(*vlessRow.root);
+
   // Row 5 — app split rules.
   auto* manage =
       AddButtonRow(host, T_("app_split_rules", "App split rules"),
@@ -1770,6 +1779,13 @@ void SettingsPage::ShowLicensesSheet() {
   if (root == nullptr) return;
   if (!licensesSheet_) licensesSheet_ = std::make_unique<LicensesSheet>(*root);
   licensesSheet_->Open();
+}
+
+void SettingsPage::ShowVlessSheet() {
+  Gtk::Window* root = RootWindow();
+  if (root == nullptr) return;
+  if (!vlessSheet_) vlessSheet_ = std::make_unique<VlessSheet>(*root, host_);
+  vlessSheet_->Open();
 }
 
 // ---- snackbar ---------------------------------------------------------------

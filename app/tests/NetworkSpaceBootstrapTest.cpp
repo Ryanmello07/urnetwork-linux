@@ -1,7 +1,9 @@
 // The operator's network space is keyed bringyour.com/main, carries no
 // migration host, and every launch moves a space stored under the retired
 // ur.network key BEFORE the bundled space is built or any NetworkSpace is
-// taken from the manager. The bootstrap is templated over the SDK's shapes
+// taken from the manager. The build writes the official values over what the
+// space stores, so a launch never wipes a VLESS server saved in it. The
+// bootstrap is templated over the SDK's shapes
 // (NetworkSpaceBootstrap.hpp), so a recording fake stands in for the manager
 // here and the ORDER of the calls is what this file pins. The call sites in
 // SdkHost.cpp and the daemon's TunnelHost.cpp are read as text, the way
@@ -17,6 +19,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "NetworkSpaceBootstrap.hpp"
 
@@ -36,7 +40,8 @@ using urnw::UrNetworkSpaceKey;
 using urnw::UrNetworkSpaceValues;
 
 // The SDK's NetworkSpaceKey / NetworkSpaceValues shapes (urnetwork_sdk.hpp),
-// the fields the bootstrap touches.
+// the fields the bootstrap touches plus two it must carry (alt_url, and the
+// VLESS server as its raw json), read the way the generated from_json reads.
 struct Key {
   std::optional<std::string> host_name;
   std::optional<std::string> env_name;
@@ -52,10 +57,42 @@ struct Values {
   std::optional<bool> sso_google;
   std::optional<std::string> api_url;
   std::optional<std::string> platform_url;
+  std::optional<std::string> alt_url;
+  std::optional<nlohmann::json> vless;
 };
 
+template <class T>
+void TakeField(const nlohmann::json& j, const char* name, std::optional<T>& value) {
+  if (auto it = j.find(name); it != j.end() && !it->is_null()) value = it->template get<T>();
+}
+
+void from_json(const nlohmann::json& j, Key& key) {
+  if (!j.is_object()) return;
+  TakeField(j, "host_name", key.host_name);
+  TakeField(j, "env_name", key.env_name);
+}
+
+void from_json(const nlohmann::json& j, Values& values) {
+  if (!j.is_object()) return;
+  TakeField(j, "bundled", values.bundled);
+  TakeField(j, "net_expose_server_ips", values.net_expose_server_ips);
+  TakeField(j, "net_expose_server_host_names", values.net_expose_server_host_names);
+  TakeField(j, "link_host_name", values.link_host_name);
+  TakeField(j, "migration_host_name", values.migration_host_name);
+  TakeField(j, "wallet", values.wallet);
+  TakeField(j, "sso_google", values.sso_google);
+  TakeField(j, "api_url", values.api_url);
+  TakeField(j, "platform_url", values.platform_url);
+  TakeField(j, "alt_url", values.alt_url);
+  if (auto it = j.find("vless"); it != j.end() && !it->is_null()) values.vless = *it;
+}
+
+// A space handle: its key, and its toJson() document ("" = no space).
 struct Space {
   Key key;
+  std::string json;
+  explicit operator bool() const { return !json.empty(); }
+  std::string toJson() const { return json; }
 };
 
 std::string Show(const std::optional<Key>& key) {
@@ -66,17 +103,23 @@ std::string Show(const std::optional<Key>& key) {
 // Records every call in order, the way the SDK manager would see them.
 struct RecordingManager {
   bool migrateResult = false;
-  std::vector<std::string> calls;
+  // what the space under the current key stores, as its toJson() ("" = none)
+  std::string storedJson;
+  mutable std::vector<std::string> calls;
   std::optional<Values> built;
 
   bool migrateNetworkSpace(const std::optional<Key>& from, const std::optional<Key>& to) {
     calls.push_back("migrate " + Show(from) + " -> " + Show(to));
     return migrateResult;
   }
+  Space getNetworkSpace(const std::optional<Key>& key) const {
+    calls.push_back("get " + Show(key));
+    return Space{key.value_or(Key{}), storedJson};
+  }
   Space updateNetworkSpaceValues(const std::optional<Key>& key, const std::optional<Values>& values) {
     calls.push_back("update " + Show(key));
     built = values;
-    return Space{key.value_or(Key{})};
+    return Space{key.value_or(Key{}), std::string()};
   }
 };
 
@@ -152,12 +195,16 @@ UR_TEST(aCustomDeploymentDerivesOffItsOwnName) {
 UR_TEST(theBootstrapMovesTheLegacySpaceBeforeBuildingTheBundledOne) {
   RecordingManager manager;
   const Space space = BootstrapUrNetworkSpace<Key, Values>(manager);
-  UR_EXPECT_EQ(2u, manager.calls.size());
-  if (manager.calls.size() != 2) return;
+  UR_EXPECT_EQ(3u, manager.calls.size());
+  if (manager.calls.size() != 3) return;
   UR_EXPECT_TRUE_MSG("first call: " + manager.calls[0],
                      manager.calls[0] == "migrate ur.network/main -> bringyour.com/main");
+  // the stored values are read AFTER the move, so a moved space keeps what it
+  // carried, and BEFORE the write they are carried into
   UR_EXPECT_TRUE_MSG("second call: " + manager.calls[1],
-                     manager.calls[1] == "update bringyour.com/main");
+                     manager.calls[1] == "get bringyour.com/main");
+  UR_EXPECT_TRUE_MSG("third call: " + manager.calls[2],
+                     manager.calls[2] == "update bringyour.com/main");
   UR_EXPECT_TRUE(space.key.host_name == std::optional<std::string>("bringyour.com"));
   UR_EXPECT_TRUE(space.key.env_name == std::optional<std::string>("main"));
   UR_EXPECT_TRUE_MSG("the bundled space is built with the official values",
@@ -173,8 +220,56 @@ UR_TEST(theBootstrapBuildsWhetherOrNotThereWasAnythingToMove) {
     manager.migrateResult = moved;
     BootstrapUrNetworkSpace<Key, Values>(manager);
     UR_EXPECT_TRUE_MSG(std::string("moved=") + (moved ? "true" : "false"),
-                       manager.calls.size() == 2 && manager.calls[1] == "update bringyour.com/main");
+                       manager.calls.size() == 3 && manager.calls[2] == "update bringyour.com/main");
   }
+}
+
+// The launch refresh writes the official values OVER what the space stores:
+// updateNetworkSpaceValues replaces the whole set, and a refresh built from
+// nothing wiped a saved VLESS server on every launch. Only the url overrides,
+// which a bundled space never has, are cleared.
+UR_TEST(theLaunchRefreshKeepsWhatTheSpaceStores) {
+  RecordingManager manager;
+  manager.storedJson = R"({
+    "key": {"host_name": "bringyour.com", "env_name": "main"},
+    "values": {
+      "bundled": false, "link_host_name": "stale.example", "migration_host_name": "stale.example",
+      "wallet": "other", "api_url": "https://api.override.test",
+      "platform_url": "wss://connect.override.test", "alt_url": "https://alt.override.test",
+      "vless": {"enabled": true, "address": "vless.example.test", "port": 443,
+                "spider_x": "/spider"}
+    }
+  })";
+  BootstrapUrNetworkSpace<Key, Values>(manager);
+  UR_EXPECT_TRUE(manager.built.has_value());
+  if (!manager.built) return;
+  const Values& v = *manager.built;
+  UR_EXPECT_TRUE_MSG("the VLESS server survives the launch",
+                     v.vless.has_value() &&
+                         v.vless->value("address", std::string()) == "vless.example.test" &&
+                         v.vless->value("spider_x", std::string()) == "/spider" &&
+                         v.vless->value("enabled", false));
+  UR_EXPECT_TRUE_MSG("a stored override nobody here owns survives",
+                     v.alt_url == std::optional<std::string>("https://alt.override.test"));
+  UR_EXPECT_TRUE(v.bundled == std::optional<bool>(true));
+  UR_EXPECT_TRUE(v.link_host_name == std::optional<std::string>("ur.io"));
+  UR_EXPECT_TRUE(v.migration_host_name == std::optional<std::string>(""));
+  UR_EXPECT_TRUE(v.wallet == std::optional<std::string>("circle"));
+  UR_EXPECT_TRUE_MSG("a bundled space carries no url overrides", !v.api_url && !v.platform_url);
+}
+
+// With nothing stored (a first launch) the refresh is exactly the official set.
+UR_TEST(aFirstLaunchBuildsTheOfficialValues) {
+  RecordingManager manager;
+  BootstrapUrNetworkSpace<Key, Values>(manager);
+  UR_EXPECT_TRUE(manager.built.has_value());
+  if (!manager.built) return;
+  const Values official = UrNetworkSpaceValues<Values>(true, kUrHostName);
+  UR_EXPECT_TRUE(manager.built->bundled == official.bundled);
+  UR_EXPECT_TRUE(manager.built->link_host_name == official.link_host_name);
+  UR_EXPECT_TRUE(manager.built->wallet == official.wallet);
+  UR_EXPECT_TRUE(manager.built->sso_google == official.sso_google);
+  UR_EXPECT_TRUE(!manager.built->vless && !manager.built->alt_url);
 }
 
 UR_TEST(theLegacyMoveIsFromTheRetiredKeyToTheCurrentOne) {
@@ -202,11 +297,14 @@ UR_TEST(theGuiBootstrapsTheSpaceWhereItCreatesTheManager) {
                      Has(init, "BuildUrNetworkSpace(*spaceManager_)"));
   UR_EXPECT_TRUE_MSG("the bootstrap runs before anything is derived from the space",
                      Position(init, "BuildUrNetworkSpace(") < Position(init, "getApi()"));
-  // the network-server switch writes the shared value set, not its own copy
-  // with a migration host of its own
+  // the network-server switch writes the shared host values, not its own copy
+  // with a migration host of its own -- over what the space stores under the
+  // key it writes
   const std::string apply = FunctionBody(source, "bool SdkHost::ApplyNetworkServer(");
-  UR_EXPECT_TRUE_MSG("ApplyNetworkServer uses UrNetworkSpaceValues",
-                     Has(apply, "UrNetworkSpaceValues(official, hostName)"));
+  UR_EXPECT_TRUE_MSG("ApplyNetworkServer uses the shared host values",
+                     Has(apply, "UrNetworkSpaceValuesOver("));
+  UR_EXPECT_TRUE_MSG("ApplyNetworkServer starts from the stored values",
+                     Has(apply, "StoredNetworkSpaceValues(*spaceManager_, key)"));
   UR_EXPECT_TRUE_MSG("ApplyNetworkServer names no migration host of its own",
                      !Has(apply, "migration_host_name"));
 }

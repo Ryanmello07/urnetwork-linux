@@ -8569,6 +8569,211 @@ msgctxt "via_exit"
 msgid "via {}"
 msgstr "经由 {}"
 
+#. The VLESS settings: the Settings row and screen title, and the row on the login screen's network settings. VLESS is a proxy protocol name.
+msgctxt "vless"
+msgid "VLESS"
+msgstr "VLESS"
+
+#. VLESS settings: the switch that skips the VLESS server's certificate check (TLS only). The app's own traffic stays encrypted.
+msgctxt "vless_allow_insecure"
+msgid "Allow an insecure certificate"
+msgstr "允许不安全的证书"
+
+#. VLESS settings: the TLS ALPN list field label. A protocol term.
+msgctxt "vless_alpn"
+msgid "ALPN"
+msgstr "ALPN"
+
+#. VLESS settings: the button that copies the settings as a vless:// share link.
+msgctxt "vless_copy_link"
+msgid "Copy link"
+msgstr "复制链接"
+
+#. VLESS settings: the switch that turns the VLESS server on or off.
+msgctxt "vless_enabled"
+msgid "Use VLESS"
+msgstr "使用 VLESS"
+
+#. VLESS settings error: the server address is missing or malformed.
+msgctxt "vless_error_address_invalid"
+msgid "Enter the server address."
+msgstr "请输入服务器地址。"
+
+#. VLESS settings error: the TLS fingerprint name is not one this app knows.
+msgctxt "vless_error_fingerprint_unsupported"
+msgid "This TLS fingerprint is not supported."
+msgstr "不支持此 TLS 指纹。"
+
+#. VLESS settings error: the Vision flow needs the TCP transport and TLS or REALITY security, or the flow is unknown. Vision, TCP, TLS and REALITY are protocol names.
+msgctxt "vless_error_flow_invalid"
+msgid "The Vision flow works only with the TCP transport and TLS or REALITY security."
+msgstr "Vision 流控只适用于 TCP 传输方式和 TLS 或 REALITY 安全。"
+
+#. VLESS settings error: the user ID is missing or is not a UUID (or a custom ID of up to 30 bytes).
+msgctxt "vless_error_id_invalid"
+msgid "Enter the user ID (a UUID)."
+msgstr "请输入用户 ID（UUID）。"
+
+#. VLESS settings error: the pasted text is not a vless:// share link.
+msgctxt "vless_error_link_invalid"
+msgid "This is not a valid VLESS link."
+msgstr "这不是有效的 VLESS 链接。"
+
+#. VLESS settings error: the link asks for a VLESS feature this app does not implement (for example VLESS encryption).
+msgctxt "vless_error_link_unsupported"
+msgid "This link uses a VLESS feature this app does not support."
+msgstr "此链接使用了本应用不支持的 VLESS 功能。"
+
+#. VLESS settings error: the transport is one this app does not implement (for example gRPC or XHTTP). TCP, WebSocket and HTTPUpgrade are protocol names.
+msgctxt "vless_error_network_unsupported"
+msgid "This transport is not supported. Use TCP, WebSocket or HTTPUpgrade."
+msgstr "不支持此传输方式。请使用 TCP、WebSocket 或 HTTPUpgrade。"
+
+#. VLESS settings error: the port is missing or outside 1 to 65535.
+msgctxt "vless_error_port_invalid"
+msgid "Enter a port from 1 to 65535."
+msgstr "请输入 1 到 65535 之间的端口。"
+
+#. VLESS settings error: the REALITY public key is missing or is not 32 bytes of base64. REALITY is a protocol name.
+msgctxt "vless_error_public_key_invalid"
+msgid "Enter the REALITY public key."
+msgstr "请输入 REALITY 公钥。"
+
+#. VLESS settings error: the security type is one this app does not implement. TLS and REALITY are protocol names.
+msgctxt "vless_error_security_unsupported"
+msgid "This security type is not supported. Use TLS, REALITY or none."
+msgstr "不支持此安全类型。请使用 TLS、REALITY 或无。"
+
+#. VLESS settings error: REALITY needs the server name (SNI) of the site it borrows. REALITY and SNI are protocol names.
+msgctxt "vless_error_server_name_required"
+msgid "Enter the server name (SNI) for REALITY."
+msgstr "请输入 REALITY 的服务器名称（SNI）。"
+
+#. VLESS settings error: the REALITY short ID is longer than 16 hexadecimal characters or is not hexadecimal. REALITY is a protocol name.
+msgctxt "vless_error_short_id_invalid"
+msgid "The REALITY short ID must be up to 16 hexadecimal characters."
+msgstr "REALITY 短 ID 最多只能包含 16 个十六进制字符。"
+
+#. VLESS settings: the picker of the browser TLS hello the connection imitates (chrome, firefox, ...).
+msgctxt "vless_fingerprint"
+msgid "TLS fingerprint"
+msgstr "TLS 指纹"
+
+#. VLESS settings: the flow picker label (none or Vision). A VLESS protocol term.
+msgctxt "vless_flow"
+msgid "Flow"
+msgstr "流控"
+
+#. VLESS settings: the Vision flow option (xtls-rprx-vision). A protocol term.
+msgctxt "vless_flow_vision"
+msgid "Vision"
+msgstr "Vision"
+
+#. VLESS settings: the HTTP Host header field label of the WebSocket and HTTPUpgrade transports. Host is a protocol term.
+msgctxt "vless_host_header"
+msgid "Host header"
+msgstr "Host 请求头"
+
+#. VLESS settings: the label of the share link field (a vless:// link).
+msgctxt "vless_link"
+msgid "VLESS link"
+msgstr "VLESS 链接"
+
+#. VLESS settings: confirmation after copying the share link.
+msgctxt "vless_link_copied"
+msgid "VLESS link copied"
+msgstr "已复制 VLESS 链接"
+
+#. VLESS settings: the hint under the share link field. vless:// is literal and must not be translated.
+msgctxt "vless_link_hint"
+msgid "Paste a vless:// link to fill in the settings."
+msgstr "粘贴 vless:// 链接以填写设置。"
+
+#. VLESS settings: the HTTPUpgrade transport option. A protocol term.
+msgctxt "vless_network_httpupgrade"
+msgid "HTTPUpgrade"
+msgstr "HTTPUpgrade"
+
+#. VLESS settings: the TCP transport option. A protocol term.
+msgctxt "vless_network_tcp"
+msgid "TCP"
+msgstr "TCP"
+
+#. VLESS settings: the WebSocket transport option. A protocol term.
+msgctxt "vless_network_ws"
+msgid "WebSocket"
+msgstr "WebSocket"
+
+#. VLESS settings: the button that reads a vless:// link from the clipboard or the link field.
+msgctxt "vless_paste_link"
+msgid "Paste link"
+msgstr "粘贴链接"
+
+#. VLESS settings: the HTTP path field label of the WebSocket and HTTPUpgrade transports.
+msgctxt "vless_path"
+msgid "Path"
+msgstr "路径"
+
+#. VLESS settings: the server port field label.
+msgctxt "vless_port"
+msgid "Port"
+msgstr "端口"
+
+#. VLESS settings: the REALITY public key field label.
+msgctxt "vless_public_key"
+msgid "Public key"
+msgstr "公钥"
+
+#. VLESS settings: the security picker label (none, TLS or REALITY).
+msgctxt "vless_security"
+msgid "Security"
+msgstr "安全"
+
+#. VLESS settings: the REALITY security option. A protocol term.
+msgctxt "vless_security_reality"
+msgid "REALITY"
+msgstr "REALITY"
+
+#. VLESS settings: the TLS security option. A protocol term.
+msgctxt "vless_security_tls"
+msgid "TLS"
+msgstr "TLS"
+
+#. VLESS settings: the server host name or IP address field label.
+msgctxt "vless_server_address"
+msgid "Server address"
+msgstr "服务器地址"
+
+#. VLESS settings: the TLS server name field label. SNI is a protocol term.
+msgctxt "vless_server_name"
+msgid "Server name (SNI)"
+msgstr "服务器名称（SNI）"
+
+#. VLESS settings: the explanation at the top of the screen. VLESS is a proxy protocol; the user's own server carries the app's connections to URnetwork when direct connections are blocked.
+msgctxt "vless_settings_description"
+msgid "Connect to URnetwork through your own VLESS server when direct connections are blocked. Your traffic to URnetwork stays encrypted end to end."
+msgstr "当直接连接被封锁时，通过您自己的 VLESS 服务器连接 URnetwork。您到 URnetwork 的流量始终保持端到端加密。"
+
+#. VLESS settings: note after saving where the VPN service runs separately from the app (the iOS tunnel extension, the desktop service). It reads the settings at its next start.
+msgctxt "vless_settings_next_connect"
+msgid "The VPN uses the new VLESS settings the next time it connects."
+msgstr "VPN 将在下次连接时使用新的 VLESS 设置。"
+
+#. VLESS settings: confirmation after saving.
+msgctxt "vless_settings_saved"
+msgid "VLESS settings saved"
+msgstr "已保存 VLESS 设置"
+
+#. VLESS settings: the REALITY short ID field label.
+msgctxt "vless_short_id"
+msgid "Short ID"
+msgstr "短 ID"
+
+#. VLESS settings: the user ID field label. The ID is a UUID the server issued.
+msgctxt "vless_user_id"
+msgid "User ID (UUID)"
+msgstr "用户 ID（UUID）"
+
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "waiting_for_approval"
 msgid "Waiting for approval"

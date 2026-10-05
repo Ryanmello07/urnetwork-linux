@@ -31,6 +31,7 @@ src/RedeemCodeSheet.cpp
 src/SeedphraseSheet.cpp
 src/DeveloperPage.cpp
 src/SettingsPage.cpp
+src/VlessSheet.cpp
 src/SplitRulesSheet.cpp
 src/SupportPage.cpp
 src/TransportBar.cpp

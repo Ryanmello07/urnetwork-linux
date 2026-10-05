@@ -13,11 +13,13 @@
 
 #include <unistd.h>
 
+#include <optional>
 #include <string>
 
 #include <urnetwork_sdk.hpp>
 
 #include "NetworkSpaceBootstrap.hpp"
+#include "StoredNetworkSpace.hpp"
 
 namespace urnw {
 
@@ -60,9 +62,23 @@ inline urnet::NetworkSpace BuildUrNetworkSpace(urnet::NetworkSpaceManager& manag
   return BootstrapUrNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(manager);
 }
 
-// The value set ApplyNetworkServer writes for a host (NetworkSpaceBootstrap.hpp).
+// The value set of a host's space that stores nothing yet
+// (NetworkSpaceBootstrap.hpp).
 inline urnet::NetworkSpaceValues UrNetworkSpaceValues(bool official, const std::string& hostName) {
   return UrNetworkSpaceValues<urnet::NetworkSpaceValues>(official, hostName);
+}
+
+// What a space stores, from its toJson() (StoredNetworkSpace.hpp): the start of
+// every write that changes some of its values.
+inline std::optional<StoredNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>>
+ParseStoredNetworkSpace(const std::string& spaceJson) {
+  return ParseStoredNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(spaceJson);
+}
+
+// What the manager stores for a key; empty when it holds no space for it.
+inline urnet::NetworkSpaceValues StoredNetworkSpaceValues(const urnet::NetworkSpaceManager& manager,
+                                                          const urnet::NetworkSpaceKey& key) {
+  return StoredNetworkSpaceValues<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(manager, key);
 }
 
 }  // namespace urnw

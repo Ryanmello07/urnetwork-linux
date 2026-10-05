@@ -4,7 +4,9 @@
 #include "I18n.hpp"
 #include "NetworkServerUtils.hpp"
 #include "NetworkSpaceConfig.hpp"
+#include "PaneKit.hpp"
 #include "Ui.hpp"
+#include "VlessSheet.hpp"
 
 namespace urnw {
 
@@ -102,6 +104,16 @@ NetworkServerSheet::NetworkServerSheet(Gtk::Window& parent, SdkHost& sdk) : sdk_
   insecureText_->set_visible(false);
   box->append(*insecureText_);
 
+  // VLESS belongs to the ACTIVE space, not to the domain typed above: its sheet
+  // saves straight away, before sign-in, and Apply leaves it alone (applying
+  // the server already in force keeps it). A row that opens something, not
+  // another action button beside Apply.
+  box->append(*kit::MakeDivider());
+  auto vlessRow = kit::MakePaneTwoLineRowButton(T_("vless", "VLESS"));
+  vlessRow.root->set_sensitive(current_.managerAvailable);
+  vlessRow.root->signal_clicked().connect([this] { OpenVless(); });
+  box->append(*vlessRow.root);
+
   statusText_ = Gtk::make_managed<Gtk::Label>();
   statusText_->add_css_class("ur-caption");
   statusText_->set_xalign(0);
@@ -140,6 +152,14 @@ NetworkServerSheet::NetworkServerSheet(Gtk::Window& parent, SdkHost& sdk) : sdk_
   set_child(*box);
   ApplyDerivedPlaceholders();
   UpdateInsecureWarning();
+}
+
+NetworkServerSheet::~NetworkServerSheet() = default;
+
+void NetworkServerSheet::OpenVless() {
+  // transient for THIS sheet, so it stacks above it rather than beside it
+  if (!vlessSheet_) vlessSheet_ = std::make_unique<VlessSheet>(*this, sdk_);
+  vlessSheet_->Open();
 }
 
 void NetworkServerSheet::ApplyDerivedPlaceholders() {

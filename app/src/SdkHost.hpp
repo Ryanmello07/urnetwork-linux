@@ -424,12 +424,43 @@ class SdkHost {
   // so which stored jwt — is in force: tears the live device down and
   // re-derives Api/LocalState. Offered from the SIGNED-OUT screen only.
   // Fires the auth-state handler with the new space's stored auth.
+  //
+  // Writes the host's values OVER what the space already stores under that
+  // key, so re-applying the same server (or returning to one used before)
+  // keeps the VLESS server and the private extender saved in it.
   bool ApplyNetworkServer(const std::string& hostName, const std::string& apiUrl,
                           const std::string& connectUrl);
   // The active space serialized for the daemon's start_tunnel: the daemon
   // must build its DeviceLocal in the SAME space or the DeviceRemote would
   // sync against a device registered in a different network ("" = default).
   std::string NetworkSpaceJson();
+
+  // ---- VLESS (sdk vless_settings_ui.go) --------------------------------------
+  // The VLESS server of the ACTIVE network space: the space the api/auth calls
+  // dial and the one start_tunnel hands urnetworkd. Settings > VLESS and the
+  // login screen's network sheet (before sign-in) both edit it here. The
+  // daemon imports the space at its next tunnel start, so a save reaches the
+  // VPN the next time it connects.
+  //
+  // Never empty while a space exists: with nothing stored the SDK answers the
+  // new-form defaults (443, tcp, reality, vision, chrome, off). nullopt only
+  // with no space, or when the read threw.
+  std::optional<urnet::VlessSettings> GetVlessSettings();
+  // "" when saved -- applied in place, so the space and everything derived
+  // from it stay valid. A vless_error_* id when ENABLED settings do not
+  // validate; nothing was saved then. Settings that are off are saved as typed,
+  // and off with no address and no id clears them. nullopt with no space to
+  // save to, or when the call threw.
+  std::optional<std::string> SetVlessSettings(const urnet::VlessSettings& settings);
+  // The SDK's free functions, wrapped so an SDK exception never reaches a view.
+  // They touch no host state. ParseVlessLink: nullopt when the call failed (the
+  // caller reads that as an invalid link); otherwise Settings (enabled) or an
+  // Error id. VlessSettingsLink: "" when the settings do not validate.
+  // ValidateVlessSettings: "" or the error id of the first problem (whether the
+  // settings are enabled does not matter).
+  static std::optional<urnet::VlessLinkResult> ParseVlessLink(const std::string& link);
+  static std::string VlessSettingsLink(const urnet::VlessSettings& settings);
+  static std::string ValidateVlessSettings(const urnet::VlessSettings& settings);
 
   // Sign in with a Solana wallet (Phantom/Solflare) via the ur.io/wallet-connect
   // browser bridge: connect -> sign a challenge -> authLogin{wallet_auth}. The
@@ -885,7 +916,8 @@ class SdkHost {
 
   // The LEGACY private extender (F1: NetExtender stays), an advanced override
   // on the network space values written through updateNetworkSpaceValues --
-  // the same path ApplyNetworkServer uses. Empty ip AND secret clears it.
+  // the same path ApplyNetworkServer uses -- over what the space stores, so no
+  // other value moves. Empty ip AND secret clears it.
   //
   // KNOWN LIMIT (the daemon split): this writes the GUI's OWN space, which is
   // the one its api/auth calls dial. urnetworkd builds its space from its own
