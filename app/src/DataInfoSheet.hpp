@@ -6,11 +6,13 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 
 #include <gtkmm.h>
 
+#include "InsufficientBalanceNotice.hpp"
 #include "SubscriptionBalance.hpp"
 
 namespace urnw {
@@ -18,6 +20,12 @@ namespace urnw {
 // The time left until the next 00:00 UTC as a compact duration ("5h 12m"),
 // with the provider_connected_duration strings.
 std::string FreeRefreshCountdownText();
+
+// The line under the refresh line that says whether the missing data is
+// reserved by open connections, with the reserved amount, or used up
+// (balance_notice::OutOfBalanceKindFor); empty for neither. The Connect page's
+// alert and the upgrade sheet a blocked connect opens both show it.
+std::string OutOfBalanceKindText(balance_notice::OutOfBalanceKind kind, int64_t reservedByteCount);
 
 // Calls `apply` now and again each time the displayed countdown changes, on
 // the GTK loop, until Stop. Keeps a "free data refreshes in {time}" line

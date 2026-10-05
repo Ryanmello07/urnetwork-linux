@@ -525,6 +525,13 @@ void ConnectPage::BuildPaneA() {
     });
     refresh->append(*why);
     heldAlert_->append(*refresh);
+    // then whether the data is reserved or used up (ApplyBalanceRecovery)
+    balanceKindLabel_ = Gtk::make_managed<Gtk::Label>();
+    balanceKindLabel_->set_xalign(0);
+    balanceKindLabel_->set_wrap(true);
+    CapNatural(balanceKindLabel_, 20);
+    balanceKindLabel_->set_visible(false);
+    heldAlert_->append(*balanceKindLabel_);
   }
   {
     auto* text = Gtk::make_managed<Gtk::Label>(
@@ -556,6 +563,31 @@ void ConnectPage::BuildPaneA() {
   }
   heldAlert_->set_visible(false);
   paneAContent_->append(*heldAlert_);
+
+  // 2.4c a connect the user asked for that the balance blocked is retried by
+  // itself once data is back (balance_notice::BalanceRecovery): say so under
+  // the held alert, or on its own for a start that was refused, whose Cancel is
+  // the only way to stop it
+  balanceRecoveryRow_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  balanceRecoveryRow_->set_margin_top(8);
+  {
+    auto* text = Gtk::make_managed<Gtk::Label>(
+        T_("insufficient_balance_will_reconnect", "You'll be reconnected when data is available again."));
+    text->set_xalign(0);
+    text->set_wrap(true);
+    text->set_hexpand(true);
+    CapNatural(text, 20);
+    balanceRecoveryRow_->append(*text);
+    balanceRecoveryCancel_ = Gtk::make_managed<Gtk::Button>(T_("cancel", "Cancel"));
+    balanceRecoveryCancel_->add_css_class("flat");
+    balanceRecoveryCancel_->set_valign(Gtk::Align::CENTER);
+    balanceRecoveryCancel_->signal_clicked().connect([this] {
+      if (on_cancel_balance_recovery) on_cancel_balance_recovery();
+    });
+    balanceRecoveryRow_->append(*balanceRecoveryCancel_);
+  }
+  balanceRecoveryRow_->set_visible(false);
+  paneAContent_->append(*balanceRecoveryRow_);
 
   // "More options" disclosure (Simple only) gating provide/options/peers
   moreOptionsToggle_ = Gtk::make_managed<Gtk::Button>(
@@ -1347,6 +1379,15 @@ void ConnectPage::ApplyBalanceNotice(const balance_notice::Signals& signals) {
   } else {
     freeRefreshTicker_.Stop();
   }
+}
+
+void ConnectPage::ApplyBalanceRecovery(const balance_notice::RecoveryLines& lines,
+                                       int64_t reservedByteCount) {
+  const std::string kindText = OutOfBalanceKindText(lines.kind, reservedByteCount);
+  balanceKindLabel_->set_text(kindText);
+  balanceKindLabel_->set_visible(!kindText.empty());
+  balanceRecoveryRow_->set_visible(lines.willReconnect);
+  balanceRecoveryCancel_->set_visible(lines.cancel);
 }
 
 void ConnectPage::SetDaemonNotice(const Glib::ustring& notice) {

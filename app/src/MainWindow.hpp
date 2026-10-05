@@ -331,6 +331,24 @@ class MainWindow : public Gtk::ApplicationWindow {
   void CheckBalanceThen(std::function<void()> retry);
   // Drops a connect waiting on a balance read (sign-in and sign-out).
   void CancelBalanceCheck();
+  // A connect the balance blocked, retried by itself once data is back
+  // (balance_notice::BalanceRecovery): the press the gate refused (the retry
+  // it was handed), or the connection held out of balance.
+  balance_notice::BalanceRecovery<std::function<void()>> balanceRecovery_;
+  // ObserveBalanceRecovery is running the refused press: the gate admits it
+  bool retryingRefusedConnect_ = false;
+  // Feeds the recovery after the latch (UpdateBalanceNotice), shows its lines
+  // on the Connect page, and makes the retry it decides on.
+  void ObserveBalanceRecovery();
+  // Another connect, the user's Disconnect, a sign-out or Cancel: nothing
+  // waits on the balance any more.
+  void ClearBalanceRecovery();
+  // The held alert's signals, as UpdateBalanceNotice builds them, and the
+  // balance as the gate reads it, for the recovery and its lines.
+  balance_notice::Signals BalanceSignals() const;
+  balance_notice::AccountBalance CurrentAccountBalance() const;
+  // Shows the recovery's lines on the Connect page (no retry).
+  void ApplyBalanceRecoveryLines();
   std::function<void()> pendingConnect_;
   bool balanceCheckPending_ = false;
   uint64_t balanceCheck_ = 0;

@@ -1668,6 +1668,7 @@ void MainWindow::BuildHome() {
   connectPage_->on_open_upgrade = [this] { OpenUpgrade(); };
   connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
   connectPage_->on_open_data_info = [this] { OpenDataInfo(); };
+  connectPage_->on_cancel_balance_recovery = [this] { ClearBalanceRecovery(); };
   shell_->SetPage("connect", *connectPage_);
   shell_->SetPage("connect-legacy", *scroller);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
@@ -2312,8 +2313,10 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // A signed-out window has no session at all: the DEFAULT reading, not a
     // bool poked into a copy of the last one.
     ApplyConnectReading(ConnectReading{});
-    // a connect waiting on a balance read belonged to that session
+    // a connect waiting on a balance read belonged to that session, and so
+    // does one waiting on the balance itself
     CancelBalanceCheck();
+    ClearBalanceRecovery();
     balance_.Stop();
     // a conversion, and the purchase waiting on it, belong to the session
     // that started it
@@ -2364,8 +2367,10 @@ void MainWindow::ToggleConnect(bool disconnect) {
     // Disconnect is safe to run unconditionally: SdkHost::Disconnect asks the
     // view controller to disconnect and then stops the daemon's tunnel, both
     // best-effort, both no-ops when there is nothing to stop.
-    // A connect still waiting on a balance read is withdrawn with it.
+    // A connect still waiting on a balance read is withdrawn with it, and a
+    // connect waiting on the balance is not run by itself after it.
     CancelBalanceCheck();
+    ClearBalanceRecovery();
     host_.Disconnect();
     // Re-read every window surface once, now. The page is already showing
     // "Disconnecting…" from its own intent; this keeps the tray, the legacy
@@ -2495,6 +2500,8 @@ void MainWindow::UpdateBalanceNotice() {
   observation.balanceKnown = balance_.HasFetched();
   observation.availableBytes = balance_.AvailableByteCount();
   outOfBalance_.Observe(observation);
+
+  ObserveBalanceRecovery();
 }
 
 void MainWindow::DisconnectFromBalanceNotice() {
@@ -2508,6 +2515,9 @@ int64_t BalanceClockMillis() { return g_get_monotonic_time() / 1000; }
 }  // namespace
 
 bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {
+  // the balance recovery runs a refused press again: it decided on a fresh
+  // balance already, and it is not a new press
+  if (retryingRefusedConnect_) return false;
   balance_notice::StartConnectInputs in;
   in.insufficientBalance = reading_.insufficientBalance;
   in.latched = outOfBalance_.OutOfBalance();
@@ -2523,6 +2533,8 @@ bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {
   in.nowMillis = BalanceClockMillis();
   switch (balance_notice::DecideStartConnect(in)) {
     case balance_notice::StartConnectStep::Start:
+      // this press replaces one still waiting on the balance
+      ClearBalanceRecovery();
       return false;
     case balance_notice::StartConnectStep::FetchBalance:
       // nothing starts until the balance is read again (or the read gives up)
@@ -2535,6 +2547,9 @@ bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {
   // nothing is started; the press opens the way to add balance instead, in
   // front of the user even when it came from the tray with the window hidden
   g_message("connect: not started, the account is out of balance; opening the upgrade path");
+  // the refused press waits on the balance and runs again by itself once it is back
+  balanceRecovery_.StartRefused(retry, BalanceClockMillis());
+  ApplyBalanceRecoveryLines();
   present();
   // this opening, and only this one, says when the free data refreshes
   if (drawer_) {
@@ -2576,6 +2591,60 @@ void MainWindow::CancelBalanceCheck() {
   balanceCheckTimeout_.disconnect();
   pendingConnect_ = nullptr;
   balanceCheckFailedAtMillis_ = -1;
+}
+
+void MainWindow::ClearBalanceRecovery() {
+  balanceRecovery_.Clear();
+  ApplyBalanceRecoveryLines();
+}
+
+balance_notice::Signals MainWindow::BalanceSignals() const {
+  balance_notice::Signals signals;
+  signals.insufficientBalance = reading_.insufficientBalance;
+  signals.pro = balance_.IsPro();
+  signals.polling = balance_.IsPolling();
+  signals.connectRequested = reading_.destinationSelected;
+  return signals;
+}
+
+balance_notice::AccountBalance MainWindow::CurrentAccountBalance() const {
+  balance_notice::AccountBalance balance;
+  balance.known = balance_.HasFetched();
+  balance.pro = balance_.IsPro();
+  balance.availableBytes = balance_.AvailableByteCount();
+  balance.openTransferBytes = balance_.PendingByteCount();
+  balance.fetchedAtMillis = balance_.FetchedAtMillis();
+  return balance;
+}
+
+void MainWindow::ApplyBalanceRecoveryLines() {
+  if (!connectPage_) return;
+  connectPage_->ApplyBalanceRecovery(
+      balance_notice::RecoveryLinesFor(BalanceSignals(),
+                                       balance_notice::OutOfBalanceKindFor(CurrentAccountBalance()),
+                                       balanceRecovery_.State()),
+      balance_.PendingByteCount());
+}
+
+void MainWindow::ObserveBalanceRecovery() {
+  const balance_notice::Signals signals = BalanceSignals();
+  auto step = balanceRecovery_.Observe(balance_notice::Gate(signals), signals.connectRequested,
+                                       CurrentAccountBalance(), BalanceClockMillis());
+  ApplyBalanceRecoveryLines();
+  if (step.kind == balance_notice::RecoveryStepKind::None) return;
+  g_message("connect: the balance is back; retrying the connect it blocked");
+  ShowToast(stack_, T_("insufficient_balance_reconnecting", "Data is available again. Reconnecting…"));
+  // past the gate, and not as a new press (which would end the wait and
+  // refill the retries): the recovery decided on a fresh balance already
+  retryingRefusedConnect_ = true;
+  if (step.kind == balance_notice::RecoveryStepKind::Start) {
+    if (step.target) step.target();
+  } else if (const auto location = host_.SelectedLocation()) {
+    host_.Connect(location);
+  } else {
+    host_.ConnectBestAvailable();
+  }
+  retryingRefusedConnect_ = false;
 }
 
 void MainWindow::OpenDataInfo() {

@@ -139,6 +139,12 @@ void UpgradeSheet::BuildUi() {
   freeRefreshLabel_->set_xalign(0);
   freeRefreshLabel_->set_wrap(true);
   freeRefreshBox_->append(*freeRefreshLabel_);
+  // reserved data may come back before the refresh; used up does not
+  freeRefreshKindLabel_ = Gtk::make_managed<Gtk::Label>();
+  freeRefreshKindLabel_->add_css_class("dim-label");
+  freeRefreshKindLabel_->set_xalign(0);
+  freeRefreshKindLabel_->set_wrap(true);
+  freeRefreshBox_->append(*freeRefreshKindLabel_);
   auto* waitForRefresh = Gtk::make_managed<Gtk::Button>(T_("wait_for_refresh", "Wait for refresh"));
   waitForRefresh->signal_clicked().connect([this] { set_visible(false); });
   freeRefreshBox_->append(*waitForRefresh);
@@ -398,6 +404,16 @@ void UpgradeSheet::Open(bool freeRefresh) {
           Format(T_("insufficient_balance_refreshes_in", "Free data refreshes in {}."),
                  FreeRefreshCountdownText()));
     });
+    balance_notice::AccountBalance read;
+    read.known = balance_.HasFetched();
+    read.pro = balance_.IsPro();
+    read.availableBytes = balance_.AvailableByteCount();
+    read.openTransferBytes = balance_.PendingByteCount();
+    read.fetchedAtMillis = balance_.FetchedAtMillis();
+    const std::string kind =
+        OutOfBalanceKindText(balance_notice::OutOfBalanceKindFor(read), balance_.PendingByteCount());
+    freeRefreshKindLabel_->set_text(kind);
+    freeRefreshKindLabel_->set_visible(!kind.empty());
   } else {
     freeRefreshTicker_.Stop();
   }
