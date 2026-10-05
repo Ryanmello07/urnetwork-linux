@@ -46,6 +46,7 @@
 #include "daemon/ControlServer.hpp"
 #include "daemon/DaemonLog.hpp"
 #include "daemon/HostMemory.hpp"
+#include "daemon/NetworkCountryWatcher.hpp"
 #include "daemon/TunnelHost.hpp"
 #include "TunnelPolicy.hpp"
 
@@ -1127,6 +1128,17 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "[daemon] orphan timeout: %ds\n", seconds);
     }
   }
+  // The country of the mobile network this machine is on (P052): read from
+  // ModemManager while a modem carries the default route, "" on every other
+  // network, and in force for the extender dials of every device this daemon
+  // builds. Started before the control socket serves anyone, so the first
+  // reading is normally in force before the first device exists; a later
+  // change applies in place.
+  urnw::NetworkCountryWatcher networkCountry(
+      urnw::TunnelConfig().name, [&tunnel](const urnw::NetworkCountryReading& reading) {
+        tunnel.SetNetworkCountryCode(reading.country_code);
+      });
+  networkCountry.Start();
   urnw::ControlServer server(tunnel, geoWriter);
   server.SetDaemonVersion(UR_APP_VERSION);
   // exact-match enforced against the GUI's hello: the gob device RPC carries

@@ -188,6 +188,14 @@ class TunnelHost {
   // change up on its next tick.
   void SetOwnerUid(int64_t uid);
 
+  // The country of the mobile network this machine is on, "" for none
+  // (NetworkCountry.hpp, P052; the daemon's NetworkCountryWatcher reads it).
+  // Process-wide in the sdk, so it is in force for every device built after
+  // this and applies in place to a running one from its next extender dial.
+  // Published in status for the GUI, which applies it to its own dials too.
+  // Main loop only.
+  void SetNetworkCountryCode(const std::string& countryCode);
+
   // Seconds a tunnel may keep running with no owning client before the daemon
   // stops it by itself. 0 (the default) keeps the current behaviour: the
   // tunnel survives a GUI crash/restart and is adoptable. Set from

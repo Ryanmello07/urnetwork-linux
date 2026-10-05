@@ -1134,6 +1134,18 @@ struct StatusReply {
   int64_t provider_mode = 0;
   bool provider_network_key = false;
 
+  // ---- the network country (P052) -----------------------------------------
+  // The country of the mobile network this machine is on, as the daemon reads
+  // it from ModemManager (NetworkCountry.hpp): lower case ISO 3166-1 alpha-2
+  // while the default route leaves through a registered modem, "" on every
+  // other network. The daemon applies it to the devices it builds; the GUI
+  // applies it to its own process, whose sign-in and api dials draw their
+  // extender names from the same spoof list. Additive within v1; absent parses
+  // "", which is what a daemon predating it is and what "no country" means
+  // anyway. RedactStatusForForeignUid drops it like every field it does not
+  // list, so another uid's GUI reports no country rather than this one.
+  std::string network_country_code;
+
   // This status was cut down because the caller is neither root nor the uid
   // that owns the running tunnel. ADDITIVE within v1; absent parses false.
   //
@@ -1171,6 +1183,7 @@ inline void to_json(nlohmann::json& j, const StatusReply& v) {
   j["provider_control_mode"] = v.provider_control_mode;
   j["provider_mode"] = v.provider_mode;
   j["provider_network_key"] = v.provider_network_key;
+  j["network_country_code"] = v.network_country_code;
   j["redacted"] = v.redacted;
 }
 inline void from_json(const nlohmann::json& j, StatusReply& v) {
@@ -1202,6 +1215,7 @@ inline void from_json(const nlohmann::json& j, StatusReply& v) {
   detail::Get(j, "provider_control_mode", v.provider_control_mode);
   detail::Get(j, "provider_mode", v.provider_mode);
   detail::Get(j, "provider_network_key", v.provider_network_key);
+  detail::Get(j, "network_country_code", v.network_country_code);  // absent = no country
   detail::Get(j, "redacted", v.redacted);      // absent = false = a full status
 }
 

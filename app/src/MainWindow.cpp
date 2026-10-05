@@ -962,6 +962,9 @@ bool MainWindow::PollDaemonHealth() {
     // Nothing claimed, nothing to contradict — but the DNS verdict from the
     // last session must not outlive it on screen.
     if (drawer_) drawer_->SetTunnelDnsState(false, false, {});
+    // The network country the daemon reads (P052), for this process's own
+    // dials: from the sign-in screen on, signed in or not.
+    host_.FollowDaemonNetworkCountry();
     // Disconnected is when the provider-only device is the provider: start it
     // after a launch without auto-connect, bring it back after a service
     // restart or an unexpected drop, and stop one the mode no longer wants.
@@ -970,6 +973,7 @@ bool MainWindow::PollDaemonHealth() {
   }
   const auto status = host_.Control().Status();
   if (!status) return true;      // unreachable is StartTunnelUi's business
+  host_.FollowDaemonNetworkCountry(*status);
   // Feed the drawer the daemon's own DNS verdict. Until this existed, the DNS
   // card was drawn entirely from the SDK's resolver PREFERENCES and could sit
   // green while dns_applied was false — the daemon knew, said so in

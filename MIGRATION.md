@@ -150,7 +150,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | Verb | Payload | Reply |
 |---|---|---|
 | `hello` | `protocol_version`, `sdk_version` | `protocol_version`, `sdk_version`, `daemon_version` |
-| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode` |
+| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode`, `network_country_code` |
 | `start_tunnel` | `by_jwt`, `instance_id`, `app_version` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `attach_tunnel` | `instance_id`, `rpc_session_id` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `stop_tunnel` | — | `ok` |
@@ -203,6 +203,19 @@ status would be redacted. `poll_status` keeps the provider status controller pol
 asked, so nothing polls the API once no GUI shows it. A daemon that predates the verb
 answers `unknown verb`, and the GUI then shows no provider statistics while
 disconnected, as before.
+
+`status.network_country_code` is the country of the mobile network this machine is on
+(P052): the daemon reads it from ModemManager on the system bus while the default
+route leaves through a registered modem's data interface, maps the operator's MCC to an
+ISO 3166-1 alpha-2 code, and reports `""` on every other network (Wi-Fi, ethernet, a
+tethered phone, no ModemManager). The locale and the timezone are never used. The daemon
+applies it with `urnet::setNetworkCountryCode` before it builds a device and in place
+after, so the extender dials of the tunnel's device and the provider-only device front
+with that country's spoof list while the extender hint cannot be fetched; the GUI
+applies the same value to its own process from its health poll. Absent (an older
+daemon) parses `""`, and a redacted status carries none. ModemManager is asked only
+while its bus name has an owner and never with auto-start, so a disabled ModemManager
+stays stopped.
 
 **`sdk_version` must match EXACTLY, and this is a second, independent check.**
 `protocol_version` guards *our* JSON control socket; the **device RPC has no version
