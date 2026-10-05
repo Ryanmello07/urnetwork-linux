@@ -896,6 +896,11 @@ msgctxt "claim_network_name_hint"
 msgid "Claim a custom network name to replace your auto-generated one"
 msgstr "자동 생성된 이름을 대체할 사용자 지정 네트워크 이름을 만드세요"
 
+#. Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.
+msgctxt "claims_open_after_finalization"
+msgid "Each epoch's claims open after its payout list is finalized and stay open until they expire."
+msgstr "각 에포크의 받기는 해당 지급 목록이 확정된 후 열리며 만료될 때까지 열려 있습니다."
+
 #. General UI string: a button that clears a field or setting.
 msgctxt "clear"
 msgid "Clear"
@@ -4296,6 +4301,16 @@ msgctxt "sent_thanks_for_your_feedback"
 msgid "Sent! Thanks for your feedback."
 msgstr "보냈습니다! 피드백 감사합니다."
 
+#. Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).
+msgctxt "set_coldkey"
+msgid "Set coldkey"
+msgstr "coldkey 설정"
+
+#. Earnings card: shown in place of sn_payout_schedule while no Bittensor coldkey is set. SN payouts go only to a coldkey; the set_coldkey action next to it opens the coldkey (connect wallet) flow.
+msgctxt "set_coldkey_to_get_paid"
+msgid "Set your Bittensor coldkey to get paid"
+msgstr "지급을 받으려면 Bittensor coldkey를 설정하세요"
+
 #. Account Screen
 msgctxt "settings"
 msgid "Settings"
@@ -4738,6 +4753,16 @@ msgstr "Pro 구독은 Stripe를 통해 청구됩니다. 아래에서 언제든�
 msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
+
+#. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
+msgctxt "sn_payout_schedule"
+msgid "Earnings settle every epoch and are paid in SN25α to your Bittensor coldkey when you claim them."
+msgstr "수익은 에포크마다 정산되며, 받기를 하면 SN25α로 Bittensor coldkey에 지급됩니다."
+
+#. Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.
+msgctxt "sn_payout_schedule_times"
+msgid "This epoch ends {0}. Claim your share from {1} until {2}."
+msgstr "이번 에포크는 {0}에 끝납니다. 내 몫은 {1}부터 {2}까지 받을 수 있습니다."
 
 #. Blockchain name. A product name: never translated.
 msgctxt "solana"
@@ -5300,6 +5325,11 @@ msgstr "URnetwork VPN 시작됨"
 msgctxt "usdc_solana_network_only"
 msgid "Send USDC on the Solana network only. USDC sent on any other network will not arrive."
 msgstr "USDC는 Solana 네트워크로만 보내세요. 다른 네트워크로 보낸 USDC는 도착하지 않습니다."
+
+#. The last USDC payout still pending since provider payouts moved to the UR subnet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions, only while a USDC amount is pending. Mirrors the email headline.
+msgctxt "usdc_waiting"
+msgid "Final USDC payout: {} USDC waiting"
+msgstr "마지막 USDC 지급: {} USDC 대기 중"
 
 msgctxt "usdc_wallet_address"
 msgid "USDC wallet address"
