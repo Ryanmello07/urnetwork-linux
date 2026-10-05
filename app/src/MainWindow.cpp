@@ -141,6 +141,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     Glib::signal_timeout().connect_once([this, tag, step] {
       if (!onboarding_) {
         onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
+        onboarding_->on_guest_sign_in_required = [this] { OnOnboardingGuestSignInRequired(); };
       }
       // URNW_ONBOARDING_PREVIEW_OFFER=1 seeds a sample welcome offer (no
       // session behind the preview, so nothing is issued): the offer card on
@@ -1994,6 +1995,12 @@ void MainWindow::DivertGuestToConversion(std::function<void()> checkout) {
   OpenGuestConversion();
 }
 
+// The server refused the onboarding checkout for a guest network the balance
+// had not reported yet: the conversion, then the upgrade once it is done.
+void MainWindow::OnOnboardingGuestSignInRequired() {
+  DivertGuestToConversion([this] { OpenUpgrade(); });
+}
+
 // android presents AuthCodeLoginSheet — a modal with its own field — instead
 // of an inline box on the login screen; the desktop equivalent is a dialog.
 void MainWindow::OnUseCode() {
@@ -2251,6 +2258,7 @@ void MainWindow::HandleOnboardingLink(const std::string& url) {
       if (balance_.OfferActive()) {
         if (!onboarding_) {
           onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
+          onboarding_->on_guest_sign_in_required = [this] { OnOnboardingGuestSignInRequired(); };
           onboarding_->on_finished = [] { prefs::Set(kOnboardingPendingKey, false); };
         }
         onboarding_->OpenOffer();
@@ -2284,6 +2292,7 @@ void MainWindow::OpenOnboardingIfPending() {
     if (onboarding_ && onboarding_->get_visible()) return;
     if (!onboarding_) {
       onboarding_ = std::make_unique<OnboardingWindow>(*this, host_, balance_);
+      onboarding_->on_guest_sign_in_required = [this] { OnOnboardingGuestSignInRequired(); };
       onboarding_->on_finished = [] { prefs::Set(kOnboardingPendingKey, false); };
     }
     onboarding_->Open();

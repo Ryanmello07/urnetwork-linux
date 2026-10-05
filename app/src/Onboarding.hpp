@@ -53,6 +53,10 @@ class OnboardingWindow : public Gtk::Window {
   void OpenOffer();
   // the flow ended (skip, or Get connected): the owner clears the pending flag
   std::function<void()> on_finished;
+  // the server refused the flow's checkout because the network is a legacy
+  // guest (guest_sign_in_required): the flow hid, and the owner opens the
+  // conversion
+  std::function<void()> on_guest_sign_in_required;
 
  private:
   void BuildUi();

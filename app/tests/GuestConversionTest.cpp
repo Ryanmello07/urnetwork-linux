@@ -259,3 +259,28 @@ UR_TEST(cancelledConversionDoesNotContinue) {
 }
 
 }  // namespace
+
+// The server refuses a payment sheet or checkout session for a guest network
+// with guest_sign_in_required (a refreshed guest before its balance loaded):
+// that leads to the conversion, every other refusal stays a payment error.
+UR_TEST(guestRefusalLeadsToTheConversion) {
+  UR_EXPECT_TRUE(std::string(urnw::kPurchaseErrorCodeGuestSignInRequired) == "guest_sign_in_required");
+  UR_EXPECT_TRUE(urnw::PurchaseRefusalFor("guest_sign_in_required") == urnw::PurchaseRefusal::AddSignIn);
+  // an older server sends no code; other refusals have none
+  UR_EXPECT_TRUE(urnw::PurchaseRefusalFor("") == urnw::PurchaseRefusal::PaymentError);
+  UR_EXPECT_TRUE(urnw::PurchaseRefusalFor("GUEST_SIGN_IN_REQUIRED") == urnw::PurchaseRefusal::PaymentError);
+  UR_EXPECT_TRUE(urnw::PurchaseRefusalFor("verify_rate_limited") == urnw::PurchaseRefusal::PaymentError);
+}
+
+// A checkout the server refused for a guest goes to the conversion and, once
+// the sign-in is added, reopens: the balance never reported the guest, so the
+// continuation runs as soon as the conversion is done.
+UR_TEST(refusedCheckoutContinuesAfterTheConversion) {
+  urnw::GuestUpgradeContinuation continuation;
+  int opened = 0;
+  continuation.Divert([&opened] { ++opened; });
+  continuation.ConversionDone();
+  continuation.ConversionClosed();
+  continuation.Poll(/*isGuest=*/false);
+  UR_EXPECT_TRUE(opened == 1);
+}

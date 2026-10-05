@@ -31,6 +31,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <functional>
 #include <string>
 
 #include <gtkmm.h>
@@ -61,6 +62,11 @@ class UpgradeSheet : public Gtk::Window {
   // flips waiting -> success / timed-out.
   void OnBalanceChanged();
 
+  // The server refused the checkout because the network is a legacy guest
+  // (guest_sign_in_required): the sheet has hidden itself, and the owner opens
+  // the conversion (ConnectDrawer: on_guest_upgrade; onboarding: its owner).
+  std::function<void()> on_guest_sign_in_required;
+
  private:
   enum class State { Options, Launching, Checkout, Waiting, Success, TimedOut };
 
@@ -75,6 +81,9 @@ class UpgradeSheet : public Gtk::Window {
   // once as hosted; sessions are only ever created in sequence, never both.
   void RequestSession(bool embedded);
   void SetState(State state);
+  // The refusal for a guest network (PurchaseRefusalFor): no fallback, no
+  // error line; the sheet hides and on_guest_sign_in_required runs.
+  void RefuseForGuest();
 
 #ifdef UR_HAVE_WEBKIT
   // Creates the webview on first use; false means webkit is unusable at

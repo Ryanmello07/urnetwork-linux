@@ -506,7 +506,15 @@ void OnboardingWindow::StartCheckout(bool yearly, const char* surface) {
     host_.events().OfferCtaTapped(PlanName(true), "stripe");
   }
   (void)surface;
-  if (!checkout_) checkout_ = std::make_unique<UpgradeSheet>(*this, host_, balance_);
+  if (!checkout_) {
+    checkout_ = std::make_unique<UpgradeSheet>(*this, host_, balance_);
+    // the server refused the checkout for a guest network: the flow steps
+    // aside for the conversion its owner opens
+    checkout_->on_guest_sign_in_required = [this] {
+      hide();
+      if (on_guest_sign_in_required) on_guest_sign_in_required();
+    };
+  }
   checkout_->OpenCheckout(yearly);
 }
 
