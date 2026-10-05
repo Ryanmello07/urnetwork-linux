@@ -33,6 +33,7 @@
 
 #include "ConnectCanvas.hpp"
 #include "ContractsSheet.hpp"
+#include "DataInfoSheet.hpp"
 #include "DnsSheet.hpp"
 #include "ExtenderProvidePresentation.hpp"
 #include "InsufficientBalanceNotice.hpp"
@@ -129,6 +130,8 @@ class ConnectPage : public Gtk::Box {
   std::function<void()> on_open_upgrade;
   // the held alert's Disconnect: the user disconnect path only, never connects
   std::function<void()> on_balance_disconnect;
+  // the held alert's Why?: the "About your data" sheet the window owns
+  std::function<void()> on_open_data_info;
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off
@@ -385,6 +388,8 @@ class ConnectPage : public Gtk::Box {
   Gtk::Label* daemonNoticeText_ = nullptr;
   // the out-of-balance held alert (ApplyBalanceNotice)
   Gtk::Box* heldAlert_ = nullptr;
+  Gtk::Label* freeRefreshLabel_ = nullptr;  // the alert's first line
+  FreeRefreshTicker freeRefreshTicker_;     // keeps it current while it shows
   Gtk::Button* hero_ = nullptr;
   ConnectCanvas* canvas_ = nullptr;
   Gtk::Label* locationText_ = nullptr;

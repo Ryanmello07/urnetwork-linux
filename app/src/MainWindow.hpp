@@ -17,6 +17,7 @@
 #include "BittensorManualSheet.hpp"
 #include "ConnectDrawer.hpp"
 #include "ConnectPage.hpp"
+#include "DataInfoSheet.hpp"
 #include "HomeShell.hpp"
 #include "InsufficientBalanceNotice.hpp"
 #include "AccountPage.hpp"
@@ -284,6 +285,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // Account's Redeem row opens the same sheet the drawer owns, but the
   // drawer exposes no opener, so the window keeps its own (lazily built).
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;
+  std::unique_ptr<DataInfoSheet> dataInfoSheet_;  // lazily built
   std::unique_ptr<GuestConversionSheet> guestConversionSheet_;  // lazily built
   GuestUpgradeContinuation guestUpgrade_;
   std::unique_ptr<OnboardingWindow> onboarding_;
@@ -344,6 +346,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   int64_t balanceCheckFailedAtMillis_ = -1;
   // The upgrade path: guest conversion for a guest, else the upgrade sheet.
   void OpenUpgrade();
+  // "About your data" (DataInfoSheet): Account's info button, the Connect
+  // page alert's Why?
+  void OpenDataInfo();
   // tray app: skip window-widget updates while hidden (resynced on show) so a
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;

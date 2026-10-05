@@ -177,6 +177,9 @@ class AccountPage : public Gtk::Box {
   // The plan pane's primary action. Guests get the sign-out-and-create-account
   // offer, everyone else the UpgradeSheet the window/drawer owns.
   std::function<void()> on_open_upgrade;
+  // The data-usage group's info button: the "About your data" sheet the
+  // window owns (it needs the balance store).
+  std::function<void()> on_open_data_info;
   // A Pro network's plan label ("Pro") replays the Pro celebration (android
   // AccountRootSubscription onPlanLabelTap); free and guest labels are inert.
   std::function<void()> on_plan_label_tap;

@@ -1323,6 +1323,36 @@ msgctxt "data_bar_explanation"
 msgid "This bar in the app shows you how much free data you are earning from your provider. You can check in any time and adjust your settings to maximize your earnings."
 msgstr "앱의 이 막대는 제공자로부터 얼마나 많은 무료 데이터를 얻고 있는지 보여줍니다. 언제든지 확인하고 설정을 조정하여 수익을 극대화할 수 있습니다."
 
+#. "About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.
+msgctxt "data_info_available"
+msgid "Data you can still use."
+msgstr "아직 사용할 수 있는 데이터입니다."
+
+#. "About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.
+msgctxt "data_info_pending"
+msgid "Data reserved for your open connections. What they don't use is returned when they close."
+msgstr "열려 있는 연결을 위해 예약된 데이터입니다. 사용하지 않은 만큼은 연결이 닫히면 돌아옵니다."
+
+#. "About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).
+msgctxt "data_info_refresh_at"
+msgid "Free data refreshes daily at 00:00 UTC (in {})."
+msgstr "무료 데이터는 매일 00:00 UTC에 갱신됩니다({} 후)."
+
+#. Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.
+msgctxt "data_info_title"
+msgid "About your data"
+msgstr "내 데이터 안내"
+
+#. "About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.
+msgctxt "data_info_used"
+msgid "Data you've used so far."
+msgstr "지금까지 사용한 데이터입니다."
+
+#. Link under the out-of-balance notice that opens the "About your data" sheet.
+msgctxt "data_info_why"
+msgid "Why?"
+msgstr "왜 그런가요?"
+
 #. Call to action
 msgctxt "data_usage"
 msgid "Data usage"
@@ -2469,6 +2499,11 @@ msgstr "업그레이드하거나 연결을 해제할 때까지 트래픽이 터�
 msgctxt "insufficient_balance_message"
 msgid "Add balance or a plan to keep connecting."
 msgstr "계속 연결하려면 잔액 또는 요금제를 추가하세요."
+
+#. Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).
+msgctxt "insufficient_balance_refreshes_in"
+msgid "Free data refreshes in {}."
+msgstr "무료 데이터는 {} 후에 갱신됩니다."
 
 #. Circle Wallet Transfer Screen
 msgctxt "insufficient_funds"
@@ -5432,6 +5467,11 @@ msgstr "버전 및 빌드 정보"
 msgctxt "via_exit"
 msgid "via {}"
 msgstr "{} 경유"
+
+#. Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.
+msgctxt "wait_for_refresh"
+msgid "Wait for refresh"
+msgstr "갱신 기다리기"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "waiting_for_approval"

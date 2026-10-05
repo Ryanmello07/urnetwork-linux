@@ -1323,6 +1323,36 @@ msgctxt "data_bar_explanation"
 msgid "This bar in the app shows you how much free data you are earning from your provider. You can check in any time and adjust your settings to maximize your earnings."
 msgstr "Thanh này trong ứng dụng cho bạn biết bạn đang kiếm được bao nhiêu dữ liệu miễn phí từ nhà cung cấp của mình. Bạn có thể kiểm tra bất cứ lúc nào và điều chỉnh cài đặt để tối đa hóa thu nhập."
 
+#. "About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.
+msgctxt "data_info_available"
+msgid "Data you can still use."
+msgstr "Dữ liệu bạn vẫn có thể dùng."
+
+#. "About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.
+msgctxt "data_info_pending"
+msgid "Data reserved for your open connections. What they don't use is returned when they close."
+msgstr "Dữ liệu được giữ trước cho các kết nối đang mở của bạn. Phần không dùng đến sẽ được trả lại khi các kết nối đóng."
+
+#. "About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).
+msgctxt "data_info_refresh_at"
+msgid "Free data refreshes daily at 00:00 UTC (in {})."
+msgstr "Dữ liệu miễn phí được làm mới hằng ngày lúc 00:00 UTC (sau {})."
+
+#. Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.
+msgctxt "data_info_title"
+msgid "About your data"
+msgstr "Về dữ liệu của bạn"
+
+#. "About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.
+msgctxt "data_info_used"
+msgid "Data you've used so far."
+msgstr "Dữ liệu bạn đã dùng cho đến nay."
+
+#. Link under the out-of-balance notice that opens the "About your data" sheet.
+msgctxt "data_info_why"
+msgid "Why?"
+msgstr "Tại sao?"
+
 #. Call to action
 msgctxt "data_usage"
 msgid "Data usage"
@@ -2469,6 +2499,11 @@ msgstr "Lưu lượng của bạn được giữ trong đường hầm cho đế
 msgctxt "insufficient_balance_message"
 msgid "Add balance or a plan to keep connecting."
 msgstr "Thêm số dư hoặc gói cước để tiếp tục kết nối."
+
+#. Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).
+msgctxt "insufficient_balance_refreshes_in"
+msgid "Free data refreshes in {}."
+msgstr "Dữ liệu miễn phí sẽ được làm mới sau {}."
 
 #. Circle Wallet Transfer Screen
 msgctxt "insufficient_funds"
@@ -5432,6 +5467,11 @@ msgstr "Thông tin phiên bản và bản dựng"
 msgctxt "via_exit"
 msgid "via {}"
 msgstr "qua {}"
+
+#. Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.
+msgctxt "wait_for_refresh"
+msgid "Wait for refresh"
+msgstr "Chờ làm mới"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "waiting_for_approval"

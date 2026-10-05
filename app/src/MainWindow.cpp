@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ProvideModeGlyph.hpp"
 #include "MainWindow.hpp"
+#include "DataInfo.hpp"
 #include "ProUpgradeReaction.hpp"
 
 #include "SsoBridge.hpp"
@@ -1742,6 +1743,7 @@ void MainWindow::BuildHome() {
   // and the notification's disconnect-only path
   connectPage_->on_open_upgrade = [this] { OpenUpgrade(); };
   connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
+  connectPage_->on_open_data_info = [this] { OpenDataInfo(); };
   shell_->SetPage("connect", *connectPage_);
   shell_->SetPage("connect-legacy", *scroller);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
@@ -1786,6 +1788,8 @@ void MainWindow::BuildHome() {
   };
   // a Pro network's plan label replays the Pro celebration
   accountPage_->on_plan_label_tap = [this] { LaunchProCelebration(); };
+  // the data-usage group's info button: the sheet reads the balance store
+  accountPage_->on_open_data_info = [this] { OpenDataInfo(); };
   // The redeem sheet needs the balance store (it starts confirmation polling),
   // which the page deliberately does not hold — so the window opens it.
   accountPage_->on_open_redeem = [this] {
@@ -2605,7 +2609,12 @@ bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {
   // front of the user even when it came from the tray with the window hidden
   g_message("connect: not started, the account is out of balance; opening the upgrade path");
   present();
+  // this opening, and only this one, says when the free data refreshes
+  if (drawer_) {
+    drawer_->MarkNextUpgradeFreeRefresh(data_info::UpgradeShowsFreeRefresh(true, balance_.IsPro()));
+  }
   OpenUpgrade();
+  if (drawer_) drawer_->MarkNextUpgradeFreeRefresh(false);
   return true;
 }
 
@@ -2640,6 +2649,11 @@ void MainWindow::CancelBalanceCheck() {
   balanceCheckTimeout_.disconnect();
   pendingConnect_ = nullptr;
   balanceCheckFailedAtMillis_ = -1;
+}
+
+void MainWindow::OpenDataInfo() {
+  if (!dataInfoSheet_) dataInfoSheet_ = std::make_unique<DataInfoSheet>(*this, balance_);
+  dataInfoSheet_->Open();
 }
 
 void MainWindow::OpenUpgrade() {

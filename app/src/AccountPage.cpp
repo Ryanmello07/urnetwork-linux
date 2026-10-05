@@ -1862,8 +1862,22 @@ void AccountPage::BuildPlanPane() {
   });
   content->append(*upgradeButton_);
 
-  // 4. the data-usage group.
-  content->append(*kit::MakePaneGroupHeader(T_("data_usage", "Data usage")).root);
+  // 4. the data-usage group. Its info button, right above the daily balance,
+  //    opens "About your data": what Used, Pending and Available mean and when
+  //    the free data refreshes.
+  {
+    auto header = kit::MakePaneGroupHeader(T_("data_usage", "Data usage"));
+    auto* info = Gtk::make_managed<Gtk::Button>();
+    info->set_icon_name("help-about-symbolic");
+    info->add_css_class("ur-pane-action");
+    info->set_tooltip_text(T_("data_info_title", "About your data"));
+    kit::SetAccessibleLabel(*info, T_("data_info_title", "About your data"));
+    info->signal_clicked().connect([this] {
+      if (on_open_data_info) on_open_data_info();
+    });
+    header.trailing->append(*info);
+    content->append(*header.root);
+  }
 
   // 5. daily balance.
   {
