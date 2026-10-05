@@ -881,6 +881,11 @@ msgctxt "blocked"
 msgid "Blocked"
 msgstr "محظور"
 
+#. Blocked locations: blocking a location failed. The argument is the location name.
+msgctxt "blocked_location_block_failed"
+msgid "Couldn't block {}. Please try again."
+msgstr "تعذّر حظر {}. يُرجى المحاولة مرة أخرى."
+
 #. Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.
 msgctxt "blocked_location_could_not_be_added_please_try"
 msgid "Blocked location could not be added. Please try again later."
@@ -890,6 +895,11 @@ msgstr "تعذّر إضافة الموقع المحظور. يرجى المحاو
 msgctxt "blocked_location_could_not_be_removed_please_try"
 msgid "Blocked location could not be removed. Please try again later."
 msgstr "تعذّر إزالة الموقع المحظور. يرجى المحاولة مرة أخرى لاحقًا."
+
+#. Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.
+msgctxt "blocked_location_unblock_failed"
+msgid "Couldn't unblock {}. Please try again."
+msgstr "تعذّر إلغاء حظر {}. يُرجى المحاولة مرة أخرى."
 
 #. Call to action
 msgctxt "blocked_locations"
@@ -905,6 +915,11 @@ msgstr "المواقع المحظورة"
 msgctxt "blocked_locations_could_not_be_loaded"
 msgid "Blocked locations could not be loaded."
 msgstr "تعذّر تحميل المواقع المحظورة."
+
+#. Blocked locations: the list could not be loaded.
+msgctxt "blocked_locations_load_failed"
+msgid "Couldn't load your blocked locations. Pull down to try again."
+msgstr "تعذّر تحميل المواقع المحظورة. اسحب لأسفل للمحاولة مرة أخرى."
 
 #. Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.
 msgctxt "blocks"
@@ -3229,6 +3244,11 @@ msgctxt "email_e4_reason_trust"
 msgid "I'm not sure I trust a VPN"
 msgstr "لست متأكداً أنني أثق بـ VPN"
 
+#. Settings: label before the support email address link.
+msgctxt "email_support_at"
+msgid "Email support at"
+msgstr "راسل الدعم على"
+
 #. Emoji keyboard group: sports, games and activities.
 msgctxt "emoji_group_activities"
 msgid "Activities"
@@ -3702,6 +3722,11 @@ msgstr "مربع التعليقات"
 msgctxt "feedback_placeholder"
 msgid "Tell us how you really feel"
 msgstr "أخبرنا برأيك"
+
+#. Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.
+msgctxt "feedback_send_failed"
+msgid "Your feedback wasn't sent. Check your connection and try again."
+msgstr "لم تُرسَل ملاحظاتك. تحقّق من اتصالك وحاول مرة أخرى."
 
 #. Feedback screen: label of the Send button while the feedback is being sent.
 msgctxt "feedback_sending"
@@ -6584,6 +6609,11 @@ msgstr "المزود المحدد"
 msgctxt "send"
 msgid "Send"
 msgstr "أرسل"
+
+#. Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.
+msgctxt "send_feedback_contact"
+msgid "Send us your feedback directly, email us at {0}, or join our {1} for direct support."
+msgstr "أرسل إلينا ملاحظاتك مباشرة، أو راسلنا على {0}، أو انضم إلى {1} للحصول على دعم مباشر."
 
 #. Settings
 msgctxt "send_product_updates"
