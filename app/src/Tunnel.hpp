@@ -373,7 +373,8 @@ class EgressSocketMarker {
 
 // fwmark carried by the daemon's own sockets. "URNW" as a u32; distinctive
 // enough that a collision with another tool's mark scheme is implausible, and
-// it is set (not or'd) only on our own sockets.
+// it is set (not or'd) only on our own sockets. Its neighbour kBypassMark
+// ("URNX", TunnelPolicy.hpp) is set only on the urnetwork-exclude slice.
 inline constexpr uint32_t kEgressMark = 0x55524e57u;
 // The capture routes live HERE, never in main: main keeps the physical
 // default, which is what the marked daemon sockets fall through to.
@@ -433,6 +434,11 @@ inline constexpr const char* kNftFwdChainName = "urnw_fwd";
 // reproduced the original mistake — a green check on the wrong question — in a
 // new place. At postrouting the device is the real one.
 inline constexpr const char* kNftProbeChainName = "urnw_probe";
+// The SIXTH chain, present only while an urnetwork-exclude slice is in force
+// on a tunnel: it masquerades kBypassMark on the physical interface (see
+// "per-app split tunnel" in TunnelPolicy.hpp for why the source address needs
+// it).
+inline constexpr const char* kNftNatChainName = "urnw_nat";
 
 // Named counters, so the readers find them BY NAME instead of by position in a
 // chain listing. `nft` is free to print rules in any order it likes and a
@@ -477,6 +483,8 @@ inline constexpr int kEgressProbePort = 9;
 // `ip rule` performs, and > NF_IP_PRI_CONNTRACK (-200) so `ct state` is
 // available to the filter chains downstream.
 inline constexpr int kMarkChainPriority = -150;
+// NF_IP_PRI_NAT_SRC, for urnw_nat.
+inline constexpr int kNatChainPriority = 100;
 // NF_IP_PRI_FILTER. Post-DNAT, so the LAN and metadata matches are on the
 // address the packet actually goes to. Priority is NOT the defence here: at
 // every hook every registered base chain runs, `accept` is terminal only for
@@ -577,6 +585,11 @@ struct FilterConfig {
   // Emitted ONLY when state == Connecting && floor, and only for cgroups that
   // exist (see DnsHelperCgroupsV2).
   std::vector<CgroupRef> dns_helper_cgroups;
+  // The tunnel owner's urnetwork-exclude slice, or nothing: marked, routed
+  // through main, masqueraded and accepted ("per-app split tunnel",
+  // TunnelPolicy.hpp). Emitted only with the socket-cgroup match
+  // (CgroupAndMark), and NetFilter::Apply drops a path that does not exist.
+  std::vector<CgroupRef> exclude_cgroups;
 };
 
 // PURE: the exact `nft -f` script for a state, so the ruleset can be reviewed
@@ -594,6 +607,7 @@ bool RulesetHasBlockFloor(const FilterConfig& cfg);
 bool RulesetBlocksIpv6(const FilterConfig& cfg);
 bool RulesetPinsDns(const FilterConfig& cfg);
 bool RulesetOpensHelperDns(const FilterConfig& cfg);  // log at BOTH edges
+bool RulesetExcludesApps(const FilterConfig& cfg);
 
 // Read-only probe (`ip route show default table all`, both families): TRUE
 // only when there is an IPv6 default route and NO IPv4 one. Arming the v6
@@ -742,6 +756,12 @@ class NetFilter {
   // ruleset is gone by then anyway, and coming up armed before any user asked
   // would be a machine that cannot reach the network at login).
   static const char* ArmedMarkerPath();
+
+  // World-readable (0644) list of the urnetwork-exclude slices in force, one
+  // cgroup path per line, present exactly while a ruleset is installed. The
+  // launcher waits for its own slice here before it starts the command, so the
+  // command's first connection already leaves outside the tunnel.
+  static const char* ExcludeStatePath();
 
   FilterState state() const { return state_; }
   bool installed() const { return state_ != FilterState::Off; }

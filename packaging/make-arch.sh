@@ -424,6 +424,7 @@ if [ -n "${PKG_TAR}" ]; then
         usr/lib/urnetwork/urnetworkd \
         usr/lib/urnetwork/libURnetworkSdk.so \
         usr/bin/urnetwork \
+        usr/bin/urnetwork-exclude \
         usr/lib/systemd/system/urnetworkd.service \
         usr/share/polkit-1/actions/com.bringyour.network.policy \
         usr/share/urnetwork/world-110m.json ; do

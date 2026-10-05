@@ -369,6 +369,7 @@ if command -v rpm >/dev/null 2>&1; then
         /usr/lib/urnetwork/urnetworkd \
         /usr/lib/urnetwork/libURnetworkSdk.so \
         /usr/bin/urnetwork \
+        /usr/bin/urnetwork-exclude \
         /usr/lib/systemd/system/urnetworkd.service \
         /usr/lib/systemd/system-preset/85-urnetwork.preset \
         /usr/share/selinux/packages/urnetwork/urnetwork.te ; do

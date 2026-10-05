@@ -141,7 +141,7 @@ assemble_daemon_root() {
     # --- static integration files: canonical sources in app/packaging -------
     local src="${APP_PACKAGING_DIR}"
     local f
-    for f in urnetwork-launcher urnetworkd.service com.bringyour.network.desktop \
+    for f in urnetwork-launcher urnetwork-exclude urnetworkd.service com.bringyour.network.desktop \
              autostart/com.bringyour.network.desktop 95-urnetwork.conf \
              85-urnetwork-unmanaged.rules \
              icons/hicolor/48x48/apps/com.bringyour.network.png \
@@ -155,6 +155,10 @@ assemble_daemon_root() {
     install -d "${root}/usr/bin"
     cp "${src}/urnetwork-launcher" "${root}/usr/bin/urnetwork"
     chmod 0755 "${root}/usr/bin/urnetwork"
+    # The per-app split tunnel launcher: runs a command in the user's
+    # urnetwork-exclude.slice, which urnetworkd lets out of the tunnel.
+    cp "${src}/urnetwork-exclude" "${root}/usr/bin/urnetwork-exclude"
+    chmod 0755 "${root}/usr/bin/urnetwork-exclude"
 
     install -d "${root}/lib/systemd/system"
     cp "${src}/urnetworkd.service" "${root}/lib/systemd/system/urnetworkd.service"
@@ -205,11 +209,11 @@ assemble_daemon_root() {
     cp "${PACKAGING_DIR}/polkit/com.bringyour.network.policy" \
         "${root}/usr/share/polkit-1/actions/com.bringyour.network.policy"
 
-    # Normalize modes: directories 0755; everything except the two
+    # Normalize modes: directories 0755; everything except the three
     # executables 0644 (shared libraries ship 0644 on Debian).
     find "${root}" -type d -exec chmod 0755 {} +
     find "${root}" -type f ! -path '*/usr/bin/*' ! -name 'urnetworkd' -exec chmod 0644 {} +
-    chmod 0755 "${root}/usr/bin/urnetwork" "${root}/usr/lib/urnetwork/urnetworkd"
+    chmod 0755 "${root}/usr/bin/urnetwork" "${root}/usr/bin/urnetwork-exclude" "${root}/usr/lib/urnetwork/urnetworkd"
 
     # Prove the polkit action file is exactly 0644 before it goes into a
     # package. polkit's rejection of a writable action file is SILENT (it logs

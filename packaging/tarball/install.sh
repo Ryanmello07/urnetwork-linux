@@ -1171,7 +1171,7 @@ INSTALL_LIST="$(cd "${PAYLOAD_DIR}" && find . -type f | sed 's|^\.||' | LC_ALL=C
 
 file_mode() {
     case "$1" in
-        /usr/bin/urnetwork|/usr/lib/urnetwork/urnetworkd) printf '0755' ;;
+        /usr/bin/urnetwork|/usr/bin/urnetwork-exclude|/usr/lib/urnetwork/urnetworkd) printf '0755' ;;
         *) printf '0644' ;;
     esac
 }
@@ -1683,6 +1683,7 @@ if [ -z "${PREFIX}" ]; then
     if [ "${LAYOUT}" = 'immutable' ] && command -v restorecon >/dev/null 2>&1; then
         restorecon -R "$(map_path '/usr/lib/urnetwork')" \
                       "$(map_path '/usr/bin')/urnetwork" \
+                      "$(map_path '/usr/bin')/urnetwork-exclude" \
                       /etc/systemd/system >/dev/null 2>&1 || \
             warn "restorecon failed -- if the service is denied by SELinux, run: sudo restorecon -R $(map_path '/usr/lib/urnetwork')"
     fi

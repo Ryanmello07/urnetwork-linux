@@ -600,4 +600,109 @@ constexpr bool CaptureV6Claims(std::string_view address) {
   return false;
 }
 
+// ---- per-app split tunnel: urnetwork-exclude --------------------------------
+//
+// `urnetwork-exclude <command>` (app/packaging/urnetwork-exclude) runs a
+// command in the user's systemd slice urnetwork-exclude.slice. While a ruleset
+// is installed, urnetworkd lets the sockets in the TUNNEL OWNER's slice leave
+// outside the tunnel, and nothing else:
+//   * urnw_mark_out marks their packets with kBypassMark (`socket cgroupv2`,
+//     the same match the daemon uses for its own sockets);
+//   * one policy rule per family sends that mark to the main table, ahead of
+//     the capture rule;
+//   * urnw_nat masquerades it on the physical interface, because connect()
+//     chose the tun's source address before the mark existed (Tunnel.hpp,
+//     EgressSocketMarker: a mark set at the output hook re-routes the packet
+//     but keeps the source address);
+//   * urnw_out accepts it, so neither the kill-switch floor nor the off-tunnel
+//     IPv6 and DNS blocks apply to it. The metadata-address drop still does.
+// Only the owner's slice: another local user excluding their processes would
+// bypass a tunnel and a kill switch they do not control, so their commands stay
+// in the tunnel. A host that is not on the cgroup v2 unified hierarchy has no
+// slice to match; the launcher refuses there and the daemon emits none of this.
+
+// "URNX", the egress mark's neighbour, set only by the exclusion rule. Like
+// kEgressMark it can be forged with CAP_NET_ADMIN, which here already means
+// root.
+inline constexpr std::uint32_t kBypassMark = 0x55524e58u;
+
+// Above the capture rule (kFwmarkRulePriority, 32763) so the mark is decided
+// first, and not 32762 (kSuppressRulePriority), the retired rule the sweeps
+// still delete.
+inline constexpr int kBypassRulePriority = 32761;
+
+// A mark as nft and ip print it ("0x%08x").
+inline std::string MarkText(std::uint32_t mark) {
+  static constexpr char kHex[] = "0123456789abcdef";
+  std::string text = "0x00000000";
+  for (int i = 0; i < 8; ++i) text[9 - i] = kHex[(mark >> (4 * i)) & 0xfu];
+  return text;
+}
+
+// The slice `systemd-run --user --slice=urnetwork-exclude.slice` creates, as a
+// path below /sys/fs/cgroup (no leading slash, like CgroupRef::path). The dash
+// makes it a child of urnetwork.slice (systemd's slice naming). "" for a
+// negative uid, which is "nobody owns the tunnel".
+inline std::string ExcludeSliceCgroupPath(std::int64_t uid) {
+  if (uid < 0) return std::string();
+  const std::string id = std::to_string(uid);
+  return "user.slice/user-" + id + ".slice/user@" + id +
+         ".service/urnetwork.slice/urnetwork-exclude.slice";
+}
+
+// nft's `socket cgroupv2 level N`: the component count of a cgroup path.
+inline int CgroupPathLevel(std::string_view path) {
+  if (path.empty()) return 0;
+  int level = 1;
+  for (const char c : path) {
+    if (c == '/') ++level;
+  }
+  return level;
+}
+
+// Whether /proc/self/cgroup describes the cgroup v2 unified hierarchy alone:
+// "0::<path>" lines and no v1 hierarchy. A legacy (v1-only) host has no 0::
+// line; a hybrid host has both, and there /sys/fs/cgroup holds the v1
+// controllers, so no slice path resolves where nft and the launcher look for
+// it. Either way per-app exclusion is hidden.
+inline bool IsCgroupV2Only(std::string_view procSelfCgroup) {
+  bool unified = false;
+  for (std::size_t at = 0; at < procSelfCgroup.size();) {
+    std::size_t end = procSelfCgroup.find('\n', at);
+    if (end == std::string_view::npos) end = procSelfCgroup.size();
+    const std::string_view line = procSelfCgroup.substr(at, end - at);
+    at = end + 1;
+    if (line.empty()) continue;
+    if (line.substr(0, 3) != "0::") return false;
+    unified = true;
+  }
+  return unified;
+}
+
+// urnw_mark_out: mark the slice's packets. No verdict, like the daemon's rule.
+inline std::string ExcludeMarkRule(std::string_view cgroupPath, int level) {
+  return "socket cgroupv2 level " + std::to_string(level) + " \"" + std::string(cgroupPath) +
+         "\" counter meta mark set " + MarkText(kBypassMark);
+}
+
+// urnw_out: a marked packet leaves, floor or not.
+inline std::string ExcludeAcceptRule() {
+  return "meta mark " + MarkText(kBypassMark) + " counter accept";
+}
+
+// urnw_nat: replace the tun source address connect() chose with the physical
+// interface's. Never on the tun itself or on loopback.
+inline std::string ExcludeMasqueradeRule(std::string_view tunName) {
+  return "meta mark " + MarkText(kBypassMark) + " oifname != \"" + std::string(tunName) +
+         "\" oifname != \"lo\" counter masquerade";
+}
+
+// The policy rule's selector, the same for `ip -4|-6 rule add` and `delete`,
+// so a delete names exactly the rule an add installed and nothing that merely
+// shares its priority.
+inline std::vector<std::string> BypassRuleSelector() {
+  return {"fwmark", MarkText(kBypassMark), "table", "main",
+          "pref",   std::to_string(kBypassRulePriority)};
+}
+
 }  // namespace urnw

@@ -10,11 +10,13 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
+#include "Tunnel.hpp"
 #include "TunnelPolicy.hpp"
 
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #ifndef UR_SRC_DIR
 #define UR_SRC_DIR ""
@@ -646,4 +648,309 @@ UR_TEST(tunnelOpenRefusesANonDualStackConfigurationBeforeItTouchesTheDevice) {
   if (source.find("CaptureV6Prefixes()", open) == std::string::npos) {
     UR_FAIL("Tunnel.cpp installs no v6 capture routes: the v6 half of the tunnel is missing");
   }
+}
+
+// ---- per-app split tunnel (urnetwork-exclude) -------------------------------
+
+namespace {
+
+void ExpectText(const char* what, const std::string& expected, const std::string& actual) {
+  if (expected != actual) {
+    UR_FAIL(std::string(what) + ": expected \"" + expected + "\", got \"" + actual + "\"");
+  }
+}
+
+// A file below app/src (or beside it, with a leading "../").
+std::string ReadAppSource(const std::string& relative) {
+  std::ifstream in(std::string(UR_SRC_DIR) + "/" + relative, std::ios::binary);
+  std::ostringstream out;
+  out << in.rdbuf();
+  return out.str();
+}
+
+// The body of the function whose definition starts with `signature`, or ""
+// (braces balanced from the first '{' after the signature).
+std::string FunctionBody(const std::string& source, const std::string& signature) {
+  const size_t at = source.find(signature);
+  if (at == std::string::npos) return std::string();
+  const size_t open = source.find('{', at);
+  if (open == std::string::npos) return std::string();
+  int depth = 0;
+  for (size_t i = open; i < source.size(); ++i) {
+    if (source[i] == '{') ++depth;
+    if (source[i] == '}' && --depth == 0) return source.substr(open, i - open + 1);
+  }
+  return std::string();
+}
+
+bool Contains(const std::string& text, const std::string& needle) {
+  return text.find(needle) != std::string::npos;
+}
+
+}  // namespace
+
+UR_TEST(bypassMarkIsItsOwnAndIsRoutedAheadOfTheCaptureRule) {
+  ExpectText("MarkText(kBypassMark)", "0x55524e58", urnw::MarkText(urnw::kBypassMark));
+  ExpectText("MarkText(kEgressMark)", "0x55524e57", urnw::MarkText(urnw::kEgressMark));
+  ExpectText("MarkText(0)", "0x00000000", urnw::MarkText(0));
+  // Not the daemon's own mark: the egress witness counts kEgressMark packets in
+  // the tun as the storm signature, and an excluded app must never feed it.
+  UR_EXPECT_TRUE(urnw::kBypassMark != urnw::kEgressMark);
+  // Decided before the capture rule sends everything unmarked to the tunnel,
+  // and never at the retired priority the sweeps delete.
+  UR_EXPECT_TRUE(urnw::kBypassRulePriority < urnw::kFwmarkRulePriority);
+  UR_EXPECT_TRUE(urnw::kBypassRulePriority != urnw::kSuppressRulePriority);
+  const std::vector<std::string> want = {"fwmark", "0x55524e58", "table", "main",
+                                         "pref",   "32761"};
+  UR_EXPECT_TRUE(urnw::BypassRuleSelector() == want);
+}
+
+UR_TEST(excludeSliceIsTheOwnersSliceBelowTheirUserManager) {
+  ExpectText("ExcludeSliceCgroupPath(1000)",
+             "user.slice/user-1000.slice/user@1000.service/urnetwork.slice/"
+             "urnetwork-exclude.slice",
+             urnw::ExcludeSliceCgroupPath(1000));
+  ExpectText("ExcludeSliceCgroupPath(0)",
+             "user.slice/user-0.slice/user@0.service/urnetwork.slice/urnetwork-exclude.slice",
+             urnw::ExcludeSliceCgroupPath(0));
+  // Nobody owns the tunnel: no slice at all, never a root-relative guess.
+  UR_EXPECT_TRUE(urnw::ExcludeSliceCgroupPath(-1).empty());
+  UR_EXPECT_EQ(5, urnw::CgroupPathLevel(urnw::ExcludeSliceCgroupPath(1000)));
+  UR_EXPECT_EQ(2, urnw::CgroupPathLevel("system.slice/urnetworkd.service"));
+  UR_EXPECT_EQ(0, urnw::CgroupPathLevel(""));
+}
+
+// THE v1 DETECTION. The exclusion is hidden unless /proc/self/cgroup describes
+// the unified hierarchy alone.
+UR_TEST(cgroupV1OnlyAndHybridHostsHideTheExclusion) {
+  UR_EXPECT_TRUE(urnw::IsCgroupV2Only("0::/user.slice/user-1000.slice/session-2.scope\n"));
+  UR_EXPECT_TRUE(urnw::IsCgroupV2Only("0::/system.slice/urnetworkd.service"));
+  UR_EXPECT_TRUE(urnw::IsCgroupV2Only("0::/\n"));  // a container's root
+  // legacy: v1 hierarchies only
+  UR_EXPECT_FALSE(urnw::IsCgroupV2Only(
+      "12:pids:/user.slice/user-1000.slice/session-2.scope\n"
+      "11:memory:/user.slice/user-1000.slice/session-2.scope\n"
+      "1:name=systemd:/user.slice/user-1000.slice/session-2.scope\n"));
+  // hybrid: the unified hierarchy beside v1 controllers (net_cls among them,
+  // which switches socket cgroup matching off in the kernel)
+  UR_EXPECT_FALSE(urnw::IsCgroupV2Only(
+      "12:net_cls,net_prio:/\n"
+      "1:name=systemd:/user.slice/user-1000.slice/session-2.scope\n"
+      "0::/user.slice/user-1000.slice/session-2.scope\n"));
+  // unreadable or empty
+  UR_EXPECT_FALSE(urnw::IsCgroupV2Only(""));
+  UR_EXPECT_FALSE(urnw::IsCgroupV2Only("\n"));
+}
+
+UR_TEST(excludeRulesRenderTheBypassMark) {
+  const std::string slice = urnw::ExcludeSliceCgroupPath(1000);
+  ExpectText("ExcludeMarkRule",
+             "socket cgroupv2 level 5 \"user.slice/user-1000.slice/user@1000.service/"
+             "urnetwork.slice/urnetwork-exclude.slice\" counter meta mark set 0x55524e58",
+             urnw::ExcludeMarkRule(slice, urnw::CgroupPathLevel(slice)));
+  ExpectText("ExcludeAcceptRule", "meta mark 0x55524e58 counter accept",
+             urnw::ExcludeAcceptRule());
+  ExpectText("ExcludeMasqueradeRule",
+             "meta mark 0x55524e58 oifname != \"urnet0\" oifname != \"lo\" counter masquerade",
+             urnw::ExcludeMasqueradeRule("urnet0"));
+}
+
+// The rules are only as safe as where BuildNftRuleset puts them: marked in the
+// mark chain, accepted in urnw_out BEFORE the blocks that would refuse them and
+// AFTER the metadata drop, masqueraded only while a tun exists, and all of it
+// from the derived (cgroup-matched, quotable) list, never the raw config.
+UR_TEST(buildNftRulesetPlacesTheExclusionRules) {
+  const std::string body = FunctionBody(ReadTunnelSource(),
+                                        "std::string BuildNftRuleset(const FilterConfig& cfg) {");
+  if (body.empty()) {
+    UR_FAIL("could not read BuildNftRuleset in Tunnel.cpp");
+    return;
+  }
+  const size_t markChain = body.find("kNftMarkChainName");
+  const size_t outChain = body.find("kNftOutChainName");
+  const size_t inChain = body.find("kNftInChainName");
+  const size_t fwdChain = body.find("kNftFwdChainName");
+  const size_t mark = body.find("ExcludeMarkRule(");
+  const size_t accept = body.find("ExcludeAcceptRule()");
+  const size_t masquerade = body.find("ExcludeMasqueradeRule(cfg.tun_name)");
+  if (mark == std::string::npos || accept == std::string::npos ||
+      masquerade == std::string::npos) {
+    UR_FAIL("BuildNftRuleset does not render the exclusion's mark, accept and masquerade rules");
+    return;
+  }
+  UR_EXPECT_TRUE_MSG("the mark rule is in urnw_mark_out", markChain < mark && mark < outChain);
+  UR_EXPECT_TRUE_MSG("the accept is in urnw_out", outChain < accept && accept < inChain);
+  UR_EXPECT_TRUE_MSG("the metadata drop still comes first",
+                     body.find("169.254.169.254") < accept);
+  UR_EXPECT_TRUE_MSG("the accept precedes the helper DNS permit",
+                     accept < body.find("if (d.helper_dns)"));
+  UR_EXPECT_TRUE_MSG("the accept precedes the DNS floor", accept < body.find("if (d.dns_floor)"));
+  UR_EXPECT_TRUE_MSG("the accept precedes the off-tunnel v6 block",
+                     accept < body.find("if (d.block_v6)"));
+  UR_EXPECT_TRUE_MSG("the accept precedes the kill-switch floor",
+                     accept < body.find("if (cfg.floor) line(\"\\t\\tcounter reject\");"));
+  UR_EXPECT_TRUE_MSG("the masquerade is its own chain after urnw_fwd",
+                     fwdChain < masquerade &&
+                         body.find("kNftNatChainName") < masquerade &&
+                         fwdChain < body.find("kNftNatChainName"));
+  UR_EXPECT_TRUE_MSG("the masquerade needs a tun",
+                     Contains(body, "if (!d.excluded.empty() && d.tun_named) {"));
+  const std::string acceptGate =
+      "if (!d.excluded.empty()) {\n    line(\"\\t\\t\" + ExcludeAcceptRule());";
+  UR_EXPECT_TRUE_MSG("the accept needs an excluded slice", Contains(body, acceptGate));
+  UR_EXPECT_TRUE_MSG("the rules come from the derived list",
+                     Contains(body, "for (const auto& excluded : d.excluded)") &&
+                         !Contains(body, "cfg.exclude_cgroups"));
+
+  // The derivation: only with the socket-cgroup match, only quotable paths.
+  const std::string derive =
+      FunctionBody(ReadTunnelSource(), "FilterDerived DeriveFilter(const FilterConfig& cfg) {");
+  const size_t gate = derive.find("if (cgroupMode == NftCgroupMode::CgroupAndMark) {");
+  const size_t fill = derive.find("if (CgroupQuotable(excluded)) d.excluded.push_back(excluded);");
+  UR_EXPECT_TRUE_MSG("DeriveFilter fills d.excluded only under CgroupAndMark",
+                     gate != std::string::npos && fill != std::string::npos && gate < fill);
+}
+
+// AN EXCLUSION NEVER COSTS THE FLOOR: absent slices are dropped before the load,
+// a refused load is retried without the exclusion, and the launcher's slice list
+// follows what is actually in force.
+UR_TEST(netFilterApplyNeverLetsTheExclusionCostTheFloor) {
+  const std::string source = ReadTunnelSource();
+  const std::string applySignature =
+      "bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {";
+  const std::string apply = FunctionBody(source, applySignature);
+  if (apply.empty()) {
+    UR_FAIL("could not read NetFilter::Apply in Tunnel.cpp");
+    return;
+  }
+  UR_EXPECT_TRUE_MSG("absent slices are dropped",
+                     Contains(apply, "} else if (CgroupInstallable(excluded)) {"));
+  const size_t firstLoad = apply.find("if (!ApplyScript(BuildNftRuleset(cfg)");
+  const size_t clear = apply.find("cfg.exclude_cgroups.clear();");
+  const size_t retry = firstLoad == std::string::npos
+                           ? std::string::npos
+                           : apply.find("if (!ApplyScript(BuildNftRuleset(cfg)", firstLoad + 1);
+  UR_EXPECT_TRUE_MSG("a refused load is retried without the exclusion",
+                     firstLoad != std::string::npos && clear != std::string::npos &&
+                         retry != std::string::npos && firstLoad < clear && clear < retry);
+  UR_EXPECT_TRUE_MSG("the slice list follows what is in force",
+                     Contains(apply, "SetExcludeState(&applied_);"));
+  const std::string remove = FunctionBody(source, "bool NetFilter::Remove(std::string* error) {");
+  UR_EXPECT_TRUE_MSG("a teardown clears the slice list",
+                     Contains(remove, "SetExcludeState(nullptr);"));
+}
+
+// The policy rule is installed with the capture rule, both families, and every
+// path that removes the capture rule removes it, by its full selector.
+UR_TEST(theBypassPolicyRuleComesAndGoesWithTheCaptureRule) {
+  const std::string source = ReadTunnelSource();
+  const std::string install =
+      FunctionBody(source, "bool Tunnel::InstallPolicyRules(TunnelError* err) {");
+  const size_t capture = install.find("\"not\",");
+  const size_t bypass4 = install.find("installBypass(\"-4\");");
+  UR_EXPECT_TRUE_MSG("InstallPolicyRules installs the v4 bypass rule after the capture rule",
+                     capture != std::string::npos && bypass4 != std::string::npos &&
+                         capture < bypass4);
+  UR_EXPECT_TRUE_MSG("InstallPolicyRules installs the v6 bypass rule with the v6 half",
+                     Contains(install, "if (ipv6Captured_) installBypass(\"-6\");"));
+  const std::string addSelector =
+      "for (const auto& part : BypassRuleSelector()) add.push_back(part);";
+  UR_EXPECT_TRUE_MSG("the installed rule is the selector", Contains(install, addSelector));
+  const std::string remove = FunctionBody(source, "void Tunnel::RemovePolicyRules() {");
+  UR_EXPECT_TRUE_MSG("RemovePolicyRules removes both families",
+                     Contains(remove, "DeleteBypassRules(ip, \"-4\");") &&
+                         Contains(remove, "DeleteBypassRules(ip, \"-6\");"));
+  const std::string sweep =
+      FunctionBody(source, "bool NetFilter::SweepStaleState(bool preserveArmed) {");
+  const std::string sweepBoth = "DeleteBypassRules(ip, \"-4\") + DeleteBypassRules(ip, \"-6\")";
+  UR_EXPECT_TRUE_MSG("the startup sweep removes both families", Contains(sweep, sweepBoth));
+  UR_EXPECT_TRUE_MSG("the startup sweep clears the slice list",
+                     Contains(sweep, "SetExcludeState(nullptr);"));
+  const std::string deleter =
+      FunctionBody(source, "int DeleteBypassRules(const std::string& ip, const char* family) {");
+  const std::string removeSelector =
+      "for (const auto& part : BypassRuleSelector()) remove.push_back(part);";
+  UR_EXPECT_TRUE_MSG("a delete names the full selector, never a priority alone",
+                     Contains(deleter, removeSelector));
+}
+
+// Only the tunnel owner's slice, only on the unified hierarchy, only with the
+// socket-cgroup match, and kept current by the reaper.
+UR_TEST(onlyTheTunnelOwnersSliceIsOfferedToTheFilter) {
+  const std::string host = ReadAppSource("daemon/TunnelHost.cpp");
+  if (host.empty()) {
+    UR_FAIL("could not read daemon/TunnelHost.cpp");
+    return;
+  }
+  const std::string slice =
+      FunctionBody(host, "CgroupRef TunnelHost::ExcludeSliceLocked(uint64_t* id) const {");
+  const std::string sliceGate =
+      "if (!cgroupV2Only_ || !cgroupSocketMatchSupported_) return CgroupRef();";
+  UR_EXPECT_TRUE_MSG("the slice needs the unified hierarchy and the socket-cgroup match",
+                     Contains(slice, sliceGate));
+  UR_EXPECT_TRUE_MSG("the slice is the owner's",
+                     Contains(slice, "ExcludeSliceCgroupPath(ownerUid_.load())"));
+  UR_EXPECT_TRUE_MSG("a refused slice is not offered again",
+                     Contains(slice, "if (inode == excludeRefusedId_) return CgroupRef();"));
+  UR_EXPECT_TRUE_MSG("the hierarchy is probed with IsCgroupV2Only",
+                     Contains(host, "cgroupV2Only_ = IsCgroupV2Only(text.str());"));
+  const std::string preflight =
+      FunctionBody(ReadAppSource("daemon/main.cpp"), "int ReportPreflight() {");
+  UR_EXPECT_TRUE_MSG("the preflight (and --diagnose) says whether the exclusion is available",
+                     Contains(preflight, "urnw::IsCgroupV2Only(text.str())"));
+  const std::string config = FunctionBody(host, "FilterConfig TunnelHost::FilterConfigForLocked(");
+  const std::string carry = "if (slice.valid) cfg.exclude_cgroups.push_back(slice);";
+  UR_EXPECT_TRUE_MSG("every installed state carries the slice",
+                     Contains(config, "if (state != FilterState::Off) {") &&
+                         Contains(config, carry));
+  const std::string maintain = FunctionBody(host, "void TunnelHost::MaintainFilterLocked() {");
+  const std::string retryGate =
+      "if (excludeId != excludeAppliedId_ && --excludeRetryTicks_ <= 0) {";
+  UR_EXPECT_TRUE_MSG("the reaper re-installs on a slice change",
+                     Contains(maintain, "ExcludeSliceLocked(&excludeId);") &&
+                         Contains(maintain, retryGate));
+  const std::string control = ReadAppSource("daemon/ControlServer.cpp");
+  const std::string claim =
+      FunctionBody(control, "void ControlServer::ClaimTunnelOwnership(Connection* conn) {");
+  UR_EXPECT_TRUE_MSG("the owner is handed to the tunnel host",
+                     Contains(claim, "tunnel_.SetOwnerUid(tunnelOwnerUid_);"));
+  UR_EXPECT_TRUE_MSG("a stopped tunnel has no owner",
+                     Contains(control, "tunnelOwnerUid_ = -1;\n        tunnel_.SetOwnerUid(-1);"));
+}
+
+// The launcher and the daemon must agree on the slice and on the list, and the
+// packages must ship the launcher.
+UR_TEST(theLauncherUsesTheDaemonsSliceAndSliceList) {
+  const std::string launcher = ReadAppSource("../packaging/urnetwork-exclude");
+  if (launcher.empty()) {
+    UR_FAIL("could not read packaging/urnetwork-exclude");
+    return;
+  }
+  std::string slice = urnw::ExcludeSliceCgroupPath(1000);
+  for (size_t at = slice.find("1000"); at != std::string::npos; at = slice.find("1000", at)) {
+    slice.replace(at, 4, "${uid}");
+  }
+  UR_EXPECT_TRUE_MSG("the launcher waits for ExcludeSliceCgroupPath",
+                     Contains(launcher, "slice=\"" + slice + "\""));
+  UR_EXPECT_TRUE_MSG("the launcher runs the command in that slice",
+                     Contains(launcher, "--slice=urnetwork-exclude.slice -- \"$@\""));
+  const std::string tunnel = ReadTunnelSource();
+  const std::string decl = "constexpr const char* kExcludeStatePath = \"";
+  const size_t at = tunnel.find(decl);
+  if (at == std::string::npos) {
+    UR_FAIL("kExcludeStatePath is not declared in Tunnel.cpp");
+    return;
+  }
+  const size_t begin = at + decl.size();
+  const std::string statePath = tunnel.substr(begin, tunnel.find('"', begin) - begin);
+  UR_EXPECT_TRUE_MSG("the launcher reads the daemon's slice list",
+                     Contains(launcher, "URNETWORK_EXCLUDE_STATE:-" + statePath + "}"));
+  const std::string common = ReadAppSource("../../packaging/lib/common.sh");
+  const std::string copy = "cp \"${src}/urnetwork-exclude\" \"${root}/usr/bin/urnetwork-exclude\"";
+  UR_EXPECT_TRUE_MSG("the daemon packages install it as /usr/bin/urnetwork-exclude",
+                     Contains(common, copy));
+  // The one chmod 0755 line names the launcher beside the daemon.
+  const std::string modes =
+      "\"${root}/usr/bin/urnetwork-exclude\" \"${root}/usr/lib/urnetwork/urnetworkd\"";
+  UR_EXPECT_TRUE_MSG("the installed launcher is executable", Contains(common, modes));
 }

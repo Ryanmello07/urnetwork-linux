@@ -1,0 +1,78 @@
+#!/bin/sh
+# /usr/bin/urnetwork-exclude -- run a command outside the URnetwork tunnel.
+#
+#   urnetwork-exclude <command> [<argument>...]
+#
+# The command runs in the user's systemd slice urnetwork-exclude.slice
+# (systemd-run --user --scope), and so do its children. While the tunnel is up,
+# urnetworkd lets that slice's traffic leave through the physical network,
+# around the kill switch as well, and keeps everything else in the tunnel. Only
+# the slice of the user who started the tunnel is let out: another user's
+# command still runs, in the tunnel, and this script says so.
+#
+# Needs systemd and the cgroup v2 unified hierarchy. urnetworkd matches the
+# slice by socket cgroup, which a cgroup v1 or hybrid host does not have, so
+# there this script refuses instead of running the command in the tunnel while
+# the user believes it is outside it.
+#
+# URNETWORK_CGROUP_ROOT, URNETWORK_PROC_CGROUP and URNETWORK_EXCLUDE_STATE move
+# the three paths below (packaging/urnetwork-exclude.test.sh).
+#
+# SPDX-License-Identifier: MPL-2.0
+
+cgroup_root="${URNETWORK_CGROUP_ROOT:-/sys/fs/cgroup}"
+proc_cgroup="${URNETWORK_PROC_CGROUP:-/proc/self/cgroup}"
+# urnetworkd's list of the slices it lets out (NetFilter::ExcludeStatePath),
+# present while it has a ruleset installed.
+state="${URNETWORK_EXCLUDE_STATE:-/run/urnetwork/excluded-slices}"
+
+usage="usage: urnetwork-exclude <command> [<argument>...]"
+case "${1:-}" in
+    -h|--help) echo "${usage}"; exit 0 ;;
+    --) shift ;;
+esac
+if [ "$#" -eq 0 ]; then
+    echo "${usage}" >&2
+    exit 2
+fi
+
+# The unified hierarchy alone: cgroup2 at the root, and nothing but 0:: lines in
+# /proc/self/cgroup (IsCgroupV2Only in app/src/TunnelPolicy.hpp).
+if [ ! -f "${cgroup_root}/cgroup.controllers" ] ||
+   ! grep -q '^0::' "${proc_cgroup}" 2>/dev/null ||
+   grep -qv '^0::' "${proc_cgroup}" 2>/dev/null; then
+    echo "urnetwork-exclude: this system does not use the cgroup v2 unified hierarchy, so URnetwork cannot exclude apps from the tunnel here" >&2
+    exit 1
+fi
+if ! command -v systemd-run >/dev/null 2>&1; then
+    echo "urnetwork-exclude: systemd-run not found; excluding apps from the tunnel needs systemd" >&2
+    exit 1
+fi
+
+uid="$(id -u)"
+# ExcludeSliceCgroupPath in app/src/TunnelPolicy.hpp. The dash makes the slice a
+# child of urnetwork.slice.
+slice="user.slice/user-${uid}.slice/user@${uid}.service/urnetwork.slice/urnetwork-exclude.slice"
+
+# Create the slice before the command exists, so urnetworkd can mark it before
+# the command opens its first socket. systemd keeps an empty slice until the
+# user's manager stops, so this runs once per login.
+if [ ! -d "${cgroup_root}/${slice}" ]; then
+    systemd-run --user --scope --quiet --collect --slice=urnetwork-exclude.slice -- true || exit
+fi
+
+# urnetworkd looks for the slice once a second. Wait until it lets the slice
+# out, so the command's first connections already leave outside the tunnel.
+if [ -e "${state}" ]; then
+    tries=0
+    until grep -Fqx "${slice}" "${state}" 2>/dev/null; do
+        tries=$((tries + 1))
+        if [ "${tries}" -gt 5 ]; then
+            echo "urnetwork-exclude: URnetwork is not excluding this command (the tunnel was started by another user, or this machine cannot exclude apps); its traffic stays in the tunnel" >&2
+            break
+        fi
+        sleep 1
+    done
+fi
+
+exec systemd-run --user --scope --quiet --collect --slice=urnetwork-exclude.slice -- "$@"

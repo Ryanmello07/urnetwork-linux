@@ -148,6 +148,12 @@ class TunnelHost {
   // tunnel, so `status` can report a captured machine with no UI attached.
   void SetOwnerConnected(bool connected);
 
+  // The uid that owns the tunnel (ControlServer::ClaimTunnelOwnership), -1 when
+  // nobody does. Only that uid's urnetwork-exclude slice may leave outside the
+  // tunnel ("per-app split tunnel", TunnelPolicy.hpp); the reaper picks a
+  // change up on its next tick.
+  void SetOwnerUid(int64_t uid);
+
   // Seconds a tunnel may keep running with no owning client before the daemon
   // stops it by itself. 0 (the default) keeps the current behaviour: the
   // tunnel survives a GUI crash/restart and is adoptable. Set from
@@ -269,8 +275,14 @@ class TunnelHost {
   // nothing else.
   bool InstallFilterLocked(FilterState state, bool floor, std::string* error);
   // The FilterConfig for `state`, built from the LIVE session (tun name, the
-  // resolvers actually handed to resolved, the DNS-helper cgroups).
-  FilterConfig FilterConfigForLocked(FilterState state, bool floor) const;
+  // resolvers actually handed to resolved, the DNS-helper cgroups, the owner's
+  // exclude slice). *excludeId gets that slice's cgroup id, 0 without one.
+  FilterConfig FilterConfigForLocked(FilterState state, bool floor,
+                                     uint64_t* excludeId = nullptr) const;
+  // The tunnel owner's urnetwork-exclude slice when this host can honour it,
+  // with its cgroup id (the directory's inode) in *id; an invalid ref and 0
+  // otherwise. Requires opMutex_.
+  CgroupRef ExcludeSliceLocked(uint64_t* id) const;
   // Reaper duty: verify the table is still ours and re-install it when it is
   // not, and retry a teardown that failed. Requires opMutex_.
   void MaintainFilterLocked();
@@ -324,6 +336,26 @@ class TunnelHost {
   // Together they select the cgroup+mark or floorless mark-only ruleset.
   bool socketMarkerProven_ = false;
   bool cgroupSocketMatchSupported_ = true;
+  // ---- per-app split tunnel (urnetwork-exclude) ----------------------------
+  // See "per-app split tunnel" in TunnelPolicy.hpp. ownerUid_ is written on the
+  // main loop (SetOwnerUid) and read by the worker's bring-up, so it is atomic.
+  std::atomic<int64_t> ownerUid_{-1};
+  // /proc/self/cgroup describes the unified hierarchy alone (IsCgroupV2Only).
+  // Read once: a host does not change hierarchy under a running daemon.
+  bool cgroupV2Only_ = false;
+  // The cgroup id of the slice the installed ruleset excludes, 0 for none. nft
+  // binds a `socket cgroupv2` path to that id at load time, so a slice that is
+  // created, removed or recreated, or a tunnel that changes owner, needs the
+  // ruleset installed again: MaintainFilterLocked compares on every tick.
+  uint64_t excludeAppliedId_ = 0;
+  // A slice whose rules the kernel refused (NetFilter::Apply then installs the
+  // ruleset without them). Not offered again until its id changes, so a kernel
+  // without nftables NAT does not cost an nft run every second.
+  uint64_t excludeRefusedId_ = 0;
+  // Backoff for a re-install that failed (main loop only).
+  int excludeRetryTicks_ = 0;
+  int excludeRetryFailures_ = 0;
+
   // $URNETWORK_ALLOW_UNPROTECTED_EGRESS — development escape hatch that lets
   // the tunnel come up with the daemon's own sockets INSIDE it. Logged loudly
   // and reported as egress_protected=false; never a default.

@@ -36,6 +36,7 @@ a known follow-up, do not silently pretend loopback is private.
 | `/usr/lib/urnetwork/urnetworkd` | daemon pkg | the daemon binary |
 | `/usr/lib/urnetwork/libURnetworkSdk.so` | daemon pkg | rpath `$ORIGIN` |
 | `/usr/bin/urnetwork` | daemon pkg | **launcher script**, the stable `Exec=` target |
+| `/usr/bin/urnetwork-exclude` | daemon pkg | per-app split tunnel launcher (`urnetwork-exclude <command>`) |
 | `/lib/systemd/system/urnetworkd.service` | daemon pkg | `/lib`, in every release's load path |
 | `/usr/share/applications/com.bringyour.network.desktop` | daemon pkg | filename **must** match `main.cpp`'s app id |
 | `/usr/share/icons/hicolor/{48x48,64x64,128x128,256x256,512x512}/apps/com.bringyour.network.png` | daemon pkg | one 1024 master, downscaled |

@@ -1360,6 +1360,8 @@ bool ControlServer::LogBelongsToOtherUid(const Connection* conn) const {
 void ControlServer::ClaimTunnelOwnership(Connection* conn) {
   tunnelOwner_ = conn;
   tunnelOwnerUid_ = conn->peer.uid;
+  // Whose urnetwork-exclude slice may leave outside this tunnel: the owner's.
+  tunnel_.SetOwnerUid(tunnelOwnerUid_);
   // Once a SECOND uid has run a tunnel, the ring contains both and no
   // per-user answer is honest any more, so it narrows to root. Latched
   // rather than recomputed: the point is that the old bytes are still there.
@@ -1663,6 +1665,7 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         // The session is over, so nobody owns it any more. Leaving the uid set
         // would make the next user's first Connect look like a take-over.
         tunnelOwnerUid_ = -1;
+        tunnel_.SetOwnerUid(-1);
         reply(ctl::MakeReply(id, true, nlohmann::json(tunnel_.Status())));
         return;
       }

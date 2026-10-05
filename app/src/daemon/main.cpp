@@ -31,6 +31,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -786,6 +788,19 @@ int ReportPreflight() {
                  "[preflight] cgroup      MISSING (required) — no cgroup v2 unified "
                  "hierarchy, so the daemon's own sockets cannot be marked and no tunnel can "
                  "be started safely\n");
+  }
+  // urnetwork-exclude matches the tunnel owner's slice by socket cgroup, which
+  // needs the unified hierarchy alone (IsCgroupV2Only). Elsewhere the launcher
+  // refuses and no exclusion rule is ever emitted.
+  {
+    std::ifstream f("/proc/self/cgroup");
+    std::ostringstream text;
+    text << f.rdbuf();
+    std::fprintf(stderr, "[preflight] exclusion   %s\n",
+                 urnw::IsCgroupV2Only(text.str())
+                     ? "available (urnetwork-exclude, cgroup v2 unified hierarchy)"
+                     : "unavailable — not the cgroup v2 unified hierarchy, so "
+                       "urnetwork-exclude refuses here");
   }
   // WHICH DNS TIER THIS MACHINE WILL ACTUALLY TAKE. The tool table above can
   // only answer "is resolvectl on $PATH", and on Arch/CachyOS that answer is

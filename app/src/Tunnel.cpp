@@ -105,6 +105,8 @@ std::string MarkHex(uint32_t mark) {
 // does not. See NetFilter::ArmedMarkerPath.
 constexpr const char* kArmedMarkerPath = "/run/urnetwork/kill-switch-armed";
 constexpr const char* kArmedMarkerDir = "/run/urnetwork";
+// Beside it, for the urnetwork-exclude launcher. See NetFilter::ExcludeStatePath.
+constexpr const char* kExcludeStatePath = "/run/urnetwork/excluded-slices";
 
 // Anything interpolated into a QUOTED nft string (a cgroup path) must not be
 // able to close the quote, escape it, or end the line. The values come from
@@ -142,6 +144,9 @@ struct FilterDerived {
   bool helper_dns = false;
   std::vector<std::string> resolvers;   // the v4 resolvers that passed inet_pton
   std::vector<std::string> resolvers6;  // the v6 resolvers that passed inet_pton
+  // The urnetwork-exclude slices to mark, route around the tunnel and accept.
+  // Only with the socket-cgroup match: the mark rule IS that match.
+  std::vector<CgroupRef> excluded;
 };
 
 FilterDerived DeriveFilter(const FilterConfig& cfg) {
@@ -169,6 +174,11 @@ FilterDerived DeriveFilter(const FilterConfig& cfg) {
   d.helper_dns = cgroupMode == NftCgroupMode::CgroupAndMark &&
                  cfg.state == FilterState::Connecting && cfg.floor &&
                  !cfg.dns_helper_cgroups.empty();
+  if (cgroupMode == NftCgroupMode::CgroupAndMark) {
+    for (const auto& excluded : cfg.exclude_cgroups) {
+      if (CgroupQuotable(excluded)) d.excluded.push_back(excluded);
+    }
+  }
   return d;
 }
 
@@ -1002,6 +1012,12 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
     line("\t\t" + CgroupMatch(cfg.cgroup) + " counter name \"" + kNftMarkDaemonCounter +
          "\" meta mark set " + mark);
   }
+  // The urnetwork-exclude slice: its own mark, which the policy rule sends to
+  // main. Every packet, not only a flow's first, so a connection the command
+  // opened before the tunnel came up keeps its physical path.
+  for (const auto& excluded : d.excluded) {
+    line("\t\t" + ExcludeMarkRule(excluded.path, excluded.level));
+  }
   line("\t}");
   line("");
 
@@ -1081,6 +1097,16 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
   // link-local in the firewall (as the first cut did) re-opened this.
   line("\t\tip daddr 169.254.169.254 counter drop");
   line("");
+
+  // PER-APP EXCLUSION (urnetwork-exclude). Above every block that follows — the
+  // DNS floor, the off-tunnel v6 block and the floor itself — because the
+  // command was explicitly asked to leave outside the tunnel, and below the
+  // metadata drop, which holds in every state. Only packets the mark chain
+  // marked from the tunnel owner's slice carry this mark.
+  if (!d.excluded.empty()) {
+    line("\t\t" + ExcludeAcceptRule());
+    line("");
+  }
 
   // The Connecting-with-floor DNS path. On a systemd-resolved host the SDK's
   // wire query leaves RESOLVED's cgroup, not ours — the Linux reappearance of
@@ -1256,6 +1282,20 @@ std::string BuildNftRuleset(const FilterConfig& cfg) {
   }
   if (cfg.floor) line("\t\tcounter drop");
   line("\t}");
+
+  // -- 4. THE EXCLUDED SLICE'S SOURCE ADDRESS. connect() looked the route up
+  //    before the mark chain marked the packet, so the socket is bound to the
+  //    tun's address; the mark re-routes the packet out of the physical
+  //    interface but keeps that address (see EgressSocketMarker). Masquerade
+  //    gives it the physical one. Only in the states that route into a tun.
+  if (!d.excluded.empty() && d.tun_named) {
+    line("");
+    line(std::string("\tchain ") + kNftNatChainName + " {");
+    line("\t\ttype nat hook postrouting priority " + std::to_string(kNatChainPriority) +
+         "; policy accept;");
+    line("\t\t" + ExcludeMasqueradeRule(cfg.tun_name));
+    line("\t}");
+  }
   line("}");
   return s;
 }
@@ -1269,6 +1309,8 @@ bool RulesetBlocksIpv6(const FilterConfig& cfg) { return DeriveFilter(cfg).block
 bool RulesetPinsDns(const FilterConfig& cfg) { return DeriveFilter(cfg).dns_floor; }
 
 bool RulesetOpensHelperDns(const FilterConfig& cfg) { return DeriveFilter(cfg).helper_dns; }
+
+bool RulesetExcludesApps(const FilterConfig& cfg) { return !DeriveFilter(cfg).excluded.empty(); }
 
 bool IsIpv6OnlyNetwork(std::string* detail) {
   const std::string ip = FindTool("ip");
@@ -1341,6 +1383,18 @@ void DeleteRetiredSuppressRules(const std::string& ip) {
     std::fprintf(stderr, "[tun] removed a retired pref %d suppress_prefixlength rule\n",
                  kSuppressRulePriority);
   }
+}
+
+// Deletes every copy of the per-app exclusion's policy rule in one family
+// ("-4" or "-6"), by its full selector (BypassRuleSelector). Returns how many
+// were removed.
+int DeleteBypassRules(const std::string& ip, const char* family) {
+  if (ip.empty()) return 0;
+  std::vector<std::string> remove = {ip, family, "rule", "delete"};
+  for (const auto& part : BypassRuleSelector()) remove.push_back(part);
+  int removed = 0;
+  while (removed < kMaxDuplicatePolicyRules && RunCommand(remove).ok()) ++removed;
+  return removed;
 }
 
 // ---- DNS takeover: file-local machinery ------------------------------------
@@ -1669,6 +1723,24 @@ std::vector<std::string> ManualResolvConfRestoreCommands() {
   return out;
 }
 
+// The launcher's view of the exclusion (NetFilter::ExcludeStatePath): the
+// slices `applied` carries, or no file at all when nothing is installed. Best
+// effort, like the armed marker: a launcher that cannot read it waits a few
+// seconds and warns, and the ruleset in the kernel is the same either way.
+void SetExcludeState(const FilterConfig* applied) {
+  if (applied == nullptr) {
+    ::unlink(kExcludeStatePath);
+    return;
+  }
+  std::string text;
+  for (const auto& excluded : applied->exclude_cgroups) text += excluded.path + "\n";
+  ::mkdir(kArmedMarkerDir, 0755);
+  std::string error;
+  if (!WriteFileAtomic(kExcludeStatePath, text, 0644, /*inPlaceFallbackOk=*/false, &error)) {
+    std::fprintf(stderr, "[filter] could not write %s: %s\n", kExcludeStatePath, error.c_str());
+  }
+}
+
 }  // namespace
 
 NetFilter::~NetFilter() {
@@ -1747,6 +1819,8 @@ std::string NetFilter::RecoveryHelpText() {
 }
 
 const char* NetFilter::ArmedMarkerPath() { return kArmedMarkerPath; }
+
+const char* NetFilter::ExcludeStatePath() { return kExcludeStatePath; }
 
 bool NetFilter::ApplyScript(const std::string& script, const char* what, std::string* error) {
   const std::string nft = FindTool("nft");
@@ -1892,6 +1966,27 @@ bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
     }
     cfg.dns_helper_cgroups = std::move(usable);
   }
+  // The same for an urnetwork-exclude slice: one that has gone (its user's
+  // systemd manager stopped) would fail the whole transaction. Without the
+  // socket-cgroup match there is nothing to mark it with, and its commands stay
+  // in the tunnel.
+  if (!cfg.exclude_cgroups.empty()) {
+    std::vector<CgroupRef> usable;
+    for (const auto& excluded : cfg.exclude_cgroups) {
+      if (cgroupMode != NftCgroupMode::CgroupAndMark) {
+        std::fprintf(stderr,
+                     "[filter] the exclude slice '%s' stays in the tunnel: this kernel does not "
+                     "support nftables socket cgroupv2 matching\n",
+                     excluded.path.c_str());
+      } else if (CgroupInstallable(excluded)) {
+        usable.push_back(excluded);
+      } else {
+        std::fprintf(stderr, "[filter] dropping absent exclude slice '%s'\n",
+                     excluded.path.c_str());
+      }
+    }
+    cfg.exclude_cgroups = std::move(usable);
+  }
   // The mark chain is worth installing even without a floor (it is the whole
   // egress self-exclusion), but only when the path resolves.
   if (cgroupMode == NftCgroupMode::CgroupAndMark &&
@@ -1903,25 +1998,40 @@ bool NetFilter::Apply(const FilterConfig& requested, std::string* error) {
     cfg.cgroup = CgroupRef();
   }
 
-  const std::string script = BuildNftRuleset(cfg);
-  if (!ApplyScript(script, ToString(cfg.state), error)) {
+  if (!ApplyScript(BuildNftRuleset(cfg), ToString(cfg.state), error)) {
     std::fprintf(stderr, "[filter] apply %s failed: %s\n", ToString(cfg.state),
                  lastError_.c_str());
-    return false;
+    if (cfg.exclude_cgroups.empty()) return false;
+    // AN EXCLUSION NEVER COSTS THE FLOOR. Its rules are the only ones here that
+    // need nftables NAT (an inet nat chain, Linux 5.2), and a slice removed
+    // between the check above and the load fails the transaction too. Either
+    // way the protective ruleset goes in without them, and the slice's commands
+    // stay in the tunnel.
+    std::fprintf(stderr, "[filter] retrying %s without the per-app exclusion\n",
+                 ToString(cfg.state));
+    cfg.exclude_cgroups.clear();
+    if (!ApplyScript(BuildNftRuleset(cfg), ToString(cfg.state), error)) {
+      std::fprintf(stderr, "[filter] apply %s failed: %s\n", ToString(cfg.state),
+                   lastError_.c_str());
+      return false;
+    }
+    if (error) error->clear();
   }
 
   state_ = cfg.state;
   floor_ = cfg.floor;
   applied_ = cfg;
   SetArmedMarker(cfg.floor);
+  SetExcludeState(&applied_);
   std::fprintf(stderr,
                "[filter] %s (floor=%d ipv6_blocked=%d dns_pinned=%d helper_dns=%d lan=%d "
-               "socket_mark=%d cgroup_match=%d cgroup=%s)\n",
+               "socket_mark=%d cgroup_match=%d cgroup=%s excluded=%d)\n",
                ToString(cfg.state), cfg.floor ? 1 : 0, RulesetBlocksIpv6(cfg) ? 1 : 0,
                RulesetPinsDns(cfg) ? 1 : 0, RulesetOpensHelperDns(cfg) ? 1 : 0,
                cfg.allow_lan ? 1 : 0, cfg.socket_mark_proven ? 1 : 0,
                cgroupMode == NftCgroupMode::CgroupAndMark ? 1 : 0,
-               cfg.cgroup.valid ? cfg.cgroup.path.c_str() : "(none)");
+               cfg.cgroup.valid ? cfg.cgroup.path.c_str() : "(none)",
+               RulesetExcludesApps(cfg) ? 1 : 0);
   if (cfg.floor) {
     // Printed at the moment the floor goes in, so the recovery command is in
     // the journal BEFORE anyone needs it.
@@ -1954,6 +2064,8 @@ bool NetFilter::Remove(std::string* error) {
   // way out, and a surviving marker would re-arm the floor against the wish
   // that got us here.
   SetArmedMarker(false);
+  // And no launcher waits on a slice list for a ruleset that is going away.
+  SetExcludeState(nullptr);
 
   const std::string nft = FindTool("nft");
   if (nft.empty()) {
@@ -2147,6 +2259,9 @@ bool NetFilter::SweepStaleState(bool preserveArmed) {
   } else if (!armed) {
     SetArmedMarker(false);
   }
+  // Whatever is left in the kernel carries no exclusion (the armed floor above
+  // is built without one), so no launcher may read an old slice list.
+  SetExcludeState(nullptr);
   // The policy rules and the capture table go regardless: there is no tun in
   // either outcome, so they can only misroute. The armed floor blocks egress
   // at the filter hook, not by routing, so removing them opens nothing.
@@ -2174,6 +2289,11 @@ bool NetFilter::SweepStaleState(bool preserveArmed) {
     std::fprintf(stderr, "[filter] startup sweep: removed a stale IPv6 policy rule\n");
   }
   RunCommand({ip, "-6", "route", "flush", "table", table});
+  // The per-app exclusion's rule only ever sends its own mark to main, and with
+  // no ruleset nothing carries that mark; swept so nothing outlives its tunnel.
+  if (DeleteBypassRules(ip, "-4") + DeleteBypassRules(ip, "-6") > 0) {
+    std::fprintf(stderr, "[filter] startup sweep: removed a stale exclusion policy rule\n");
+  }
   return armedFloorLeft;
 }
 
@@ -2627,6 +2747,25 @@ bool Tunnel::InstallPolicyRules(TunnelError* err) {
       return false;
     }
   }
+  // The per-app exclusion (urnetwork-exclude): packets the mark chain marked
+  // with kBypassMark are looked up in main, ahead of the capture rule. Inert
+  // until a slice is in force, because nothing else carries that mark. Not
+  // fatal: without it a marked packet falls to the capture rule and stays in
+  // the tunnel, which is the safe way for the exclusion to fail.
+  const auto installBypass = [&](const char* family) {
+    DeleteBypassRules(ip, family);
+    std::vector<std::string> add = {ip, family, "rule", "add"};
+    for (const auto& part : BypassRuleSelector()) add.push_back(part);
+    const CommandResult rb = RunCommand(add);
+    if (!rb.ok()) {
+      std::fprintf(stderr,
+                   "[tun] WARNING: %s: %s; excluded apps (urnetwork-exclude) stay in the "
+                   "tunnel\n",
+                   JoinArgv(add).c_str(), rb.Describe().c_str());
+    }
+  };
+  installBypass("-4");
+  if (ipv6Captured_) installBypass("-6");
   return true;
 }
 
@@ -2656,6 +2795,10 @@ void Tunnel::RemovePolicyRules() {
   }
   // Belt for an upgrade that started while an older build's rule was in place.
   DeleteRetiredSuppressRules(ip);
+  // The per-app exclusion's rule, both families, unconditionally like the v6
+  // capture rule below.
+  DeleteBypassRules(ip, "-4");
+  DeleteBypassRules(ip, "-6");
   // The kernel drops routes with their link, in every table; flushing is the
   // belt for the case where the link outlives us by a moment.
   RunCommand({ip, "-4", "route", "flush", "table", table});
