@@ -2948,6 +2948,11 @@ void SdkHost::SubscribeDrawer() {
   presentationSubs_.push_back(peerVc_->addPeersListener(
       [this](std::optional<urnet::NetworkPeerList>) { EmitDrawerEvent(DrawerEvent::Peers); }));
   peerVc_->start();
+  // this device's provider status (P008): the earnings page's reason line,
+  // demand histogram and ranking numbers. Opened with the peers, but only
+  // while providing is not never, and polling only while the Earnings
+  // destination is on screen (SetProviderStatusPolling).
+  OpenProviderStatusLocked(device_->getProvideControlMode());
 
   // post quantum identity: the device's own identity key (hash) + the
   // providers with an identity-verified e2e session, via the SDK's shared
@@ -3016,6 +3021,8 @@ void SdkHost::ClosePresentationLocked() {
     blockActionVc_.reset();
     locationsVc_.reset();
     peerVc_.reset();
+    providerStatusSub_.reset();
+    providerStatusVc_.reset();
     pqiVc_.reset();
     providerLocationsVc_.reset();
     extenderVc_.reset();
@@ -3035,6 +3042,7 @@ void SdkHost::ClosePresentationLocked() {
   providerLocationsVc_.reset();
   if (pqiVc_) device_->closePostQuantumIdentityViewController(*pqiVc_);
   pqiVc_.reset();
+  CloseProviderStatusLocked();
   if (peerVc_) device_->closePeerViewController(*peerVc_);
   peerVc_.reset();
   if (locationsVc_) device_->closeLocationsViewController(*locationsVc_);
@@ -3063,6 +3071,69 @@ void SdkHost::SetPresentationActive(bool active) {
   SubscribeStats();
   SubscribeDrawer();
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
+}
+
+// ---- this device's provider status (support part P008) ----------------------
+// The controller polls the API through the GUI's own space (DeviceRemote's
+// GetApi) and finds this device by the remote's client id, the daemon's
+// provider client. Its listener only emits an event tag, like the peers': the
+// earnings page marshals onto the GTK loop and re-reads ProviderStatusNow.
+
+void SdkHost::OpenProviderStatusLocked(const std::string& provideControlMode) {
+  if (!device_ || providerStatusVc_ || provideControlMode == "never") return;
+  try {
+    providerStatusVc_ = device_->openProviderStatusViewController();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] open provider status view controller failed: %s\n", e.what());
+    providerStatusVc_.reset();
+    return;
+  }
+  providerStatusSub_.emplace(providerStatusVc_->addProviderStatusListener(
+      [this] { EmitDrawerEvent(DrawerEvent::ProviderStatus); }));
+  if (providerStatusPolling_) providerStatusVc_->start();
+}
+
+void SdkHost::CloseProviderStatusLocked() {
+  // the listener goes first, so nothing fires for a controller being closed;
+  // the typed close is the only one that releases the controller (the
+  // generic close cannot take a C++ handle)
+  providerStatusSub_.reset();
+  if (providerStatusVc_ && device_) {
+    device_->closeProviderStatusViewController(*providerStatusVc_);
+  }
+  providerStatusVc_.reset();
+}
+
+SdkHost::ProviderStatusSnapshot SdkHost::ProviderStatusNow() {
+  std::scoped_lock lock(mutex_);
+  ProviderStatusSnapshot snapshot;
+  if (!providerStatusVc_) return snapshot;
+  snapshot.open = true;
+  try {
+    snapshot.loaded = providerStatusVc_->getIsLoaded();
+    snapshot.lastFetchError = providerStatusVc_->getLastFetchError();
+    snapshot.status = providerStatusVc_->getProviderStatus();
+  } catch (const std::exception& e) {
+    // a malformed document must never take the page down: it reads as a
+    // failed poll
+    std::fprintf(stderr, "[sdk] read provider status failed: %s\n", e.what());
+    snapshot.loaded = false;
+    snapshot.lastFetchError = e.what();
+    snapshot.status.reset();
+  }
+  return snapshot;
+}
+
+void SdkHost::SetProviderStatusPolling(bool polling) {
+  std::scoped_lock lock(mutex_);
+  if (providerStatusPolling_ == polling) return;
+  providerStatusPolling_ = polling;
+  if (!providerStatusVc_) return;
+  if (polling) {
+    providerStatusVc_->start();
+  } else {
+    providerStatusVc_->stop();
+  }
 }
 
 // ---- connect drawer accessors ----------------------------------------------
@@ -3989,6 +4060,18 @@ void SdkHost::SetProvideControlMode(const std::string& mode) {
   // does both) — DeviceLocal.SetProvideControlMode
   // alone does not persist, and StartTunnel restores the persisted mode.
   if (localState_) localState_->setProvideControlMode(mode);
+  // The provider status controller lives only while providing is not never
+  // (P008): never closes it, and a mode turned on while the presentation is
+  // open (its peers controller is) opens it.
+  if (mode == "never") {
+    if (providerStatusVc_) {
+      CloseProviderStatusLocked();
+      EmitDrawerEvent(DrawerEvent::ProviderStatus);
+    }
+  } else if (peerVc_ && !providerStatusVc_) {
+    OpenProviderStatusLocked(mode);
+    EmitDrawerEvent(DrawerEvent::ProviderStatus);
+  }
 }
 
 std::string SdkHost::GetProvideControlMode() {

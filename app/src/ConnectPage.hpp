@@ -81,6 +81,11 @@ class ConnectPage : public Gtk::Box {
   void Resync();
 
   void SetAdvancedMode(bool on);   // structural: Simple <-> Advanced
+  // The provide mode picker, opened from the earnings page (its provide mode
+  // row, the extender row and the idle line's Change): in Simple mode it sits
+  // in the collapsed "More options" group, so the group opens, and the current
+  // mode's button takes the focus, which scrolls it into view.
+  void RevealProvideControls();
   void ApplyBreakpoint(int widthDip);
   void SetPresentationActive(bool active);
   void Tick();  // the shared ~10fps clock: canvas dot transitions

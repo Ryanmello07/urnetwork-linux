@@ -592,6 +592,9 @@ void ConnectDrawer::OnHostEvent(DrawerEvent event) {
       // this device's own extender role has no surface in the drawer; the
       // connect page's provide group and the earnings page carry it
       break;
+    case DrawerEvent::ProviderStatus:
+      // the provider status is the earnings page's
+      break;
     case DrawerEvent::Blocker:
       RefreshBlocker();
       break;

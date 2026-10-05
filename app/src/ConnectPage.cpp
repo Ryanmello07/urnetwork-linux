@@ -2080,6 +2080,19 @@ void ConnectPage::SyncProvideControlMode() {
   syncingProvide_ = false;
 }
 
+void ConnectPage::RevealProvideControls() {
+  if (!advanced_ && !moreOptionsExpanded_) {
+    moreOptionsExpanded_ = true;
+    ApplyMoreOptionsVisibility();
+  }
+  for (Gtk::ToggleButton* button : {provideAuto_, provideAlways_, provideNetwork_, provideNever_}) {
+    if (button && button->get_active()) {
+      button->grab_focus();
+      break;
+    }
+  }
+}
+
 // inbound echoes of the two device-owned toggles (§5): no-op when already
 // equal, otherwise written under the guard so the handler cannot bounce back
 void ConnectPage::ApplyBlockerUi() {
@@ -2621,6 +2634,9 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       break;
     case DrawerEvent::ExtenderProvideStatus:
       ApplyExtenderProvideState();
+      break;
+    case DrawerEvent::ProviderStatus:
+      // the provider status is the earnings page's
       break;
   }
 }

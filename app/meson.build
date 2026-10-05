@@ -227,6 +227,7 @@ executable('urnetwork-gui',
     'src/Ui.cpp',
     'src/Formatters.cpp',
     'src/TransferChart.cpp',
+    'src/DemandChart.cpp',
     'src/TransportPresentation.cpp',
     'src/TransportBar.cpp',
     'src/TransportSheet.cpp',
@@ -526,7 +527,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # the route-locally offer), the VLESS editor's form, visibility rules,
 # settings mapping and messages and the stored network space values every
 # space write starts from, the per-app exclusion's slice, rules and call
-# sites, what a network peer row connects to, and the daemon
+# sites, what a network peer row connects to, the provider card's idle
+# reason, status line, demand histogram and ranking rows, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -606,6 +608,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/AddSignInWiringTest.cpp',
     'tests/VlessPresentationTest.cpp',
     'tests/PeerLocationTest.cpp',
+    'tests/ProviderIdleReasonTest.cpp',
+    'tests/ProviderStatusPresentationTest.cpp',
+    'tests/ProviderStatusWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -625,6 +630,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # its destructor must touch no widget (issue #13).
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
               # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
+              # ProviderStatusWiringTest reads SdkHost.cpp, EarningsPage.cpp and
+              # po/en.po the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
