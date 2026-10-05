@@ -37,9 +37,12 @@
 //     ProviderStats, which reads that device's view controllers for the GUI,
 //     only try-locks it as well.
 //   * UploadLogs runs on the main loop and only try-locks opMutex_; a request
-//     that finds a bring-up is queued and the reaper starts it. Its standalone
-//     device's upload callback runs on an SDK thread and only sets a flag; the
-//     reaper retires the device.
+//     that finds a bring-up is queued and the reaper starts it. The sdk's
+//     upload (the zip and the post) runs on a thread of its own
+//     (logupload::Flight), which touches nothing of this object but the
+//     device's handle; the device stays alive until that call returns
+//     (ReleaseDeviceLocked). The upload's callback ends the upload in the
+//     flight; the reaper retires the standalone device.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -59,6 +62,7 @@
 #include <urnetwork_sdk.hpp>
 
 #include "ControlProtocol.hpp"
+#include "LogUpload.hpp"
 #include "NetworkQuality.hpp"
 #include "Tunnel.hpp"
 
@@ -176,13 +180,18 @@ class TunnelHost {
   // provider-only device, else on a standalone device built from the request's
   // credentials exactly as the provider-only device is (provide mode never,
   // and no tun, route, DNS, nftables or listener), which is retired once its
-  // upload reports, after logupload::kStandaloneDeviceMaxMillis, or before any
+  // upload finishes, after logupload::kStandaloneDeviceMaxMillis, or before any
   // other device under this identity is built. While a bring-up owns the
   // session the request is queued and the reaper starts it once the bring-up
-  // is over. `carrier` is logupload::ToString of the device. Main loop only.
+  // is over. One upload at a time (logupload::Flight): a request while one is
+  // in flight is refused with ctl::kCodeLogUploadBusy. Returns once the upload
+  // is admitted: the zip and the post run on their own thread, and status
+  // reports the outcome under `uploadId`. `carrier` is logupload::ToString of
+  // the device. Main loop only.
   struct LogUploadResult {
     bool ok = false;
     const char* carrier = "";
+    int64_t uploadId = 0;
     std::string error;
     const char* code = nullptr;  // a ctl::kCode* when !ok
   };
@@ -255,13 +264,19 @@ class TunnelHost {
   // Publishes the provider-only device's live tier and network key into
   // status_. Requires opMutex_.
   void RefreshProviderStatusLocked();
-  // UploadLogs' body once no bring-up owns the session: the upload on the
-  // device that runs, or on a standalone one built for it. Requires opMutex_.
-  LogUploadResult StartLogUploadLocked(const ctl::UploadLogsRequest& request);
+  // UploadLogs' body once no bring-up owns the session: admits the upload
+  // (or starts the queued one, `queuedUploadId`), then hands it to its thread
+  // on the device that runs, or on a standalone one built for it. Requires
+  // opMutex_.
+  LogUploadResult StartLogUploadLocked(const ctl::UploadLogsRequest& request,
+                                       int64_t queuedUploadId);
   // Closes the standalone upload device, waiting a bounded time as the
   // provider-only device's retire does. A no-op without one. Requires opMutex_.
   void RetireUploadDeviceLocked();
-  // Reaper duty: retire the standalone device whose upload reported or ran out
+  // Releases a device the caller has closed, unless the log upload's call is on
+  // it: then the flight keeps it until that call returns. Requires opMutex_.
+  void ReleaseDeviceLocked(std::optional<urnet::DeviceLocal>& device);
+  // Reaper duty: retire the standalone device whose upload finished or ran out
   // of time, then start a queued request. Requires opMutex_.
   void MaintainLogUploadLocked();
   // Requires opMutex_. A reason means "somebody asked for this stop": it lifts
@@ -405,17 +420,20 @@ class TunnelHost {
   std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
   provide::ProviderStatusLease providerStatusLease_;
   // The standalone device a log upload runs on while neither device above
-  // exists (UploadLogs), when it was built, and the flag its upload callback
-  // sets on an SDK thread; the reaper retires it on the main loop. A third slot,
-  // never engaged beside device_ or providerDevice_: both are built only after
-  // RetireUploadDeviceLocked. Guarded by opMutex_.
+  // exists (UploadLogs), and when it was built; the reaper retires it on the
+  // main loop. A third slot, never engaged beside device_ or providerDevice_:
+  // both are built only after RetireUploadDeviceLocked. Guarded by opMutex_.
   std::optional<urnet::DeviceLocal> uploadDevice_;
   int64_t uploadDeviceBuiltMillis_ = 0;
-  std::shared_ptr<std::atomic<bool>> uploadReported_;
-  // A request that arrived while a bring-up owned the session, and when.
-  // Main loop only (UploadLogs and the reaper), so it needs no lock.
+  // The log upload in flight, shared with its thread and its callback, which
+  // hold nothing else of this object (logupload::Flight: its own lock).
+  std::shared_ptr<logupload::Flight> logUploadFlight_;
+  // A request that arrived while a bring-up owned the session, when, and the
+  // id the flight admitted it under. Main loop only (UploadLogs and the
+  // reaper), so it needs no lock.
   std::optional<ctl::UploadLogsRequest> queuedUpload_;
   int64_t queuedUploadMillis_ = 0;
+  int64_t queuedUploadId_ = 0;
   std::optional<urnet::IoLoop> ioLoop_;
   // Set by the LIVE loop's done callback; a retired loop carries its own copy
   // (see retiredLoops_) so the two can never be confused.

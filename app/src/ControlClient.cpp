@@ -847,7 +847,7 @@ std::optional<ctl::ProviderStatsReply> ControlClient::ProviderStats(
 }
 
 bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request, std::string* carrier,
-                               std::string* error, std::string* code) {
+                               std::string* error, std::string* code, int64_t* uploadId) {
   std::scoped_lock lock(mutex_);
   if (const auto invalid = ctl::ValidateUploadLogsRequest(request)) {
     ResetAuthLocked();
@@ -866,7 +866,11 @@ bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request, std::strin
     if (code) *code = ctl::ReplyCode(*reply);
     return false;
   }
-  if (carrier && reply->is_object()) *carrier = reply->get<ctl::UploadLogsReply>().carrier;
+  if (reply->is_object()) {
+    const auto payload = reply->get<ctl::UploadLogsReply>();
+    if (carrier) *carrier = payload.carrier;
+    if (uploadId) *uploadId = payload.upload_id;
+  }
   return true;
 }
 

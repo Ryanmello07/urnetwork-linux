@@ -735,11 +735,45 @@ UR_TEST(controlUploadLogsRoundTrip) {
 
   ctl::UploadLogsReply reply;
   reply.carrier = "standalone";
+  reply.upload_id = 1759700000123;
   const auto replyBack = ctl::DecodeFrame(ctl::EncodeFrame(
       ctl::MakeReply(16, true, nlohmann::json(reply))))->get<ctl::UploadLogsReply>();
   UR_EXPECT_TRUE(replyBack.carrier == "standalone");
-  // absent says nothing about the device
+  UR_EXPECT_EQ(1759700000123LL, static_cast<long long>(replyBack.upload_id));
+  // absent says nothing about the device, and names no upload
   UR_EXPECT_TRUE(nlohmann::json::object().get<ctl::UploadLogsReply>().carrier.empty());
+  UR_EXPECT_EQ(0LL, static_cast<long long>(
+                        nlohmann::json::object().get<ctl::UploadLogsReply>().upload_id));
+}
+
+// The outcome of an upload reaches the GUI through status: the upload's id
+// and where it is, additive within v1 (an older daemon's status names no
+// upload), and never in a status cut down for another uid, whose feedback it
+// describes.
+UR_TEST(controlStatusCarriesTheLogUpload) {
+  ctl::StatusReply status;
+  status.log_upload_id = 1759700000123;
+  status.log_upload_state = "refused";
+  status.log_upload_carrier = "provider";
+  const auto back =
+      ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeReply(18, true, nlohmann::json(status))))
+          ->get<ctl::StatusReply>();
+  UR_EXPECT_EQ(1759700000123LL, static_cast<long long>(back.log_upload_id));
+  UR_EXPECT_TRUE(back.log_upload_state == "refused");
+  UR_EXPECT_TRUE(back.log_upload_carrier == "provider");
+
+  nlohmann::json older = nlohmann::json(status);
+  older.erase("log_upload_id");
+  older.erase("log_upload_state");
+  older.erase("log_upload_carrier");
+  const auto olderBack = older.get<ctl::StatusReply>();
+  UR_EXPECT_EQ(0LL, static_cast<long long>(olderBack.log_upload_id));
+  UR_EXPECT_TRUE(olderBack.log_upload_state.empty());
+
+  const ctl::StatusReply redacted = ctl::RedactStatusForForeignUid(status);
+  UR_EXPECT_EQ(0LL, static_cast<long long>(redacted.log_upload_id));
+  UR_EXPECT_TRUE(redacted.log_upload_state.empty());
+  UR_EXPECT_TRUE(redacted.log_upload_carrier.empty());
 }
 
 // The feedback id becomes a path segment of the url root's device posts to, so
@@ -791,6 +825,7 @@ UR_TEST(controlUploadLogsIsGatedLikeTheLogAndNeverPrompts) {
   }
   UR_EXPECT_FALSE(ctl::VerbWantsInteraction(ctl::Verb::UploadLogs, /*is_log_tail=*/false));
   UR_EXPECT_TRUE(std::string(ctl::kCodeLogUploadFailed) == "log_upload_failed");
+  UR_EXPECT_TRUE(std::string(ctl::kCodeLogUploadBusy) == "log_upload_busy");
   // a daemon that predates the verb says so with the one error every daemon gives
   const auto older =
       ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(17, ctl::kErrorUnknownVerb)));

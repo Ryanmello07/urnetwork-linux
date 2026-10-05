@@ -31,6 +31,7 @@
 
 #include "ClientEvents.hpp"
 #include "ControlClient.hpp"
+#include "LogUpload.hpp"
 #include "Health.hpp"
 #include "ProvideLifecycle.hpp"
 #include "RpcSession.hpp"
@@ -716,12 +717,21 @@ class SdkHost {
   // logs that matter are urnetworkd's, and the DeviceRemote reaches them only
   // while a tunnel session runs. This asks the daemon to upload its own logs
   // for `feedbackId` (ControlProtocol.hpp upload_logs), connected or not, with
-  // this session's client credentials as start_provider carries them. True when
-  // the daemon took it; false when it cannot be asked, predates the verb or
-  // refused, and the caller then falls back to the DeviceRemote as before
-  // (logupload::GuiStepAfterDaemon). Blocking, bounded by the control client's
-  // receive timeout, and never holding mutex_ across the call. Main loop.
-  bool UploadDaemonLogs(const std::string& feedbackId);
+  // this session's client credentials as start_provider carries them. The
+  // daemon answers once it admitted the upload, which then runs on its own
+  // thread: Accepted (its outcome is followed in status, FollowDaemonLogUpload),
+  // Busy (one is in flight already), or NotTaken when it cannot be asked,
+  // predates the verb or refused, and the caller then falls back to the
+  // DeviceRemote as before (logupload::GuiStepAfterDaemon). Blocking, bounded by
+  // the control client's receive timeout, and never holding mutex_ across the
+  // call. Main loop.
+  logupload::DaemonAnswer UploadDaemonLogs(const std::string& feedbackId);
+  // The outcome of the upload UploadDaemonLogs left pending, once the daemon's
+  // status names it finished (logupload::CompletionFor): logged, and the wait
+  // ends. The first asks for a status only while an upload is pending. Main
+  // loop (MainWindow::PollDaemonHealth).
+  void FollowDaemonLogUpload();
+  void FollowDaemonLogUpload(const ctl::StatusReply& status);
 
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
@@ -1323,6 +1333,9 @@ class SdkHost {
   // The network country last applied to this process (FollowDaemonNetworkCountry).
   // Main loop only.
   std::string followedNetworkCountry_;
+  // The daemon's id of the log upload this process waits on (UploadDaemonLogs),
+  // 0 for none. Main loop only, like the calls that read and write it.
+  int64_t pendingLogUploadId_ = 0;
   // ---- the provider-only device's statistics (provider_stats) ---------------
   // What the daemon's view controllers on the provider-only device last said,
   // in the SDK's types. The provider statistics accessors and ProviderStatusNow

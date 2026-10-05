@@ -538,8 +538,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # reason, status line, demand histogram and ranking rows, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
-# lines and their filters, which device carries a feedback's log upload and
-# for how long, and the daemon control protocol: framing,
+# lines and their filters, which device carries a feedback's log upload, for
+# how long, and the upload in flight off the daemon's main loop, and the daemon
+# control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
 # authorization) carry no GTK, libadwaita or SDK dependency on purpose, so this

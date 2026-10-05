@@ -4384,14 +4384,14 @@ void SdkHost::FollowDaemonNetworkCountry(const ctl::StatusReply& status) {
   g_message("sdkhost: network country = \"%s\" (urnetworkd)", countryCode.c_str());
 }
 
-bool SdkHost::UploadDaemonLogs(const std::string& feedbackId) {
+logupload::DaemonAnswer SdkHost::UploadDaemonLogs(const std::string& feedbackId) {
   // The request start_provider sends, so a daemon with no device builds the
   // same one (client jwt, instance id, app version, the active network space).
   ctl::UploadLogsRequest request;
   request.feedback_id = feedbackId;
   {
     std::scoped_lock lock(mutex_);
-    if (!localState_) return false;
+    if (!localState_) return logupload::DaemonAnswer::NotTaken;
     request.by_jwt = localState_->getByClientJwt();
     request.instance_id = localState_->getInstanceId();
     request.app_version = kAppVersion;
@@ -4404,9 +4404,16 @@ bool SdkHost::UploadDaemonLogs(const std::string& feedbackId) {
   std::string carrier;
   std::string error;
   std::string code;
-  if (control_.UploadLogs(request, &carrier, &error, &code)) {
-    g_message("support: urnetworkd is uploading its logs (%s device)", carrier.c_str());
-    return true;
+  int64_t uploadId = 0;
+  if (control_.UploadLogs(request, &carrier, &error, &code, &uploadId)) {
+    // its outcome comes through status (FollowDaemonLogUpload)
+    pendingLogUploadId_ = uploadId;
+    g_message("support: urnetworkd took the log upload (%s device)", carrier.c_str());
+    return logupload::DaemonAnswer::Accepted;
+  }
+  if (code == ctl::kCodeLogUploadBusy) {
+    g_message("support: urnetworkd is uploading its logs for an earlier feedback already");
+    return logupload::DaemonAnswer::Busy;
   }
   if (error == ctl::kErrorUnknownVerb) {
     g_message("support: the system service predates upload_logs; the logs go up only through "
@@ -4415,7 +4422,33 @@ bool SdkHost::UploadDaemonLogs(const std::string& feedbackId) {
     g_warning("support: urnetworkd did not upload its logs (code=%s): %s",
               code.empty() ? "none" : code.c_str(), error.empty() ? "no detail" : error.c_str());
   }
-  return false;
+  return logupload::DaemonAnswer::NotTaken;
+}
+
+void SdkHost::FollowDaemonLogUpload() {
+  // nothing to wait for: no status call
+  if (pendingLogUploadId_ == 0) return;
+  if (const std::optional<ctl::StatusReply> status = control_.Status()) {
+    FollowDaemonLogUpload(*status);
+  }
+}
+
+void SdkHost::FollowDaemonLogUpload(const ctl::StatusReply& status) {
+  // Another user's session: the daemon names nothing of it, this included.
+  if (status.redacted) return;
+  const std::optional<logupload::FlightState> outcome = logupload::CompletionFor(
+      pendingLogUploadId_, status.log_upload_id,
+      logupload::FlightStateFromString(status.log_upload_state));
+  if (!outcome) return;
+  pendingLogUploadId_ = 0;
+  // Logged, never shown: the feedback itself was accepted.
+  if (*outcome == logupload::FlightState::Uploaded) {
+    g_message("support: urnetworkd uploaded its logs (%s device)",
+              status.log_upload_carrier.c_str());
+  } else {
+    g_warning("support: urnetworkd's log upload ended %s (%s device)",
+              status.log_upload_state.c_str(), status.log_upload_carrier.c_str());
+  }
 }
 
 void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {

@@ -2012,6 +2012,8 @@ nlohmann::json ControlServer::HandleStartProvider(Connection* conn, int64_t id,
 
 // upload_logs — this daemon's logs to URnetwork for a feedback the server
 // accepted (ControlProtocol.hpp, TunnelHost::UploadLogs), connected or not.
+// Answered once the upload is admitted: the zip and the post run on their own
+// thread, and status reports the outcome under the reply's upload_id.
 //
 // The log's gate, not the tunnel's: what leaves is the daemon's glog files,
 // which describe every session this daemon has run, so the upload asks what
@@ -2040,6 +2042,7 @@ nlohmann::json ControlServer::HandleUploadLogs(Connection* conn, int64_t id,
   }
   ctl::UploadLogsReply payload;
   payload.carrier = result.carrier;
+  payload.upload_id = result.uploadId;
   return ctl::MakeReply(id, true, nlohmann::json(payload));
 }
 

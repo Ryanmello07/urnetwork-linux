@@ -405,8 +405,8 @@ void SupportPage::UploadLogs(const std::string& feedbackId) {
   // connection that will not come up has to carry them. The DeviceRemote below
   // reaches the same files only through a running tunnel's device; it is what
   // a daemon that predates upload_logs (or refuses it) still gets.
-  const bool daemonAccepted = host_.UploadDaemonLogs(feedbackId);
-  const logupload::GuiStep step = logupload::GuiStepAfterDaemon(daemonAccepted, host_.hasDevice());
+  const logupload::DaemonAnswer answer = host_.UploadDaemonLogs(feedbackId);
+  const logupload::GuiStep step = logupload::GuiStepAfterDaemon(answer, host_.hasDevice());
   if (step == logupload::GuiStep::Done) return;
   if (step == logupload::GuiStep::Skip) {
     g_message("support: skipping log upload (the system service did not take it and no "
