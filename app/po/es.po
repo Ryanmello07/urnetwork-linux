@@ -54,11 +54,6 @@ msgctxt "account_isn_t_ready_for_purchases"
 msgid "Your account isn't ready for purchases. Please restart the app and try again."
 msgstr "Tu cuenta aún no está lista para compras. Reinicia la app e inténtalo de nuevo."
 
-#. Sign-in error shown when the account exists but has not been verified yet.
-msgctxt "account_needs_verification"
-msgid "This account needs verification. Check your email."
-msgstr "Esta cuenta necesita verificación. Revisa tu correo electrónico."
-
 #. Accessibility label of the row of rings, one per extender carrying a live connection.
 msgctxt "active_extenders"
 msgid "Active extenders"
@@ -5874,11 +5869,6 @@ msgctxt "plan_monthly_equivalent_line"
 msgid "≈ {}/month · billed once a year"
 msgstr "≈ {}/mes · se cobra una vez al año"
 
-#. The monthly plan card's price on the Linux onboarding page.
-msgctxt "plan_monthly_price"
-msgid "$5/month"
-msgstr "$5/month"
-
 #. Monthly plan card label: the store-formatted price per month.
 msgctxt "plan_price_per_month"
 msgid "{}/month"
@@ -5910,11 +5900,6 @@ msgstr[1] "{0} días gratis, después {1}/año. Cancela cuando quieras."
 msgctxt "plan_terms_yearly_billed_today"
 msgid "{} billed today, then every year. Cancel anytime."
 msgstr "{} cobrados hoy y después cada año. Cancela cuando quieras."
-
-#. The yearly plan card's price on the Linux onboarding page.
-msgctxt "plan_yearly_price"
-msgid "$40/year"
-msgstr "$40/year"
 
 #. Used in Shared/Views/SolanaSignMessageSheet.swift.
 msgctxt "please_install_phantom_or_solflare_to_use_this"
@@ -6737,11 +6722,6 @@ msgctxt "referral_share_message"
 msgid "Join me on URnetwork! Get the app and enter referral code {} when you sign up."
 msgstr "¡Únete a URnetwork conmigo! Descarga la app e introduce el código de referencia {} al registrarte."
 
-#. One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.
-msgctxt "referral_summary"
-msgid "Code: {0} · Referrals: {1} · Friends enter the code when they sign up"
-msgstr "Código: {0} · Referidos: {1} · Tus amigos ingresan el código al registrarse"
-
 #. Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).
 msgctxt "referral_toast_joined"
 msgid "A friend joined with your code! +{1} GiB/day, for life."
@@ -6948,11 +6928,6 @@ msgstr "Las reglas de seguridad de URnetwork mantienen este tráfico fuera de la
 msgctxt "save"
 msgid "Save"
 msgstr "Guardar"
-
-#. Line under the yearly plan's price: the saving against paying monthly.
-msgctxt "save_33_percent"
-msgid "Save 33%"
-msgstr "Ahorra 33%"
 
 #. Call to action
 msgctxt "save_logs"
@@ -7306,11 +7281,6 @@ msgstr "Métodos de inicio de sesión"
 msgctxt "sign_in_with_apple"
 msgid "Sign in with Apple"
 msgstr "Iniciar sesión con Apple"
-
-#. Button that signs in with a pasted auth code instead of a password.
-msgctxt "sign_in_with_code"
-msgid "Sign in with code"
-msgstr "Iniciar sesión con código"
 
 #. Used in Authenticate/LoginInitial/UrGoogleSignInButton.swift.
 msgctxt "sign_in_with_google"

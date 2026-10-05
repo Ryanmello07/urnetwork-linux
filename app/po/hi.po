@@ -49,11 +49,6 @@ msgctxt "account_auth_verified"
 msgid "{} (verified)"
 msgstr "{} (सत्यापित)"
 
-#. Sign-in error shown when the account exists but has not been verified yet.
-msgctxt "account_needs_verification"
-msgid "This account needs verification. Check your email."
-msgstr "इस खाते के लिए सत्यापन आवश्यक है। अपना ईमेल देखें।"
-
 #. A heading for the list of current block actions.
 msgctxt "activity"
 msgid "Activity"
@@ -4331,11 +4326,6 @@ msgctxt "plan_monthly_equivalent_line"
 msgid "≈ {}/month · billed once a year"
 msgstr "≈ {}/माह · साल में एक बार बिल"
 
-#. The monthly plan card's price on the Linux onboarding page.
-msgctxt "plan_monthly_price"
-msgid "$5/month"
-msgstr "$5/month"
-
 #. Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.
 msgctxt "plan_save_percent"
 msgid "Save {}%"
@@ -4357,11 +4347,6 @@ msgstr[1] "{0} दिन मुफ़्त, फिर {1}/वर्ष। क�
 msgctxt "plan_terms_yearly_billed_today"
 msgid "{} billed today, then every year. Cancel anytime."
 msgstr "आज {} का बिल, फिर हर साल। कभी भी रद्द करें।"
-
-#. The yearly plan card's price on the Linux onboarding page.
-msgctxt "plan_yearly_price"
-msgid "$40/year"
-msgstr "$40/year"
 
 #. Used in Shared/Views/SolanaSignMessageSheet.swift.
 msgctxt "please_install_phantom_or_solflare_to_use_this"
@@ -5084,11 +5069,6 @@ msgctxt "referral_share_message"
 msgid "Join me on URnetwork! Get the app and enter referral code {} when you sign up."
 msgstr "URnetwork पर मेरे साथ जुड़ें! ऐप डाउनलोड करें और साइन अप करते समय रेफ़रल कोड {} डालें।"
 
-#. One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.
-msgctxt "referral_summary"
-msgid "Code: {0} · Referrals: {1} · Friends enter the code when they sign up"
-msgstr "कोड: {0} · रेफ़रल: {1} · दोस्त साइन अप करते समय कोड डालते हैं"
-
 #. Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).
 msgctxt "referral_toast_joined"
 msgid "A friend joined with your code! +{1} GiB/day, for life."
@@ -5541,11 +5521,6 @@ msgstr "साइन-इन विधि सफलतापूर्वक ज�
 msgctxt "sign_in_methods"
 msgid "Sign-In Methods"
 msgstr "साइन-इन विधियाँ"
-
-#. Button that signs in with a pasted auth code instead of a password.
-msgctxt "sign_in_with_code"
-msgid "Sign in with code"
-msgstr "कोड से साइन इन करें"
 
 #. Used in Authenticate/LoginInitial/UrGoogleSignInButton.swift.
 msgctxt "sign_in_with_google"
