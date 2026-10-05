@@ -803,6 +803,11 @@ msgctxt "bittensor_error_message_mismatch"
 msgid "The wallet signed a different request. Start again."
 msgstr "La billetera firmó una solicitud diferente. Empieza de nuevo."
 
+#. Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).
+msgctxt "bittensor_error_signature_mismatch"
+msgid "This signature isn't from the address you entered. In {}, sign the message with that address, then paste the signature again."
+msgstr "Esta firma no es de la dirección que introdujiste. En {}, firma el mensaje con esa dirección y vuelve a pegar la firma."
+
 #. Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).
 msgctxt "bittensor_manual_sign_instructions"
 msgid "Sign this message with the {} wallet that holds your coldkey, then paste the address and the signature below."

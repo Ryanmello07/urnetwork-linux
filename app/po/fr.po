@@ -718,6 +718,11 @@ msgctxt "bittensor_error_address_not_in_wallet"
 msgid "Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has."
 msgstr "Votre portefeuille {} ne contient pas l'adresse que vous avez saisie. Ajoutez ou connectez ce compte dans le portefeuille, ou saisissez une adresse qu'il contient."
 
+#. Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).
+msgctxt "bittensor_error_signature_mismatch"
+msgid "This signature isn't from the address you entered. In {}, sign the message with that address, then paste the signature again."
+msgstr "Cette signature ne provient pas de l'adresse que vous avez saisie. Dans {}, signez le message avec cette adresse, puis collez à nouveau la signature."
+
 #. Call to action
 msgctxt "bittensor_sign_in"
 msgid "Sign in with Bittensor"
