@@ -56,13 +56,13 @@ constexpr int kLogScrollerMinHeight = 200;
 constexpr int kLogScrollerMaxHeight = 420;
 
 // ---- the localization convention (spec §2, "Dev(key, english)") -----------
-// NONE of the dev_* keys are in the store today: the English literals ARE the
-// shipped strings, and T_ renders them until the store grows the key. Two
-// derived key shapes keep the table below readable and the extraction greppable
-// (`grep -oE '"dev_[a-z0-9_]+"' DeveloperPage.cpp | sort -u`):
-//   <key>_detail — the 11px explanation under a row's title
-//   <key>_value  — a metric row's composed value format
-// Both carry their English here exactly as the spec's tables spell it.
+// Every key here is in the store: rows that say exactly what the android
+// developer screen says use its key (and its translations); the rest are
+// untranslatable desktop keys, English in every catalog. The English must equal
+// the store's byte for byte or the lookup misses (CatalogLookupTest). A row's
+// explanation is looked up as <key>_detail, so a row whose detail differs from
+// android's (a unit, "machine" for "phone") keeps a desktop key of its own. A
+// metric's composed value format has a key of its own (dev_*_value).
 std::string DetailKey(const char* key) { return std::string(key) + "_detail"; }
 
 // ---- the override rows (spec §2.10) ----------------------------------------
@@ -102,12 +102,12 @@ const BoolSpec kBoolSpecs[] = {
      "When an exit stalls, ping it once before convicting. A congested but alive exit "
      "answers and keeps its flows; a dead one is still dropped",
      &urnet::ReliabilitySettings::BusyProbe},
-    {Section::Detection, 7, "dev_demote_before_removing", "Demote before removing",
+    {Section::Detection, 7, "dev_soft_verdict", "Demote before removing",
      "Ambiguous verdicts bench an exit instead of tearing down its flows; removal needs "
      "sustained evidence or an empty exit",
      &urnet::ReliabilitySettings::SoftVerdictDemote},
     // Placement — which exit a flow lands on, and how the pool is shaped
-    {Section::Placement, 0, "dev_live_tier_demotion", "Live tier demotion",
+    {Section::Placement, 0, "dev_effective_tier", "Live tier demotion",
      "Failing dials and survived verdicts push a provider down the ranking within a "
      "second; promotion back needs clean minutes and a proven connect",
      &urnet::ReliabilitySettings::EffectiveTierSelection},
@@ -119,27 +119,27 @@ const BoolSpec kBoolSpecs[] = {
      "A quarantined exit keeps its own sites' new connections through the early bench, "
      "when the verdict is least proven. New sites still avoid it",
      &urnet::ReliabilitySettings::QuarantineGroupFollow},
-    {Section::Placement, 7, "dev_keep_a_spare_exit_warm", "Keep a spare exit warm",
+    {Section::Placement, 7, "dev_standing_reserve", "Keep a spare exit warm",
      "Size each window one exit beyond its target so a replacement is already connected. "
      "Off waits until a loss to backfill",
      &urnet::ReliabilitySettings::StandingReserve},
-    {Section::Placement, 10, "dev_group_ips_by_site", "Group IPs by site",
+    {Section::Placement, 10, "dev_cluster_affinity", "Group IPs by site",
      "Keeps a site on one exit when its hostname is not visible",
      &urnet::ReliabilitySettings::ClusterAffinityFallback},
-    {Section::Placement, 11, "dev_converge_late_named_flows", "Converge late-named flows",
+    {Section::Placement, 11, "dev_server_name_bridge", "Converge late-named flows",
      "Moves later connections onto the exit the first one already uses",
      &urnet::ReliabilitySettings::ServerNameAffinityBridge},
     // Recovery — getting a flow moving again after its exit fails
-    {Section::Recovery, 0, "dev_rebind_quic_on_exit_loss", "Rebind QUIC on exit loss",
+    {Section::Recovery, 0, "dev_quic_rebind", "Rebind QUIC on exit loss",
      "Re-pin established QUIC flows to a live exit inside the removal instead of tearing "
      "them down",
      &urnet::ReliabilitySettings::QuicRebindOnExitLoss},
-    {Section::Recovery, 1, "dev_retry_refused_connects_elsewhere",
+    {Section::Recovery, 1, "dev_dial_failure_rerace",
      "Retry refused connects elsewhere",
      "When a provider can't reach a site, move the connection to another exit instead of "
      "letting it hang",
      &urnet::ReliabilitySettings::DialFailureRerace},
-    {Section::Recovery, 2, "dev_signal_udp_teardown", "Signal UDP teardown",
+    {Section::Recovery, 2, "dev_udp_teardown", "Signal UDP teardown",
      "Tells DNS and QUIC the path is gone instead of going silent",
      &urnet::ReliabilitySettings::UdpTeardownSignal},
     // Probing — proving an exit can actually reach real destinations
@@ -180,7 +180,7 @@ const NumSpec kNumSpecs[] = {
      true, nullptr, nullptr, &urnet::ReliabilitySettings::BlackholeReceiveTimeoutMillis,
      nullptr},
     // Placement
-    {Section::Placement, 1, "dev_max_connections_per_exit", "Max connections per exit",
+    {Section::Placement, 1, "dev_max_flows_per_exit", "Max connections per exit",
      "Losing an exit kills every connection on it. Lower spreads the damage; a site may "
      "then use more than one exit IP",
      false, "dev_unlimited", "Unlimited", nullptr,
@@ -199,7 +199,8 @@ const NumSpec kNumSpecs[] = {
      true, nullptr, nullptr, &urnet::ReliabilitySettings::RemovalBudgetWindowMillis, nullptr},
     {Section::Placement, 8, "dev_load_corroboration", "Load corroboration",
      "Extra silent destinations required per this many flows before a busy exit can be "
-     "benched on soft evidence. Off keeps the flat minimum",
+     "benched on soft evidence: a 24-flow exit at 8 needs 3 silent sites, not 2. Off keeps "
+     "the flat minimum",
      false, "off", "Off", nullptr,
      &urnet::ReliabilitySettings::BlackholeLoadCorroboration},
     {Section::Placement, 9, "dev_corroborate_silent_exits", "Corroborate silent exits",
@@ -213,7 +214,7 @@ const NumSpec kNumSpecs[] = {
     {Section::Recovery, 4, "dev_longer_tcp_idle_timeout", "Longer TCP idle timeout",
      "How long a TCP connection may sit idle, in ms. Off uses the UDP bound", true, nullptr,
      nullptr, &urnet::ReliabilitySettings::TcpSequenceIdleTimeoutMillis, nullptr},
-    {Section::Recovery, 5, "dev_udp_idle_timeout", "UDP idle timeout",
+    {Section::Recovery, 5, "dev_udp_idle_timeout_desktop", "UDP idle timeout",
      "How long a non-TCP flow may sit idle before it is reaped, in ms", true, nullptr,
      nullptr, &urnet::ReliabilitySettings::SequenceIdleTimeoutMillis, nullptr},
     {Section::Recovery, 6, "dev_uplink_silence_gate", "Uplink silence gate",
@@ -230,7 +231,7 @@ const NumSpec kNumSpecs[] = {
      "How long a qualification probe waits for an answer, in ms. Off uses the built-in 4s. "
      "It only bounds waiting for proof, it never convicts",
      true, nullptr, nullptr, &urnet::ReliabilitySettings::ProbeTimeoutMillis, nullptr},
-    {Section::Probing, 2, "dev_probe_hosts_per_pass", "Probe hosts per pass",
+    {Section::Probing, 2, "dev_probe_sample_hosts", "Probe hosts per pass",
      "How many health sites one qualification pass dials through an exit. 0 probes the "
      "entire embedded list; a smaller number rotates through it in blocks",
      false, "dev_all", "All", nullptr, &urnet::ReliabilitySettings::ProbeSampleHostCount},
@@ -238,7 +239,7 @@ const NumSpec kNumSpecs[] = {
      "How many consecutive probe passes an exit may answer with total silence before it is "
      "warned out of new-flow placement. Placement only",
      false, "off", "Off", nullptr, &urnet::ReliabilitySettings::ProbeSilenceWarnStreak},
-    {Section::Probing, 4, "dev_candidates_per_slot", "Candidates evaluated per slot",
+    {Section::Probing, 4, "dev_evaluation_pool", "Candidates evaluated per slot",
      "How many providers a window expansion pings and ranks per slot it needs, keeping the "
      "best. 1 evaluates exactly what it needs",
      false, "dev_one_min", "1 (min)", nullptr,
@@ -273,14 +274,15 @@ struct MetricSpec {
 const MetricSpec kMetricSpecs[] = {
     {"dev_flows_opened", "Flows opened",
      "Total since reset, so runs of different lengths compare"},
-    {"dev_provider_connect_failures", "Provider connect failures",
+    {"dev_dial_failures", "Provider connect failures",
      "Times a provider reported it could not open the upstream connection"},
-    {"dev_moved_to_another_exit", "Moved to another exit",
+    {"dev_flows_reraced", "Moved to another exit",
      "How many of those failures were quietly moved instead of hanging"},
     {"dev_probes", "Probes", "Qualification probes this session"},
     {"dev_busy_probes", "Busy probes",
-     "Liveness pings fired at stalled exits; acquitted ones answered and were kept"},
-    {"dev_verdicts_held", "Verdicts held",
+     "Liveness pings fired at stalled exits; acquitted ones answered and were kept, the "
+     "removals the probe prevented"},
+    {"dev_verdicts_held_desktop", "Verdicts held",
      "Convictions withheld because this machine's own uplink, not the provider, was silent "
      "(uplink / transport)"},
     {"dev_removals_deferred", "Removals deferred",
@@ -288,16 +290,16 @@ const MetricSpec kMetricSpecs[] = {
     {"dev_suspends_caught", "Suspends caught",
      "Host suspends the detector caught, each one a batch of verdicts held instead of "
      "executed on a just-resumed machine"},
-    {"dev_quic_flows_rebound", "QUIC flows rebound",
+    {"dev_flows_rebound", "QUIC flows rebound",
      "Flows moved to a warm exit inside a removal; accepted means the server took the path "
      "change without a re-dial"},
     {"dev_blast_radius", "Blast radius",
      "Connections lost per provider failure. Lower is better"},
-    {"dev_worst_single_failure", "Worst single failure",
+    {"dev_worst_loss", "Worst single failure",
      "The one the user actually feels"},
-    {"dev_recovery_time", "Recovery time",
+    {"dev_recovery", "Recovery time",
      "From an exit dying to that site answering again"},
-    {"dev_never_came_back", "Never came back", "Sites abandoned rather than recovered"},
+    {"dev_recovery_missed", "Never came back", "Sites abandoned rather than recovered"},
 };
 
 constexpr size_t kMetricCount = sizeof(kMetricSpecs) / sizeof(kMetricSpecs[0]);
@@ -971,7 +973,7 @@ void DeveloperPage::BuildExitsCard() {
       12, &kUrTextMuted));
 
   // Shuffle acts on the whole window, so it lives under the table, not in a row.
-  auto* shuffle = MakeActionButton(T_("dev_shuffle_exits", "Shuffle exit window"), false);
+  auto* shuffle = MakeActionButton(T_("dev_shuffle_exits", "Shuffle all exits"), false);
   shuffle->signal_clicked().connect([this] { RunShuffleExits(); });
   card.body->append(*shuffle);
 
@@ -1148,11 +1150,11 @@ void DeveloperPage::BuildOverrideSections() {
     const char* label;
   };
   const SectionSpec sections[] = {
-      {Section::Detection, "dev_detection", "Detection"},
-      {Section::Placement, "dev_placement", "Placement"},
-      {Section::Recovery, "dev_recovery", "Recovery"},
-      {Section::Probing, "dev_probing", "Probing"},
-      {Section::Observability, "dev_observability", "Observability"},
+      {Section::Detection, "dev_section_detection", "Detection"},
+      {Section::Placement, "dev_section_placement", "Placement"},
+      {Section::Recovery, "dev_section_recovery", "Recovery"},
+      {Section::Probing, "dev_section_probing", "Probing"},
+      {Section::Observability, "dev_section_observability", "Observability"},
   };
 
   for (const SectionSpec& section : sections) {
@@ -1490,7 +1492,7 @@ void DeveloperPage::ApplyMetrics(const urnet::ReliabilityMetrics& metrics) {
         visible = metrics.FlowsRebound > 0;
         break;
       case 9:
-        value = Format(T_("dev_blast_radius_value", "{0} per failure"),
+        value = Format(T_("dev_blast_radius_value", "{} per failure"),
                        FormatOneDecimal(metrics.MeanFlowsLostPerExitLoss));
         visible = anyLoss;
         break;
@@ -1565,7 +1567,7 @@ void DeveloperPage::ApplyExits(const std::vector<urnet::Exit>& exits) {
                               Glib::ustring(T_("dev_migrate", "Migrate")) + " " + shortId);
       migrate->signal_clicked().connect([this, clientId, shortId] {
         RunAction(Action::MigrateExit,
-                  Glib::ustring(T_("dev_migrate_exit", "Migrated exit")) + " " + shortId,
+                  Glib::ustring(T_("dev_migrated_exit", "Migrated exit")) + " " + shortId,
                   clientId);
       });
       cluster->append(*migrate);
@@ -1577,11 +1579,11 @@ void DeveloperPage::ApplyExits(const std::vector<urnet::Exit>& exits) {
             [this, fault, clientId] { RunFaultAction(fault, clientId); });
         cluster->append(*button);
       };
-      addFault("dev_drop", "Drop", Fault::Drop);
+      addFault("dev_drop_exit", "Drop", Fault::Drop);
       // Stall and Unstall are BOTH always shown and enabled: urnet::Exit
       // carries no stalled flag, so the client cannot know which one is
       // meaningful, and a toggle would have to lie about its state.
-      addFault("dev_stall", "Stall", Fault::Stall);
+      addFault("dev_stall_exit", "Stall", Fault::Stall);
       addFault("dev_unstall", "Unstall", Fault::Unstall);
 
       if (auto* inner = RowInner(row.root)) inner->append(*cluster);
@@ -2143,7 +2145,7 @@ void DeveloperPage::RunShuffleExits() {
       // ceiling; the exits table above is where the reshuffle is visible.
       SetLastAction(issued
                         ? Glib::ustring(T_("dev_requested", "Requested:")) + " " +
-                              T_("dev_shuffle_exits", "Shuffle exit window")
+                              T_("dev_shuffle_exits", "Shuffle all exits")
                         : Glib::ustring(T_("dev_not_issued",
                                            "Not issued: there is no live session to act "
                                            "on.")));
