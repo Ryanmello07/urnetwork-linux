@@ -129,7 +129,22 @@ void UpgradeSheet::BuildUi() {
   optionsBox_->append(*proTitle);
 
   // No explainer under the title: the sheet is the title and the two plan
-  // options (android UpgradeScreenHeader).
+  // options (android UpgradeScreenHeader). A blocked connect is the exception:
+  // upgrading must not read as the only way back, so the sheet says when the
+  // free data refreshes and offers to wait for it (Open).
+  freeRefreshBox_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+  freeRefreshBox_->set_margin_top(8);
+  freeRefreshLabel_ = Gtk::make_managed<Gtk::Label>();
+  freeRefreshLabel_->add_css_class("dim-label");
+  freeRefreshLabel_->set_xalign(0);
+  freeRefreshLabel_->set_wrap(true);
+  freeRefreshBox_->append(*freeRefreshLabel_);
+  auto* waitForRefresh = Gtk::make_managed<Gtk::Button>(T_("wait_for_refresh", "Wait for refresh"));
+  waitForRefresh->signal_clicked().connect([this] { set_visible(false); });
+  freeRefreshBox_->append(*waitForRefresh);
+  freeRefreshBox_->set_visible(false);
+  optionsBox_->append(*freeRefreshBox_);
+  signal_hide().connect([this] { freeRefreshTicker_.Stop(); });
 
   // the plan picker the onboarding welcome page shows: yearly in the gold
   // dress with the trial, selected by default, monthly plain below it. One
@@ -374,8 +389,18 @@ void UpgradeSheet::EmitPurchase(const char* outcome, const std::string& errorCla
   }
 }
 
-void UpgradeSheet::Open() {
+void UpgradeSheet::Open(bool freeRefresh) {
   ++*epoch_;
+  freeRefreshBox_->set_visible(freeRefresh);
+  if (freeRefresh) {
+    freeRefreshTicker_.Start([this] {
+      freeRefreshLabel_->set_text(
+          Format(T_("insufficient_balance_refreshes_in", "Free data refreshes in {}."),
+                 FreeRefreshCountdownText()));
+    });
+  } else {
+    freeRefreshTicker_.Stop();
+  }
   errorLabel_->set_visible(false);
   ApplyPrices();
   plans_->Select(true);

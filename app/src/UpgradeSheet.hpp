@@ -35,6 +35,7 @@
 
 #include <gtkmm.h>
 
+#include "DataInfoSheet.hpp"
 #include "OfferCard.hpp"
 #include "SdkHost.hpp"
 #include "SubscriptionBalance.hpp"
@@ -47,7 +48,10 @@ class UpgradeSheet : public Gtk::Window {
  public:
   UpgradeSheet(Gtk::Window& parent, SdkHost& host, SubscriptionBalanceStore& balance);
 
-  void Open();
+  // `freeRefresh`: a start connect refused for the balance opened the sheet
+  // (data_info::UpgradeShowsFreeRefresh), so it says when the free data
+  // refreshes and offers Wait for refresh.
+  void Open(bool freeRefresh = false);
   // selects the plan and goes straight to the Stripe checkout (the onboarding's Start free trial)
   void OpenCheckout(bool yearly);
   // The balance store's tier/offer changed: reprint the plan cards and the
@@ -108,6 +112,9 @@ class UpgradeSheet : public Gtk::Window {
   OfferCard* offerLine_ = nullptr;  // the active welcome offer, read-only
   bool purchaseEmitted_ = false;    // purchase.completed once per checkout
   bool paySheetActive_ = false;     // the web view shows the pay page (not Checkout)
+  Gtk::Box* freeRefreshBox_ = nullptr;  // shown when a blocked connect opened the sheet
+  Gtk::Label* freeRefreshLabel_ = nullptr;
+  FreeRefreshTicker freeRefreshTicker_;
   // waiting-state headline: "complete in the browser" (hosted) vs
   // "processing payment" (embedded, already paid in the webview)
   Gtk::Label* waitingLabel_ = nullptr;

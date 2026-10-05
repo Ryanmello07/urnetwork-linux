@@ -89,6 +89,9 @@ class ConnectDrawer : public Gtk::Box {
   void SetConnectRequested(bool requested);
   // Opens the upgrade sheet (also the target of the insufficient banner).
   void OpenUpgrade();
+  // The next OpenUpgrade's sheet says when the free data refreshes: set by the
+  // window only around the start-connect block's OpenUpgrade.
+  void MarkNextUpgradeFreeRefresh(bool on) { nextUpgradeFreeRefresh_ = on; }
 
   // Opens the location/provider chooser (owned here); called from the drawer's
   // location row and from the home screen's peers status line.
@@ -210,6 +213,7 @@ class ConnectDrawer : public Gtk::Box {
   std::unique_ptr<TransportSheet> transportSheet_;  // the client transport policy editor
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;
   std::unique_ptr<UpgradeSheet> upgradeSheet_;
+  bool nextUpgradeFreeRefresh_ = false;  // MarkNextUpgradeFreeRefresh
 };
 
 }  // namespace urnw

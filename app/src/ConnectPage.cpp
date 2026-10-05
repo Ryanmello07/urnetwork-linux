@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ConnectPage.hpp"
+#include "DataInfo.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -506,6 +507,25 @@ void ConnectPage::BuildPaneA() {
   // connect action's reading.
   heldAlert_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
   heldAlert_->set_margin_top(8);
+  {
+    // first when the free data refreshes, so Upgrade does not read as the only
+    // way back; Why? explains the balance in the "About your data" sheet
+    auto* refresh = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    freeRefreshLabel_ = Gtk::make_managed<Gtk::Label>();
+    freeRefreshLabel_->set_xalign(0);
+    freeRefreshLabel_->set_wrap(true);
+    freeRefreshLabel_->set_hexpand(true);
+    CapNatural(freeRefreshLabel_, 20);
+    refresh->append(*freeRefreshLabel_);
+    auto* why = Gtk::make_managed<Gtk::Button>(T_("data_info_why", "Why?"));
+    why->add_css_class("flat");
+    why->set_valign(Gtk::Align::CENTER);
+    why->signal_clicked().connect([this] {
+      if (on_open_data_info) on_open_data_info();
+    });
+    refresh->append(*why);
+    heldAlert_->append(*refresh);
+  }
   {
     auto* text = Gtk::make_managed<Gtk::Label>(
         T_("insufficient_balance_held_notice",
@@ -1315,6 +1335,18 @@ void ConnectPage::ApplyConnectStatus() {
 
 void ConnectPage::ApplyBalanceNotice(const balance_notice::Signals& signals) {
   heldAlert_->set_visible(balance_notice::HeldAlert(signals));
+  // the alert leads with when the free data refreshes, kept current while it shows
+  if (data_info::AlertShowsFreeRefresh(balance_notice::HeldAlert(signals))) {
+    if (!freeRefreshTicker_.Running()) {
+      freeRefreshTicker_.Start([this] {
+        freeRefreshLabel_->set_text(
+            Format(T_("insufficient_balance_refreshes_in", "Free data refreshes in {}."),
+                   FreeRefreshCountdownText()));
+      });
+    }
+  } else {
+    freeRefreshTicker_.Stop();
+  }
 }
 
 void ConnectPage::SetDaemonNotice(const Glib::ustring& notice) {

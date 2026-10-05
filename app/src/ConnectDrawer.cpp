@@ -689,7 +689,7 @@ void ConnectDrawer::OpenUpgrade() {
     if (on_guest_upgrade) on_guest_upgrade([this] { OpenUpgrade(); });
     return;
   }
-  upgradeSheet_->Open();
+  upgradeSheet_->Open(nextUpgradeFreeRefresh_);
 }
 
 void ConnectDrawer::OpenLocationChooser() {
