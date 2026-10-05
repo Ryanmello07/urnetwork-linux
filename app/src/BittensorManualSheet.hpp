@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include <gtkmm.h>
 
@@ -22,6 +23,14 @@ namespace urnw {
 // WalletConnect: which wallets it works with). Map a response with
 // bittensor::ChosenWallet. The caller connects "response" and presents it.
 GtkWidget* NewBittensorWalletChooser(GtkWindow* parent);
+
+// The text for a refused wallet sign-in, network create or added sign-in
+// method: a signature pasted on this sheet from another account than the
+// entered address (the server's signature_mismatch after a manual wallet,
+// bittensor::ConnectErrorTextFor) says so with the wallet's name; anything else
+// is `message`. `bittensorWalletId` is "" for any other method.
+std::string WalletProofRefusalText(const std::string& code, const std::string& message,
+                                   const std::string& bittensorWalletId);
 
 class BittensorManualSheet : public Gtk::Window {
  public:

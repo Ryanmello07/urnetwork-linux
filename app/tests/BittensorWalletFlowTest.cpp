@@ -292,3 +292,46 @@ UR_TEST(BittensorWalletFlow_ASignatureFromAnotherAccountNamesTheManualWallet) {
   const std::string setWallet = FunctionBody(earnings, "void SetWallet(SdkHost& host,");
   UR_EXPECT_TRUE(setWallet.find("result->error->code.value_or(std::string())") != std::string::npos);
 }
+
+// Sign-in, network create and an added sign-in method refuse the same pasted
+// signature with the same code (sign-in and create when they ask for
+// result_errors). The host carries the code and the Bittensor wallet that
+// signed, and each page words it with WalletProofRefusalText (the manual
+// sheet's ConnectErrorTextFor and the wallet's name); any other refusal reads
+// as sent.
+UR_TEST(BittensorWalletFlow_SignInCreateAndAddNameTheManualWallet) {
+  const std::string host = ReadFile("SdkHost.cpp");
+  for (const char* signature : {"void SdkHost::AuthLoginWithWallet(",
+                                "void SdkHost::FinishCreateNetworkWithWallet("}) {
+    const std::string body = FunctionBody(host, signature);
+    UR_EXPECT_TRUE_MSG(signature, body.find("args.result_errors = true;") != std::string::npos);
+    UR_EXPECT_TRUE_MSG(signature, body.find("bittensorWalletId = bittensorWalletId_;") != std::string::npos);
+  }
+  const std::string login = FunctionBody(host, "void SdkHost::AuthLoginWithWallet(");
+  UR_EXPECT_TRUE(login.find("r.errorCode = result->error->code.value_or(std::string());") !=
+                 std::string::npos);
+  const std::string create = FunctionBody(host, "void SdkHost::HandleNetworkCreateResult(");
+  UR_EXPECT_TRUE(create.find("r.errorCode = result->error->code.value_or(std::string());") !=
+                 std::string::npos);
+  const std::string add = FunctionBody(host, "void SdkHost::AddAuthMethod(");
+  UR_EXPECT_TRUE(add.find("result->error->code.value_or(std::string())") != std::string::npos);
+
+  const std::string sheet = ReadFile("BittensorManualSheet.cpp");
+  const std::string words = FunctionBody(sheet, "std::string WalletProofRefusalText(");
+  UR_EXPECT_TRUE(words.find("bittensor::ConnectErrorTextFor(") != std::string::npos);
+  UR_EXPECT_TRUE(words.find("urnet::bittensorWalletTransportFor(bittensorWalletId,") != std::string::npos);
+  UR_EXPECT_TRUE(words.find("urnet::bittensorWalletDisplayName(bittensorWalletId)") != std::string::npos);
+
+  const std::string window = ReadFile("MainWindow.cpp");
+  UR_EXPECT_TRUE_MSG("sign-in", FunctionBody(window, "void MainWindow::OnWalletAuth(")
+                                        .find("WalletProofRefusalText(result.errorCode, result.error, "
+                                              "result.bittensorWalletId)") != std::string::npos);
+  UR_EXPECT_TRUE_MSG("create", ReadFile("AuthViews.cpp")
+                                   .find("WalletProofRefusalText(r.errorCode, r.error, r.bittensorWalletId)") !=
+                                   std::string::npos);
+  const std::string account = ReadFile("AccountPage.cpp");
+  UR_EXPECT_TRUE_MSG("add", account.find("WalletProofRefusalText(result.code, result.error, bittensorWalletId)") !=
+                                std::string::npos);
+  UR_EXPECT_TRUE_MSG("add names its wallet",
+                     account.find("Answer(addsignin::Method::Wallet, walletId)") != std::string::npos);
+}
