@@ -47,6 +47,7 @@
 #include "daemon/DaemonLog.hpp"
 #include "daemon/HostMemory.hpp"
 #include "daemon/NetworkCountryWatcher.hpp"
+#include "daemon/SupportDiagnostics.hpp"
 #include "daemon/TunnelHost.hpp"
 #include "TunnelPolicy.hpp"
 
@@ -1137,6 +1138,7 @@ int main(int argc, char** argv) {
   urnw::NetworkCountryWatcher networkCountry(
       urnw::TunnelConfig().name, [&tunnel](const urnw::NetworkCountryReading& reading) {
         tunnel.SetNetworkCountryCode(reading.country_code);
+        urnw::support::LogNetworkCountry(reading);
       });
   networkCountry.Start();
   urnw::ControlServer server(tunnel, geoWriter);
@@ -1170,6 +1172,9 @@ int main(int argc, char** argv) {
       "alone: %s)\n",
       UR_APP_VERSION, stateDir.c_str(), server.AuthModeName(), SelfPath(argv[0]).c_str(),
       urnw::NetFilter::RecoveryCommand());
+  // The host facts a support reply needs, into the sdk log that "send feedback
+  // with logs" uploads; the preflight above went to the journal only.
+  urnw::support::LogDaemonStart(urnw::TunnelConfig().name, sweptArmedFloor);
   g_main_loop_run(loop);
   g_main_loop_unref(loop);
   return 0;
