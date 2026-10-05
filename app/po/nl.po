@@ -2540,7 +2540,7 @@ msgstr "Verbinding verbreken"
 #. Used in Shared/Intents/DisconnectIntent.swift.
 msgctxt "disconnect_urnetwork_vpn"
 msgid "Disconnect URnetwork VPN"
-msgstr "URnetwork VPM verbinding verbreken"
+msgstr "URnetwork VPN verbinding verbreken"
 
 #. Connection status shown on the connect panel and in the tray tooltip when the tunnel is down. The counterpart of the `connected` key.
 msgctxt "disconnected"
