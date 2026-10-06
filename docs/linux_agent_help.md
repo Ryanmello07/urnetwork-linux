@@ -98,14 +98,6 @@ cherry-picked to a paired `*-upstream` branch cut from upstream main (reliabilit
 merged upstream as connect#190, merge commit `9dc9531`; the open stack pattern is
 sdk#134/android#468, connect#198/#199/#200, sdk#136/#137).
 
-**CRITICAL CI context:** upstream `urnetwork/connect` has had **zero CI workflows on main since
-2026-08-04** — merge `35ceb0f0` ("reliability checkpoint: merge beta/custom-server") resolved to
-a parent with no `.github/` and silently dropped `test.yml` + `provider-release.yml` (a restored
-`test.yml` exists only on connect's unmerged `beta/message` branch, `c322744`). Until that
-lands, the fork's beta pipeline — which compiles all of connect+sdk from source on every push —
-is the **only recurring compile proof** for the connect/sdk beta branches. The Linux pipeline
-inherits this safety-net duty.
-
 ---
 
 ## 3. Windows client architecture
@@ -2215,79 +2207,21 @@ EOL ~yearly — plan an annual runtime bump.
 
 ---
 
-## 11. Build/CI blueprint (mirror the Windows fork pipeline)
+## 11. Build blueprint
 
 ### 11.1 Version scheme (shared with Android/Apple beta lines — keep the identity)
 
 `v<YYYY.M.D>-<code>-beta` where `code = (epoch(run created_at) - epoch(2023-05-23)) * 10` —
 seconds since company founding, ×10, monotonically increasing (e.g. `v2026.8.9-1015032940-beta`).
-Derived **once** in the SDK job from the RUN's `created_at` via
-`gh api repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID --jq .created_at` (all jobs agree
-across midnight UTC; job outputs are the only cross-job channel); base date unpadded
-(`date -u '+%Y.%-m.%-d'`). Flows into binaries via `-X github.com/urnetwork/sdk.Version` and
-build-system defines. **Unstamped builds are `0.0.0-dev` / code `0`, and code 0 NEVER
-self-updates** — the sentinel is load-bearing. `windows:app/src/Common/VersionGrammar.h`
+Base date unpadded (`date -u '+%Y.%-m.%-d'`). Flows into binaries via
+`-X github.com/urnetwork/sdk.Version` and build-system defines. **Unstamped builds are
+`0.0.0-dev` / code `0`, and code 0 NEVER self-updates** — the sentinel is load-bearing. `windows:app/src/Common/VersionGrammar.h`
 `ParseReleaseCode(std::string_view) noexcept -> uint64_t` parses
 `v<YYYY.M.D>-<code>[-beta]` (leading `v` optional; strict: 4-digit year, month 1–12, day
 1–31, code ≤ 18 digits, nothing after but literal `-beta`; 0 on any mismatch = "never
 newer") — header-only and OS-agnostic; reuse or transliterate exactly, selftest-covered.
 (MSI's 8-bit `%-y.%-m.%-d` version is Windows-only; a .deb/AppImage carries the full string —
 but note nfpm's version/release split at the last hyphen, §9.3.)
-
-### 11.2 SDK job (adapt `windows:.github/workflows/beta-build.yml` job 1, ubuntu-latest)
-
-1. Derive version (above); export as job outputs.
-2. Sibling checkout: the official `urnetwork/sdk` into `sdk/` and
-   `git clone --depth 1 https://github.com/urnetwork/connect.git connect`, depth-1
-   `urnetwork/glog` + `urnetwork/goidenticons` — all siblings, matching the `replace ../..`
-   layout. Check out official `urnetwork` repos only, never a personal fork. (The fork's
-   Windows workflow pinned its own sdk/connect forks to `beta/algorithm-dpi` regardless of
-   triggering branch; a copy
-   of the workflow must also exist on the default branch or GitHub never shows the
-   Run-workflow button. Triggers: push + PR on `beta/custom-server` AND `beta/algorithm-dpi`
-   + `workflow_dispatch`.)
-3. **goidenticons `RenderPngV2` conditional shim** (copy verbatim): grep
-   `^func RenderPngV2(` in `goidenticons/`; **only when absent** write
-   `goidenticons/render_v2_ci_shim.go` containing
-   `func RenderPngV2(data []byte, size int) ([]byte, error) { return RenderPng(data, size) }`
-   — an unconditional shim is a redeclaration compile error when the symbol exists.
-4. Toolchain: for Linux targets, none of the mingw/llvm-mingw machinery is needed — use
-   `sdk:cgo/Makefile` `build_linux` (zig cc glibc-2.35 pin, §5.5) or native gcc for
-   host-arch.
-5. `if [ ! -f go.sum ]; then go mod download all; fi` (go.sum is git-ignored), then
-   `make build_linux WARP_VERSION=<version>`.
-6. **Assert the artifact that matters**: each `libURnetworkSdk.so` exists AND is
-   ≥ 5,000,000 bytes, and the zip contains both arches — the Makefile chains with `; \` so a
-   failed `go build` still exits 0 after the header cp (this shipped a DLL-less "green" zip
-   once).
-7. Upload artifact `urnetwork-sdk-linux` = `URnetworkSdkLinux.zip`
-   (`linux/{amd64,arm64}/libURnetworkSdk.so + urnetwork_sdk.{h,hpp}`).
-
-### 11.3 App job (replaces msbuild with meson/ninja)
-
-Download `urnetwork-sdk-linux` → `linux:app/scripts/fetch-deps.sh` unpacks into
-`third_party/urnetwork-sdk/<arch>/` → `meson setup -Dsdk_arch=<arch>
--Dapp_version=$VERSION -Dgui=enabled` → `ninja` → `meson test` (pure-logic tests +
-`glibc-floor-gate.sh`; **build the daemon on Ubuntu 22.04** to honestly claim the 2.35
-floor). Then run `linux:packaging/make-deb.sh`, `make-install-tarball.sh`, `make-appimage.sh`
-(readelf webkit + glibc-ceiling gates run inside). Payload verification mirrors
-`verify-msi-payload.ps1`'s lesson — the compile-proof alone once shipped a 7-file MSI for
-months: check the .deb via `dpkg-deb -c` with a min-count + critical-file-names assertion
-(unit file, daemon binary, launcher, .desktop, udev/NM files); hard-fail the AppImage if
-`urnetwork-gui`, `libURnetworkSdk.so`, fonts, or `world-110m.json` are missing
-(copy-everything-minus-junk staging, never an allowlist — a Windows allowlist once silently
-dropped `Assets\Fonts`, and a glob artifact upload did the same). Keep `fail-fast: false` and
-always-upload build logs while bringing the platform up. Artifact name grammar symmetric with
-Windows: `URnetwork-v<version>-linux-<arch>-<kind>` alongside the MIGRATION.md names (§9.3).
-
-### 11.4 Release job
-
-`if: github.event_name != 'pull_request'` — **PRs build everything but never publish**. Then:
-`tag="v${VERSION}"`, `gh release delete "$tag" --yes || true` (same-day re-runs replace,
-never collide), `gh release create "$tag" --prerelease --target "$GITHUB_SHA" --title ...
---notes-file ...` with the artifacts. Every green push to `beta/custom-server` or
-`beta/algorithm-dpi` publishes a prerelease. **No SHA256SUMS asset** — verification rides
-GitHub's per-asset `digest` field.
 
 ### 11.5 GUI auto-update (mirror `UpdateChecker` semantics)
 
@@ -2329,9 +2263,8 @@ GitHub's per-asset `digest` field.
 
 ### 11.6 Local/offline conventions
 
-- `.local-deps/` (git-ignored): `gh run download <run-id> -n urnetwork-sdk-linux -D
-  .local-deps`; the app build consumes `URnetworkSdkLinux.zip` from there without rebuilding
-  Go (Windows `build-local.ps1` builds in ~60 s this way).
+- `.local-deps/` (git-ignored): the app build consumes `URnetworkSdkLinux.zip` from there
+  without rebuilding Go (Windows `build-local.ps1` builds in ~60 s this way).
 - `.localstate-*/` per-worktree app state via env override so concurrent agents don't share
   LocalState/rpc_session/logs (Windows uses `URNETWORK_APP_ROOT`; linux: has
   `$URNETWORK_CONTROL_SOCKET` + XDG overrides). Kill only *this worktree's* running
@@ -2342,8 +2275,7 @@ GitHub's per-asset `digest` field.
 - The upstream-owned VM pipeline (`windows:build-sdk.ps1`, `build/all/build-windows.sh`,
   monorepo parent `URNETWORK_ROOT` with sibling `localizations/`, `build/`, `vault/`) is the
   official-release shape; `linux:build.sh` / `linux:test-main.sh` /
-  `build/all/build-linux.sh` already mirror the split. The fork GitHub CI is what runs day to
-  day.
+  `build/all/build-linux.sh` already mirror the split.
 - nDPI note (smart-routing line): the Windows `ndpi-crossproof` job pins ntop/nDPI **tag 5.0**
   (commit `375f99ef9fb4999d778b57bbeece171b3fa9fba6`; "nDPI's ABI churns every minor"). On
   Linux the cross-compile contortions collapse to a native `./configure && make` proof —
@@ -2465,8 +2397,7 @@ Each milestone has a verify step; do not advance on compile-green alone (§12.2)
 **M0 — Repo hygiene + SDK .so.**
 Remove Snap (the §9.4 list), rewrite `linux:README.md` to the two-process/AppImage+deb+rpm
 reality, land this document at `docs/linux_agent_help.md`. Stand up the sibling checkout +
-`make build_linux` (zig cc, glibc 2.35) locally and in CI (§11.2), with the ≥5 MB `.so`
-assertion and the goidenticons conditional shim.
+`make build_linux` (zig cc, glibc 2.35) locally, with the ≥5 MB `.so` assertion.
 *Verify:* `sdk:cgo/smoke/smoke.cpp` + `smoke_hpp.cpp` run green against the built
 `libURnetworkSdk.so`; `urnet_live_handle_count()` returns to baseline; `gen/abi_baseline_test.go`
 green; `tests/glibc-floor-gate.sh` passes on the .so.
@@ -2526,8 +2457,7 @@ hide-mid-reveal and resize-between-Arm-and-Start leave every element settled.
 **M5 — Packaging matrix + update loop.**
 deb (nfpm→also rpm) + install.sh tarball + AppImage (webkit/glibc gates) per §9.3/§10;
 first-run pkexec daemon install from the AppImage; GUI updater with ParseReleaseCode +
-same-asset digest capture + rename-swap + two-click daemon restart; release job
-(prerelease-per-green-push, delete-then-create, `--target $GITHUB_SHA`, PRs never publish);
+same-asset digest capture + rename-swap + two-click daemon restart;
 zsync channel on get.ur.network; Flathub GUI-only manifest
 (`--filesystem=/run/urnetwork:ro`, metainfo with the host-daemon requirement) last.
 *Verify:* fresh-VM matrix — Ubuntu 22.04/24.04, Debian 12, Fedora (trayless GNOME): install
