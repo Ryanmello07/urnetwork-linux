@@ -4303,6 +4303,11 @@ msgctxt "extenders_no_session"
 msgid "Sign in and connect to manage extenders."
 msgstr "Masuk dan hubungkan untuk mengelola extender."
 
+#. Confirmation after the extenders were reset (Extenders section under account).
+msgctxt "extenders_reset_done"
+msgid "Extenders reset"
+msgstr "Extender disetel ulang"
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -6938,6 +6943,16 @@ msgstr "Kirim ulang tautan"
 msgctxt "resend_verify_code"
 msgid "Resend code"
 msgstr "Kirim ulang kode"
+
+#. Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.
+msgctxt "reset_extenders"
+msgid "Reset extenders"
+msgstr "Setel ulang extender"
+
+#. Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.
+msgctxt "reset_extenders_confirm"
+msgid "This removes the extenders you added and clears everything learned about extenders, which are then discovered again from scratch."
+msgstr "Ini menghapus extender yang Anda tambahkan dan semua yang diketahui tentang extender. Setelah itu, extender ditemukan lagi dari awal."
 
 #. Button text for resetting password
 msgctxt "reset_it"

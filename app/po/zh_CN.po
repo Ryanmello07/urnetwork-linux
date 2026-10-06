@@ -4303,6 +4303,11 @@ msgctxt "extenders_no_session"
 msgid "Sign in and connect to manage extenders."
 msgstr "登录并连接后即可管理扩展器。"
 
+#. Confirmation after the extenders were reset (Extenders section under account).
+msgctxt "extenders_reset_done"
+msgid "Extenders reset"
+msgstr "扩展器已重置"
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -6938,6 +6943,16 @@ msgstr "重新发送链接"
 msgctxt "resend_verify_code"
 msgid "Resend code"
 msgstr "重新发送代码"
+
+#. Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.
+msgctxt "reset_extenders"
+msgid "Reset extenders"
+msgstr "重置扩展器"
+
+#. Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.
+msgctxt "reset_extenders_confirm"
+msgid "This removes the extenders you added and clears everything learned about extenders, which are then discovered again from scratch."
+msgstr "这会移除已添加的扩展器，并清除已知的所有扩展器信息，之后将从头重新发现扩展器。"
 
 #. Button text for resetting password
 msgctxt "reset_it"
