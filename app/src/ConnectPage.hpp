@@ -420,6 +420,9 @@ class ConnectPage : public Gtk::Box {
   Gtk::ToggleButton* provideNever_ = nullptr;
   bool syncingProvide_ = false;
   Gtk::Label* discoverableText_ = nullptr;
+  // "Providing to N clients" under the discoverable line (ProvideLine.hpp):
+  // collapsed while there is nothing to say
+  Gtk::Label* provideStatsText_ = nullptr;
   // the provider extender row and its description, directly under the provide
   // control's footer line (N7): hidden, never disabled, while the status is
   // absent or the role unsupported

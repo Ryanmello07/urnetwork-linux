@@ -16,6 +16,7 @@
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
+#include "ProvideLine.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -652,6 +653,18 @@ void ConnectPage::BuildPaneA() {
   discoverableText_->set_wrap(true);
   CapNatural(discoverableText_, 32);
   moreOptionsHost_->append(*discoverableText_);
+  // the provide line under it, as the discoverable line is drawn; the line
+  // collapses, never a blank row, while there is nothing to say
+  provideStatsText_ = Gtk::make_managed<Gtk::Label>();
+  provideStatsText_->add_css_class("ur-caption");
+  provideStatsText_->set_xalign(0);
+  provideStatsText_->set_margin_start(12);
+  provideStatsText_->set_margin_end(12);
+  provideStatsText_->set_margin_bottom(8);
+  provideStatsText_->set_wrap(true);
+  CapNatural(provideStatsText_, 32);
+  provideStatsText_->set_visible(false);
+  moreOptionsHost_->append(*provideStatsText_);
 
   // The provider extender row (EXTENDER.md N7), after the provide control's
   // own footer line so the segmented control keeps it. Hand built like the
@@ -1457,6 +1470,28 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
             ? T_("device_discoverable", "This device is discoverable")
             : T_("device_not_discoverable",
                  "Enable provide mode to make this device discoverable"));
+  }
+  // The provide line: not while the count is unknown (the provider-only
+  // device as a daemon that predates its client count reports it), since a
+  // count there would be a guess.
+  if (provideStatsText_) {
+    Glib::ustring provide;
+    switch (ProvideLineFor(stats.provideEnabled, stats.providePaused,
+                           stats.provideClientsUnknown)) {
+      case ProvideLine::Paused:
+        provide = T_("providing_paused", "Providing (paused)");
+        break;
+      case ProvideLine::Clients:
+        // the catalog carries the plural forms; never inflect here
+        provide = Format(TN_("providing_client_count", "Providing to {} client",
+                             "Providing to {} clients",
+                             static_cast<unsigned long>(stats.provideClients)),
+                         stats.provideClients);
+        break;
+      case ProvideLine::None:
+        break;
+    }
+    kit::SetTextOrCollapse(*provideStatsText_, provide);
   }
   // §2: pane A's header strip carries PaneATitle and nothing else — the
   // provider count is pane C's ProviderCountLine (§4.3) and rendering it twice

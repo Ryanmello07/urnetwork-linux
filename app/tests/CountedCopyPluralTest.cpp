@@ -46,6 +46,8 @@ const CountedCopy kCounted[] = {
      "That's {} words — a seedphrase is 12 or 24 words"},
     {"ConnectDrawer.cpp", "provider_count", "{} provider", "{} providers"},
     {"LocationsSheet.cpp", "provider_count", "{} provider", "{} providers"},
+    {"ConnectPage.cpp", "providing_client_count", "Providing to {} client",
+     "Providing to {} clients"},
 };
 
 UR_TEST(CountedCopyIsLookedUpAsAPlural) {
