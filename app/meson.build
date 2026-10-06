@@ -242,7 +242,6 @@ executable('urnetwork-gui',
     'src/ExtenderImportSheet.cpp',
     # the vendored MIT QR encoder behind the extender share code
     'third_party/qrcodegen/qrcodegen.cpp',
-    'src/ConnectDrawer.cpp',
     'src/PostQuantumIdentity.cpp',
     'src/ContractsSheet.cpp',
     'src/LocationsSheet.cpp',
@@ -535,7 +534,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # settings mapping and messages and the stored network space values every
 # space write starts from, the per-app exclusion's slice, rules and call
 # sites, what a network peer row connects to, the provider card's idle
-# reason, status line, demand histogram and ranking rows, the exclusion
+# reason, status line, demand histogram and ranking rows, the connect page's
+# provide line, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
 # lines and their filters, which device carries a feedback's log upload, for
@@ -631,6 +631,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProviderStatusPresentationTest.cpp',
     'tests/ProviderStatusWiringTest.cpp',
     'tests/ProvideLifecycleTest.cpp',
+    'tests/ProvideLineTest.cpp',
+    'tests/LegacyHomeRemovedTest.cpp',
+    'tests/ConnectActivityRowsWiringTest.cpp',
     'tests/SignOutTest.cpp',
     'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
@@ -674,6 +677,11 @@ urnetwork_tests = executable('urnetwork-tests',
               # ProvideWhileDisconnectedWiringTest reads the provider-only device's
               # daemon and GUI call sites the same way, and
               # ProviderOnlyStatusWiringTest its statistics and settings call sites.
+              # ProvideLineTest reads the connect page's provide line the same way.
+              # LegacyHomeRemovedTest reads the window, the shell and the build lists
+              # the same way: the legacy home stays gone and every page is reachable.
+              # ConnectActivityRowsWiringTest reads the connect page's ip family row
+              # and extender panel, and their host feed, the same way.
               # SignOutWiringTest reads SdkHost and the health poll the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and

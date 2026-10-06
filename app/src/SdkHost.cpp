@@ -2862,6 +2862,11 @@ LiveStats SdkHost::ReadStats() {
     s.provideMode = daemonProviderMode_.load();
     s.provideEnabled = daemonProviderRunning_.load() && s.provideMode != 0;
     s.provideHasNetworkKey = daemonProviderNetworkKey_.load();
+    // The provide line's count, from the same status: a count it did not
+    // give is unknown, never 0.
+    const int64_t clientCount = daemonProviderClientCount_.load();
+    s.provideClients = clientCount < 0 ? 0 : clientCount;
+    s.provideClientsUnknown = s.provideEnabled && clientCount < 0;
   }
   return s;
 }
@@ -3069,10 +3074,10 @@ void SdkHost::SubscribeDrawer() {
       [this] { EmitDrawerEvent(DrawerEvent::ProviderLocations); }));
 
   // extenders (EXTENDER.md K4/K5): the directory + gossip status, read off the
-  // DEVICE so the drawer panel shows the DAEMON's directory -- the one whose
-  // dials the rings describe -- rather than this process's. The SDK coalesces
-  // to one callback per second, so no throttle is needed here; the panel
-  // dedupes by value anyway.
+  // DEVICE so the connect page's panel shows the DAEMON's directory -- the one
+  // whose dials the rings describe -- rather than this process's. The SDK
+  // coalesces to one callback per second, so no throttle is needed here; the
+  // panel dedupes by value anyway.
   presentationSubs_.push_back(device_->addExtenderStatusChangeListener(
       [this](std::optional<urnet::ExtenderStatus>) {
         EmitDrawerEvent(DrawerEvent::ExtenderStatus);
@@ -3925,11 +3930,11 @@ void SdkHost::StepProviderSelection(int steps) {
   providerLocationsVc_->stepSelection(steps);
 }
 
-// ---- extenders (EXTENDER.md K4 to K8) ---------------------------------------
+// ---- extenders (EXTENDER.md K4 to K8, N2 to N8) -----------------------------
 
 std::optional<urnet::ExtenderStatus> SdkHost::GetExtenderStatus() {
   std::scoped_lock lock(mutex_);
-  if (!device_) return std::nullopt;  // no session: the panel hides, never zeroes
+  if (!device_) return std::nullopt;  // no session: the panel reads disconnected
   try {
     return device_->getExtenderStatus();
   } catch (const std::exception& e) {
@@ -4224,17 +4229,6 @@ bool SdkHost::RequestReliability(ReliabilityRead scope,
     });
   });
   return true;
-}
-
-std::string SdkHost::PublicIdentityKeyHash() {
-  std::scoped_lock lock(mutex_);
-  return pqiVc_ ? pqiVc_->getPublicIdentityKeyHash() : std::string();
-}
-
-std::vector<uint8_t> SdkHost::PublicIdentityKey() {
-  std::scoped_lock lock(mutex_);
-  // the raw key comes off the device (the linux cgo VC exposes only the hash)
-  return device_ ? device_->getPublicIdentityKey() : std::vector<uint8_t>();
 }
 
 void SdkHost::ConnectBestAvailable() {
@@ -4611,9 +4605,11 @@ void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {
   const bool running = status.provider_running && !status.redacted;
   const int64_t tier = running ? status.provider_mode : 0;
   const bool networkKey = running && status.provider_network_key;
+  const int64_t clientCount = running ? status.provider_client_count : -1;
   bool changed = daemonProviderRunning_.exchange(running) != running;
   changed = daemonProviderMode_.exchange(tier) != tier || changed;
   changed = daemonProviderNetworkKey_.exchange(networkKey) != networkKey || changed;
+  changed = daemonProviderClientCount_.exchange(clientCount) != clientCount || changed;
   if (changed) PublishStats();
 }
 
@@ -4734,6 +4730,7 @@ void SdkHost::Shutdown() {
   daemonProviderRunning_.store(false);
   daemonProviderMode_.store(0);
   daemonProviderNetworkKey_.store(false);
+  daemonProviderClientCount_.store(-1);
   DropDaemonProviderStatsLocked();
 }
 
@@ -4770,6 +4767,7 @@ void SdkHost::Logout() {
   daemonProviderRunning_.store(false);
   daemonProviderMode_.store(0);
   daemonProviderNetworkKey_.store(false);
+  daemonProviderClientCount_.store(-1);
   DropDaemonProviderStatsLocked();
   providerStateKnown_ = false;
   providerBackoff_.NoteSuccess();

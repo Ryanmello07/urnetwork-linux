@@ -1,6 +1,7 @@
 // The extender panel's reading of ExtenderStatus: the gossip state to color
 // and label mapping, the active ring set and the "N of M" figures
-// (EXTENDER.md K4/K5).
+// (EXTENDER.md K4/K5), with Windows' rules for no status, an entry with no
+// address and a count with nothing usable.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
@@ -46,40 +47,56 @@ UR_TEST(ExtenderStatus_GossipStateMapsToTheThreeDots) {
 // The label keys are the store's, and the yellow state's key is NOT
 // "connecting" -- the store carries it as gossip_connecting.
 UR_TEST(ExtenderStatus_StateLabelsAreTheStoreKeys) {
-  const Panel connected = PanelFor(true, {}, 0, 0, "connected", 0);
+  const Panel connected = PanelFor({}, 0, 0, "connected", 0);
   UR_EXPECT_TRUE(std::string(connected.stateLabelKey()) == "connected");
   UR_EXPECT_TRUE(std::string(connected.stateLabelEnglish()) == "Connected");
 
-  const Panel connecting = PanelFor(true, {}, 0, 0, "connecting", 0);
+  const Panel connecting = PanelFor({}, 0, 0, "connecting", 0);
   UR_EXPECT_TRUE(std::string(connecting.stateLabelKey()) == "gossip_connecting");
   UR_EXPECT_TRUE(std::string(connecting.stateLabelEnglish()) == "Connecting");
 
-  const Panel disconnected = PanelFor(true, {}, 0, 0, "disconnected", 0);
+  const Panel disconnected = PanelFor({}, 0, 0, "disconnected", 0);
   UR_EXPECT_TRUE(std::string(disconnected.stateLabelKey()) == "disconnected");
   UR_EXPECT_TRUE(std::string(disconnected.stateLabelEnglish()) == "Disconnected");
 }
 
-// No status at all is NOT "zero extenders": the panel hides instead of
-// reporting a number it does not have.
-UR_TEST(ExtenderStatus_NoStatusIsUnknownNotZero) {
-  const Panel none = PanelFor(false, TwoActiveOneIdle(), 2, 9, "connected", 7);
-  UR_EXPECT_FALSE(none.known);
+// No status at all (no session) is read as the empty status, as Windows reads
+// its default view: the disconnected network, a red dot, "0 of 0" drawn faint
+// and no rings. The panel shows it rather than hiding.
+UR_TEST(ExtenderStatus_NoStatusReadsAsTheDisconnectedNetwork) {
+  const Panel none = PanelFor({}, 0, 0, std::string(), 0);
+  UR_EXPECT_TRUE(none.gossip == GossipState::Disconnected);
+  UR_EXPECT_TRUE(none.dot() == StatusDot::Red);
+  UR_EXPECT_TRUE(std::string(none.stateLabelKey()) == "disconnected");
   UR_EXPECT_EQ(0, static_cast<int>(none.ringColorHexes.size()));
   UR_EXPECT_EQ(0, none.active);
   UR_EXPECT_EQ(0, none.reserve);
   UR_EXPECT_EQ(0, none.eventsPerMinute);
-  UR_EXPECT_TRUE(none.gossip == GossipState::Disconnected);
+  UR_EXPECT_TRUE(none.countFaint());
+}
 
-  // ...and a status that really is empty reads as a known zero
-  const Panel empty = PanelFor(true, {}, 0, 0, "disconnected", 0);
-  UR_EXPECT_TRUE(empty.known);
-  UR_EXPECT_EQ(0, empty.active);
+// "0 of 0" is faint so it does not read as a figure to act on; anything usable
+// is drawn muted.
+UR_TEST(ExtenderStatus_TheCountIsFaintOnlyWithNothingUsable) {
+  UR_EXPECT_TRUE(PanelFor({}, 0, 0, "connected", 0).countFaint());
+  UR_EXPECT_FALSE(PanelFor({}, 0, 9, "connected", 0).countFaint());
+  UR_EXPECT_FALSE(PanelFor(TwoActiveOneIdle(), 2, 9, "connected", 0).countFaint());
+}
+
+// An entry with no address is not an extender, so it gets no ring, whatever
+// it says about traffic; the figures still come from the counts.
+UR_TEST(ExtenderStatus_AnEntryWithNoAddressIsNotARing) {
+  const Panel panel = PanelFor({Entry{"", "3cdd67", 3}, Entry{"192.0.2.1", "dd4f3c", 1}}, 2, 2,
+                               "connected", 0);
+  UR_EXPECT_EQ(1, static_cast<int>(panel.ringColorHexes.size()));
+  UR_EXPECT_TRUE(panel.ringColorHexes[0] == "dd4f3c");
+  UR_EXPECT_EQ(2, panel.active);
 }
 
 // A ring per extender CARRYING TRAFFIC, in the SDK's order and color. An idle
 // directory entry is reserve, not a ring.
 UR_TEST(ExtenderStatus_RingsAreTheInUseExtendersInOrder) {
-  const Panel panel = PanelFor(true, TwoActiveOneIdle(), 2, 9, "connected", 4);
+  const Panel panel = PanelFor(TwoActiveOneIdle(), 2, 9, "connected", 4);
   UR_EXPECT_EQ(2, static_cast<int>(panel.ringColorHexes.size()));
   UR_EXPECT_TRUE(panel.ringColorHexes[0] == "3cdd67");
   UR_EXPECT_TRUE(panel.ringColorHexes[1] == "dd4f3c");
@@ -93,7 +110,7 @@ UR_TEST(ExtenderStatus_RingsAreTheInUseExtendersInOrder) {
 // ActiveCount and ReserveCount as the authority, and a truncated extender list
 // must not silently restate the count.
 UR_TEST(ExtenderStatus_FiguresComeFromTheCountsNotTheEntries) {
-  const Panel panel = PanelFor(true, TwoActiveOneIdle(), 5, 40, "connected", 0);
+  const Panel panel = PanelFor(TwoActiveOneIdle(), 5, 40, "connected", 0);
   UR_EXPECT_EQ(2, static_cast<int>(panel.ringColorHexes.size()));
   UR_EXPECT_EQ(5, panel.active);
   UR_EXPECT_EQ(40, panel.reserve);
@@ -102,7 +119,7 @@ UR_TEST(ExtenderStatus_FiguresComeFromTheCountsNotTheEntries) {
 // A negative figure is a bug elsewhere; "-1 of 3" is not something a user can
 // read, so everything clamps at zero.
 UR_TEST(ExtenderStatus_NegativeCountsClampToZero) {
-  const Panel panel = PanelFor(true, {}, -1, -7, "connected", -3);
+  const Panel panel = PanelFor({}, -1, -7, "connected", -3);
   UR_EXPECT_EQ(0, panel.active);
   UR_EXPECT_EQ(0, panel.reserve);
   UR_EXPECT_EQ(0, panel.eventsPerMinute);
@@ -113,7 +130,7 @@ UR_TEST(ExtenderStatus_NegativeCountsClampToZero) {
 UR_TEST(ExtenderStatus_RingsAreCapped) {
   std::vector<Entry> many;
   for (int i = 0; i < kMaxPanelRings + 5; ++i) many.push_back(Entry{"192.0.2.1", "3cdd67", 1});
-  const Panel panel = PanelFor(true, many, kMaxPanelRings + 5, kMaxPanelRings + 5, "connected", 0);
+  const Panel panel = PanelFor(many, kMaxPanelRings + 5, kMaxPanelRings + 5, "connected", 0);
   UR_EXPECT_EQ(kMaxPanelRings, static_cast<int>(panel.ringColorHexes.size()));
   UR_EXPECT_EQ(5, panel.hiddenRings);
   UR_EXPECT_EQ(kMaxPanelRings + 5, panel.active);
@@ -122,7 +139,7 @@ UR_TEST(ExtenderStatus_RingsAreCapped) {
 // An extender with no color still gets its ring: the count of rings must match
 // the count of live extenders whatever the SDK filled in.
 UR_TEST(ExtenderStatus_ColorlessActiveExtenderStillRings) {
-  const Panel panel = PanelFor(true, {Entry{"192.0.2.1", "", 1}}, 1, 1, "connecting", 0);
+  const Panel panel = PanelFor({Entry{"192.0.2.1", "", 1}}, 1, 1, "connecting", 0);
   UR_EXPECT_EQ(1, static_cast<int>(panel.ringColorHexes.size()));
   UR_EXPECT_TRUE(panel.ringColorHexes[0].empty());
   UR_EXPECT_TRUE(panel.dot() == StatusDot::Yellow);

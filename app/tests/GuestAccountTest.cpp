@@ -46,7 +46,7 @@ bool Has(const std::string& haystack, const char* needle) {
 
 UR_TEST(nothingCallsTheRemovedGuestUpgrade) {
   for (const char* file : {"SdkHost.cpp", "SdkHost.hpp", "AuthViews.cpp", "AuthViews.hpp",
-                           "MainWindow.cpp", "ConnectDrawer.cpp"}) {
+                           "MainWindow.cpp"}) {
     const std::string source = ReadSource(file);
     UR_EXPECT_TRUE_MSG(file, !source.empty());
     UR_EXPECT_TRUE_MSG(file, !Has(source, "upgradeGuest("));
@@ -62,7 +62,14 @@ UR_TEST(guestConvertsInPlaceAndNeverSignsOut) {
   const std::string open = FunctionBody(window, "void MainWindow::OpenGuestConversion()");
   UR_EXPECT_TRUE(Has(open, "guestConversionSheet_->Open()"));
   UR_EXPECT_TRUE(!Has(open, "Logout"));
-  UR_EXPECT_TRUE(Has(window, "drawer_->on_create_account = [this] { OpenGuestConversion(); };"));
+  // Account's button reads "Create an account" for a guest and asks only for
+  // the conversion
+  const size_t account = window.find("accountPage_->on_open_upgrade = [this] {");
+  UR_EXPECT_TRUE(account != std::string::npos);
+  if (account != std::string::npos) {
+    const std::string hook = window.substr(account, 200);
+    UR_EXPECT_TRUE(Has(hook, "if (balance_.IsGuest()) {\n      OpenGuestConversion();"));
+  }
   // the sheet adds and verifies on this network, and never signs in or out
   const std::string sheet = ReadSource("GuestConversionSheet.cpp");
   UR_EXPECT_TRUE(Has(sheet, "host_.api().addAuth("));
@@ -70,11 +77,13 @@ UR_TEST(guestConvertsInPlaceAndNeverSignsOut) {
   UR_EXPECT_TRUE(Has(sheet, "host_.RefreshJwt()"));
   UR_EXPECT_TRUE(!Has(sheet, "Logout"));
   UR_EXPECT_TRUE(!Has(sheet, "host_.VerifyCode("));  // the variant that signs in
-  // the guest's upgrade door never reaches checkout
-  const std::string drawer = ReadSource("ConnectDrawer.cpp");
-  const std::string openUpgrade = FunctionBody(drawer, "void ConnectDrawer::OpenUpgrade()");
-  UR_EXPECT_TRUE(Has(openUpgrade, "if (balance_.IsGuest())"));
-  UR_EXPECT_TRUE(Has(openUpgrade, "on_guest_upgrade("));
+  // the guest's upgrade door never reaches checkout: every upgrade entry
+  // point lands on the window's OpenUpgrade, which converts a guest first
+  const std::string openUpgrade = FunctionBody(window, "void MainWindow::OpenUpgrade()");
+  const size_t gate = openUpgrade.find("if (balance_.IsGuest()) {");
+  const size_t sheetOpen = openUpgrade.find("upgradeSheet_->Open(");
+  UR_EXPECT_TRUE(gate != std::string::npos && sheetOpen != std::string::npos && gate < sheetOpen);
+  UR_EXPECT_TRUE(Has(openUpgrade, "DivertGuestToConversion("));
   // the sign-out copy is gone; the conversion copy is in the catalog
   const std::string pot = ReadSource("../po/urnetwork.pot");
   UR_EXPECT_TRUE(!Has(pot, "msgctxt \"guest_sign_out_balance_warning\""));
@@ -132,14 +141,13 @@ UR_TEST(accountAddedSignInIsVerifiedBeforeItCountsAsAdded) {
 // A purchase entry that sent a guest to the conversion continues to the
 // upgrade it was opening once the conversion is done and the guest clears
 // (GuestUpgradeContinuation, tested in GuestConversionTest); it used to close
-// back to where the user started. The plan cards' "Create an account" asks
-// only for the conversion.
+// back to where the user started. Account's "Create an account" asks only
+// for the conversion.
 UR_TEST(guestPurchaseContinuesAfterTheConversion) {
-  const std::string drawer = ReadSource("ConnectDrawer.cpp");
-  const std::string openUpgrade = FunctionBody(drawer, "void ConnectDrawer::OpenUpgrade()");
-  UR_EXPECT_TRUE_MSG("the drawer's upgrade continues after the conversion",
-                     Has(openUpgrade, "on_guest_upgrade([this] { OpenUpgrade(); });"));
   const std::string window = ReadSource("MainWindow.cpp");
+  const std::string openUpgrade = FunctionBody(window, "void MainWindow::OpenUpgrade()");
+  UR_EXPECT_TRUE_MSG("the upgrade continues after the conversion",
+                     Has(openUpgrade, "DivertGuestToConversion([this] { OpenUpgrade(); });"));
   const std::string divert = FunctionBody(window, "void MainWindow::DivertGuestToConversion(");
   UR_EXPECT_TRUE(Has(divert, "guestUpgrade_.Divert(std::move(checkout));"));
   UR_EXPECT_TRUE(Has(divert, "OpenGuestConversion();"));

@@ -1,6 +1,7 @@
-// The out-of-balance notice: the drawer banner text and the once-per-episode
-// desktop notification (urnetwork/android#483). Every case drives the tracker
-// through an explicit sequence of readings, so the expected calls are exact.
+// The out-of-balance notice: the Connect page's held alert and the
+// once-per-episode desktop notification (urnetwork/android#483). Every case
+// drives the tracker through an explicit sequence of readings, so the expected
+// calls are exact.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "Health.hpp"
@@ -17,7 +18,6 @@
 
 namespace {
 
-using urnw::balance_notice::Banner;
 using urnw::balance_notice::Signals;
 using urnw::balance_notice::Tracker;
 
@@ -132,21 +132,6 @@ UR_TEST(balanceNoticeWithdrawsOnDisconnectAndDoesNotRePost) {
   UR_EXPECT_EQ(0, sink.disconnects + idleSink.disconnects);
 }
 
-UR_TEST(balanceNoticeBannerSaysTrafficIsHeldWhileConnectRequested) {
-  ExpectText("held key", "insufficient_balance_held_notice", Banner(Held()).key);
-  ExpectText("held text", "Your traffic is held in the tunnel until you upgrade or disconnect.",
-             Banner(Held()).english);
-  Signals idle = Held();
-  idle.connectRequested = false;
-  ExpectText("not requested", "insufficient_balance_message", Banner(idle).key);
-  Signals pro = Held();
-  pro.pro = true;
-  ExpectText("pro", "insufficient_balance_message", Banner(pro).key);
-  Signals polling = Held();
-  polling.polling = true;
-  ExpectText("polling", "insufficient_balance_message", Banner(polling).key);
-}
-
 UR_TEST(balanceNoticeGateKeepsDisconnectAsTheAction) {
   // the notice tells the user to disconnect, so the button must offer it
   urnw::health::Signals s;
@@ -157,17 +142,15 @@ UR_TEST(balanceNoticeGateKeepsDisconnectAsTheAction) {
   UR_EXPECT_TRUE(urnw::health::Render(s).action == urnw::health::Action::Disconnect);
 }
 
-UR_TEST(balanceNoticeIsWiredIntoTheWindowAndTheDrawer) {
+UR_TEST(balanceNoticeIsWiredIntoTheWindow) {
   // a tracker nothing feeds is the defect again, so the call sites are read as
-  // text (MainWindow and ConnectDrawer need GTK and the SDK)
+  // text (MainWindow needs GTK and the SDK)
   const std::string window = ReadSource("MainWindow.cpp");
-  const std::string drawer = ReadSource("ConnectDrawer.cpp");
   const std::string app = ReadSource("main.cpp");
   UR_EXPECT_TRUE(Has(window, "balanceNotice_.Observe("));
   UR_EXPECT_TRUE(Has(window, "send_notification("));
   UR_EXPECT_TRUE(Has(window, "withdraw_notification("));
   UR_EXPECT_TRUE(Has(window, "ToggleConnect(/*disconnect=*/true)"));
-  UR_EXPECT_TRUE(Has(drawer, "balance_notice::Banner("));
   UR_EXPECT_TRUE(Has(app, "kBalanceNoticeDisconnectAction"));
 }
 
@@ -185,17 +168,11 @@ UR_TEST(balanceNoticeHeldAlertTable) {
     if (urnw::balance_notice::HeldAlert(s) != expected) {
       UR_FAIL("held alert wrong for case " + std::to_string(bits));
     }
-    // the banner text and the alert are one decision
-    const bool bannerHeld = std::string(Banner(s).key) == "insufficient_balance_held_notice";
-    if (bannerHeld != expected) {
-      UR_FAIL("banner disagrees with the alert, case " + std::to_string(bits));
-    }
   }
 }
 
 UR_TEST(balanceNoticeHeldAlertIsOnTheReachableConnectPage) {
-  // the drawer banner lives on the legacy column the navigation cannot reach;
-  // the Connect page the user sees must host the alert and both ways out
+  // the Connect page the user sees hosts the alert and both ways out
   const std::string page = ReadSource("ConnectPage.cpp");
   const std::string window = ReadSource("MainWindow.cpp");
   const size_t alertAt = page.find("heldAlert_ = Gtk::make_managed");

@@ -1,6 +1,6 @@
 // The ip family status row's counting, ranking and line selection -- the
-// pure logic behind the drawer's Dualstack / IPv4 / IPv6 columns. The same
-// cases as the apple IpFamilyStatusRowTests.
+// pure logic behind the connect page's Dualstack / IPv4 / IPv6 columns. The
+// same cases as the apple IpFamilyStatusRowTests.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 

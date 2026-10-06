@@ -1,5 +1,5 @@
-// The extender panel (connect/EXTENDER.md K4): in the connect drawer's client
-// statistics card, directly under the ip family status row. One line:
+// The extender panel (connect/EXTENDER.md K4): on the connect page's activity
+// pane, directly under the ip family status row, as on Windows. One line:
 //
 //   Extenders
 //   ◯ ◯   2 of 9              ● Connected   4 events/min
@@ -12,8 +12,8 @@
 // the feed or the mesh in the trailing 60 seconds.
 //
 // DECORATIVE. K4 is explicit that tapping does nothing and there is no details
-// panel, so the whole component is inert and a tap on it is a tap on the card
-// underneath, exactly like the status row above it. The rings are hidden from
+// panel, so the whole component is inert, a plain row like the status row
+// above it and unlike the transport bar above that. The rings are hidden from
 // the accessibility tree and the panel names itself with its numbers, since a
 // row of identical circles says nothing to a screen reader.
 //
@@ -40,8 +40,8 @@ class ExtenderPanel : public Gtk::Box {
   ExtenderPanel();
 
   // Feed the device's ExtenderStatus (SdkHost::GetExtenderStatus), on the
-  // DrawerEvent::ExtenderStatus tick. nullopt is "no session": the panel
-  // hides, which is a different statement from "zero extenders".
+  // DrawerEvent::ExtenderStatus tick. nullopt is "no session", which reads as
+  // the disconnected network (a red dot, 0 of 0, no rings), as on Windows.
   void SetStatus(const std::optional<urnet::ExtenderStatus>& status);
 
  private:

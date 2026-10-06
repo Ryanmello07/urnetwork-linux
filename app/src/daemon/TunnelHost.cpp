@@ -1808,12 +1808,15 @@ void TunnelHost::RetireProviderDeviceLocked() {
   status_.provider_control_mode.clear();
   status_.provider_mode = 0;
   status_.provider_network_key = false;
+  status_.provider_client_count = -1;
 }
 
 void TunnelHost::RefreshProviderStatusLocked() {
   if (!providerDevice_) return;
   int64_t tier = 0;
   bool networkKey = false;
+  // unread until its read succeeds, so a failed read shows no count
+  int64_t clientCount = -1;
   try {
     tier = providerDevice_->getProvideMode();
     if (auto keys = providerDevice_->getProvideSecretKeys()) {
@@ -1824,6 +1827,10 @@ void TunnelHost::RefreshProviderStatusLocked() {
         }
       }
     }
+    // the count a tunnel session's device gives the GUI over the device rpc:
+    // its connected network peers, none while its provider has no client yet
+    const auto peers = providerDevice_->getNetworkPeers();
+    clientCount = peers && peers->Connected ? static_cast<int64_t>(peers->Connected->size()) : 0;
   } catch (const std::exception&) {
     // status must never throw across the wire; the next tick reads again
   }
@@ -1832,6 +1839,7 @@ void TunnelHost::RefreshProviderStatusLocked() {
   status_.provider_control_mode = providerConfig_.provide_mode;
   status_.provider_mode = tier;
   status_.provider_network_key = networkKey;
+  status_.provider_client_count = clientCount;
 }
 
 // ---- the log upload (upload_logs) -------------------------------------------
@@ -2390,8 +2398,8 @@ void TunnelHost::Reap() {
       DaemonLogf("[tunnel] network change notification failed: %s\n", e.what());
     }
   }
-  // The provider-only device's tier and keys are the sdk's to change, so
-  // `status` re-reads them once a second (a no-op without that device).
+  // The provider-only device's tier, keys and peers are the sdk's to change,
+  // so `status` re-reads them once a second (a no-op without that device).
   RefreshProviderStatusLocked();
   // ...and its provider status controller stops polling the API once no GUI
   // that shows it has asked for a while (provider_stats with poll_status).

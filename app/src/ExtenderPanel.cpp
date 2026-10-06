@@ -14,14 +14,14 @@
 namespace urnw {
 namespace {
 
-// The active-extender rings, at the connect canvas's default dot size so the
-// rows under the transport bar read as one stack.
+// The active-extender rings: one text line tall, Windows' 12px ring with a 4px
+// gap, so a row of them sits beside the count without changing the row height.
 constexpr int kRingDiameter = 12;
 constexpr int kRingGap = 4;
-// An extender whose color the SDK did not fill in still rings, in this
-// neutral: the ring count must match the number of live extenders whatever the
-// status carried.
-constexpr Rgba kRingFallback{0xF8 / 255.0, 0xF8 / 255.0, 0xF8 / 255.0, 1.0};
+// An extender whose color the SDK did not fill in still rings, muted rather
+// than painted a hue this app invented: the ring count must match the number
+// of live extenders whatever the status carried.
+constexpr Rgba kRingFallback = kUrTextMuted;
 
 // The state's label, through the store. Written out per case rather than
 // looked up from the pure header's key id so the three literals stay greppable
@@ -35,10 +35,12 @@ const char* StateLabel(extender::GossipState state) {
   return "";
 }
 
+// The connect status line's own triple (ConnectPage's status dots), so a dot
+// means the same thing everywhere on the page, as on Windows.
 Rgba ColorForDot(extender::StatusDot dot) {
   switch (dot) {
     case extender::StatusDot::Green: return kUrGreen;
-    case extender::StatusDot::Yellow: return kUrAmber;
+    case extender::StatusDot::Yellow: return kUrYellow;
     case extender::StatusDot::Red: return kUrCoral;
   }
   return kUrCoral;
@@ -74,8 +76,8 @@ ExtenderPanel::ExtenderPanel() : Gtk::Box(Gtk::Orientation::VERTICAL, 6) {
 }
 
 void ExtenderPanel::BuildUi() {
-  // the same title treatment the transport bar wears, so the two stack as
-  // one block around the status row
+  // Windows' sizes and tones: an 11px muted title over 12px muted figures, the
+  // event rate 11px faint
   auto* title = Gtk::make_managed<Gtk::Label>(T_("extenders", "Extenders"));
   title->add_css_class("dim-label");
   title->add_css_class("ur-caption-11");
@@ -84,12 +86,12 @@ void ExtenderPanel::BuildUi() {
 
   auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
 
-  // the rings wrap rather than push the figures off the card
+  // the rings wrap rather than push the figures off the pane
   rings_ = Gtk::make_managed<WrapRow>(kRingGap, kRingGap);
   line->append(*rings_);
 
   count_ = Gtk::make_managed<Gtk::Label>();
-  count_->add_css_class("ur-caption-11");
+  count_->add_css_class("ur-caption-12");
   count_->set_xalign(0);
   line->append(*count_);
 
@@ -101,10 +103,11 @@ void ExtenderPanel::BuildUi() {
   kit::MarkDecorative(*dot_);  // the state label beside it says the same word
   gossip->append(*dot_);
   state_ = Gtk::make_managed<Gtk::Label>();
-  state_->add_css_class("ur-caption-11");
+  state_->add_css_class("dim-label");
+  state_->add_css_class("ur-caption-12");
   gossip->append(*state_);
   events_ = Gtk::make_managed<Gtk::Label>();
-  events_->add_css_class("dim-label");
+  events_->add_css_class("ur-label-faint");
   events_->add_css_class("ur-caption-11");
   gossip->append(*events_);
   line->append(*gossip);
@@ -122,8 +125,8 @@ void ExtenderPanel::SetStatus(const std::optional<urnet::ExtenderStatus>& status
     }
   }
   const extender::Panel panel =
-      extender::PanelFor(status.has_value(), entries,
-                         status ? status->ActiveCount : 0, status ? status->ReserveCount : 0,
+      extender::PanelFor(entries, status ? status->ActiveCount : 0,
+                         status ? status->ReserveCount : 0,
                          status ? status->GossipState : std::string(),
                          status ? status->EventCountLastMinute : 0);
   if (rendered_ && panel == panel_) return;  // a push that changes nothing touches nothing
@@ -133,11 +136,6 @@ void ExtenderPanel::SetStatus(const std::optional<urnet::ExtenderStatus>& status
 
 void ExtenderPanel::Render() {
   rendered_ = true;
-  // No status at all is NOT "zero extenders": with no session the panel is
-  // absent rather than reporting a number it does not have.
-  set_visible(panel_.known);
-  if (!panel_.known) return;
-
   rings_->Clear();
   for (const auto& colorHex : panel_.ringColorHexes) rings_->Append(*MakeRing(colorHex));
   // an empty strip collapses so the count sits where the rings would start
@@ -145,6 +143,10 @@ void ExtenderPanel::Render() {
 
   count_->set_text(Format(T_("extenders_active_of_reserve", "{0} of {1}"), panel_.active,
                           panel_.reserve));
+  // faint rather than muted when nothing is usable, so "0 of 0" does not read
+  // as a figure to act on
+  count_->remove_css_class(panel_.countFaint() ? "dim-label" : "ur-label-faint");
+  count_->add_css_class(panel_.countFaint() ? "ur-label-faint" : "dim-label");
   dot_->set_markup("<span foreground='" + HexForMarkup(ColorForDot(panel_.dot())) + "'>●</span>");
   state_->set_text(StateLabel(panel_.gossip));
   events_->set_text(Format(TN_("gossip_events_per_minute", "{} event/min", "{} events/min",

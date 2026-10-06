@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-#include "ProvideModeGlyph.hpp"
 #include "MainWindow.hpp"
 #include "DataInfo.hpp"
 #include "ProUpgradeReaction.hpp"
@@ -168,9 +167,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       }
     }, 800);
   }
-  // AdwToastOverlay across the page stack: hosts the drawer PQI panel's
-  // copied-to-clipboard toasts (the detail sheets carry their own overlays;
-  // see Ui.hpp ShowToast).
+  // AdwToastOverlay across the page stack: hosts the window's toasts (the
+  // balance recovery's reconnecting notice; the detail sheets carry their own
+  // overlays; see Ui.hpp ShowToast).
   GtkWidget* toastOverlay = adw_toast_overlay_new();
   adw_toast_overlay_set_child(ADW_TOAST_OVERLAY(toastOverlay), GTK_WIDGET(stack_.gobj()));
   // The Pro celebration wraps everything: the page stack (with its toasts)
@@ -204,13 +203,11 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (earningsPage_) earningsPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
     if (windowVisible_) {
-      status_.set_text(lastStatus_);
       // RE-READ, never replay: SetPresentationActive(true) above has just
       // reopened the connect controller, so the reading the window was last
       // pushed describes a moment when there was no controller to ask.
       ApplyConnectReading(host_.CurrentConnectReading());
       ApplyStats(lastStats_);
-      if (drawer_) drawer_->RefreshAll();  // drawer events are dropped while hidden
     }
   };
   property_visible().signal_changed().connect(reconcilePresentation);
@@ -234,18 +231,18 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       [this] { UpdateCarouselRunning(); });
 
   // Balance/plan changes land on the GTK loop already (the store marshals);
-  // fan out to the drawer's plan card, banner, and the upgrade sheet states.
+  // fan out to the upgrade sheet's states, the pages and the balance gate.
   balance_.SetChangedHandler([this] {
-    if (drawer_) drawer_->OnBalanceChanged();
+    if (upgradeSheet_) upgradeSheet_->OnBalanceChanged();
     // a converted guest's purchase continues once the server stops reporting a guest
     guestUpgrade_.Poll(balance_.IsGuest());
     UpdateBalanceNotice();  // a Pro upgrade or a settled poll moves the gate
-    // Earnings gates its upgrade door and its plan-flavoured copy on the same
-    // two bits the drawer's plan card reads.
+    // Earnings gates its upgrade door and its plan-flavoured copy on the
+    // plan's two bits.
     if (earningsPage_) earningsPage_->SetBalanceState(balance_.IsPro(), balance_.IsGuest());
     // Account paints its whole plan pane from ONE relayed snapshot — the page
     // never touches the store, which is window-owned and shared with the
-    // drawer, the balance warning and the upgrade sheet.
+    // balance warning and the upgrade sheet.
     if (accountPage_) {
       AccountBalance snapshot;
       snapshot.usedByteCount = balance_.UsedByteCount();
@@ -272,7 +269,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
           ReactToProUpgrade(true, proCelebrated_, provideControlMode);
       if (reaction.provideControlMode != provideControlMode) {
         host_.SetProvideControlMode(reaction.provideControlMode);
-        SyncProvideControlMode();
+        // the connect page's picker shows the mode the reaction holds
+        if (connectPage_) connectPage_->Resync();
       }
       if (reaction.celebrate) {
         proCelebrated_ = true;
@@ -339,17 +337,18 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // Same visibility gate: dropped while hidden, resynced on show.
   host_.SetDrawerEventHandler([this](DrawerEvent event) {
     PostToMain([this, event] {
-      if (windowVisible_ && drawer_) drawer_->OnHostEvent(event);
-      // Panes B/C of Home read the same feed the legacy drawer does. Without
-      // this, they only ever refresh on a stats push: block actions, block
-      // stats, overrides, contracts, DNS settings, blocker, routeLocal and
-      // location changes would never reach the page at all.
+      // Panes B/C of Home read this feed. Without it they would only ever
+      // refresh on a stats push: block actions, block stats, overrides,
+      // contracts, DNS settings, blocker, routeLocal and location changes
+      // would never reach the page at all.
       if (windowVisible_ && connectPage_) connectPage_->OnHostEvent(event);
       // ...and so do the earnings page's provider and extender statistics and
       // its read-only extender row (EXTENDER.md N7, O5), under the same gate
       if (windowVisible_ && earningsPage_) earningsPage_->OnHostEvent(event);
-      if (event == DrawerEvent::Peers || event == DrawerEvent::DeviceLifecycle) {
-        RefreshPeersStatus();
+      // the location chooser's pinned peers and its sections, while it is open
+      if (windowVisible_ && (event == DrawerEvent::Peers || event == DrawerEvent::Locations) &&
+          locationsSheet_ && locationsSheet_->is_visible()) {
+        locationsSheet_->Refresh();
       }
       if (event == DrawerEvent::ProviderSelection) {
         // a wheel step (or any other app-side selection) landing back from the
@@ -507,16 +506,12 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   const DaemonAuthOutcome authOutcome = host_.Control().ReplySerial() != replySerialBefore
                                             ? host_.Control().LastAuthOutcome()
                                             : DaemonAuthOutcome::None;
-  // ONE text, TWO sinks. These strings used to be written only to
-  // daemonStatusLabel_, which lives in the legacy single-column home that the
-  // nav shell never shows — so every daemon failure was invisible and pressing
-  // Connect looked like a silent no-op. ConnectPage::SetDaemonNotice is the
-  // surface the user actually sees; the legacy label is kept in sync until the
-  // legacy column is deleted.
+  // The notice goes to ConnectPage::SetDaemonNotice, the surface the user
+  // sees: a daemon failure must never look like a silent no-op of the press.
   Glib::ustring notice;
   switch (result) {
     case TunnelStartResult::Started:
-      break;  // empty notice clears both
+      break;  // an empty notice clears it
     case TunnelStartResult::DaemonUnreachable:
       // "Unreachable" is three different problems with three different fixes.
       // Collapsing them into "not running" actively misleads: against a
@@ -575,8 +570,6 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   // required behaviour, not an accident: no banner AND no g_warning for a user
   // who closed the password dialog themselves.
   if (!notice.empty()) g_warning("connect: %s", notice.c_str());
-  daemonStatusLabel_.set_text(notice);
-  daemonStatusLabel_.set_visible(!notice.empty());
   if (connectPage_) connectPage_->SetDaemonNotice(notice);
 
   // A TUNNEL WITHOUT A DESTINATION CARRIES NOTHING, AND LOOKS EXACTLY LIKE ONE
@@ -959,9 +952,6 @@ void MainWindow::size_allocate_vfunc(int width, int height, int baseline) {
 // already stopped the session and possibly armed the kill switch.
 bool MainWindow::PollDaemonHealth() {
   if (!connected_) {
-    // Nothing claimed, nothing to contradict — but the DNS verdict from the
-    // last session must not outlive it on screen.
-    if (drawer_) drawer_->SetTunnelDnsState(false, false, {});
     // The network country the daemon reads (P052), for this process's own
     // dials: from the sign-in screen on, signed in or not.
     host_.FollowDaemonNetworkCountry();
@@ -977,13 +967,6 @@ bool MainWindow::PollDaemonHealth() {
   if (!status) return true;      // unreachable is StartTunnelUi's business
   host_.FollowDaemonNetworkCountry(*status);
   host_.FollowDaemonLogUpload(*status);
-  // Feed the drawer the daemon's own DNS verdict. Until this existed, the DNS
-  // card was drawn entirely from the SDK's resolver PREFERENCES and could sit
-  // green while dns_applied was false — the daemon knew, said so in
-  // dns_detail, and nothing on screen read it.
-  if (drawer_) {
-    drawer_->SetTunnelDnsState(true, status->dns_applied, status->dns_detail);
-  }
   if (status->tunnel_state != ctl::TunnelState::Error &&
       status->tunnel_state != ctl::TunnelState::Stopped) {
     return true;
@@ -1013,8 +996,6 @@ bool MainWindow::PollDaemonHealth() {
             status->error.c_str());
   ApplyConnectReading(DaemonTunnelGoneReading());
   if (connectPage_) connectPage_->SetDaemonNotice(detail);
-  daemonStatusLabel_.set_text(detail);
-  daemonStatusLabel_.set_visible(true);
   return true;
 }
 
@@ -1497,174 +1478,19 @@ void MainWindow::OnInstantSubmit() {
   });
 }
 
-void MainWindow::RefreshPeersStatus() {
-  // ALL connected devices (online, provide or not); the chooser's peers
-  // section stays provide-filtered (connectable only)
-  const int peerCount = static_cast<int>(host_.ConnectedPeerCount());
-  const Rgba dotColor = 0 < peerCount ? kUrGreen : kUrAmber;
-  peersStatusDot_.set_markup("<span foreground='" + HexForMarkup(dotColor) + "'>●</span>");
-  peersStatusText_.set_text(
-      Format(TN_("network_peer_count", "You have {} other device online",
-                 "You have {} other devices online", peerCount),
-             peerCount));
-}
-
 void MainWindow::BuildHome() {
-  auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 16);
-  box->set_margin(24);
-  box->set_valign(Gtk::Align::START);
-
-  status_.add_css_class("title-2");
-  box->append(status_);
-
-  // daemon session problems, right under the status so the reason reads with
-  // the state. Gray (the app's unavailable treatment), wrapped, never a blank
-  // — hidden entirely while the session is healthy.
-  daemonStatusLabel_.add_css_class("dim-label");
-  daemonStatusLabel_.set_wrap(true);
-  daemonStatusLabel_.set_justify(Gtk::Justification::CENTER);
-  daemonStatusLabel_.set_visible(false);
-  box->append(daemonStatusLabel_);
-
-  connectBtn_.add_css_class("suggested-action");
-  connectBtn_.add_css_class("pill");
-  // The legacy column's own button. It is labelled from connected_ (ApplyConnectReading
-  // below), not from the page's reading, so it has no action to carry and takes
-  // the ask-the-page path — and `sigc::mem_fun` can no longer name an overloaded
-  // member anyway.
-  connectBtn_.signal_clicked().connect([this] { ToggleConnect(); });
-  box->append(connectBtn_);
-
-  // network peers status line, right under the connect button: a dot (green when
-  // peers are online, red at zero) + "{n} peers", always shown. Tapping opens the
-  // location chooser (owned by the drawer).
-  auto* peersRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  peersRow->set_halign(Gtk::Align::CENTER);
-  peersStatusDot_.set_valign(Gtk::Align::CENTER);
-  peersRow->append(peersStatusDot_);
-  peersStatusText_.add_css_class("dim-label");
-  peersRow->append(peersStatusText_);
-  peersRow->add_css_class("ur-card-tappable");
-  SetPointerCursor(*peersRow);
-  WireCardPressFeedback(*peersRow);
-  auto peersGesture = Gtk::GestureClick::create();
-  peersGesture->signal_released().connect(
-      [this](int, double, double) { if (drawer_) drawer_->OpenLocationChooser(); });
-  peersRow->add_controller(peersGesture);
-  box->append(*peersRow);
-  // discoverability (apple/android parity): whether this device is itself
-  // connectable as a same-network peer
-  discoverableLabel_.add_css_class("dim-label");
-  box->append(discoverableLabel_);
-  RefreshPeersStatus();
-
-  // live stats (macOS parity): provider window size, throughput, provide.
-  // The provider count doubles as the entry point into the provider-locations
-  // sheet; the gesture is installed once and gated on the live connected state
-  // in ApplyStats, so it is inert while disconnected, reconnecting, or showing
-  // the insufficient-balance copy.
-  providerCountLabel_.add_css_class("dim-label");
-  {
-    auto gesture = Gtk::GestureClick::create();
-    gesture->signal_released().connect([this](int, double, double) {
-      if (providerCountClickable_) OpenProviderLocations();
-    });
-    providerCountLabel_.add_controller(gesture);
-  }
-  throughputLabel_.add_css_class("dim-label");
-  provideStatsLabel_.add_css_class("dim-label");
-  box->append(providerCountLabel_);
-  box->append(throughputLabel_);
-  box->append(provideStatsLabel_);
-
-  // provide control mode picker (apple/android parity): Auto | Always |
-  // Network | Never. "Network" is the private provider — the provider is
-  // always on, but provides only to same-network peers, never publicly.
-  auto* provideRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  provideRow->set_halign(Gtk::Align::CENTER);
-  provideModeDot_.set_valign(Gtk::Align::CENTER);
-  provideRow->append(provideModeDot_);
-  provideRow->append(*Gtk::make_managed<Gtk::Label>(T_("provide", "Provide")));
-  auto* provideSegmented = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL);
-  provideSegmented->add_css_class("linked");
-  provideAuto_ = Gtk::make_managed<Gtk::ToggleButton>(T_("auto", "Auto"));
-  provideAlways_ = Gtk::make_managed<Gtk::ToggleButton>(T_("always", "Always"));
-  provideNetwork_ = Gtk::make_managed<Gtk::ToggleButton>(T_("network", "Network"));
-  provideNever_ = Gtk::make_managed<Gtk::ToggleButton>(T_("never", "Never"));
-  provideAlways_->set_group(*provideAuto_);
-  provideNetwork_->set_group(*provideAuto_);
-  provideNever_->set_group(*provideAuto_);
-  // default matches the stored default ("never" — providing is opt-in); the
-  // real state syncs in ApplyAuthState. Set before the signal connections
-  // below so construction doesn't fire an apply.
-  provideNever_->set_active(true);
-  for (Gtk::ToggleButton* button :
-       {provideAuto_, provideAlways_, provideNetwork_, provideNever_}) {
-    provideSegmented->append(*button);
-    // toggled fires for the deactivated button too; apply once on the activation
-    button->signal_toggled().connect([this, button] {
-      if (button->get_active()) ApplyProvideControlMode();
-    });
-  }
-  provideRow->append(*provideSegmented);
-  box->append(*provideRow);
-
-  // connect drawer (macOS ConnectActions parity): connection controls, the
-  // three stats cards, the block-ads-and-trackers toggle, and the plan +
-  // usage card (with the upgrade + redeem flows behind it)
-  drawer_ = Gtk::make_managed<ConnectDrawer>(host_, *this, balance_);
-  drawer_->on_create_account = [this] { OpenGuestConversion(); };
-  drawer_->on_guest_upgrade = [this](std::function<void()> checkout) {
-    DivertGuestToConversion(std::move(checkout));
-  };
-  // "Total referrals" in the drawer's usage bar opens the same Referrals page
-  // Account's row opens (one referral screen everywhere)
-  drawer_->on_open_referrals = [this] {
-    if (shell_) shell_->Navigate("referrals");
-  };
-  box->append(*drawer_);
-
-  box->append(*Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL));
-
-  auto* signOut = Gtk::make_managed<Gtk::Button>(T_("sign_out", "Sign out"));
-  signOut->add_css_class("destructive-action");
-  signOut->signal_clicked().connect([this] { host_.Logout(); });
-  box->append(*signOut);
-
-  auto* protocolLink = Gtk::make_managed<Gtk::LinkButton>(
-      "https://ur.xyz", T_("uses_ur_protocol", "Uses the UR Protocol"));
-  protocolLink->add_css_class("dim-label");
-  box->append(*protocolLink);
-
-  // AdwClamp caps the column at the drawer's max width (600, macOS parity)
-  // while still shrinking with a narrow window; the scroller makes the taller
-  // home view usable at any height.
-  GtkWidget* clamp = adw_clamp_new();
-  adw_clamp_set_maximum_size(ADW_CLAMP(clamp), 600);
-  adw_clamp_set_tightening_threshold(ADW_CLAMP(clamp), 600);
-  adw_clamp_set_child(ADW_CLAMP(clamp), GTK_WIDGET(box->gobj()));
-
-  auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
-  scroller->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
-  scroller->set_child(*Glib::wrap(clamp));
-
   // ---- the signed-in nav shell (windows NavigationView home) ---------------
-  // The old single-column home rides inside it as the Connect page until the
-  // Windows-parity ConnectPage lands; the other destinations register as they
-  // are built. The shell owns nav/status-strip/mode-notice chrome.
+  // Every destination registers as a page; the shell owns the nav, the status
+  // strip and the mode-notice chrome.
   shell_ = Gtk::make_managed<HomeShell>();
-  // The Windows-parity three-pane Home (docs/parity/connect-page.md). The
-  // legacy single-column drawer stays in the tree under "connect-legacy"
-  // until every drawer surface has been relocated into panes B/C.
+  // The Windows-parity three-pane Home (docs/parity/connect-page.md).
   connectPage_ = Gtk::make_managed<ConnectPage>(host_);
   // on_connect_action, NOT on_toggle_connect: the press carries the action that
   // wrote the label the user actually clicked. Binding the void toggle here is
   // what left the window re-deriving the action from a stricter reading, and a
   // button reading "Disconnect" starting a tunnel.
   connectPage_->on_connect_action = [this](bool disconnect) { ToggleConnect(disconnect); };
-  connectPage_->on_open_locations = [this] {
-    if (drawer_) drawer_->OpenLocationChooser();
-  };
+  connectPage_->on_open_locations = [this] { OpenLocationChooser(); };
   // "Connected to N providers" -> the provider sheet. MainWindow owns it
   // because the GeoClue location override must keep following the window
   // while the sheet is closed.
@@ -1678,7 +1504,6 @@ void MainWindow::BuildHome() {
   connectPage_->on_open_data_info = [this] { OpenDataInfo(); };
   connectPage_->on_cancel_balance_recovery = [this] { ClearBalanceRecovery(); };
   shell_->SetPage("connect", *connectPage_);
-  shell_->SetPage("connect-legacy", *scroller);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
     auto* page = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
     page->add_css_class("ur-pane");
@@ -2192,38 +2017,6 @@ void MainWindow::OnWalletAuth(const AuthResult& result) {
   });
 }
 
-// picker -> host: apply the active segment's mode. The sync guard keeps the
-// programmatic set_active in SyncProvideControlMode from writing back.
-void MainWindow::ApplyProvideControlMode() {
-  if (syncingProvideMode_) return;
-  std::string mode = "never";
-  if (provideAuto_ && provideAuto_->get_active()) {
-    mode = "auto";
-  } else if (provideAlways_ && provideAlways_->get_active()) {
-    mode = "always";
-  } else if (provideNetwork_ && provideNetwork_->get_active()) {
-    mode = "network";
-  }
-  host_.SetProvideControlMode(mode);
-}
-
-// host -> picker: reflect the device/persisted mode ("manual" and any unknown
-// value land on Never, matching the SDK's conservative default case).
-void MainWindow::SyncProvideControlMode() {
-  const std::string mode = host_.GetProvideControlMode();
-  syncingProvideMode_ = true;
-  if (mode == "auto" && provideAuto_) {
-    provideAuto_->set_active(true);
-  } else if (mode == "always" && provideAlways_) {
-    provideAlways_->set_active(true);
-  } else if (mode == "network" && provideNetwork_) {
-    provideNetwork_->set_active(true);
-  } else if (provideNever_) {
-    provideNever_->set_active(true);
-  }
-  syncingProvideMode_ = false;
-}
-
 // The post-sign-up onboarding: shown once, only after a network was created
 // on this machine (never for an existing account signing in).
 void MainWindow::NoteConnected() {
@@ -2272,8 +2065,8 @@ void MainWindow::HandleOnboardingLink(const std::string& url) {
           onboarding_->on_finished = [] { prefs::Set(kOnboardingPendingKey, false); };
         }
         onboarding_->OpenOffer();
-      } else if (drawer_) {
-        drawer_->OpenUpgrade();
+      } else {
+        OpenUpgrade();
       }
       break;
     case OnboardingLink::Feedback: {
@@ -2314,7 +2107,6 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
   // a known out-of-balance state belongs to the session that observed it
   outOfBalance_.Reset();
   if (loggedIn) {
-    SyncProvideControlMode();
     ApplyConnectReading(host_.CurrentConnectReading());
     // (re)seed the balance/plan store from the (possibly new) jwt: login and
     // app start land here
@@ -2454,22 +2246,20 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // and this window's press logging all read this one bit, so the menu can no
   // longer say "Connect" over a press that disconnects.
   connected_ = view.action == health::Action::Disconnect;
-  connectBtn_.set_label(connected_ ? T_("disconnect", "Disconnect") : T_("connect", "Connect"));
   if (view.state == health::State::Connected) NoteConnected();
   // The strip's raw status field carries the controller's OWN token now
   // (CONNECTING/CONNECTED/CONNECT_FAILED), not the two-word destination
   // vocabulary the old push could produce.
-  lastStatus_ = reading.rawStatus.empty() ? std::string("DISCONNECTED") : reading.rawStatus;
+  const std::string rawStatus =
+      reading.rawStatus.empty() ? std::string("DISCONNECTED") : reading.rawStatus;
   // the status strip's state field: dot color per state (§8.1 connect dots).
   // Green only for the state the hero calls Connected — the strip used to go
   // green the moment a destination was picked.
   if (shell_) {
     shell_->SetStatusState(
-        lastStatus_, view.state == health::State::Connected ? "#87FB67" : "#2A60FF");
+        rawStatus, view.state == health::State::Connected ? "#87FB67" : "#2A60FF");
   }
-  if (windowVisible_) status_.set_text(lastStatus_);
   if (connectPage_) connectPage_->ApplyConnectReading(reading);
-  if (drawer_) drawer_->SetConnectRequested(reading.destinationSelected);
   UpdateBalanceNotice();
   if (on_connected_change && (connected_ != wasConnected || !trayConnectedPushed_)) {
     trayConnectedPushed_ = true;
@@ -2571,11 +2361,9 @@ bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {
   ApplyBalanceRecoveryLines();
   present();
   // this opening, and only this one, says when the free data refreshes
-  if (drawer_) {
-    drawer_->MarkNextUpgradeFreeRefresh(data_info::UpgradeShowsFreeRefresh(true, balance_.IsPro()));
-  }
+  nextUpgradeFreeRefresh_ = data_info::UpgradeShowsFreeRefresh(true, balance_.IsPro());
   OpenUpgrade();
-  if (drawer_) drawer_->MarkNextUpgradeFreeRefresh(false);
+  nextUpgradeFreeRefresh_ = false;
   return true;
 }
 
@@ -2672,13 +2460,28 @@ void MainWindow::OpenDataInfo() {
 }
 
 void MainWindow::OpenUpgrade() {
-  // a guest converts first and then continues to the upgrade
-  // (ConnectDrawer::OpenUpgrade -> DivertGuestToConversion)
-  if (drawer_) {
-    drawer_->OpenUpgrade();
-  } else if (balance_.IsGuest()) {
-    OpenGuestConversion();
+  // No purchase for a legacy guest network: whatever was bought would stay on
+  // a network with no login (every upgrade entry point lands here). The gate
+  // lifts once a sign-in is added (the server's `guest` turns false), and the
+  // conversion then continues here to the upgrade it was opening.
+  if (balance_.IsGuest()) {
+    DivertGuestToConversion([this] { OpenUpgrade(); });
+    return;
   }
+  if (!upgradeSheet_) {
+    upgradeSheet_ = std::make_unique<UpgradeSheet>(*this, host_, balance_);
+    // the server refused the checkout for a guest network the balance had not
+    // reported yet: the conversion, then the upgrade once it is done
+    upgradeSheet_->on_guest_sign_in_required = [this] {
+      DivertGuestToConversion([this] { OpenUpgrade(); });
+    };
+  }
+  upgradeSheet_->Open(nextUpgradeFreeRefresh_);
+}
+
+void MainWindow::OpenLocationChooser() {
+  if (!locationsSheet_) locationsSheet_ = std::make_unique<LocationsSheet>(*this, host_);
+  locationsSheet_->Open();
 }
 
 void MainWindow::OpenProviderLocations() {
@@ -2723,12 +2526,6 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
     std::snprintf(buf, sizeof(buf), "%.1f %s", v, u);
     return buf;
   };
-  // the drawer surfaces the insufficient-balance banner (upgrade flow CTA)
-  // and the ip family status row (the same grid push the hero canvas rides)
-  if (drawer_) {
-    drawer_->SetInsufficientBalance(stats.insufficientBalance);
-    drawer_->SetProviderGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
-  }
   if (connectPage_) connectPage_->ApplyStats(stats);
   if (earningsPage_) earningsPage_->ApplyProvideState(stats);  // the provide row + gate
   // the status strip: provider + traffic (+ the Advanced raw field)
@@ -2743,53 +2540,6 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
     shell_->SetStatusRaw(stats.connectionStatus);
     shell_->SetStatusSession(host_.hasDevice() ? "tunnel" : "none");
   }
-  // the provider-locations sheet opens only from a genuine connection: not
-  // while reconnecting, and not behind the insufficient-balance copy, where the
-  // label is not a provider count at all
-  providerCountClickable_ = stats.connected && !stats.insufficientBalance;
-  providerCountLabel_.set_cursor(providerCountClickable_ ? Gdk::Cursor::create("pointer")
-                                                         : Glib::RefPtr<Gdk::Cursor>());
-  if (stats.insufficientBalance) {
-    providerCountLabel_.set_text(T_("insufficient_balance_add_balance_or_plan",
-                                    "Insufficient balance — add balance or a plan"));
-    throughputLabel_.set_text("");
-  } else if (stats.connected) {
-    // the catalog carries the plural forms; never inflect here
-    providerCountLabel_.set_text(
-        Format(TN_("connected_provider_count", "Connected to {} provider",
-                   "Connected to {} providers", static_cast<unsigned long>(stats.providerCount)),
-               stats.providerCount));
-    // arrows + rates: no translatable text
-    throughputLabel_.set_text("↓ " + rate(stats.downBitsPerSecond) + "   ↑ " +
-                              rate(stats.upBitsPerSecond));
-  } else {
-    providerCountLabel_.set_text("");
-    throughputLabel_.set_text("");
-  }
-  std::string provide;
-  if (stats.provideEnabled) {
-    provide = stats.providePaused
-                  ? std::string(T_("providing_paused", "Providing (paused)"))
-                  : Format(TN_("providing_client_count", "Providing to {} client",
-                               "Providing to {} clients",
-                               static_cast<unsigned long>(stats.provideClients)),
-                           stats.provideClients);
-  }
-  provideStatsLabel_.set_text(provide);
-
-  // provide indicator (apple parity). The effective provide mode is a bit
-  // set (0 none, 1 network, 2 friends-and-family, 3 public) — per-case only.
-  // "●" = solid dot (Network tier), "◉" = dot with outer ring (Public tier).
-  const auto provideVisual = ProvideModeGlyphFor(stats.provideMode, stats.providePaused);
-  provideModeDot_.set_markup("<span foreground='" + HexForMarkup(provideVisual.color) + "'>" +
-                             provideVisual.glyph + "</span>");
-
-  // discoverability line (apple/android parity): a paused device stays
-  // discoverable — pause stops public provide only
-  discoverableLabel_.set_text(
-      stats.provideEnabled && stats.provideHasNetworkKey
-          ? T_("device_discoverable", "This device is discoverable")
-          : T_("device_not_discoverable", "Enable provide mode to make this device discoverable"));
 }
 
 // ---- the Pro celebration ----------------------------------------------------

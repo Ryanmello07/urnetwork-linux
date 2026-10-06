@@ -110,11 +110,11 @@ enum class DrawerEvent {
   Location,         // connect location changed
   Profile,          // performance profile changed
   Locations,        // filtered provider-location list changed (the chooser)
-  Peers,            // connected network peers changed (chooser + drawer label)
-  ProviderIdentities,  // post-quantum identity set changed (PQI panel + list)
+  Peers,            // connected network peers changed (chooser + connect page)
+  ProviderIdentities,  // post-quantum identity set changed (identities list + badges)
   ProviderLocations,   // connected provider set/locations changed (locations sheet)
   ProviderSelection,   // the globe's selected provider changed (locations sheet)
-  ExtenderStatus,      // extender directory / gossip status changed (drawer panel)
+  ExtenderStatus,      // extender directory / gossip status changed (connect page panel)
   // this device's own extender role changed state or setting (the connect
   // page's extender row, the earnings page's read-only row and statistics)
   ExtenderProvideStatus,
@@ -156,6 +156,11 @@ struct LiveStats {
   bool provideEnabled = false;
   bool providePaused = false;
   int64_t provideClients = 0;
+  // provideClients could not be read: the provider-only device's count, from
+  // a daemon that predates it or a read that failed. provideClients is then 0
+  // and no count is shown. Never true with a DeviceRemote, whose peers are
+  // read directly.
+  bool provideClientsUnknown = false;
   // the LIVE effective provide mode (protocol values: 0 none, 1 network,
   // 2 friends-and-family, 3 public — a bit set, compare per-case)
   int64_t provideMode = 0;
@@ -930,15 +935,12 @@ class SdkHost {
   int64_t ConnectedPeerCount();
 
   // ---- post quantum identity (PQI) -----------------------------------------
-  // The device's own public identity key (+ its canonical 52-char display
-  // hash) and the providers with an established, identity-verified e2e
-  // session, through the SDK's shared PostQuantumIdentityViewController (the
-  // apple PostQuantumIdentityStore binds the same one). The VC lives only
-  // while the tunnel runs; reads return empty/nullopt otherwise. Changes
-  // arrive as DrawerEvent::ProviderIdentities.
+  // The providers with an established, identity-verified e2e session, through
+  // the SDK's shared PostQuantumIdentityViewController (the apple
+  // PostQuantumIdentityStore binds the same one). The VC lives only while the
+  // tunnel runs; reads return nullopt otherwise. Changes arrive as
+  // DrawerEvent::ProviderIdentities.
   std::optional<urnet::ProviderIdentityList> ProviderIdentities();
-  std::string PublicIdentityKeyHash();
-  std::vector<uint8_t> PublicIdentityKey();
 
   // ---- connected provider locations ------------------------------------------
   // Where each provider in the current connect window is, in the SDK's shared
@@ -966,14 +968,14 @@ class SdkHost {
   void SetSelectedProviderClientId(const std::string& clientId);
   void StepProviderSelection(int steps);
 
-  // ---- extenders (EXTENDER.md K4 to K8) -------------------------------------
+  // ---- extenders (EXTENDER.md K4 to K8, N2 to N8) ---------------------------
   // The extender directory + gossip status, read off the DEVICE (K5: it lives
   // on DeviceLocal and reaches DeviceRemote over the rpc with the last value
-  // cached, exactly as the provider family transport status), so the drawer
-  // panel reads the DAEMON's directory rather than this process's. nullopt
-  // with no device -- which the panel renders as "hidden", never as zero.
-  // Changes arrive as DrawerEvent::ExtenderStatus, coalesced by the SDK to one
-  // callback per second.
+  // cached, exactly as the provider family transport status), so the connect
+  // page's panel reads the DAEMON's directory rather than this process's.
+  // nullopt with no device, which the panel draws as the disconnected network
+  // (Windows' rule). Changes arrive as DrawerEvent::ExtenderStatus, coalesced
+  // by the SDK to one callback per second.
   std::optional<urnet::ExtenderStatus> GetExtenderStatus();
 
   // The status of this device's OWN extender role (EXTENDER.md N2, N3), read
@@ -1394,11 +1396,13 @@ class SdkHost {
   signout::Obligation signOut_{SignOutMarker()};
   provide::ProviderStepBackoff signOutBackoff_;  // guarded by mutex_
   // What ReadStats shows with no DeviceRemote: the provider-only device's
-  // running bit, live tier and network-key bit as `status` last said. Atomic
-  // for the same reason provideHasNetworkKey_ is.
+  // running bit, live tier, network-key bit and client count as `status` last
+  // said, the count -1 while not said. Atomic for the same reason
+  // provideHasNetworkKey_ is.
   std::atomic<bool> daemonProviderRunning_{false};
   std::atomic<int64_t> daemonProviderMode_{0};
   std::atomic<bool> daemonProviderNetworkKey_{false};
+  std::atomic<int64_t> daemonProviderClientCount_{-1};
   // The network country last applied to this process (FollowDaemonNetworkCountry).
   // Main loop only.
   std::string followedNetworkCountry_;

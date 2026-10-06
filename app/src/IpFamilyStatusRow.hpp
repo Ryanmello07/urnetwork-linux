@@ -1,5 +1,6 @@
-// The ip family status row (connect/IPV6.md D2): under the transport bar in
-// the client statistics card, one row of three equal, top-aligned columns --
+// The ip family status row (connect/IPV6.md D2): on the connect page's
+// activity pane, directly under the transport bar, as on Windows. One row of
+// three equal, top-aligned columns --
 // Dualstack, IPv4, IPv6 -- each its label in the pixel display face over its
 // status: "n connected" then "m connecting", each line only when its count is
 // not zero, or "disconnected" alone. No section title: the labels are the
@@ -16,9 +17,9 @@
 // lines come and go; the reserve is an invisible template column under the
 // live columns.
 //
-// DECORATIVE: the columns carry no interaction; a tap on the row is a tap on
-// the card. The whole component names itself to accessibility with its three
-// readings.
+// DECORATIVE: the columns carry no interaction; it is a plain row, not a
+// button like the transport bar above it. The whole component names itself to
+// accessibility with its three readings.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 

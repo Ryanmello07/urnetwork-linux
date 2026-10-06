@@ -108,7 +108,7 @@ struct AccountFlow {
 
 // §2.3 — the balance snapshot the window relays from SubscriptionBalanceStore.
 // The page deliberately does NOT own the store: the store is a window-level
-// singleton feeding the drawer, the warning bar and the upgrade sheet too, and
+// singleton feeding the warning bar and the upgrade sheet too, and
 // the Account page is one more subscriber to its publish.
 struct AccountBalance {
   int64_t usedByteCount = 0;

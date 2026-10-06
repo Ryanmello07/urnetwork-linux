@@ -35,8 +35,10 @@
 #include "ContractsSheet.hpp"
 #include "DataInfoSheet.hpp"
 #include "DnsSheet.hpp"
+#include "ExtenderPanel.hpp"
 #include "ExtenderProvidePresentation.hpp"
 #include "InsufficientBalanceNotice.hpp"
+#include "IpFamilyStatusRow.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
@@ -77,9 +79,9 @@ class ConnectPage : public Gtk::Box {
   // under it "You'll be reconnected when data is available again." with, for
   // a refused start, Cancel.
   void ApplyBalanceRecovery(const balance_notice::RecoveryLines& lines, int64_t reservedByteCount);
-  // The drawer's change feed (SdkHost::DrawerEvent), dispatched per group
-  // exactly as ConnectDrawer::OnHostEvent does: every case re-reads through the
-  // SdkHost accessors on the GTK thread and re-applies ONE surface.
+  // The drawer's change feed (SdkHost::DrawerEvent), dispatched per group:
+  // every case re-reads through the SdkHost accessors on the GTK thread and
+  // re-applies ONE surface.
   void OnHostEvent(DrawerEvent event);
   // Re-seed every pane B/C cache from the Current* getters (login, tab entry,
   // window re-show). Idempotent.
@@ -420,6 +422,9 @@ class ConnectPage : public Gtk::Box {
   Gtk::ToggleButton* provideNever_ = nullptr;
   bool syncingProvide_ = false;
   Gtk::Label* discoverableText_ = nullptr;
+  // "Providing to N clients" under the discoverable line (ProvideLine.hpp):
+  // collapsed while there is nothing to say
+  Gtk::Label* provideStatsText_ = nullptr;
   // the provider extender row and its description, directly under the provide
   // control's footer line (N7): hidden, never disabled, while the status is
   // absent or the role unsupported
@@ -465,6 +470,11 @@ class ConnectPage : public Gtk::Box {
   // the window's remote traffic by transport, directly under the remote
   // chart; its click opens the transport settings sheet
   TransportBar* transportBar_ = nullptr;
+  // Windows' next two rows: the window's providers by address family, fed by
+  // the stats push's grid, then the extender network, fed by the device's
+  // extender status. Neither is tappable.
+  IpFamilyStatusRow* ipFamilyStatusRow_ = nullptr;
+  ExtenderPanel* extenderPanel_ = nullptr;
   Gtk::Label* connectionsCount_ = nullptr;
   Gtk::Box* connectionsArea_ = nullptr;
   Gtk::Box* connectionsHost_ = nullptr;

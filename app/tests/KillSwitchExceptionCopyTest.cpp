@@ -1,10 +1,12 @@
 // The kill switch exception disclosure must match what the tunnel installs.
 // Tunnel::Open routes CaptureV6Prefixes (::/0 minus link-local, ULA and
 // multicast) into the tun, so IPv6 is routed like IPv4 and SMTP on TCP port 25
-// (connect ip_smtp_policy.go) is the one public-route exception. The popover
-// read a key the localization store does not have (kill_switch_smtp_exception),
-// so every locale showed the English text; it must read the store key that
-// carries the corrected copy and its translations.
+// (connect ip_smtp_policy.go) is the one public-route exception. The legacy
+// drawer's popover read a key the localization store does not have
+// (kill_switch_smtp_exception), so every locale showed the English text; the
+// disclosure must read the store key that carries the corrected copy and its
+// translations. It is shown in Settings, beside the safety-rule exception, as
+// Windows shows the two.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -54,12 +56,14 @@ UR_TEST(killSwitchExceptionTunnelCapturesPublicIpv6) {
   UR_EXPECT_FALSE(urnw::CaptureV6Claims("fe80::1"));
 }
 
-UR_TEST(killSwitchExceptionPopoverReadsTheStoreKey) {
-  const std::string drawer = ReadAppFile("src/ConnectDrawer.cpp");
-  UR_EXPECT_FALSE(drawer.empty());
-  UR_EXPECT_FALSE(Has(drawer, "\"kill_switch_smtp_exception\""));
-  UR_EXPECT_TRUE(Has(drawer, std::string("\"") + kKey + "\""));
-  UR_EXPECT_FALSE(Has(drawer, "IPv6 is not routed through URnetwork"));
+UR_TEST(killSwitchExceptionSettingsReadsTheStoreKey) {
+  const std::string settings = ReadAppFile("src/SettingsPage.cpp");
+  UR_EXPECT_FALSE(settings.empty());
+  UR_EXPECT_FALSE(Has(settings, "\"kill_switch_smtp_exception\""));
+  UR_EXPECT_TRUE(Has(settings, std::string("T_(\"") + kKey + "\""));
+  UR_EXPECT_TRUE(Has(settings, "\"While the VPN is connected, IPv6 is routed through URnetwork like IPv4. \""));
+  UR_EXPECT_TRUE(Has(settings, "\"Outbound SMTP on TCP port 25 bypasses the VPN, even when the kill switch \""));
+  UR_EXPECT_FALSE(Has(settings, "IPv6 is not routed through URnetwork"));
 }
 
 UR_TEST(killSwitchExceptionCopyIsInTheCatalogAndTranslated) {

@@ -1,7 +1,7 @@
-// Shared UI helpers for the connect drawer surfaces: the brand visual system
-// (the mac app's dark theme palette, centralized here), a one-time CSS
-// bootstrap for the card/chip/button styles, small widget factories used by
-// the drawer cards and detail sheets, and the entrance animation helper.
+// Shared UI helpers for the pages and their detail sheets: the brand visual
+// system (the mac app's dark theme palette, centralized here), a one-time CSS
+// bootstrap for the card/chip/button styles, small widget factories, and the
+// entrance animation helper.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -66,7 +66,8 @@ std::string HexForMarkup(const Rgba& color);
 // in every locale) to pango <a href> markup, escaping everything else.
 std::string MarkdownLinksToPango(const std::string& markdown);
 
-// Install the drawer CSS (cards, chips, dots, mono values) once per display.
+// Install the shared CSS (cards, chips, dots, mono values) once per display;
+// named for the connect drawer it was first written for.
 void EnsureDrawerCss();
 
 // A rounded-12 tinted card (vertical box, .ur-card padding).
@@ -76,15 +77,9 @@ Gtk::Box* MakeCard(int spacing = 0);
 Gtk::Label* MakeChip(const std::string& text, const std::string& colorClass, bool highlighted);
 // Muted caption label, left aligned.
 Gtk::Label* MakeCaption(const std::string& text);
-// Card header: muted title + trailing chevron.
-Gtk::Box* MakeCardHeader(const std::string& title);
 
 void RemoveAllChildren(Gtk::Box& box);
 void SetPointerCursor(Gtk::Widget& widget);
-// Pressed-state feedback for a tappable card (.ur-card-tappable): toggles the
-// "pressed" CSS class from a capture-phase click gesture, since GTK4 never
-// sets :active on a plain box. Pair with SetPointerCursor.
-void WireCardPressFeedback(Gtk::Widget& widget);
 // Pop a toast on the nearest enclosing AdwToastOverlay (MainWindow wraps its
 // page stack in one; the detail sheets carry their own). No-op without one.
 void ShowToast(Gtk::Widget& context, const std::string& message);

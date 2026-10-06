@@ -1,7 +1,7 @@
-// ONE rendering of the kill switch's real state, shared by the three surfaces
-// that carry the toggle (ConnectPage's connect options, ConnectDrawer's
-// connection controls, SettingsPage's Connections pane). It exists so those
-// three cannot disagree about what the same SdkHost::KillSwitchStatus means —
+// ONE rendering of the kill switch's real state, shared by the two surfaces
+// that carry the toggle (ConnectPage's connect options and SettingsPage's
+// Connections pane). It exists so those two cannot disagree about what the
+// same SdkHost::KillSwitchStatus means —
 // on this control a surface that says "on" while another says "not in force"
 // is worse than either answer alone.
 //

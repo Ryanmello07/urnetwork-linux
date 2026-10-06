@@ -7,8 +7,7 @@
 namespace urnw {
 namespace {
 
-// A colored bullet used as a row's leading dot (same markup form the drawer's
-// selected-location dot uses).
+// A colored bullet used as a row's leading dot.
 Gtk::Label* MakeColorDot(const Rgba& color) {
   auto* dot = Gtk::make_managed<Gtk::Label>();
   dot->set_valign(Gtk::Align::CENTER);

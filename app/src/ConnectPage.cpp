@@ -16,6 +16,7 @@
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
+#include "ProvideLine.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -297,8 +298,8 @@ uint64_t LocationSig(const std::optional<urnet::ConnectLocation>& location) {
 ConnectPage::ConnectPage(SdkHost& host)
     : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0), host_(host) {
   add_css_class("ur-pane");
-  // the dns pill capsule + the dot tones live in the drawer sheet (Ui.cpp);
-  // idempotent, and the legacy drawer may not have been built yet
+  // the dns pill capsule + the dot tones live in the shared sheet (Ui.cpp);
+  // idempotent
   EnsureDrawerCss();
   EnsurePageCss();
   BuildPaneA();
@@ -652,6 +653,18 @@ void ConnectPage::BuildPaneA() {
   discoverableText_->set_wrap(true);
   CapNatural(discoverableText_, 32);
   moreOptionsHost_->append(*discoverableText_);
+  // the provide line under it, as the discoverable line is drawn; the line
+  // collapses, never a blank row, while there is nothing to say
+  provideStatsText_ = Gtk::make_managed<Gtk::Label>();
+  provideStatsText_->add_css_class("ur-caption");
+  provideStatsText_->set_xalign(0);
+  provideStatsText_->set_margin_start(12);
+  provideStatsText_->set_margin_end(12);
+  provideStatsText_->set_margin_bottom(8);
+  provideStatsText_->set_wrap(true);
+  CapNatural(provideStatsText_, 32);
+  provideStatsText_->set_visible(false);
+  moreOptionsHost_->append(*provideStatsText_);
 
   // The provider extender row (EXTENDER.md N7), after the provide control's
   // own footer line so the segmented control keeps it. Hand built like the
@@ -762,9 +775,8 @@ void ConnectPage::BuildPaneA() {
     return toggle;
   };
   // The three PerformanceProfile toggles ride ONE writer
-  // (PushPerformanceProfile) exactly as ConnectDrawer::ApplyControls does:
-  // SdkHost::GetPerformanceProfile/SetPerformanceProfile are the accessors and
-  // have been since the drawer shipped.
+  // (PushPerformanceProfile): SdkHost::GetPerformanceProfile and
+  // SetPerformanceProfile are the accessors.
   // a Fixed IP window keeps its one exit for the session (connect stickyExit)
   fixedIpToggle_ = addToggleRow(T_("fixed_ip", "Fixed IP"), false,
                                 [this](bool) { PushPerformanceProfile(); },
@@ -885,6 +897,23 @@ void ConnectPage::BuildPaneB() {
   transportBar_->on_activate = [this] { OpenTransportSheet(); };
   if (auto* inner = RowInner(transportRow)) inner->append(*transportBar_);
   paneB_.content->append(*transportRow);
+
+  // Windows' next two rows (connect/IPV6.md D2, EXTENDER.md K4): the ip family
+  // status row directly under the transport bar, then the extender panel. Plain
+  // rows on the pane's 12px inset with no rule of their own: they are not
+  // tappable, and the connections group header below draws the separation.
+  ipFamilyStatusRow_ = Gtk::make_managed<IpFamilyStatusRow>();
+  ipFamilyStatusRow_->set_margin_start(12);
+  ipFamilyStatusRow_->set_margin_end(12);
+  ipFamilyStatusRow_->set_margin_top(8);
+  ipFamilyStatusRow_->set_margin_bottom(8);
+  paneB_.content->append(*ipFamilyStatusRow_);
+  extenderPanel_ = Gtk::make_managed<ExtenderPanel>();
+  extenderPanel_->set_margin_start(12);
+  extenderPanel_->set_margin_end(12);
+  extenderPanel_->set_margin_top(8);
+  extenderPanel_->set_margin_bottom(8);
+  paneB_.content->append(*extenderPanel_);
 
   // 3.3 the connections group header; its meta is the FULL feed count even
   // though the list caps at 200 rows
@@ -1428,6 +1457,9 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
   // the hero's grid feed — fed unconditionally, empty list included (the
   // canvas renders it as the bare lattice; an empty grid is a NORMAL state)
   canvas_->SetGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
+  // the same grid, counted by proven address family; an empty grid reads as
+  // three "disconnected" columns
+  if (ipFamilyStatusRow_) ipFamilyStatusRow_->SetGrid(stats.gridPoints);
 
   // 3.1 pane B header carries the live throughput; with no session the line
   // COLLAPSES entirely rather than reading "0 bps"
@@ -1457,6 +1489,28 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
             ? T_("device_discoverable", "This device is discoverable")
             : T_("device_not_discoverable",
                  "Enable provide mode to make this device discoverable"));
+  }
+  // The provide line: not while the count is unknown (the provider-only
+  // device as a daemon that predates its client count reports it), since a
+  // count there would be a guess.
+  if (provideStatsText_) {
+    Glib::ustring provide;
+    switch (ProvideLineFor(stats.provideEnabled, stats.providePaused,
+                           stats.provideClientsUnknown)) {
+      case ProvideLine::Paused:
+        provide = T_("providing_paused", "Providing (paused)");
+        break;
+      case ProvideLine::Clients:
+        // the catalog carries the plural forms; never inflect here
+        provide = Format(TN_("providing_client_count", "Providing to {} client",
+                             "Providing to {} clients",
+                             static_cast<unsigned long>(stats.provideClients)),
+                         stats.provideClients);
+        break;
+      case ProvideLine::None:
+        break;
+    }
+    kit::SetTextOrCollapse(*provideStatsText_, provide);
   }
   // §2: pane A's header strip carries PaneATitle and nothing else — the
   // provider count is pane C's ProviderCountLine (§4.3) and rendering it twice
@@ -1820,9 +1874,8 @@ void ConnectPage::ApplyDnsCard() {
         dnsSettings_->EnableFallback);
 }
 
-// iOS DnsRecommendationPill parity (and ConnectDrawer::RefreshDnsPill verbatim,
-// with §6's pill keys): a regional recommendation NEVER falls through to the
-// safe-defaults nudge.
+// iOS DnsRecommendationPill parity, with §6's pill keys: a regional
+// recommendation NEVER falls through to the safe-defaults nudge.
 void ConnectPage::ApplyDnsRecommendationPill() {
   if (!dnsPillRow_ || !dnsPillDot_ || !dnsPillText_) return;
   auto show = [this](const std::string& text, const std::string& countryCode) {
@@ -2222,9 +2275,8 @@ void ConnectPage::OnExtenderToggled() {
 }
 
 // ---- connect options: the performance profile (§2.8) ---------------------------
-// ConnectDrawer::RefreshControls/ApplyControls, reused verbatim: the Linux
-// SdkHost has exposed GetPerformanceProfile/SetPerformanceProfile since the
-// drawer shipped, and a nil profile means Auto with everything off.
+// The Linux SdkHost exposes GetPerformanceProfile/SetPerformanceProfile, and a
+// nil profile means Auto with everything off.
 
 void ConnectPage::SeedConnectControls() {
   if (!modeAuto_ || !fixedIpToggle_ || !anonToggle_ || !pqeToggle_) return;
@@ -2289,7 +2341,7 @@ void ConnectPage::PushPerformanceProfile() {
 
 // §2.3: the row says WHERE you are connecting. A selected network peer resolves
 // to its device name (the raw client id is not a place), and no selection is
-// "Best available provider" — ConnectDrawer::RefreshControls' logic verbatim.
+// "Best available provider".
 void ConnectPage::ApplyLocationRow() {
   if (!locationText_ || !locationRow_) return;
   // renders from the cached reading: the row is re-rendered on BOTH the
@@ -2401,6 +2453,9 @@ void ConnectPage::RefreshFeeds(bool force) {
   // when something pushes. Cheap: ReadConnectReading takes no lock and reads
   // getters the stats feed already reads many times a second.
   ApplyConnectReading(host_.CurrentConnectReading());
+  // the extender network: no event fires when the device goes, so a device
+  // arriving or leaving is re-read here; the panel drops an unchanged reading
+  if (extenderPanel_) extenderPanel_->SetStatus(host_.GetExtenderStatus());
   {
     auto actions = host_.BlockActions();
     const uint64_t sig = BlockActionsSig(actions);
@@ -2680,8 +2735,9 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       // they must survive with this page unbuilt
       break;
     case DrawerEvent::ExtenderStatus:
-      // the extender panel is the drawer's, and the hero canvas's rings ride
-      // the provider grid rather than the status
+      // the SDK coalesces this to one callback per second; the panel drops a
+      // push that changes nothing, so this costs a read and a compare
+      if (extenderPanel_) extenderPanel_->SetStatus(host_.GetExtenderStatus());
       break;
     case DrawerEvent::ExtenderProvideStatus:
       ApplyExtenderProvideState();

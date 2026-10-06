@@ -3,8 +3,9 @@
 // defaults (20 referrals, 3 GiB/day) instead of the terms the server returned
 // with the referral code. Every usage bar now reads its figures and the
 // server's terms together through UsageBarDataFrom, and the bar keeps no terms
-// of its own. ConnectDrawer and UsageBar need GTK and the SDK, so their
-// sources are read as text, the same way UpdateWiringTest does.
+// of its own; the store-fed bar left is onboarding's. Onboarding and UsageBar
+// need GTK and the SDK, so their sources are read as text, the same way
+// UpdateWiringTest does.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -79,17 +80,17 @@ UR_TEST(usageBarDataCarriesTheServersReferralTerms) {
   UR_EXPECT_EQ(int64_t{35}, row.bonusGibPerDay);
 }
 
-UR_TEST(theDrawersUsageBarGetsTheServersReferralTerms) {
-  const std::string drawer = ReadSource("ConnectDrawer.cpp");
+UR_TEST(theOnboardingUsageBarGetsTheServersReferralTerms) {
+  const std::string onboarding = ReadSource("Onboarding.cpp");
   const std::string bar = ReadSource("UsageBar.hpp");
-  if (drawer.empty() || bar.empty()) {
-    UR_FAIL("could not read ConnectDrawer.cpp / UsageBar.hpp to check the usage bar wiring");
+  if (onboarding.empty() || bar.empty()) {
+    UR_FAIL("could not read Onboarding.cpp / UsageBar.hpp to check the usage bar wiring");
     return;
   }
-  const std::string refresh = FunctionBody(drawer, "void ConnectDrawer::RefreshPlanCard()");
-  UR_EXPECT_TRUE_MSG("the drawer's usage bar is not filled from UsageBarDataFrom(balance_), "
+  const std::string refresh = FunctionBody(onboarding, "void OnboardingWindow::RefreshBalance()");
+  UR_EXPECT_TRUE_MSG("onboarding's usage bar is not filled from UsageBarDataFrom(balance_), "
                      "so it misses the server's referral terms",
-                     Has(refresh, "usageBar_->SetData(UsageBarDataFrom(balance_))"));
+                     Has(refresh, "usage_->SetData(UsageBarDataFrom(balance_))"));
   // a bar with its own terms shows them whenever a caller forgets to set them
   UR_EXPECT_FALSE(Has(bar, "maxReferrals_"));
   UR_EXPECT_FALSE(Has(bar, "bonusGibPerDay_"));

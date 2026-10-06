@@ -150,7 +150,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | Verb | Payload | Reply |
 |---|---|---|
 | `hello` | `protocol_version`, `sdk_version` | `protocol_version`, `sdk_version`, `daemon_version` |
-| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode`, `network_country_code`, `log_upload_id`, `log_upload_state`, `log_upload_carrier` |
+| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode`, `provider_client_count`, `network_country_code`, `log_upload_id`, `log_upload_state`, `log_upload_carrier` |
 | `start_tunnel` | `by_jwt`, `instance_id`, `app_version` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `attach_tunnel` | `instance_id`, `rpc_session_id` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `stop_tunnel` | — | `ok` |
@@ -190,7 +190,12 @@ it with everything else. It is authorized like `set_provide`, without a prompt, 
 the GUI's health poll sends it as well as Disconnect. A request that differs from the
 running device's (`ctl::SameProviderDevice`) replaces it, which is how a saved network
 space value (the bootstrap DoH servers, VLESS, the private extender) reaches a running
-provider: the GUI sends `start_provider` again when one is saved.
+provider: the GUI sends `start_provider` again when one is saved. `status` publishes the
+device: `provider_running`, its control mode, live tier and network key, and
+`provider_client_count`, its connected network peers (the count a tunnel session's device
+gives the GUI), which the provide line ("Providing to N clients") reads while
+disconnected. The count is -1 until it is read, and absent from a daemon that predates it,
+which parses -1 too; the GUI then shows no count rather than 0.
 
 `provider_stats` is what the GUI's provider statistics read while there is no tunnel
 session, because the provider-only device has no `DeviceRemote`: the daemon runs the

@@ -122,7 +122,5 @@ UR_TEST(SafetyRule_KillSwitchDisclosureWiring) {
   const std::string settings = ReadSource("SettingsPage.cpp");
   UR_EXPECT_TRUE(settings.find("\"kill_switch_exception_unrecognized_encrypted\"") !=
                  std::string::npos);
-  const std::string drawer = ReadSource("ConnectDrawer.cpp");
-  UR_EXPECT_TRUE(drawer.find("\"kill_switch_exception_unrecognized_encrypted\"") !=
-                 std::string::npos);
+  UR_EXPECT_TRUE(settings.find("\"kill_switch_exception_smtp_detail\"") != std::string::npos);
 }

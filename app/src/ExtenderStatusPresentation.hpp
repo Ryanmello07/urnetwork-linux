@@ -9,6 +9,12 @@
 // green connected, yellow connecting, red disconnected -- with the state's
 // label and the count of records and revocations applied in the trailing 60 s.
 //
+// Windows' rules (its ExtenderPresentation.h): with no status (no session) the
+// panel reads as the disconnected network, a red dot and "0 of 0" with no
+// rings, which is the truth rather than an empty state to hide; an entry with
+// no address is not a ring; and "0 of 0" is drawn faint so it does not read as
+// a figure to act on.
+//
 // Header-only and free of GTK and the SDK so the unit tests need no vendored
 // headers (tests/ExtenderStatusPresentationTest.cpp).
 // SPDX-License-Identifier: MPL-2.0
@@ -91,9 +97,6 @@ struct Entry {
 inline constexpr int kMaxPanelRings = 32;
 
 struct Panel {
-  // false when there is no status at all (no session, no daemon): the panel
-  // hides rather than claiming zero extenders, which is a different reading.
-  bool known = false;
   // one ring per active extender, in the SDK's order, in its own color
   std::vector<std::string> ringColorHexes;
   // active extenders the ring cap dropped; 0 normally
@@ -106,13 +109,15 @@ struct Panel {
   StatusDot dot() const { return DotFor(gossip); }
   const char* stateLabelKey() const { return StateLabelKey(gossip); }
   const char* stateLabelEnglish() const { return StateLabelEnglish(gossip); }
+  // nothing usable at all: the "N of M" figure is drawn faint
+  bool countFaint() const { return reserve == 0; }
 
   // By value, so the panel can drop a push that changes nothing rather than
   // rebuilding its ring strip once a second forever.
   friend bool operator==(const Panel& a, const Panel& b) {
-    return a.known == b.known && a.ringColorHexes == b.ringColorHexes &&
-           a.hiddenRings == b.hiddenRings && a.active == b.active && a.reserve == b.reserve &&
-           a.gossip == b.gossip && a.eventsPerMinute == b.eventsPerMinute;
+    return a.ringColorHexes == b.ringColorHexes && a.hiddenRings == b.hiddenRings &&
+           a.active == b.active && a.reserve == b.reserve && a.gossip == b.gossip &&
+           a.eventsPerMinute == b.eventsPerMinute;
   }
   friend bool operator!=(const Panel& a, const Panel& b) { return !(a == b); }
 };
@@ -127,19 +132,20 @@ struct Panel {
 // authority the design names.
 //
 // Every count is clamped at zero: a negative figure is a bug somewhere else
-// and "-1 of 3" is not a reading a user can act on.
-inline Panel PanelFor(bool haveStatus, const std::vector<Entry>& extenders, int64_t activeCount,
+// and "-1 of 3" is not a reading a user can act on. No status at all is read
+// as the empty one (no entries, zero counts, no state), which is the
+// disconnected panel.
+inline Panel PanelFor(const std::vector<Entry>& extenders, int64_t activeCount,
                       int64_t reserveCount, const std::string& gossipState,
                       int64_t eventCountLastMinute) {
   Panel out;
-  if (!haveStatus) return out;
-  out.known = true;
   out.active = std::max<int64_t>(activeCount, 0);
   out.reserve = std::max<int64_t>(reserveCount, 0);
   out.gossip = GossipStateFor(gossipState);
   out.eventsPerMinute = std::max<int64_t>(eventCountLastMinute, 0);
   for (const auto& entry : extenders) {
     if (entry.inUse <= 0) continue;  // "active" is carrying traffic right now
+    if (entry.ip.empty()) continue;  // an entry with no address is not an extender
     if (static_cast<int>(out.ringColorHexes.size()) >= kMaxPanelRings) {
       ++out.hiddenRings;
       continue;
