@@ -1,19 +1,27 @@
-// Signing out of URnetwork (SignOut.hpp, owner decision 2026-10-05): a
-// sign-out sends Quit's stop_tunnel; one the daemon could not be told stays
-// owed in a marker that outlives the app, is delivered before anything else
-// once the daemon can be reached, and holds every start until then; another
-// user's session is never touched; and the next sign-in's reconcile starts
-// what its settings say, as a fresh launch's does.
+// Signing out of URnetwork (SignOut.hpp, owner decisions 2026-10-05): a
+// sign-out sends Quit's stop_tunnel, then logout, after which the daemon keeps
+// neither the device identity nor the credential its sdk stored for the
+// account, so the next network starts on a new identity; one the daemon could
+// not be told stays owed in a marker that outlives the app, is delivered before
+// anything else once the daemon can be reached, and holds every start until
+// then; another user's session, its identity and its credential are never
+// touched; and the next sign-in's reconcile starts what its settings say, as a
+// fresh launch's does.
 //
 // The daemon is a fake with urnetworkd's semantics where a sign-out meets
 // them: stop_tunnel ends this user's session and retires the provider-only
-// device; set_provide with a mode that does not provide retires the device; a
-// start is refused beside a session; a restart ends what ran and starts
-// nothing by itself; a status for another user's session is redacted. The app
-// is modeled as SdkHost runs it, and those lines are pinned in SdkHost by
+// device; logout does too, and deletes the identity and the stored credential,
+// but is refused beside another user's live session and while a bring-up owns
+// the session, and a daemon that predates it answers `unknown verb`; a start
+// makes the identity once and stores its account's credential; set_provide
+// with a mode that does not provide retires the device; a start is refused
+// beside a session; a restart ends what ran and starts nothing by itself; a
+// status for another user's session is redacted. The app is modeled as
+// SdkHost runs it, and those lines are pinned in SdkHost by
 // SignOutWiringTest.cpp: the reconcile delivers an owed sign-out first, a
-// signed-out reconcile provides nothing, and nothing starts while a sign-out
-// is owed. Nothing here waits on a clock.
+// signed-out reconcile provides nothing, nothing starts while a sign-out is
+// owed, and a daemon's `unknown verb` to logout counts as done. Nothing here
+// waits on a clock.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -40,8 +48,13 @@ class FakeDaemon {
  public:
   // The control socket answers and the hello succeeds.
   bool reachable = true;
-  // polkit denies this user's stop (an inactive session, a dismissed prompt).
+  // polkit denies this user's control-tunnel action (an inactive session, a
+  // dismissed prompt), which stop_tunnel and logout both ask for.
   bool refusesStop = false;
+  // A bring-up owns the session, so a logout is refused (start_in_progress).
+  bool busy = false;
+  // urnetworkd predates the logout verb.
+  bool predatesLogout = false;
   // `status` does not answer.
   bool silent = false;
   // Another user's session runs: their tunnel, their provider.
@@ -53,6 +66,11 @@ class FakeDaemon {
   // What runs for this user, and for whom: gone with the process.
   std::string tunnelAccount;
   std::string providerAccount;
+  // On disk: the device identity the daemon keeps (one per daemon, "" when
+  // none) and the client credential its sdk stored in the space.
+  std::string identity;
+  std::string storedCredential;
+  int identitiesMade = 0;
 
   bool StopTunnel() {
     log.push_back("stop_tunnel");
@@ -60,6 +78,19 @@ class FakeDaemon {
     tunnelAccount.clear();
     providerAccount.clear();
     return true;
+  }
+  // How the daemon answers logout.
+  enum class LogoutAnswer { Done, UnknownVerb, OtherUsersSession, Refused };
+  LogoutAnswer Logout() {
+    log.push_back("logout");
+    if (predatesLogout) return LogoutAnswer::UnknownVerb;
+    if (otherUsersSession) return LogoutAnswer::OtherUsersSession;
+    if (refusesStop || busy) return LogoutAnswer::Refused;
+    tunnelAccount.clear();
+    providerAccount.clear();
+    identity.clear();
+    storedCredential.clear();
+    return LogoutAnswer::Done;
   }
   // set_provide with a mode that does not provide (the reconcile's Stop step).
   void StopProvider() {
@@ -69,12 +100,20 @@ class FakeDaemon {
   void StartProvider(const std::string& account) {
     log.push_back("start_provider " + account);
     if (!tunnelAccount.empty() || otherUsersSession) return;
+    BuildDevice(account);
     providerAccount = account;
   }
   void StartTunnel(const std::string& account) {
     log.push_back("start_tunnel " + account);
     providerAccount.clear();
+    BuildDevice(account);
     tunnelAccount = account;
+  }
+  // TunnelHost::NewDeviceLocked: the stored identity, or a new one when there
+  // is none; the device stores its account's credential when it starts.
+  void BuildDevice(const std::string& account) {
+    if (identity.empty()) identity = "identity-" + std::to_string(++identitiesMade);
+    storedCredential = account;
   }
   // The process ends, by a crash, an update or a reboot, and starts again.
   void Restart() {
@@ -174,6 +213,19 @@ class App {
       if (daemon_.onRequest) daemon_.onRequest(request);
       switch (request) {
         case Request::StopTunnel: return daemon_.StopTunnel();
+        case Request::Logout:
+          switch (daemon_.Logout()) {
+            case FakeDaemon::LogoutAnswer::Done:
+            // ControlClient::LogoutOutcome::Unsupported, which SdkHost counts
+            // as done
+            case FakeDaemon::LogoutAnswer::UnknownVerb:
+            // auth_not_tunnel_owner, which SdkHost counts as done too
+            case FakeDaemon::LogoutAnswer::OtherUsersSession:
+              return true;
+            case FakeDaemon::LogoutAnswer::Refused:
+              return false;
+          }
+          return false;
       }
       return false;
     };
@@ -199,7 +251,7 @@ bool AnyStartFor(const std::vector<std::string>& log, const std::string& account
   return false;
 }
 
-const std::vector<std::string> kSignOutRequests{"stop_tunnel"};
+const std::vector<std::string> kSignOutRequests{"stop_tunnel", "logout"};
 
 }  // namespace
 
@@ -216,7 +268,7 @@ UR_TEST(SignOut_StopsAsQuit) {
     const std::size_t at = daemon.log.size();
     const Delivery delivery = app.SignOut();
     UR_EXPECT_TRUE_MSG("delivered to a daemon that can be reached", delivery == Delivery::Delivered);
-    UR_EXPECT_TRUE_MSG("Quit's stop_tunnel and nothing else, got " + Join(daemon.Since(at)),
+    UR_EXPECT_TRUE_MSG("Quit's stop_tunnel, then logout, got " + Join(daemon.Since(at)),
                        daemon.Since(at) == kSignOutRequests);
     UR_EXPECT_TRUE_MSG("nothing of a's runs", !daemon.Runs());
     UR_EXPECT_TRUE_MSG("nothing is owed once delivered", !marker && !app.Owed());
@@ -293,7 +345,7 @@ UR_TEST(SignOut_OwedHoldsTheNextSignIn) {
   daemon.reachable = true;
   const std::size_t at = daemon.log.size();
   rebooted.Reconcile();
-  const std::vector<std::string> want{"stop_tunnel", "start_provider b"};
+  const std::vector<std::string> want{"stop_tunnel", "logout", "start_provider b"};
   UR_EXPECT_TRUE_MSG("a's sign-out is delivered before b's provider starts, got " +
                          Join(daemon.Since(at)),
                      daemon.Since(at) == want);
@@ -317,7 +369,7 @@ UR_TEST(SignOut_ARefusalStaysOwed) {
   daemon.refusesStop = false;
   const std::size_t at = daemon.log.size();
   app.Reconcile();
-  const std::vector<std::string> want{"stop_tunnel", "start_provider b"};
+  const std::vector<std::string> want{"stop_tunnel", "logout", "start_provider b"};
   UR_EXPECT_TRUE_MSG("allowed: the sign-out first, then b, got " + Join(daemon.Since(at)),
                      daemon.Since(at) == want);
 }
@@ -343,12 +395,118 @@ UR_TEST(SignOut_LeavesAnotherUsersSession) {
   App app(daemon, marker, "a", "never");
   daemon.otherUsersSession = true;
   daemon.tunnelAccount = "someone else";
+  daemon.identity = "identity of someone else";
+  daemon.storedCredential = "someone else";
   const std::size_t at = daemon.log.size();
   UR_EXPECT_TRUE_MSG("another user's session: delivered", app.SignOut() == Delivery::Delivered);
   UR_EXPECT_TRUE_MSG("another user's session: nothing sent", daemon.log.size() == at);
   UR_EXPECT_TRUE_MSG("another user's session: it still runs",
                      daemon.tunnelAccount == "someone else");
+  UR_EXPECT_TRUE_MSG("another user's session: its identity and credential are kept",
+                     daemon.identity == "identity of someone else" &&
+                         daemon.storedCredential == "someone else");
   UR_EXPECT_TRUE_MSG("another user's session: nothing owed", !marker);
+}
+
+// Each network starts fresh: after a's sign-out the daemon keeps neither a's
+// identity nor a's stored credential, and b, signing in next, runs on a new
+// identity, connected or only providing.
+UR_TEST(SignOut_TheNextNetworkStartsOnANewIdentity) {
+  for (const bool connected : {true, false}) {
+    FakeDaemon daemon;
+    bool marker = false;
+    App app(daemon, marker, "", "never");
+    app.SignIn("a", "always");
+    if (connected) app.Connect();
+    const std::string identityOfA = daemon.identity;
+    UR_EXPECT_TRUE_MSG("a runs on an identity", !identityOfA.empty() &&
+                                                    daemon.storedCredential == "a");
+    UR_EXPECT_TRUE_MSG("delivered", app.SignOut() == Delivery::Delivered);
+    UR_EXPECT_TRUE_MSG("signed out: the daemon keeps no identity and no credential of a's",
+                       daemon.identity.empty() && daemon.storedCredential.empty());
+    app.SignIn("b", "always");
+    if (connected) app.Connect();
+    UR_EXPECT_TRUE_MSG("b runs", daemon.Runs() && daemon.storedCredential == "b");
+    UR_EXPECT_TRUE_MSG("b runs on a new identity, not a's: " + daemon.identity,
+                       !daemon.identity.empty() && daemon.identity != identityOfA);
+  }
+}
+
+// Another user's session that starts between this user's status read and its
+// logout is refused by the daemon, not cleared, and that refusal delivers the
+// sign-out as a redacted status would have: nothing of this user's is left to
+// clear, and their session, identity and credential stand.
+UR_TEST(SignOut_ALogoutRacingAnotherUsersStartClearsNothingOfIt) {
+  FakeDaemon daemon;
+  bool marker = false;
+  App app(daemon, marker, "", "never");
+  app.SignIn("a", "always");
+  daemon.onRequest = [&daemon](Request request) {
+    if (request != Request::Logout || daemon.otherUsersSession) return;
+    // another user connects: their device, on the daemon's identity
+    daemon.otherUsersSession = true;
+    daemon.tunnelAccount = "someone else";
+    daemon.BuildDevice("someone else");
+  };
+  const std::size_t at = daemon.log.size();
+  UR_EXPECT_TRUE_MSG("delivered beside the new session", app.SignOut() == Delivery::Delivered);
+  UR_EXPECT_TRUE_MSG("stop_tunnel then the refused logout, got " + Join(daemon.Since(at)),
+                     daemon.Since(at) == kSignOutRequests);
+  const std::string theirIdentity = daemon.identity;
+  UR_EXPECT_TRUE_MSG("their session, identity and credential stand",
+                     daemon.tunnelAccount == "someone else" && !theirIdentity.empty() &&
+                         daemon.storedCredential == "someone else");
+  UR_EXPECT_TRUE_MSG("nothing owed", !marker && !app.Owed());
+  const std::size_t after = daemon.log.size();
+  app.Reconcile();
+  UR_EXPECT_TRUE_MSG("nothing more is sent beside it, got " + Join(daemon.Since(after)),
+                     daemon.Since(after).empty());
+  UR_EXPECT_TRUE_MSG("their identity and credential are still theirs",
+                     daemon.identity == theirIdentity &&
+                         daemon.storedCredential == "someone else" &&
+                         daemon.tunnelAccount == "someone else");
+}
+
+// A bring-up that owns the session refuses the logout: the sign-out stays
+// owed, b starts nothing, and once the daemon can do it b starts on a new
+// identity.
+UR_TEST(SignOut_ABusyDaemonKeepsTheLogoutOwed) {
+  FakeDaemon daemon;
+  bool marker = false;
+  App app(daemon, marker, "", "never");
+  app.SignIn("a", "always");
+  const std::string identityOfA = daemon.identity;
+  daemon.busy = true;
+  UR_EXPECT_TRUE_MSG("busy: refused", app.SignOut() == Delivery::Refused);
+  UR_EXPECT_TRUE_MSG("busy: owed", marker && app.Owed());
+  app.SignIn("b", "always");
+  app.Connect();
+  UR_EXPECT_TRUE_MSG("busy: b starts nothing", !AnyStartFor(daemon.log, "b"));
+  daemon.busy = false;
+  const std::size_t at = daemon.log.size();
+  app.Reconcile();
+  const std::vector<std::string> want{"stop_tunnel", "logout", "start_provider b"};
+  UR_EXPECT_TRUE_MSG("the logout, then b, got " + Join(daemon.Since(at)), daemon.Since(at) == want);
+  UR_EXPECT_TRUE_MSG("b provides on a new identity",
+                     daemon.providerAccount == "b" && daemon.identity != identityOfA);
+}
+
+// A daemon that predates logout answers `unknown verb`, which counts as done:
+// it has nothing to clear the identity with, and keeping the sign-out owed to
+// it would hold every start.
+UR_TEST(SignOut_ADaemonWithoutLogoutStillDelivers) {
+  FakeDaemon daemon;
+  daemon.predatesLogout = true;
+  bool marker = false;
+  App app(daemon, marker, "", "never");
+  app.SignIn("a", "always");
+  const std::size_t at = daemon.log.size();
+  UR_EXPECT_TRUE_MSG("an older daemon: delivered", app.SignOut() == Delivery::Delivered);
+  UR_EXPECT_TRUE_MSG("an older daemon: both requests sent, got " + Join(daemon.Since(at)),
+                     daemon.Since(at) == kSignOutRequests);
+  UR_EXPECT_TRUE_MSG("an older daemon: nothing owed, nothing runs", !marker && !daemon.Runs());
+  app.SignIn("b", "always");
+  UR_EXPECT_TRUE_MSG("an older daemon: b provides", daemon.providerAccount == "b");
 }
 
 // The next sign-in's reconcile starts what a fresh launch's does, for every
@@ -407,13 +565,15 @@ UR_TEST(SignOut_NothingOwedSendsNothing) {
   app.Reconcile();
   app.Connect();
   for (const std::string& line : daemon.log) {
-    UR_EXPECT_TRUE_MSG("nothing owed: no stop_tunnel, got " + line, line != "stop_tunnel");
+    UR_EXPECT_TRUE_MSG("nothing owed: no stop_tunnel or logout, got " + line,
+                       line != "stop_tunnel" && line != "logout");
   }
   UR_EXPECT_TRUE_MSG("nothing owed: a's tunnel runs", daemon.tunnelAccount == "a");
 }
 
 UR_TEST(SignOut_Names) {
   UR_EXPECT_TRUE(std::string(signout::ToString(Request::StopTunnel)) == "stop_tunnel");
+  UR_EXPECT_TRUE(std::string(signout::ToString(Request::Logout)) == "logout");
   for (const Delivery delivery : {Delivery::Delivered, Delivery::Unreachable, Delivery::Refused}) {
     UR_EXPECT_TRUE(std::string(signout::ToString(delivery)) != "unknown");
   }

@@ -70,7 +70,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
       ctl::Verb::SetProvideExtender,
       ctl::Verb::LocationOverrideAvailable,
       ctl::Verb::LocationOverrideWrite, ctl::Verb::LocationOverrideClear,
-      ctl::Verb::UploadLogs,
+      ctl::Verb::UploadLogs,     ctl::Verb::Logout,
   };
   for (const ctl::Verb v : verbs) {
     UR_EXPECT_TRUE_MSG(ctl::ToString(v), ctl::VerbFromString(ctl::ToString(v)) == v);
@@ -92,6 +92,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_clear") ==
                  ctl::Verb::LocationOverrideClear);
   UR_EXPECT_TRUE(ctl::VerbFromString("upload_logs") == ctl::Verb::UploadLogs);
+  UR_EXPECT_TRUE(ctl::VerbFromString("logout") == ctl::Verb::Logout);
 }
 
 UR_TEST(controlTunnelStateNamesRoundTrip) {
@@ -963,6 +964,30 @@ UR_TEST(controlSetProvideExtenderIsGatedLikeSetProvide) {
   UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetProvideExtender, false, true)) ==
                  ctl::kActionTakeOverTunnel);
   UR_EXPECT_TRUE(ctl::VerbWantsInteraction(ctl::Verb::SetProvideExtender, /*is_log_tail=*/false));
+}
+
+// logout names the account's network space; an absent one parses empty (the
+// compiled-in default space, as for start_tunnel).
+UR_TEST(controlLogoutRoundTrip) {
+  ctl::LogoutRequest req;
+  req.network_space_json = R"({"key":{"host_name":"network.example","env_name":"main"}})";
+  const auto back = ctl::DecodeFrame(
+      ctl::EncodeFrame(ctl::MakeRequest(ctl::Verb::Logout, 33, nlohmann::json(req))));
+  UR_EXPECT_TRUE(ctl::RequestVerb(*back) == ctl::Verb::Logout);
+  UR_EXPECT_TRUE(back->get<ctl::LogoutRequest>().network_space_json == req.network_space_json);
+  UR_EXPECT_TRUE(nlohmann::json::parse("{}").get<ctl::LogoutRequest>().network_space_json.empty());
+}
+
+// logout costs what a stop costs and never the take-over action: another
+// user's live session is never cleared by a sign-out, so there is nothing an
+// administrator could authorize. The health poll re-sends an owed one, so it
+// never prompts.
+UR_TEST(controlLogoutIsControlTunnelEvenAcrossUidsAndNeverPrompts) {
+  for (const bool crossUid : {false, true}) {
+    UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::Logout, false, crossUid)) ==
+                   ctl::kActionControlTunnel);
+  }
+  UR_EXPECT_TRUE(!ctl::VerbWantsInteraction(ctl::Verb::Logout, /*is_log_tail=*/false));
 }
 
 // provider_stats carries the setting beside the role, and the daemon's word

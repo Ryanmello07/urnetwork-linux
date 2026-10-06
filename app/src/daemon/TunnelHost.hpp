@@ -210,6 +210,24 @@ class TunnelHost {
   };
   LogUploadResult UploadLogs(const ctl::UploadLogsRequest& request);
 
+  // The account signed out (logout; SignOut.hpp, owner decision 2026-10-05:
+  // each network starts fresh). Ends what runs as an explicit stop does (the
+  // session, the provider-only device, a log upload's standalone device and a
+  // queued upload), forgets the provide mode and the kill switch the account
+  // asked for, deletes the device identity this daemon keeps and logs out what
+  // the sdk stored in `networkSpaceJson`'s space (the client credential and
+  // instance a device persists when it starts, among the rest; an empty json
+  // is the compiled-in default space, as for a start). The next start then
+  // makes a new identity in a clean space. The space's extender state stays,
+  // as every sign-out leaves it (the sdk's LocalState.logout keeps it).
+  //
+  // Never waits behind a bring-up: false, with nothing cleared, while one owns
+  // the session (`*code` ctl::kCodeStartInProgress). False with `*error` when a
+  // file or the space could not be cleared; what could be cleared is. The GUI
+  // keeps a refused sign-out owed and sends it again. Whose session this may
+  // clear is the control server's to decide. Main loop only.
+  bool Logout(const std::string& networkSpaceJson, std::string* error, const char** code);
+
   // The kill switch the CLIENT asked for. Semantics follow the Windows source
   // of truth (docs/linux_agent_help.md §6.3): a user disconnect always lifts
   // the policy, and turning the switch on while nothing is connected does NOT

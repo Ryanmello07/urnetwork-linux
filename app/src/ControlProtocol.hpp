@@ -364,6 +364,7 @@ enum class Verb {
   LocationOverrideWrite,
   LocationOverrideClear,
   UploadLogs,
+  Logout,
   Unknown,
 };
 
@@ -383,6 +384,7 @@ inline const char* ToString(Verb v) {
     case Verb::LocationOverrideWrite: return "location_override_write";
     case Verb::LocationOverrideClear: return "location_override_clear";
     case Verb::UploadLogs: return "upload_logs";
+    case Verb::Logout: return "logout";
     case Verb::Unknown: break;
   }
   return "unknown";
@@ -403,6 +405,7 @@ inline Verb VerbFromString(const std::string& s) {
   if (s == "location_override_write") return Verb::LocationOverrideWrite;
   if (s == "location_override_clear") return Verb::LocationOverrideClear;
   if (s == "upload_logs") return Verb::UploadLogs;
+  if (s == "logout") return Verb::Logout;
   return Verb::Unknown;
 }
 
@@ -472,6 +475,13 @@ inline const char* ActionIdForVerb(Verb verb, bool is_log_tail, bool cross_uid) 
     // control a session, and a log is not something to take over.
     case Verb::UploadLogs:
       return kActionReadLog;
+    // logout deletes what the daemon keeps for the account that signed out, so
+    // it costs what a stop costs. Never the take-over action, whoever runs the
+    // session: another user's live session is theirs, and the daemon refuses a
+    // logout beside it whatever was authorized (ControlServer), so asking an
+    // administrator could only buy a refusal.
+    case Verb::Logout:
+      return kActionControlTunnel;
     case Verb::Hello:
     case Verb::Status:
     case Verb::ProviderStats:
@@ -512,6 +522,10 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     // be a surprise, so a check that needs one answers with a challenge code
     // and the GUI falls back to its own path. read-log is allow_active=yes.
     case Verb::UploadLogs:
+    // A press the first time, but a sign-out the daemon could not be told is
+    // sent again from the health poll, so a check that needs a password
+    // answers with a challenge code and the sign-out stays owed.
+    case Verb::Logout:
     case Verb::Hello:
     case Verb::Status:
     case Verb::ProviderStats:
@@ -959,6 +973,41 @@ struct SetProvideRequest {
 inline void to_json(nlohmann::json& j, const SetProvideRequest& v) { j["mode"] = v.mode; }
 inline void from_json(const nlohmann::json& j, SetProvideRequest& v) {
   detail::Get(j, "mode", v.mode);
+}
+
+// logout: the account signed out of this app (SignOut.hpp; owner decision
+// 2026-10-05: "logout should not cross contaminate other networks. Each
+// network should start fresh"). The daemon ends the session, the provider-only
+// device and a log upload's standalone device as an explicit stop does,
+// forgets the provide mode and the kill switch the account asked for, deletes
+// the device identity it keeps (one per daemon), and logs out what its sdk
+// stored in the request's network space for the account: the client
+// credential and instance a device persists when it starts, among the rest. So
+// the next account signed in starts on a new identity and a clean space. The
+// space's extender state (its directory, gossip role and identity, and the
+// provider extender setting) stays, as every sign-out leaves it (the sdk's
+// LocalState.logout keeps it; owner, 2026-10-05).
+//
+// Refused, with nothing cleared, while another user's session is live
+// (kCodeAuthNotTunnelOwner: their session is theirs, whatever was authorized),
+// while another client of this uid owns the live tunnel
+// (kCodeTunnelOwnedByOtherClient), and while a bring-up owns the session
+// (kCodeStartInProgress: never waited behind, as no main-loop verb is). The GUI
+// keeps a refused sign-out owed and sends it again.
+//
+// A new verb, additive within protocol v1, mirroring the Windows service's
+// logout. A daemon that predates it answers kErrorUnknownVerb, which the GUI
+// counts as done: such a daemon has nothing to clear the identity with, and a
+// sign-out kept owed to it would hold every start forever. An absent space is
+// the compiled-in default, as for start_tunnel.
+struct LogoutRequest {
+  std::string network_space_json;
+};
+inline void to_json(nlohmann::json& j, const LogoutRequest& v) {
+  j["network_space_json"] = v.network_space_json;
+}
+inline void from_json(const nlohmann::json& j, LogoutRequest& v) {
+  detail::Get(j, "network_space_json", v.network_space_json);
 }
 
 // set_provide_extender: the connect page's Extender switch while no tunnel

@@ -1686,6 +1686,49 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         return;
       }
 
+      case ctl::Verb::Logout: {
+        // Another user's live session is theirs: a sign-out clears nothing of
+        // it, whatever was authorized (logout never asks for the take-over
+        // action). The GUI skips a sign-out beside one anyway; this holds the
+        // line when a session started between its status read and this.
+        if (TunnelOwnedByOtherUid(conn)) {
+          LogAuthOutcome("refused", conn->peer.uid, conn->peer.pid, ctl::kActionControlTunnel,
+                         ctl::kCodeAuthNotTunnelOwner,
+                         "logout beside the live session of uid " +
+                             std::to_string(tunnelOwnerUid_));
+          reply(ctl::MakeErrorReply(id,
+                                    "another user on this device runs a URnetwork session, so "
+                                    "nothing was cleared",
+                                    ctl::kCodeAuthNotTunnelOwner));
+          return;
+        }
+        // As for stop_tunnel: only the owning connection while it is connected.
+        nlohmann::json denied;
+        bool crossUid = false;
+        if (!CheckTunnelOwner(conn, id, &denied, &crossUid, /*authorizedTakeOver=*/false)) {
+          reply(std::move(denied));
+          return;
+        }
+        const auto req = request.get<ctl::LogoutRequest>();
+        std::string error;
+        const char* code = nullptr;
+        if (!tunnel_.Logout(req.network_space_json, &error, &code)) {
+          reply(ctl::MakeErrorReply(
+              id, error.empty() ? "the signed-out account's state could not be cleared" : error,
+              code));
+          return;
+        }
+        // The session is over and its identity gone: nobody owns anything.
+        if (tunnelOwner_ == conn) {
+          tunnelOwner_ = nullptr;
+          tunnel_.SetOwnerConnected(false);
+        }
+        tunnelOwnerUid_ = -1;
+        tunnel_.SetOwnerUid(-1);
+        reply(ctl::MakeReply(id, true, nlohmann::json(tunnel_.Status())));
+        return;
+      }
+
       case ctl::Verb::SetProvide: {
         nlohmann::json denied;
         bool crossUid = false;

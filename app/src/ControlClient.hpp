@@ -187,6 +187,8 @@ inline bool VerbNeedsAuthorization(ctl::Verb verb) {
     case ctl::Verb::LocationOverrideClear:
     // read-log, the action log_tail is checked against
     case ctl::Verb::UploadLogs:
+    // control-tunnel, as stop_tunnel
+    case ctl::Verb::Logout:
       return true;
     case ctl::Verb::Hello:
     case ctl::Verb::Status:
@@ -431,6 +433,15 @@ class ControlClient {
   // refusal or a transport failure. Sent only to a daemon whose provider_stats
   // said it takes it.
   bool SetProvideExtender(bool on, std::string* error = nullptr);
+  // The account signed out (ControlProtocol.hpp logout): the daemon deletes the
+  // device identity it keeps and logs out what its sdk stored in
+  // `networkSpaceJson`'s space. Done when the daemon did it, Unsupported when it
+  // predates the verb (it answers ctl::kErrorUnknownVerb, and has nothing to
+  // clear the identity with), Failed on a transport failure or a refusal, with
+  // `error` and `code`.
+  enum class LogoutOutcome { Done, Unsupported, Failed };
+  LogoutOutcome Logout(const std::string& networkSpaceJson, std::string* error = nullptr,
+                       std::string* code = nullptr);
   // Asks the daemon to install (or lift) the nftables kill switch. `out`
   // receives the status whose kill_switch field is what is REALLY in force —
   // Failed is a distinct state from Off and must be rendered as such.

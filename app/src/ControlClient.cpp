@@ -890,6 +890,26 @@ bool ControlClient::SetProvideExtender(bool on, std::string* error) {
   return true;
 }
 
+ControlClient::LogoutOutcome ControlClient::Logout(const std::string& networkSpaceJson,
+                                                  std::string* error, std::string* code) {
+  std::scoped_lock lock(mutex_);
+  ctl::LogoutRequest req;
+  req.network_space_json = networkSpaceJson;
+  // Re-sent once on a dead socket like stop_tunnel: a second logout finds
+  // nothing left to clear.
+  const auto reply = CallLocked(ctl::Verb::Logout, nlohmann::json(req), error,
+                                /*allowRetry=*/true, PolkitAwareTimeoutLocked());
+  if (!reply) return LogoutOutcome::Failed;
+  if (!ctl::ReplyOk(*reply)) {
+    const std::string replyError = ctl::ReplyError(*reply);
+    if (error) *error = replyError;
+    if (code) *code = ctl::ReplyCode(*reply);
+    return replyError == ctl::kErrorUnknownVerb ? LogoutOutcome::Unsupported
+                                                : LogoutOutcome::Failed;
+  }
+  return LogoutOutcome::Done;
+}
+
 bool ControlClient::LocationOverrideAvailable(bool* available, std::string* reason) {
   std::scoped_lock lock(mutex_);
   std::string error;
