@@ -8644,6 +8644,51 @@ msgctxt "site_pay_sheet_trial_line"
 msgid "Your card is saved today and charged {1} on {0}. Cancel anytime before then."
 msgstr "Карта сохраняется сегодня, {1} спишется {0}. До этого можно отменить в любой момент."
 
+#. Pay page (/app/pay-sheet on ur.io): the bank's card verification (3D Secure) failed or was not completed. Nothing was charged.
+msgctxt "site_payment_error_authentication_failed"
+msgid "Your bank could not verify the card. Try again or use another card."
+msgstr "Банку не удалось подтвердить карту. Попробуйте ещё раз или используйте другую карту."
+
+#. Pay page (/app/pay-sheet, the card form the desktop apps and the F-Droid app open on ur.io): the card's bank declined the payment (Stripe card_declined). Nothing was charged.
+msgctxt "site_payment_error_card_declined"
+msgid "Your card was declined. Try another card, or contact your bank."
+msgstr "Ваша карта отклонена. Попробуйте другую карту или обратитесь в свой банк."
+
+#. Pay page (/app/pay-sheet on ur.io): the card has expired, or the expiry date entered is in the past. Nothing was charged.
+msgctxt "site_payment_error_expired_card"
+msgid "Your card has expired. Try another card."
+msgstr "Срок действия карты истёк. Попробуйте другую карту."
+
+#. Pay page (/app/pay-sheet on ur.io): Stripe's card form did not load (usually no internet connection, or a network or content blocker that blocks Stripe). Nothing was charged.
+msgctxt "site_payment_error_form_unavailable"
+msgid "The payment form could not load. Check your internet connection and try again."
+msgstr "Не удалось загрузить форму оплаты. Проверьте подключение к интернету и попробуйте снова."
+
+#. Pay page (/app/pay-sheet on ur.io): a card number, expiry date, security code or postal code in the payment form is wrong or missing. Stripe's own sentence naming the field is shown under this line. Nothing was charged.
+msgctxt "site_payment_error_incorrect_details"
+msgid "Some payment details are incorrect or incomplete. Check them and try again."
+msgstr "Некоторые платёжные данные неверны или не заполнены. Проверьте их и попробуйте снова."
+
+#. Pay page (/app/pay-sheet on ur.io): the card was declined because it does not have enough funds (Stripe decline code insufficient_funds). Nothing was charged.
+msgctxt "site_payment_error_insufficient_funds"
+msgid "Your card has insufficient funds. Try another card."
+msgstr "На карте недостаточно средств. Попробуйте другую карту."
+
+#. Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: Stripe or URnetwork's server could not be reached (offline, timed out, or blocked by the network).
+msgctxt "site_payment_error_network"
+msgid "Could not connect. Check your internet connection and try again."
+msgstr "Не удалось подключиться. Проверьте подключение к интернету и попробуйте снова."
+
+#. Pay page (/app/pay-sheet on ur.io): Stripe or the bank could not process the payment just now (a temporary error); trying again usually works.
+msgctxt "site_payment_error_processing"
+msgid "The payment could not be processed right now. Try again in a moment."
+msgstr "Сейчас не удалось обработать платёж. Попробуйте ещё раз чуть позже."
+
+#. Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: too many payment attempts in a short time, so Stripe or URnetwork's server turned this one away. Nothing was charged.
+msgctxt "site_payment_error_rate_limited"
+msgid "Too many attempts. Wait a minute, then try again."
+msgstr "Слишком много попыток. Подождите минуту и попробуйте снова."
+
 #. Upgrade sheet: give-up state body — the payment may still be processing and will appear under Account
 msgctxt "site_payment_not_seen_body"
 msgid "We haven't seen your payment yet. If you completed it in your wallet, it may still be processing — your plan will update automatically under Account once it lands."
