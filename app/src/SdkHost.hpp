@@ -755,8 +755,11 @@ class SdkHost {
   void FollowDaemonLogUpload(const ctl::StatusReply& status);
   // A Reset extenders urnetworkd refused because a bring-up owned its session
   // (OwedExtenderReset), sent again, once, on the reset's worker when the
-  // status shows that bring-up settled. The first asks for a status only while
-  // a reset is owed. Main loop (MainWindow::PollDaemonHealth).
+  // status shows that bring-up settled. It asks for no dialog, so the daemon
+  // refuses it rather than prompt (beside another user's live session, or
+  // where authorizing it would need a dialog), and it is then dropped. The
+  // first asks for a status only while a reset is owed. Main loop
+  // (MainWindow::PollDaemonHealth).
   void FollowDaemonExtenderReset();
   void FollowDaemonExtenderReset(const ctl::StatusReply& status);
 

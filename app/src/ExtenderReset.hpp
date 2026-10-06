@@ -3,9 +3,13 @@
 // bring-up imported the network space as it was before the reset, so the
 // session it brings up would dial from the old directory until the space is
 // imported again. The GUI sends the same request again, once, when a status it
-// reads shows the bring-up settled. An id the space applied already changes
-// nothing, so the second delivery is harmless. A GUI that quits first drops it,
-// and the space's next import applies the id it carries.
+// reads shows the bring-up settled. Nobody pressed anything for that one, so
+// it asks for no dialog (ResetExtendersRequest::interactive): the daemon
+// refuses it beside another uid's live session and wherever authorizing it
+// would need a dialog, and the GUI then drops it. An id the space applied
+// already changes nothing, so the second delivery is harmless. A GUI that
+// quits first drops it too, and the space's next import applies the id it
+// carries.
 //
 // Header-only and free of GTK and the SDK so the unit tests need no vendored
 // headers (tests/ExtenderResetTest.cpp).
@@ -38,11 +42,13 @@ class OwedExtenderReset {
   }
 
   // The owed request to send again: taken once `status` shows the daemon's
-  // session no longer starting, after which nothing is owed.
+  // session no longer starting, after which nothing is owed. It asks for no
+  // dialog.
   std::optional<ctl::ResetExtendersRequest> TakeIfSettled(const ctl::StatusReply& status) {
     if (!owed_ || status.tunnel_state == ctl::TunnelState::Starting) return std::nullopt;
     std::optional<ctl::ResetExtendersRequest> request = std::move(owed_);
     owed_.reset();
+    request->interactive = false;
     return request;
   }
 

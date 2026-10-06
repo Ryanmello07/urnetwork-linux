@@ -1094,6 +1094,47 @@ UR_TEST(controlResetExtendersIsGatedLikeSetProvideExtender) {
   UR_EXPECT_TRUE(ctl::VerbWantsInteraction(ctl::Verb::ResetExtenders, /*is_log_tail=*/false));
 }
 
+// A reset the GUI sends again without a press carries interactive false, which
+// the daemon reads off the raw frame before it authorizes, never throwing:
+// absent or null is a press, false and anything but a boolean ask for no
+// dialog. A press's frame is unchanged.
+UR_TEST(controlResetExtendersSentAgainAsksForNoDialog) {
+  const ctl::ResetExtendersRequest press = SampleResetExtenders();
+  UR_EXPECT_TRUE(press.interactive);
+  const nlohmann::json pressWire = nlohmann::json(press);
+  UR_EXPECT_FALSE(pressWire.contains("interactive"));
+  UR_EXPECT_TRUE(ctl::ResetExtendersAllowsInteraction(
+      ctl::MakeRequest(ctl::Verb::ResetExtenders, 34, pressWire)));
+  UR_EXPECT_TRUE(pressWire.get<ctl::ResetExtendersRequest>().interactive);
+
+  ctl::ResetExtendersRequest again = press;
+  again.interactive = false;
+  const auto frame = ctl::DecodeFrame(
+      ctl::EncodeFrame(ctl::MakeRequest(ctl::Verb::ResetExtenders, 35, nlohmann::json(again))));
+  UR_EXPECT_TRUE(frame->contains("interactive") && frame->at("interactive") == false);
+  UR_EXPECT_FALSE(ctl::ResetExtendersAllowsInteraction(*frame));
+  UR_EXPECT_FALSE(frame->get<ctl::ResetExtendersRequest>().interactive);
+
+  nlohmann::json odd = nlohmann::json(press);
+  odd["interactive"] = nullptr;
+  UR_EXPECT_TRUE(ctl::ResetExtendersAllowsInteraction(odd));
+  odd["interactive"] = true;
+  UR_EXPECT_TRUE(ctl::ResetExtendersAllowsInteraction(odd));
+  for (const nlohmann::json& value :
+       {nlohmann::json("false"), nlohmann::json(0), nlohmann::json::object()}) {
+    odd["interactive"] = value;
+    UR_EXPECT_TRUE_MSG(value.dump(), !ctl::ResetExtendersAllowsInteraction(odd));
+    // and strict once authorized: the parse refuses what is not a boolean
+    bool threw = false;
+    try {
+      (void)odd.get<ctl::ResetExtendersRequest>();
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    UR_EXPECT_TRUE_MSG(value.dump(), threw);
+  }
+}
+
 UR_TEST(controlLocationOverrideRoundTrips) {
   ctl::LocationOverrideWriteRequest write;
   write.lat = 35.6762;

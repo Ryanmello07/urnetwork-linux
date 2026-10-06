@@ -4724,8 +4724,10 @@ void SdkHost::FollowDaemonExtenderReset(const ctl::StatusReply& status) {
   // As in ResetExtenders: the previous worker may still be joinable.
   if (extenderResetWorker_.joinable()) extenderResetWorker_.join();
   extenderResetWorker_ = std::thread([this, request = std::move(*request)] {
-    // Sent once: the answer is logged and never makes the reset owed again. A
-    // daemon that does not take it applies the reset at its next import.
+    // Sent once and as taken, which asks for no dialog: a refusal (another
+    // user's live session, or a check that would need a dialog) drops it, the
+    // answer never makes it owed again, and the daemon's next import applies
+    // the reset.
     try {
       bool daemonReset = false;
       std::string error;
@@ -4736,8 +4738,9 @@ void SdkHost::FollowDaemonExtenderReset(const ctl::StatusReply& status) {
                   daemonReset ? "reset the space it holds"
                               : "holds no space to reset, or reset it already");
       } else {
-        g_message("extender: reset %s sent again after the bring-up; urnetworkd did not take "
-                  "it (code=%s): %s; its next tunnel or provider start carries it",
+        g_message("extender: reset %s sent again after the bring-up was refused without a "
+                  "dialog (code=%s): %s; dropped, and the next tunnel or provider start "
+                  "applies it",
                   request.extender_reset_id.c_str(), code.empty() ? "none" : code.c_str(),
                   error.empty() ? "no detail" : error.c_str());
       }

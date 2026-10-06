@@ -12,7 +12,8 @@
 //     the section reads the form again and says "Extenders reset";
 //   * a reset the daemon refused because a bring-up owned its session is noted
 //     on the main loop and sent again, once, on the same worker, when the
-//     window's health poll reads a status that shows the bring-up settled;
+//     window's health poll reads a status that shows the bring-up settled, and
+//     without a dialog: the daemon refuses it rather than prompt;
 //   * the daemon dispatches the verb behind set_provide_extender's owner gate,
 //     looks the space up under opMutex_ (refusing, never waiting, while a
 //     bring-up owns the session) and applies the reset outside it, to the one
@@ -262,6 +263,35 @@ UR_TEST(ExtenderResetWiring_ABusyRefusalIsSentAgainAfterTheBringUp) {
       Contains(Between(health, "if (!connected_) {", "return true;"), "host_.FollowDaemonExtenderReset();"));
   UR_EXPECT_TRUE(Precedes(health, "if (!status) return true;",
                           "host_.FollowDaemonExtenderReset(*status);"));
+}
+
+// The request sent again never prompts. The daemon reads its interactive field
+// off the raw frame before authorizing: beside another uid's live session it
+// refuses before any check, and otherwise the check runs without interaction.
+// The GUI sends the request as OwedExtenderReset took it, never marked as a
+// press, and a press's request is never marked otherwise.
+UR_TEST(ExtenderResetWiring_TheRequestSentAgainNeverPrompts) {
+  const std::string dispatch = ExtenderResetBody(
+      ReadExtenderResetSource("daemon/ControlServer.cpp"), "void ControlServer::Dispatch(");
+  const std::string unprompted = Between(
+      dispatch,
+      "if (verb == ctl::Verb::ResetExtenders && !ctl::ResetExtendersAllowsInteraction(request)) {",
+      "RequireAuth(");
+  UR_EXPECT_TRUE(!unprompted.empty());
+  const std::string beside = Between(unprompted, "if (crossUid) {", "interactive = false;");
+  UR_EXPECT_TRUE(Contains(beside, "ctl::kCodeAuthNotTunnelOwner"));
+  UR_EXPECT_TRUE(Contains(beside, "return;"));
+  UR_EXPECT_TRUE(Precedes(dispatch, "bool interactive = ctl::VerbWantsInteraction(verb, isLogTail);",
+                          "!ctl::ResetExtendersAllowsInteraction(request)"));
+  UR_EXPECT_TRUE(
+      Precedes(dispatch, "interactive = false;", "RequireAuth(connId, actionId, interactive, id,"));
+
+  const std::string source = ReadExtenderResetSource("SdkHost.cpp");
+  UR_EXPECT_TRUE(!Contains(ExtenderResetBody(source,
+                                             "void SdkHost::FollowDaemonExtenderReset(const "
+                                             "ctl::StatusReply& status) {"),
+                           "interactive"));
+  UR_EXPECT_TRUE(!Contains(ExtenderResetBody(source, "bool SdkHost::ResetExtenders("), "interactive"));
 }
 
 // The connect page's extender panel stays a read-only status: the reset lives

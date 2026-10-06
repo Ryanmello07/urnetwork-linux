@@ -158,7 +158,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | `start_provider` | `by_jwt`, `instance_id`, `app_version`, `network_space_json`, `provide_mode`, `provider_transport_settings_json` | `ok` + the status |
 | `provider_stats` | `poll_status` | `running`, `has_provider_stats`, `provider_throughput_points_json`, `provider_transport_distribution_json`, `status_open`, `status_loaded`, `status_last_fetch_error`, `provider_status_json`, `extender_provide_status_json`, `extender_throughput_points_json`, `provide_extender`, `provide_extender_writable` |
 | `set_provide_extender` | `provide_extender` | `ok` |
-| `reset_extenders` | `host_name`, `env_name`, `extender_reset_id` | `ok`, `reset` |
+| `reset_extenders` | `host_name`, `env_name`, `extender_reset_id`, `interactive` | `ok`, `reset` |
 | `location_override_available` | — | `available`, `reason` |
 | `location_override_write` | `lat`, `lon`, `accuracy_m` | `ok` |
 | `location_override_clear` | — | `ok` |
@@ -270,8 +270,14 @@ never asked applies it at its next `start_tunnel` or `start_provider` import, an
 the space applied already changes nothing. A daemon whose session a bring-up owns refuses
 it (`start_in_progress`, never waited behind), and that bring-up imports the space as it
 was before the reset, so the GUI sends the same request again, once, when its health
-poll reads a status that shows the bring-up settled. Every field is required, at
-most 256 bytes and free of control bytes, since the daemon logs the key it reset. One
+poll reads a status that shows the bring-up settled. Nobody pressed anything for that
+one, so it carries `interactive: false` and never raises a dialog: beside another uid's
+live session, which only `take-over-tunnel` reaches, the daemon refuses it before any
+check (`auth_not_tunnel_owner`), and otherwise it checks it without interaction and
+refuses (`auth_required`) where a dialog would be needed. The GUI then drops it, and the
+next import applies the id. Every field but `interactive` (a boolean; absent is a press)
+is required, at most 256 bytes and free of control bytes, since the daemon logs the key
+it reset. One
 daemon serves every user of the machine and its spaces are theirs in common, so one
 user's reset of a key resets the daemon's state for that key for everyone; that is
 intended (extender knowledge is per installation), and the verb is gated like

@@ -53,6 +53,20 @@ UR_TEST(ExtenderReset_ABusyRefusalIsSentAgainOnceTheBringUpSettled) {
   UR_EXPECT_FALSE(owed.TakeIfSettled(StatusIn(ctl::TunnelState::Up)).has_value());
 }
 
+// Nobody pressed anything for the request sent again, so it asks for no dialog,
+// while the press's own request did.
+UR_TEST(ExtenderReset_TheRequestSentAgainAsksForNoDialog) {
+  urnw::OwedExtenderReset owed;
+  const ctl::ResetExtendersRequest press = SampleOwedReset("f00dfeed-0000-4000-8000-000000000008");
+  UR_EXPECT_TRUE(press.interactive);
+  owed.NoteAnswer(press, /*taken=*/false, ctl::kCodeStartInProgress);
+  const std::optional<ctl::ResetExtendersRequest> again =
+      owed.TakeIfSettled(StatusIn(ctl::TunnelState::Up));
+  UR_EXPECT_TRUE(again.has_value());
+  UR_EXPECT_TRUE(again && !again->interactive);
+  UR_EXPECT_TRUE(again && !ctl::ResetExtendersAllowsInteraction(nlohmann::json(*again)));
+}
+
 // Any state but starting is a settled bring-up, another user's redacted status
 // included (it keeps tunnel_state).
 UR_TEST(ExtenderReset_EveryStateButStartingIsSettled) {

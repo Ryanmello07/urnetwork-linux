@@ -1016,7 +1016,8 @@ inline void from_json(const nlohmann::json& j, SetProvideExtenderRequest& v) {
 // one, changes nothing, which also makes the verb safe to send again: a busy
 // refusal (kCodeStartInProgress) comes while a bring-up imports the space as it
 // was before the reset, so the GUI sends the same request again once that
-// bring-up settled (ExtenderReset.hpp).
+// bring-up settled (ExtenderReset.hpp), asking for no dialog (`interactive`
+// below).
 //
 // One daemon serves every user of the machine and keeps its spaces in
 // /var/lib/urnetwork/sdk for all of them, so one user's reset of a key resets
@@ -1036,11 +1037,30 @@ struct ResetExtendersRequest {
   std::string env_name;
   // The id the GUI's resetExtenders returned.
   std::string extender_reset_id;
+  // False for a reset the GUI sends again without a press (ExtenderReset.hpp).
+  // The daemon then never raises an authentication dialog for it: beside
+  // another uid's live session, which only the take-over action reaches, it
+  // is refused before any check (kCodeAuthNotTunnelOwner), and otherwise it is
+  // checked without interaction, so a check that would need a dialog is
+  // refused (kCodeAuthRequired) instead. Sent only when false; absent is a
+  // press.
+  bool interactive = true;
 };
 inline void to_json(nlohmann::json& j, const ResetExtendersRequest& v) {
   j["host_name"] = v.host_name;
   j["env_name"] = v.env_name;
   j["extender_reset_id"] = v.extender_reset_id;
+  if (!v.interactive) j["interactive"] = false;
+}
+
+// The request's interactive field, read off the raw frame where the daemon
+// chooses how to authorize it, before the frame is parsed, so it never throws.
+// Absent or null is a press; anything but a boolean reads as no dialog, the
+// side that cannot prompt.
+inline bool ResetExtendersAllowsInteraction(const nlohmann::json& request) {
+  const auto it = request.find("interactive");
+  if (it == request.end() || it->is_null()) return true;
+  return it->is_boolean() && it->get<bool>();
 }
 
 // Each field is a name, not a payload, and the daemon writes the key it reset
@@ -1072,6 +1092,7 @@ inline void from_json(const nlohmann::json& j, ResetExtendersRequest& v) {
   detail::Get(j, "host_name", v.host_name);
   detail::Get(j, "env_name", v.env_name);
   detail::Get(j, "extender_reset_id", v.extender_reset_id);
+  detail::Get(j, "interactive", v.interactive);
   if (const auto invalid = ValidateResetExtendersRequest(v)) {
     throw std::runtime_error("reset_extenders: " + *invalid);
   }

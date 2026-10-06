@@ -1590,7 +1590,26 @@ void ControlServer::Dispatch(uint64_t connId, const nlohmann::json& request, Rep
     reply(ctl::MakeErrorReply(id, ctl::kErrorUnknownVerb));
     return;
   }
-  const bool interactive = ctl::VerbWantsInteraction(verb, isLogTail);
+  bool interactive = ctl::VerbWantsInteraction(verb, isLogTail);
+  // A reset_extenders the GUI sends again without a press never raises a
+  // dialog (ResetExtendersRequest::interactive). Beside another uid's live
+  // session, which only the take-over action reaches, it is refused before any
+  // check; otherwise it is checked without interaction, so polkit's challenge
+  // comes back as a refusal rather than a prompt.
+  if (verb == ctl::Verb::ResetExtenders && !ctl::ResetExtendersAllowsInteraction(request)) {
+    if (crossUid) {
+      LogAuthOutcome("refused", conn->peer.uid, conn->peer.pid, actionId,
+                     ctl::kCodeAuthNotTunnelOwner,
+                     "a reset sent without a press, beside the live session of uid " +
+                         std::to_string(tunnelOwnerUid_));
+      reply(ctl::MakeErrorReply(id,
+                                "another user on this device runs a URnetwork session, so a "
+                                "reset sent without a press was not applied",
+                                ctl::kCodeAuthNotTunnelOwner));
+      return;
+    }
+    interactive = false;
+  }
 
   // `request` is captured BY VALUE: the caller's frame dies when PumpConnection
   // moves on, and an interactive check may not be answered for minutes.
