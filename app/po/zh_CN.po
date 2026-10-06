@@ -1276,6 +1276,11 @@ msgctxt "code_sign_in_failed"
 msgid "Code sign in failed"
 msgstr "使用验证码登录失败"
 
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.
+msgctxt "collapsed"
+msgid "Collapsed"
+msgstr "已收起"
+
 #. Login initial
 msgctxt "commitment_issues"
 msgid "Commitment issues?"
@@ -4162,6 +4167,11 @@ msgstr "你开启的每个应用都会在应用菜单中多出一个启动器，
 msgctxt "excluded"
 msgid "Excluded"
 msgstr "已排除"
+
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.
+msgctxt "expanded"
+msgid "Expanded"
+msgstr "已展开"
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "expires"

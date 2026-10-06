@@ -1278,6 +1278,11 @@ msgctxt "code_sign_in_failed"
 msgid "Code sign in failed"
 msgstr ""
 
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.
+msgctxt "collapsed"
+msgid "Collapsed"
+msgstr ""
+
 #. Login initial
 msgctxt "commitment_issues"
 msgid "Commitment issues?"
@@ -4166,6 +4171,11 @@ msgstr ""
 #. transfer stats and split rules
 msgctxt "excluded"
 msgid "Excluded"
+msgstr ""
+
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.
+msgctxt "expanded"
+msgid "Expanded"
 msgstr ""
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
