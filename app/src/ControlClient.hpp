@@ -182,6 +182,9 @@ inline bool VerbNeedsAuthorization(ctl::Verb verb) {
     case ctl::Verb::SetProvide:
     case ctl::Verb::StartProvider:
     case ctl::Verb::SetProvideExtender:
+    // control-tunnel, or take-over-tunnel beside another uid's session, as
+    // set_provide_extender
+    case ctl::Verb::ResetExtenders:
     case ctl::Verb::SetKillSwitch:
     case ctl::Verb::LocationOverrideWrite:
     case ctl::Verb::LocationOverrideClear:
@@ -428,6 +431,17 @@ class ControlClient {
   bool UploadLogs(const ctl::UploadLogsRequest& request, std::string* carrier = nullptr,
                   std::string* error = nullptr, std::string* code = nullptr,
                   int64_t* uploadId = nullptr);
+  // Hands the daemon a reset of the extenders this process made in its own
+  // network space (ControlProtocol.hpp reset_extenders), which the daemon
+  // applies to the space it holds under the same key.
+  // ctl::ValidateResetExtendersRequest runs before anything is sent. True when
+  // the daemon answered, with `reset` whether it held that space and the reset
+  // was new to it; false on a transport failure, a refusal (`code`,
+  // ctl::kCodeStartInProgress while a bring-up owns the session) or a daemon
+  // that predates the verb (`error` is ctl::kErrorUnknownVerb). A daemon that
+  // did not take it applies the reset at its next import of the space.
+  bool ResetExtenders(const ctl::ResetExtendersRequest& request, bool* reset = nullptr,
+                      std::string* error = nullptr, std::string* code = nullptr);
   // The connect page's Extender switch while no tunnel session's device takes
   // it (ControlProtocol.hpp set_provide_extender). False with `error` for a
   // refusal or a transport failure. Sent only to a daemon whose provider_stats

@@ -1590,7 +1590,26 @@ void ControlServer::Dispatch(uint64_t connId, const nlohmann::json& request, Rep
     reply(ctl::MakeErrorReply(id, ctl::kErrorUnknownVerb));
     return;
   }
-  const bool interactive = ctl::VerbWantsInteraction(verb, isLogTail);
+  bool interactive = ctl::VerbWantsInteraction(verb, isLogTail);
+  // A reset_extenders the GUI sends again without a press never raises a
+  // dialog (ResetExtendersRequest::interactive). Beside another uid's live
+  // session, which only the take-over action reaches, it is refused before any
+  // check; otherwise it is checked without interaction, so polkit's challenge
+  // comes back as a refusal rather than a prompt.
+  if (verb == ctl::Verb::ResetExtenders && !ctl::ResetExtendersAllowsInteraction(request)) {
+    if (crossUid) {
+      LogAuthOutcome("refused", conn->peer.uid, conn->peer.pid, actionId,
+                     ctl::kCodeAuthNotTunnelOwner,
+                     "a reset sent without a press, beside the live session of uid " +
+                         std::to_string(tunnelOwnerUid_));
+      reply(ctl::MakeErrorReply(id,
+                                "another user on this device runs a URnetwork session, so a "
+                                "reset sent without a press was not applied",
+                                ctl::kCodeAuthNotTunnelOwner));
+      return;
+    }
+    interactive = false;
+  }
 
   // `request` is captured BY VALUE: the caller's frame dies when PumpConnection
   // moves on, and an interactive check may not be answered for minutes.
@@ -1771,6 +1790,33 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
           return;
         }
         reply(ctl::MakeReply(id, true));
+        return;
+      }
+
+      case ctl::Verb::ResetExtenders: {
+        // A reset the GUI made in its own space, applied to the space this
+        // daemon holds under the same key, behind the same owner gate as
+        // set_provide_extender: the space is shared by every user of the
+        // machine, and a reset changes what the live session dials through. A
+        // request that does not name a space and a reset throws out of the
+        // get<> as an error reply.
+        nlohmann::json denied;
+        bool crossUid = false;
+        if (!CheckTunnelOwner(conn, id, &denied, &crossUid, authorizedCrossUid)) {
+          reply(std::move(denied));
+          return;
+        }
+        const auto req = request.get<ctl::ResetExtendersRequest>();
+        const TunnelHost::ExtenderResetResult result = tunnel_.ResetExtenders(req);
+        if (!result.ok) {
+          reply(ctl::MakeErrorReply(
+              id, result.error.empty() ? "the extenders could not be reset" : result.error,
+              result.code));
+          return;
+        }
+        ctl::ResetExtendersReply payload;
+        payload.reset = result.reset;
+        reply(ctl::MakeReply(id, true, nlohmann::json(payload)));
         return;
       }
 

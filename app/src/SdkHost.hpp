@@ -31,6 +31,7 @@
 
 #include "ClientEvents.hpp"
 #include "ControlClient.hpp"
+#include "ExtenderReset.hpp"
 #include "LogUpload.hpp"
 #include "Health.hpp"
 #include "ProvideLifecycle.hpp"
@@ -761,6 +762,15 @@ class SdkHost {
   // loop (MainWindow::PollDaemonHealth).
   void FollowDaemonLogUpload();
   void FollowDaemonLogUpload(const ctl::StatusReply& status);
+  // A Reset extenders urnetworkd refused because a bring-up owned its session
+  // (OwedExtenderReset), sent again, once, on the reset's worker when the
+  // status shows that bring-up settled. It asks for no dialog, so the daemon
+  // refuses it rather than prompt (beside another user's live session, or
+  // where authorizing it would need a dialog), and it is then dropped. The
+  // first asks for a status only while a reset is owed. Main loop
+  // (MainWindow::PollDaemonHealth).
+  void FollowDaemonExtenderReset();
+  void FollowDaemonExtenderReset(const ctl::StatusReply& status);
 
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
@@ -1027,10 +1037,15 @@ class SdkHost {
   // window hidden or the tunnel down and the account section renders its
   // no-device state rather than an empty form.
   //
-  // Settings are the SPACE's, applied through the controller, which restarts
-  // the space's network client and node in place. On this platform that space
-  // belongs to urnetworkd, which is the correct one: the tunnel's dials are
-  // what the settings steer.
+  // The controller works on the device's space, and a DeviceRemote's space is
+  // this process's own (networkSpace_), not urnetworkd's. A settings save
+  // changes this process's space and restarts its extender client and node in
+  // place. urnetworkd takes the saved values at its next start_tunnel or
+  // start_provider import, which carries them in network_space_json, not
+  // directly: until then the tunnel and the provider-only device keep the
+  // values they were started with. A share is built from this process's
+  // directory, and an import adds its addresses there; those addresses never
+  // reach the daemon, while an import's settings travel like a save.
   std::optional<urnet::ExtenderSettings> GetExtenderSettings();
   std::optional<urnet::ExtenderSettings> SetExtenderSettings(const std::string& dnsName,
                                                              const std::string& gossipUrl,
@@ -1049,10 +1064,37 @@ class SdkHost {
   // builds its devices from the space the GUI sends with start_tunnel and
   // start_provider, so a tunnel takes a private extender set here at its next
   // connect, and a running provider-only device at once (the save sends
-  // start_provider again). Every other extender setting goes through the view
-  // controller above and therefore reaches the daemon directly.
+  // start_provider again). The settings the view controller above saves are
+  // in this same space and reach the daemon the same way, at its next import,
+  // except that their save sends no start_provider.
   std::optional<urnet::NetExtender> GetPrivateExtender();
   bool SetPrivateExtender(const std::string& ip, const std::string& secret);
+
+  // Account > Extenders' Reset extenders (connect EXTENDER.md E7): back to a
+  // fresh install's extender state. Resets this process's own network space
+  // (NetworkSpace::resetExtenders: what the space learned and what the user
+  // added go, the dns name, gossip url and root keys return to their defaults,
+  // the cleared values are persisted with the reset's id, and the space's
+  // extender client and node relearn), then hands the space's key and the id
+  // to urnetworkd (reset_extenders), which applies the reset to the space it
+  // holds under that key, the one its tunnel session's device and its
+  // provider-only device run in. Not the device rpc: the verb covers the
+  // provider-only device and no session too. A daemon that is unreachable or
+  // does not take it applies the reset at its next import of this space
+  // (start_tunnel, start_provider), whose values carry the id, except that one
+  // refusing it because a bring-up owns its session gets it again once that
+  // bring-up settled (FollowDaemonExtenderReset). The bootstrap DoH servers, the
+  // gossip mode and the provider extender setting stay.
+  //
+  // Runs on a worker, never on the main loop: the sdk joins the space's old
+  // extender client, and the daemon may put a polkit dialog in front of the
+  // verb. `done` runs on the main loop. False, with `done` never called,
+  // without a network space or while a reset is in flight.
+  struct ExtenderResetOutcome {
+    bool reset = false;        // this process's space was reset
+    bool daemonReset = false;  // urnetworkd applied it to the space it holds
+  };
+  bool ResetExtenders(std::function<void(ExtenderResetOutcome)> done);
 
   // ---- this device's provider status (support part P008) -------------------
   // The SDK's ProviderStatusViewController: GET /network/provider-status about
@@ -1413,6 +1455,10 @@ class SdkHost {
   // The daemon's id of the log upload this process waits on (UploadDaemonLogs),
   // 0 for none. Main loop only, like the calls that read and write it.
   int64_t pendingLogUploadId_ = 0;
+  // The Reset extenders owed to urnetworkd (FollowDaemonExtenderReset). Main
+  // loop only: a press's answer is noted from the main loop, where the health
+  // poll takes it. Never persisted, so a GUI that quits drops it.
+  OwedExtenderReset owedExtenderReset_;
   // ---- the provider-only device's statistics (provider_stats) ---------------
   // What the daemon's view controllers on the provider-only device last said,
   // in the SDK's types. The provider statistics accessors, ProviderStatusNow,
@@ -1467,6 +1513,13 @@ class SdkHost {
   std::atomic<bool> reliabilityBusy_{false};
   std::mutex reliabilityWorkerMutex_;
   std::thread reliabilityWorker_;
+  // ResetExtenders' worker, guarded the same two ways: extenderResetBusy_ is
+  // its single-flight gate, cleared by the worker before it marshals `done`,
+  // and extenderResetWorkerMutex_ guards only the thread object, which ~SdkHost
+  // joins.
+  std::atomic<bool> extenderResetBusy_{false};
+  std::mutex extenderResetWorkerMutex_;
+  std::thread extenderResetWorker_;
 
   // ---- kill switch ----------------------------------------------------------
   // The last published snapshot (guarded by mutex_). Seeded requested-only at

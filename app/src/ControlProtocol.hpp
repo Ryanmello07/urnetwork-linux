@@ -359,6 +359,7 @@ enum class Verb {
   StartProvider,
   ProviderStats,
   SetProvideExtender,
+  ResetExtenders,
   SetKillSwitch,
   LocationOverrideAvailable,
   LocationOverrideWrite,
@@ -379,6 +380,7 @@ inline const char* ToString(Verb v) {
     case Verb::StartProvider: return "start_provider";
     case Verb::ProviderStats: return "provider_stats";
     case Verb::SetProvideExtender: return "set_provide_extender";
+    case Verb::ResetExtenders: return "reset_extenders";
     case Verb::SetKillSwitch: return "set_kill_switch";
     case Verb::LocationOverrideAvailable: return "location_override_available";
     case Verb::LocationOverrideWrite: return "location_override_write";
@@ -400,6 +402,7 @@ inline Verb VerbFromString(const std::string& s) {
   if (s == "start_provider") return Verb::StartProvider;
   if (s == "provider_stats") return Verb::ProviderStats;
   if (s == "set_provide_extender") return Verb::SetProvideExtender;
+  if (s == "reset_extenders") return Verb::ResetExtenders;
   if (s == "set_kill_switch") return Verb::SetKillSwitch;
   if (s == "location_override_available") return Verb::LocationOverrideAvailable;
   if (s == "location_override_write") return Verb::LocationOverrideWrite;
@@ -460,6 +463,10 @@ inline const char* ActionIdForVerb(Verb verb, bool is_log_tail, bool cross_uid) 
     // set_provide_extender too: it writes that session's provider extender
     // setting, the switch beside the provide mode.
     case Verb::SetProvideExtender:
+    // reset_extenders as well: the daemon's spaces are shared by every user of
+    // this machine, so a reset changes what another uid's live session dials
+    // through, and that costs the take-over action.
+    case Verb::ResetExtenders:
     case Verb::LocationOverrideWrite:
     case Verb::LocationOverrideClear:
       return cross_uid ? kActionTakeOverTunnel : kActionControlTunnel;
@@ -507,6 +514,8 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     case Verb::SetProvide:
     // a press of the connect page's Extender switch
     case Verb::SetProvideExtender:
+    // a confirmed press of Account > Extenders' Reset extenders
+    case Verb::ResetExtenders:
     case Verb::SetKillSwitch:
     case Verb::LocationOverrideWrite:
     case Verb::LocationOverrideClear:
@@ -1035,6 +1044,118 @@ inline void from_json(const nlohmann::json& j, SetProvideExtenderRequest& v) {
     throw std::runtime_error("set_provide_extender requires provide_extender (a boolean)");
   }
   v.provide_extender = it->get<bool>();
+}
+
+// ---- reset_extenders -------------------------------------------------------
+// Account > Extenders' Reset extenders (connect EXTENDER.md E7). The GUI resets
+// its own network space (urnet::NetworkSpace::resetExtenders), which persists
+// the cleared extender values with the id of the reset, and sends that id here
+// with the space's key. The daemon applies the same reset to the space it holds
+// under that key (applyExtenderReset): everything learned about extenders is
+// cleared, and the space's extender client and node relearn as on a first run.
+// The tunnel session's device and the provider-only device both run in that
+// space, so one call covers both. Their live extender paths keep running; new
+// dials draw from the fresh directory.
+//
+// The verb makes the reset immediate, and it is not the only path. The id
+// travels in the space's values, and the sdk applies a reset whose id is newer
+// than the last one the daemon's storage applied when the space is imported, so
+// a daemon that was unreachable, busy or never asked applies it at its next
+// start_tunnel or start_provider. An id the space applied already, or an older
+// one, changes nothing, which also makes the verb safe to send again: a busy
+// refusal (kCodeStartInProgress) comes while a bring-up imports the space as it
+// was before the reset, so the GUI sends the same request again once that
+// bring-up settled (ExtenderReset.hpp), asking for no dialog (`interactive`
+// below).
+//
+// One daemon serves every user of the machine and keeps its spaces in
+// /var/lib/urnetwork/sdk for all of them, so one user's reset of a key resets
+// the daemon's state for that key for everyone. That is intended (extender
+// knowledge is per installation, and local accounts trust each other that
+// far), and it is gated like set_provide_extender: control-tunnel while the
+// caller owns the live session or none is live, take-over-tunnel while another
+// uid's tunnel or provider session is live, since the reset changes what that
+// session dials through. Another user's own GUI space is untouched, and the id
+// their next import carries is older, so it applies nothing.
+//
+// A new verb, additive within protocol v1: a daemon that predates it answers
+// kErrorUnknownVerb.
+struct ResetExtendersRequest {
+  // The key of the space the GUI reset (urnet::NetworkSpaceKey).
+  std::string host_name;
+  std::string env_name;
+  // The id the GUI's resetExtenders returned.
+  std::string extender_reset_id;
+  // False for a reset the GUI sends again without a press (ExtenderReset.hpp).
+  // The daemon then never raises an authentication dialog for it: beside
+  // another uid's live session, which only the take-over action reaches, it
+  // is refused before any check (kCodeAuthNotTunnelOwner), and otherwise it is
+  // checked without interaction, so a check that would need a dialog is
+  // refused (kCodeAuthRequired) instead. Sent only when false; absent is a
+  // press.
+  bool interactive = true;
+};
+inline void to_json(nlohmann::json& j, const ResetExtendersRequest& v) {
+  j["host_name"] = v.host_name;
+  j["env_name"] = v.env_name;
+  j["extender_reset_id"] = v.extender_reset_id;
+  if (!v.interactive) j["interactive"] = false;
+}
+
+// The request's interactive field, read off the raw frame where the daemon
+// chooses how to authorize it, before the frame is parsed, so it never throws.
+// Absent or null is a press; anything but a boolean reads as no dialog, the
+// side that cannot prompt.
+inline bool ResetExtendersAllowsInteraction(const nlohmann::json& request) {
+  const auto it = request.find("interactive");
+  if (it == request.end() || it->is_null()) return true;
+  return it->is_boolean() && it->get<bool>();
+}
+
+// Each field is a name, not a payload, and the daemon writes the key it reset
+// to its line-oriented log: bounded, and free of control bytes.
+inline constexpr size_t kMaxResetExtendersFieldBytes = 256;
+
+// Both halves apply it, the GUI before a frame is sent and the daemon when it
+// parses one, so the rule is one function. Every field is required.
+inline std::optional<std::string> ValidateResetExtendersRequest(
+    const ResetExtendersRequest& req) {
+  auto invalid = [](const char* name, const std::string& value) -> std::optional<std::string> {
+    if (value.empty()) return std::string(name) + " is required";
+    if (value.size() > kMaxResetExtendersFieldBytes) return std::string(name) + " is too long";
+    for (const char c : value) {
+      const unsigned char u = static_cast<unsigned char>(c);
+      if (u < 0x20 || u == 0x7f) return std::string(name) + " has a control character";
+    }
+    return std::nullopt;
+  };
+  if (auto error = invalid("host_name", req.host_name)) return error;
+  if (auto error = invalid("env_name", req.env_name)) return error;
+  return invalid("extender_reset_id", req.extender_reset_id);
+}
+
+// Tolerant reads like every payload here, then strict: a reset that names no
+// space or no reset must not be applied to a default one. The daemon answers
+// the throw as an error reply.
+inline void from_json(const nlohmann::json& j, ResetExtendersRequest& v) {
+  detail::Get(j, "host_name", v.host_name);
+  detail::Get(j, "env_name", v.env_name);
+  detail::Get(j, "extender_reset_id", v.extender_reset_id);
+  detail::Get(j, "interactive", v.interactive);
+  if (const auto invalid = ValidateResetExtendersRequest(v)) {
+    throw std::runtime_error("reset_extenders: " + *invalid);
+  }
+}
+
+// Whether the daemon held a space under the key and the reset was new to it.
+// False is no failure: the daemon holds no space before its first device, and
+// a reset the space applied already has been applied. Absent parses false.
+struct ResetExtendersReply {
+  bool reset = false;
+};
+inline void to_json(nlohmann::json& j, const ResetExtendersReply& v) { j["reset"] = v.reset; }
+inline void from_json(const nlohmann::json& j, ResetExtendersReply& v) {
+  detail::Get(j, "reset", v.reset);
 }
 
 // ---- start_provider --------------------------------------------------------
