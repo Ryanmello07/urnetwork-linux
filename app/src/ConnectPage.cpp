@@ -298,8 +298,8 @@ uint64_t LocationSig(const std::optional<urnet::ConnectLocation>& location) {
 ConnectPage::ConnectPage(SdkHost& host)
     : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0), host_(host) {
   add_css_class("ur-pane");
-  // the dns pill capsule + the dot tones live in the drawer sheet (Ui.cpp);
-  // idempotent, and the legacy drawer may not have been built yet
+  // the dns pill capsule + the dot tones live in the shared sheet (Ui.cpp);
+  // idempotent
   EnsureDrawerCss();
   EnsurePageCss();
   BuildPaneA();
@@ -775,9 +775,8 @@ void ConnectPage::BuildPaneA() {
     return toggle;
   };
   // The three PerformanceProfile toggles ride ONE writer
-  // (PushPerformanceProfile) exactly as ConnectDrawer::ApplyControls does:
-  // SdkHost::GetPerformanceProfile/SetPerformanceProfile are the accessors and
-  // have been since the drawer shipped.
+  // (PushPerformanceProfile): SdkHost::GetPerformanceProfile and
+  // SetPerformanceProfile are the accessors.
   // a Fixed IP window keeps its one exit for the session (connect stickyExit)
   fixedIpToggle_ = addToggleRow(T_("fixed_ip", "Fixed IP"), false,
                                 [this](bool) { PushPerformanceProfile(); },
@@ -1855,9 +1854,8 @@ void ConnectPage::ApplyDnsCard() {
         dnsSettings_->EnableFallback);
 }
 
-// iOS DnsRecommendationPill parity (and ConnectDrawer::RefreshDnsPill verbatim,
-// with §6's pill keys): a regional recommendation NEVER falls through to the
-// safe-defaults nudge.
+// iOS DnsRecommendationPill parity, with §6's pill keys: a regional
+// recommendation NEVER falls through to the safe-defaults nudge.
 void ConnectPage::ApplyDnsRecommendationPill() {
   if (!dnsPillRow_ || !dnsPillDot_ || !dnsPillText_) return;
   auto show = [this](const std::string& text, const std::string& countryCode) {
@@ -2257,9 +2255,8 @@ void ConnectPage::OnExtenderToggled() {
 }
 
 // ---- connect options: the performance profile (§2.8) ---------------------------
-// ConnectDrawer::RefreshControls/ApplyControls, reused verbatim: the Linux
-// SdkHost has exposed GetPerformanceProfile/SetPerformanceProfile since the
-// drawer shipped, and a nil profile means Auto with everything off.
+// The Linux SdkHost exposes GetPerformanceProfile/SetPerformanceProfile, and a
+// nil profile means Auto with everything off.
 
 void ConnectPage::SeedConnectControls() {
   if (!modeAuto_ || !fixedIpToggle_ || !anonToggle_ || !pqeToggle_) return;
@@ -2324,7 +2321,7 @@ void ConnectPage::PushPerformanceProfile() {
 
 // §2.3: the row says WHERE you are connecting. A selected network peer resolves
 // to its device name (the raw client id is not a place), and no selection is
-// "Best available provider" — ConnectDrawer::RefreshControls' logic verbatim.
+// "Best available provider".
 void ConnectPage::ApplyLocationRow() {
   if (!locationText_ || !locationRow_) return;
   // renders from the cached reading: the row is re-rendered on BOTH the
@@ -2713,10 +2710,6 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::ProviderSelection:
       // MainWindow owns the globe sheet and the location-override tracking, so
       // they must survive with this page unbuilt
-      break;
-    case DrawerEvent::ExtenderStatus:
-      // the extender panel is the drawer's, and the hero canvas's rings ride
-      // the provider grid rather than the status
       break;
     case DrawerEvent::ExtenderProvideStatus:
       ApplyExtenderProvideState();

@@ -3649,16 +3649,6 @@ msgctxt "dns_default_not_applied"
 msgid "The default safe settings are not applied"
 msgstr "기본 안전 설정이 적용되어 있지 않습니다"
 
-#. Connect drawer: warning that DNS is resolving outside the tunnel.
-msgctxt "dns_not_on_tunnel"
-msgid "DNS is NOT going through the tunnel — names you look up are resolving outside it."
-msgstr "DNS가 터널을 통과하지 않습니다 — 조회하는 이름이 터널 밖에서 해석되고 있습니다."
-
-#. Connect drawer: status that DNS goes through the tunnel.
-msgctxt "dns_on_tunnel"
-msgid "DNS is going through the tunnel"
-msgstr "DNS가 터널을 통과합니다"
-
 #. A label displayed in a row of a custom dns settings.
 msgctxt "dns_over_https"
 msgid "DNS over HTTPS"

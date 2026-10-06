@@ -15,7 +15,6 @@
 
 #include "AuthViews.hpp"
 #include "BittensorManualSheet.hpp"
-#include "ConnectDrawer.hpp"
 #include "ConnectPage.hpp"
 #include "DataInfoSheet.hpp"
 #include "HomeShell.hpp"
@@ -28,16 +27,19 @@
 #include "UpdateChecker.hpp"
 #include "SupportPage.hpp"
 #include "LocationOverride.hpp"
+#include "LocationsSheet.hpp"
 #include "LoginCarousel.hpp"
 #include "NetworkServerSheet.hpp"
 #include "Onboarding.hpp"
 #include "ProviderLocationsSheet.hpp"
+#include "RedeemCodeSheet.hpp"
 #include "ReferralsPage.hpp"
 #include "SdkHost.hpp"
 #include "SeedphraseSheet.hpp"
 #include "ProCelebration.hpp"
 #include "GuestConversionSheet.hpp"
 #include "SubscriptionBalance.hpp"
+#include "UpgradeSheet.hpp"
 #include "UrMotion.hpp"
 
 namespace urnw {
@@ -85,9 +87,6 @@ class MainWindow : public Gtk::ApplicationWindow {
   // and then carries NOTHING, while looking identical to a working one. Only
   // ToggleConnect passes false, because it issues its own connect.
   TunnelStartResult StartTunnelUi(bool connectDestination = true);
-  void RefreshPeersStatus();  // home-screen peers status line (dot + "{n} peers")
-  void ApplyProvideControlMode();  // picker -> host (guarded during sync)
-  void SyncProvideControlMode();   // host -> picker
   void BuildAuthPages();  // create network / verify / password reset
   void OnGetStarted();  // authLogin discovery -> password / create / inline error
   void OnSignIn();
@@ -145,8 +144,8 @@ class MainWindow : public Gtk::ApplicationWindow {
   void SettleReveal();  // CancelToFinal: every ring to the settled pose
   void NavigateCreate(CreateNetworkPage::Mode mode, const std::string& userAuth, bool fromHome);
   // Every create-account and purchase affordance for a legacy guest network
-  // (the plan card, the insufficient-balance banner, Account's plan action,
-  // the upgrade sheet) opens the in-place conversion (GuestConversionSheet):
+  // (the Connect page's held alert, Account's plan action, the upgrade sheet)
+  // opens the in-place conversion (GuestConversionSheet):
   // a sign-in is added to THIS network and verified, so its plan and balance
   // stay. Signing out would abandon the network for good (it has no login).
   void OpenGuestConversion();
@@ -164,7 +163,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // The current reading with tunnelBound forced down: what the daemon status
   // poll has just proven when it finds urnetworkd no longer carrying.
   ConnectReading DaemonTunnelGoneReading();
-  void ApplyStats(const LiveStats& stats);  // live provider count / throughput / provide
+  void ApplyStats(const LiveStats& stats);  // the pages' live stats and the status strip
   void OpenProviderLocations();             // the "Connected to N providers" entry point
   // Keep the device-location override pointed at the oldest connected provider
   // that has coordinates. Runs off the SDK change feed rather than from the
@@ -173,7 +172,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   void SyncLocationOverrideTarget();
 
   SdkHost& host_;
-  // subscription balance / plan / referral store (the drawer's plan card, the
+  // subscription balance / plan / referral store (the pages' plan views, the
   // upgrade + redeem confirmation polling)
   SubscriptionBalanceStore balance_;
   Gtk::Stack stack_;
@@ -235,32 +234,6 @@ class MainWindow : public Gtk::ApplicationWindow {
   std::string loginUserAuth_;
   bool discoveringLogin_ = false;
 
-  Gtk::Label status_{"Disconnected"};
-  // daemon session problems (unreachable / out of date / app out of date /
-  // start failure), rendered under the status line; hidden while healthy
-  Gtk::Label daemonStatusLabel_;
-  Gtk::Button connectBtn_{"Connect"};
-  // provide indicator (apple parity): "●" solid dot = Network provide (green;
-  // coral when not providing), "◉" dot + ring = Public provide (amber when
-  // paused — pause stops public only)
-  Gtk::Label provideModeDot_;
-  // provide control mode picker: Auto | Always | Network | Never. "Network" is
-  // the private provider (always on, provides to same-network peers only).
-  Gtk::ToggleButton* provideAuto_ = nullptr;
-  Gtk::ToggleButton* provideAlways_ = nullptr;
-  Gtk::ToggleButton* provideNetwork_ = nullptr;
-  Gtk::ToggleButton* provideNever_ = nullptr;
-  bool syncingProvideMode_ = false;  // guards Apply during programmatic sync
-  // live stats (macOS parity); also the entry point into the provider-locations
-  // sheet, clickable only while genuinely connected
-  Gtk::Label providerCountLabel_;
-  bool providerCountClickable_ = false;
-  Gtk::Label throughputLabel_;
-  Gtk::Label provideStatsLabel_;
-  Gtk::Label peersStatusDot_;   // green when peers > 0, red at 0
-  Gtk::Label peersStatusText_;  // "{n} peers"; tapping opens the chooser
-  Gtk::Label discoverableLabel_;  // "This device is discoverable" (apple parity)
-  ConnectDrawer* drawer_ = nullptr;  // connect drawer (controls/stats/dns/blocker/plan cards)
   HomeShell* shell_ = nullptr;       // the signed-in nav shell (windows NavigationView home)
   // Windows-parity destinations (docs/parity/*.md); the rest are placeholders
   // until their pages land.
@@ -276,9 +249,17 @@ class MainWindow : public Gtk::ApplicationWindow {
   // Settings (the notice + the auto-check toggle) and Developer (the manual
   // check), then started. Its worker is joined when the window goes.
   std::unique_ptr<UpdateChecker> updates_;
-  // Account's Redeem row opens the same sheet the drawer owns, but the
-  // drawer exposes no opener, so the window keeps its own (lazily built).
+  // Account's Redeem row opens it (lazily built).
   std::unique_ptr<RedeemCodeSheet> redeemSheet_;
+  // Every upgrade entry point opens it through OpenUpgrade (lazily built).
+  std::unique_ptr<UpgradeSheet> upgradeSheet_;
+  // The next OpenUpgrade's sheet says when the free data refreshes: set only
+  // around the start-connect block's opening (ConnectBlockedByBalance).
+  bool nextUpgradeFreeRefresh_ = false;
+  // The location/provider chooser behind the Connect page's location row
+  // (lazily built); refreshed from the drawer event feed while it is open.
+  std::unique_ptr<LocationsSheet> locationsSheet_;
+  void OpenLocationChooser();
   std::unique_ptr<DataInfoSheet> dataInfoSheet_;  // lazily built
   std::unique_ptr<GuestConversionSheet> guestConversionSheet_;  // lazily built
   GuestUpgradeContinuation guestUpgrade_;
@@ -366,7 +347,6 @@ class MainWindow : public Gtk::ApplicationWindow {
   bool windowVisible_ = false;
   sigc::connection appFocusSync_;      // the pending coalesced focus reading
   sigc::connection toplevelsChanged_;  // the toplevel list's items-changed hook
-  std::string lastStatus_ = "Disconnected";
   LiveStats lastStats_;  // resynced into the widgets when the window is shown
 
   // Device-location override (GeoClue static source). Owned here rather than by

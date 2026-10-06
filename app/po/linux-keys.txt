@@ -4,7 +4,6 @@ about
 account
 account_auth_unverified
 account_auth_verified
-active_extenders
 activity
 add
 add_a_sign_in_method
@@ -189,7 +188,6 @@ connected
 connected_provider_count
 connecting_status_indicator
 connecting_to_wallet
-connection_mode
 connections
 continue_txt
 continue_with_free_plan
@@ -220,7 +218,6 @@ countries
 country
 country_multipliers
 create
-create_account
 create_account_2
 create_an_account
 create_instant_account
@@ -459,16 +456,12 @@ devices
 disconnect
 disconnected
 display_network_on_leaderboard
-dns_default_not_applied
-dns_not_on_tunnel
-dns_on_tunnel
 dns_over_https
 dns_pill_default
 dns_pill_recommended
 dns_recommendation_message
 dns_restore_secure_message
 dns_settings_unavailable
-dns_unapplied_recommended
 dns_using_recommended
 dns_using_secure
 done
@@ -536,7 +529,6 @@ extender_settings_saved
 extender_start_failed
 extender_statistics
 extenders
-extenders_active_of_reserve
 extenders_no_session
 fast_dns_on_connect
 fast_dns_on_connect_description
@@ -554,9 +546,6 @@ get_pro
 get_started
 google
 google_sign_in_method_added
-gossip_connecting
-gossip_events_per_minute
-gossip_network
 gossip_url
 got_it
 guest
@@ -582,7 +571,6 @@ insufficient_balance
 insufficient_balance_add_balance_or_plan
 insufficient_balance_exhausted
 insufficient_balance_held_notice
-insufficient_balance_message
 insufficient_balance_reconnecting
 insufficient_balance_refreshes_in
 insufficient_balance_reserved
@@ -596,10 +584,6 @@ invalid_ss58_address
 ip_address
 ip_count
 ip_families
-ip_family_connected_count
-ip_family_connecting_count
-ip_family_disconnected
-ip_family_dualstack
 ipv4
 ipv4_and_ipv6
 ipv6
@@ -607,7 +591,6 @@ its_nice_to_see_you_again
 join_the_community_on_discord_https_discord_com
 join_urnetwork
 kill_switch
-kill_switch_exception
 kill_switch_exception_smtp_detail
 kill_switch_exception_unrecognized_encrypted
 leaderboard
@@ -629,7 +612,6 @@ local_dns
 local_dns_servers
 local_doh_urls
 local_lowercase
-local_statistics
 location_override_cleanup_required
 location_override_coverage_gaps
 location_override_coverage_geoclue
@@ -720,8 +702,6 @@ password_reset_link_sent_to
 paste_share_text
 payout_wallet_updated
 payouts_now_go_to
-peer_count_one
-peer_count_other
 peer_discovery_disabled
 pending_data_key
 periodic_product_updates
@@ -917,7 +897,6 @@ share_extenders_count
 share_extenders_hint
 share_extenders_too_large
 share_text_copied
-show_kill_switch_exception
 show_on_points_leaderboard
 show_urnetwork
 sign_in

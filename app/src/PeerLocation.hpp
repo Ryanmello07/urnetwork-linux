@@ -1,7 +1,7 @@
 // What a network peer row connects to: the location the chooser's pinned peer
 // section (LocationsSheet.cpp) and the Network page's peers group
 // (NetworkPage.cpp) build when one of the user's own devices is tapped, and the
-// name those rows and the connect drawer show for a peer.
+// name those rows and the Connect page's location row show for a peer.
 //
 // A peer row is one of the user's own devices (PeerViewController: connected
 // and provide-enabled), so its location carries network_peer = true. The SDK
@@ -27,7 +27,7 @@
 namespace urnw {
 
 // A network peer's display name: DeviceName, else DeviceSpec, else the client id.
-// Shared with the connect drawer's selected-location label.
+// Shared with the Connect page's location row.
 template <class Peer>
 std::string PeerDisplayName(const Peer& peer) {
   if (!peer.DeviceName.empty()) return peer.DeviceName;

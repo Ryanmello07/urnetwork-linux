@@ -452,8 +452,7 @@ Gtk::Widget* ProviderLocationsSheet::BuildRow(size_t index, RowWidgets& out) {
     out.pqBadge = badge;
     idRow->append(*badge);
   }
-  // the address-family tag, trailing: what this exit can carry (the drawer's
-  // ip family status row is the same reading counted over the whole window)
+  // the address-family tag, trailing: what this exit can carry
   out.ipFamily = Gtk::make_managed<Gtk::Label>(IpFamilyTag(row));
   out.ipFamily->add_css_class("ur-mono-11");
   out.ipFamily->add_css_class("dim-label");

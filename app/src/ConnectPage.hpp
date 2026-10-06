@@ -77,9 +77,9 @@ class ConnectPage : public Gtk::Box {
   // under it "You'll be reconnected when data is available again." with, for
   // a refused start, Cancel.
   void ApplyBalanceRecovery(const balance_notice::RecoveryLines& lines, int64_t reservedByteCount);
-  // The drawer's change feed (SdkHost::DrawerEvent), dispatched per group
-  // exactly as ConnectDrawer::OnHostEvent does: every case re-reads through the
-  // SdkHost accessors on the GTK thread and re-applies ONE surface.
+  // The drawer's change feed (SdkHost::DrawerEvent), dispatched per group:
+  // every case re-reads through the SdkHost accessors on the GTK thread and
+  // re-applies ONE surface.
   void OnHostEvent(DrawerEvent event);
   // Re-seed every pane B/C cache from the Current* getters (login, tab entry,
   // window re-show). Idempotent.

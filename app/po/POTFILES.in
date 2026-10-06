@@ -14,9 +14,6 @@
 #   src/Ui.cpp          stylesheet + widget factories — no user-facing strings
 #   src/main.cpp        only the gettext bootstrap and stderr diagnostics
 src/AuthViews.cpp
-src/ConnectDrawer.cpp
-src/IpFamilyStatusRow.cpp
-src/ExtenderPanel.cpp
 src/ExtenderSection.cpp
 src/ControlDohSection.cpp
 src/ExtenderShareSheet.cpp

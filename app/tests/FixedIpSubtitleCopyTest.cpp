@@ -1,7 +1,7 @@
 // Fixed IP keeps one exit for the session (connect stickyExit: a Fixed IP
 // window has no standing spare and is never drained on the hourly lifetime),
-// so both Fixed IP rows - the connect page's and the connect drawer's - say so
-// in a note under the title (fixed_ip_subtitle, from the localizations store).
+// so the connect page's Fixed IP row says so in a note under the title
+// (fixed_ip_subtitle, from the localizations store).
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -48,11 +48,9 @@ std::string PoTranslation(const std::string& po, const std::string& key) {
 UR_TEST(fixedIpRowsShowTheSubtitle) {
   // the English fallback is the store's copy, so a missing catalog reads right
   const std::string call = std::string("T_(\"") + kKey + "\",";
-  for (const char* file : {"src/ConnectPage.cpp", "src/ConnectDrawer.cpp"}) {
-    const std::string source = ReadAppFile(file);
-    UR_EXPECT_TRUE_MSG(file, Has(source, call));
-    UR_EXPECT_TRUE_MSG(file, Has(source, std::string("\"") + kEnglish + "\""));
-  }
+  const std::string source = ReadAppFile("src/ConnectPage.cpp");
+  UR_EXPECT_TRUE(Has(source, call));
+  UR_EXPECT_TRUE(Has(source, std::string("\"") + kEnglish + "\""));
   // the page's row passes it as the toggle row's note
   const std::string page = ReadAppFile("src/ConnectPage.cpp");
   const size_t fixed = page.find("fixedIpToggle_ = addToggleRow(T_(\"fixed_ip\", \"Fixed IP\")");

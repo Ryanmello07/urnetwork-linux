@@ -70,18 +70,18 @@ UR_TEST(GuestRefusal_TheSheetStopsBeforeAnyFallback) {
 }
 
 UR_TEST(GuestRefusal_TheOwnersOpenTheConversion) {
-  // the drawer's sheet goes through the drawer's guest gate
-  const std::string drawer = ReadAppFile("src/ConnectDrawer.cpp");
-  const size_t wired = drawer.find("upgradeSheet_->on_guest_sign_in_required = [this] {");
+  // the window's upgrade sheet goes through the window's guest gate
+  const std::string window = ReadAppFile("src/MainWindow.cpp");
+  const std::string openUpgrade = FunctionBody(window, "void MainWindow::OpenUpgrade()");
+  const size_t wired = openUpgrade.find("upgradeSheet_->on_guest_sign_in_required = [this] {");
   UR_EXPECT_TRUE(wired != std::string::npos);
-  UR_EXPECT_TRUE(drawer.find("if (on_guest_upgrade) on_guest_upgrade([this] { OpenUpgrade(); });", wired) !=
+  UR_EXPECT_TRUE(openUpgrade.find("DivertGuestToConversion([this] { OpenUpgrade(); });", wired) !=
                  std::string::npos);
 
   // the onboarding flow steps aside, and every owner of it opens the conversion
   const std::string onboarding = ReadAppFile("src/Onboarding.cpp");
   UR_EXPECT_TRUE(Has(onboarding, "checkout_->on_guest_sign_in_required = [this] {"));
   UR_EXPECT_TRUE(Has(onboarding, "if (on_guest_sign_in_required) on_guest_sign_in_required();"));
-  const std::string window = ReadAppFile("src/MainWindow.cpp");
   size_t created = 0;
   size_t wiredOnboarding = 0;
   for (size_t at = window.find("std::make_unique<OnboardingWindow>("); at != std::string::npos;

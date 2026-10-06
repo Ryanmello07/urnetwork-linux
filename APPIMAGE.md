@@ -237,7 +237,7 @@ the fallback for a distro/FHS install.
 
 **b) Symbolic icons depend on a host icon theme.** The UI uses named icons
 throughout (`go-previous-symbolic`, `emblem-ok-symbolic`, `dialog-warning-symbolic`,
-… — see `app/src/AuthViews.cpp:29`, `app/src/ConnectDrawer.cpp:100`, and ~15 more).
+… — see `app/src/AuthViews.cpp:29` and ~15 more).
 The snap's `gnome` extension guaranteed the Adwaita icon theme was present. On a
 bare host — or a non-GNOME desktop — these resolve to nothing and the UI shows
 blank or missing icons.

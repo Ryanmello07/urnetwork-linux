@@ -3654,16 +3654,6 @@ msgctxt "dns_default_not_applied"
 msgid "The default safe settings are not applied"
 msgstr "As definições seguras predefinidas não estão aplicadas"
 
-#. Connect drawer: warning that DNS is resolving outside the tunnel.
-msgctxt "dns_not_on_tunnel"
-msgid "DNS is NOT going through the tunnel — names you look up are resolving outside it."
-msgstr "O DNS NÃO está a passar pelo túnel — os nomes que consulta são resolvidos fora dele."
-
-#. Connect drawer: status that DNS goes through the tunnel.
-msgctxt "dns_on_tunnel"
-msgid "DNS is going through the tunnel"
-msgstr "O DNS está a passar pelo túnel"
-
 #. A label displayed in a row of a custom dns settings.
 msgctxt "dns_over_https"
 msgid "DNS over HTTPS"

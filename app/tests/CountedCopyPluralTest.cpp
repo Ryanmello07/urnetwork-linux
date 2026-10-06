@@ -44,7 +44,6 @@ const CountedCopy kCounted[] = {
     {"MainWindow.cpp", "seedphrase_word_count_warning",
      "That's {} word — a seedphrase is 12 or 24 words",
      "That's {} words — a seedphrase is 12 or 24 words"},
-    {"ConnectDrawer.cpp", "provider_count", "{} provider", "{} providers"},
     {"LocationsSheet.cpp", "provider_count", "{} provider", "{} providers"},
     {"ConnectPage.cpp", "providing_client_count", "Providing to {} client",
      "Providing to {} clients"},
@@ -62,9 +61,8 @@ UR_TEST(CountedCopyIsLookedUpAsAPlural) {
     UR_EXPECT_TRUE(call.find(std::string("\"") + copy.other + "\"") != std::string::npos);
     UR_EXPECT_TRUE(source.find(std::string("T_(\"") + copy.key + "\"") == std::string::npos);
   }
-  for (const char* file : {"ConnectDrawer.cpp", "LocationsSheet.cpp"}) {
-    UR_EXPECT_TRUE(ReadCountedSource(file).find("\"provider_count_int\"") == std::string::npos);
-  }
+  UR_EXPECT_TRUE(ReadCountedSource("LocationsSheet.cpp").find("\"provider_count_int\"") ==
+                 std::string::npos);
 }
 
 UR_TEST(CountedCopyMatchesThePluralCatalogEntry) {

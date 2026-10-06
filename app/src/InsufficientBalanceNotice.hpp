@@ -1,5 +1,5 @@
-// The out-of-balance notice: what the drawer banner says and when the desktop
-// notification is posted and withdrawn.
+// The out-of-balance notice: when the Connect page's held alert shows and when
+// the desktop notification is posted and withdrawn.
 //
 // Out of balance is a billing state, not a dropped tunnel. While a connection
 // is requested the tunnel keeps capturing with no provider behind it, so the
@@ -41,27 +41,12 @@ struct Signals {
   bool connectRequested = false;
 };
 
-// The existing out-of-balance gate (mac ConnectActions, ConnectDrawer banner).
+// The existing out-of-balance gate (mac ConnectActions).
 inline bool Gate(const Signals& s) { return s.insufficientBalance && !s.pro && !s.polling; }
 
 // The tunnel is holding traffic for an out-of-balance account: the Connect
 // page shows the held alert with Upgrade and Disconnect.
 inline bool HeldAlert(const Signals& s) { return Gate(s) && s.connectRequested; }
-
-struct BannerText {
-  const char* key;
-  const char* english;
-};
-
-// The drawer banner body. While a connection is requested the tunnel is
-// holding traffic, so the banner says so and names the way out.
-inline BannerText Banner(const Signals& s) {
-  if (HeldAlert(s)) {
-    return BannerText{"insufficient_balance_held_notice",
-                      "Your traffic is held in the tunnel until you upgrade or disconnect."};
-  }
-  return BannerText{"insufficient_balance_message", "Add balance or a plan to keep connecting."};
-}
 
 // Posts and withdraws the desktop notification through a sink with Post() and
 // Withdraw(). The sink is a template parameter so tests can count calls.

@@ -110,11 +110,10 @@ enum class DrawerEvent {
   Location,         // connect location changed
   Profile,          // performance profile changed
   Locations,        // filtered provider-location list changed (the chooser)
-  Peers,            // connected network peers changed (chooser + drawer label)
-  ProviderIdentities,  // post-quantum identity set changed (PQI panel + list)
+  Peers,            // connected network peers changed (chooser + connect page)
+  ProviderIdentities,  // post-quantum identity set changed (identities list + badges)
   ProviderLocations,   // connected provider set/locations changed (locations sheet)
   ProviderSelection,   // the globe's selected provider changed (locations sheet)
-  ExtenderStatus,      // extender directory / gossip status changed (drawer panel)
   // this device's own extender role changed state or setting (the connect
   // page's extender row, the earnings page's read-only row and statistics)
   ExtenderProvideStatus,
@@ -935,15 +934,12 @@ class SdkHost {
   int64_t ConnectedPeerCount();
 
   // ---- post quantum identity (PQI) -----------------------------------------
-  // The device's own public identity key (+ its canonical 52-char display
-  // hash) and the providers with an established, identity-verified e2e
-  // session, through the SDK's shared PostQuantumIdentityViewController (the
-  // apple PostQuantumIdentityStore binds the same one). The VC lives only
-  // while the tunnel runs; reads return empty/nullopt otherwise. Changes
-  // arrive as DrawerEvent::ProviderIdentities.
+  // The providers with an established, identity-verified e2e session, through
+  // the SDK's shared PostQuantumIdentityViewController (the apple
+  // PostQuantumIdentityStore binds the same one). The VC lives only while the
+  // tunnel runs; reads return nullopt otherwise. Changes arrive as
+  // DrawerEvent::ProviderIdentities.
   std::optional<urnet::ProviderIdentityList> ProviderIdentities();
-  std::string PublicIdentityKeyHash();
-  std::vector<uint8_t> PublicIdentityKey();
 
   // ---- connected provider locations ------------------------------------------
   // Where each provider in the current connect window is, in the SDK's shared
@@ -971,19 +967,10 @@ class SdkHost {
   void SetSelectedProviderClientId(const std::string& clientId);
   void StepProviderSelection(int steps);
 
-  // ---- extenders (EXTENDER.md K4 to K8) -------------------------------------
-  // The extender directory + gossip status, read off the DEVICE (K5: it lives
-  // on DeviceLocal and reaches DeviceRemote over the rpc with the last value
-  // cached, exactly as the provider family transport status), so the drawer
-  // panel reads the DAEMON's directory rather than this process's. nullopt
-  // with no device -- which the panel renders as "hidden", never as zero.
-  // Changes arrive as DrawerEvent::ExtenderStatus, coalesced by the SDK to one
-  // callback per second.
-  std::optional<urnet::ExtenderStatus> GetExtenderStatus();
-
+  // ---- extenders (EXTENDER.md K6 to K8, N2 to N8) ---------------------------
   // The status of this device's OWN extender role (EXTENDER.md N2, N3), read
-  // off the DEVICE like GetExtenderStatus, because the role runs in the
-  // daemon's DeviceLocal. DeviceRemote reads it through the rpc with the last
+  // off the DEVICE, because the role runs in the daemon's DeviceLocal.
+  // DeviceRemote reads it through the rpc with the last
   // value cached, and answers the unsupported status against a device process
   // that lacks the method. With no device, the daemon's provider-only device's
   // as provider_stats last read it, only while the daemon takes the switch's

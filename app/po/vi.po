@@ -3649,16 +3649,6 @@ msgctxt "dns_default_not_applied"
 msgid "The default safe settings are not applied"
 msgstr "Cài đặt an toàn mặc định chưa được áp dụng"
 
-#. Connect drawer: warning that DNS is resolving outside the tunnel.
-msgctxt "dns_not_on_tunnel"
-msgid "DNS is NOT going through the tunnel — names you look up are resolving outside it."
-msgstr "DNS KHÔNG đi qua đường hầm — các tên bạn tra cứu đang được phân giải bên ngoài nó."
-
-#. Connect drawer: status that DNS goes through the tunnel.
-msgctxt "dns_on_tunnel"
-msgid "DNS is going through the tunnel"
-msgstr "DNS đang đi qua đường hầm"
-
 #. A label displayed in a row of a custom dns settings.
 msgctxt "dns_over_https"
 msgid "DNS over HTTPS"

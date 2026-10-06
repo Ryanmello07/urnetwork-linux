@@ -27,7 +27,7 @@ class DnsSheet : public Gtk::Window {
 
   // Field-wise equality of two resolver settings (nullopt server lists compare
   // equal to empty ones). The canonical comparison for "are these settings the
-  // same" — the connect drawer's Custom DNS pill reuses it to decide whether the
+  // same" — the Connect page's DNS recommendation pill reuses it to decide whether the
   // applied settings match the regional recommendation / safe defaults.
   static bool SettingsEqual(const urnet::DnsResolverSettings& a,
                             const urnet::DnsResolverSettings& b);

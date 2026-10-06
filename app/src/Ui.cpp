@@ -29,10 +29,8 @@ window.background { background-color: #101010; color: #f8f8f8; }
   border-radius: 12px; padding: 16px; }
 .ur-card-tappable { transition: background-color 150ms ease, border-color 150ms ease; }
 .ur-card-tappable:hover { background-color: #242424; border-color: alpha(#ffffff, .22); }
-/* GTK4 never sets :active on a plain box, so pressed feedback is the .pressed
-   class WireCardPressFeedback toggles from the click gesture (windows
-   UrCardPressedBrush #2A2A2A) */
-.ur-card-tappable.pressed, .ur-card-tappable:active {
+/* windows UrCardPressedBrush #2A2A2A */
+.ur-card-tappable:active {
   background-color: #2a2a2a; border-color: alpha(#ffffff, .22); }
 .ur-banner { background-color: #1c1c1c; border-radius: 12px; padding: 12px; }
 /* dns recommendation pill: a small left-aligned coral-tinted capsule atop the
@@ -57,18 +55,10 @@ window.background { background-color: #101010; color: #f8f8f8; }
 .ur-dot-off { color: alpha(#5a5a5a, .4); }
 .ur-value-on { color: #87fb67; }
 /* monospace values (ids, IPs, URLs, identity key hashes) */
-.ur-mono-15 { font-family: monospace; font-size: 15px; font-weight: 500; }
 .ur-mono-13 { font-family: monospace; font-size: 13px; font-weight: 500; }
 .ur-mono-12 { font-family: monospace; font-size: 12px; }
 .ur-mono-11 { font-family: monospace; font-size: 11px; }
 .ur-caption-11 { font-size: 11px; }
-/* the ip family status row: column labels in the pixel display face at the
-   app's smallest NeueBit size (.ur-onb-neuebit-small); the tier color comes
-   from .dim-label / .ur-label-faint on the label, and tweens like the apple
-   row's 1s tween */
-.ur-ipfamily-label { font-family: "PP NeueBit"; font-size: 16px; font-weight: bold;
-  transition: color 1000ms ease; }
-.ur-ipfamily-line { transition: color 1000ms ease; }
 .ur-caption-10 { font-size: 10px; }
 /* contract-details direction tints (send green / receive pink): arrow + rate */
 .ur-fg-green { color: #87fb67; }
@@ -206,21 +196,6 @@ Gtk::Label* MakeCaption(const std::string& text) {
   return label;
 }
 
-Gtk::Box* MakeCardHeader(const std::string& title) {
-  auto* header = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  auto* label = Gtk::make_managed<Gtk::Label>(title);
-  label->add_css_class("dim-label");
-  label->set_xalign(0);
-  label->set_hexpand(true);
-  header->append(*label);
-  auto* chevron = Gtk::make_managed<Gtk::Image>();
-  chevron->set_from_icon_name("go-next-symbolic");
-  chevron->add_css_class("dim-label");
-  header->append(*chevron);
-  header->set_margin_bottom(8);
-  return header;
-}
-
 void RemoveAllChildren(Gtk::Box& box) {
   while (Gtk::Widget* child = box.get_first_child()) {
     box.remove(*child);
@@ -229,22 +204,6 @@ void RemoveAllChildren(Gtk::Box& box) {
 
 void SetPointerCursor(Gtk::Widget& widget) {
   gtk_widget_set_cursor_from_name(widget.gobj(), "pointer");
-}
-
-void WireCardPressFeedback(Gtk::Widget& widget) {
-  // GTK4 sets :hover on any widget under the pointer but :active only on real
-  // buttons, so a tappable card needs its own pressed feedback. A capture-
-  // phase gesture that CLAIMS nothing: the card's own click gesture still
-  // fires. unset_state covers release-outside and cancelled sequences.
-  auto gesture = Gtk::GestureClick::create();
-  gesture->set_propagation_phase(Gtk::PropagationPhase::CAPTURE);
-  gesture->signal_pressed().connect(
-      [&widget](int, double, double) { widget.add_css_class("pressed"); });
-  gesture->signal_released().connect(
-      [&widget](int, double, double) { widget.remove_css_class("pressed"); });
-  gesture->signal_cancel().connect(
-      [&widget](Gdk::EventSequence*) { widget.remove_css_class("pressed"); });
-  widget.add_controller(gesture);
 }
 
 void ShowToast(Gtk::Widget& context, const std::string& message) {

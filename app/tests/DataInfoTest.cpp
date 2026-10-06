@@ -211,25 +211,29 @@ UR_TEST(DataInfo_WhenEachEntryPointShows) {
   UR_EXPECT_FALSE(UpgradeShowsFreeRefresh(true, true));
 }
 
-// Only the start-connect block marks the upgrade sheet: the window sets the
-// drawer's mark around that one OpenUpgrade, and the drawer's opening reads it.
+// Only the start-connect block marks the upgrade sheet: the window sets its
+// mark around that one OpenUpgrade, and its opening of the sheet reads it.
 UR_TEST(DataInfo_OnlyTheStartConnectBlockMarksTheUpgradeSheet) {
   const std::string window = ReadSource("MainWindow.cpp");
   const std::string gate =
       Body(window, "bool MainWindow::ConnectBlockedByBalance(std::function<void()> retry) {");
   const std::string mark =
-      "drawer_->MarkNextUpgradeFreeRefresh(data_info::UpgradeShowsFreeRefresh(true, balance_.IsPro()));";
+      "nextUpgradeFreeRefresh_ = data_info::UpgradeShowsFreeRefresh(true, balance_.IsPro());";
   const auto markAt = gate.find(mark);
   const auto openAt = gate.find("OpenUpgrade();");
-  const auto clearAt = gate.find("drawer_->MarkNextUpgradeFreeRefresh(false);");
+  const auto clearAt = gate.find("nextUpgradeFreeRefresh_ = false;");
   UR_EXPECT_TRUE(markAt != std::string::npos);
   UR_EXPECT_TRUE(markAt < openAt);
   UR_EXPECT_TRUE(openAt != std::string::npos && openAt < clearAt && clearAt != std::string::npos);
   // nothing else marks it: Account's Upgrade, the alert's Upgrade and the
   // onboarding link open the sheet without the refresh line
-  UR_EXPECT_TRUE(window.find(mark) == window.rfind(mark));
-  const std::string drawer = ReadSource("ConnectDrawer.cpp");
-  UR_EXPECT_TRUE(Contains(Body(drawer, "void ConnectDrawer::OpenUpgrade()"),
+  size_t writes = 0;
+  for (size_t at = window.find("nextUpgradeFreeRefresh_ = "); at != std::string::npos;
+       at = window.find("nextUpgradeFreeRefresh_ = ", at + 1)) {
+    ++writes;
+  }
+  UR_EXPECT_EQ(size_t{2}, writes);
+  UR_EXPECT_TRUE(Contains(Body(window, "void MainWindow::OpenUpgrade() {"),
                           "upgradeSheet_->Open(nextUpgradeFreeRefresh_);"));
   const std::string sheet = ReadSource("UpgradeSheet.cpp");
   const std::string open = Body(sheet, "void UpgradeSheet::Open(bool freeRefresh) {");

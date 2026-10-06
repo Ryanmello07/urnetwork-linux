@@ -64,7 +64,7 @@ class UpgradeSheet : public Gtk::Window {
 
   // The server refused the checkout because the network is a legacy guest
   // (guest_sign_in_required): the sheet has hidden itself, and the owner opens
-  // the conversion (ConnectDrawer: on_guest_upgrade; onboarding: its owner).
+  // the conversion (MainWindow::OpenUpgrade; onboarding: its owner).
   std::function<void()> on_guest_sign_in_required;
 
  private:

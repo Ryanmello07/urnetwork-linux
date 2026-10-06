@@ -27,7 +27,7 @@ std::string ReadFastDnsSource(const std::string& relative) {
 }
 
 UR_TEST(FastDnsSurfacesUseTheOptInKey) {
-  for (const char* file : {"DnsSheet.cpp", "ConnectPage.cpp", "ConnectDrawer.cpp"}) {
+  for (const char* file : {"DnsSheet.cpp", "ConnectPage.cpp"}) {
     const std::string source = ReadFastDnsSource(file);
     UR_EXPECT_TRUE(!source.empty());
     UR_EXPECT_TRUE(source.find("\"local_dns_fallback") == std::string::npos);
