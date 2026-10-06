@@ -3,7 +3,9 @@
 // Single-process entry point. Owns the SdkHost (the in-process VPN core), the
 // GTK4 window, and the D-Bus tray. Closing the window hides to the tray and the
 // tunnel keeps running (the Windows/macOS "keep connected" behavior); Quit from
-// the tray is the only real exit.
+// the tray is the only real exit. One instance runs per session: a later
+// launch hands itself to it and exits, and one that meets it quitting waits
+// for it to end, then starts (InstanceHandover.hpp).
 #include <adwaita.h>
 #include <glib.h>
 #include <giomm/file.h>
@@ -18,9 +20,12 @@
 #include <string>
 
 #include "I18n.hpp"
+#include "InstanceHandover.hpp"
+#include "LaunchAtStartup.hpp"
 #include "MainWindow.hpp"
 #include "RuntimePaths.hpp"
 #include "SdkHost.hpp"
+#include "SingleInstance.hpp"
 #include "Tray.hpp"
 #include "UrTheme.hpp"
 
@@ -37,6 +42,15 @@ std::string EnsureDir(const std::string& base, const char* leaf) {
   std::string dir = base + "/" + leaf;
   g_mkdir_with_parents(dir.c_str(), 0700);
   return dir;
+}
+
+// The launcher's autostart flag, read once and unset so nothing this process
+// starts inherits it (InstanceHandover.hpp).
+bool TakeAutostartFlag() {
+  const bool autostart =
+      urnw::instance::IsAutostartFlag(g_getenv(urnw::instance::kAutostartEnvironment));
+  g_unsetenv(urnw::instance::kAutostartEnvironment);
+  return autostart;
 }
 
 }  // namespace
@@ -65,30 +79,66 @@ int main(int argc, char** argv) {
   // that resolve for some lookup paths and silently miss for others.
   urnw::LoadBrandFonts();
 
+  // Must match the .desktop StartupWMClass + common-id so the shell associates
+  // the window with the app (and the hide-to-tray window keeps its identity).
+  // HANDLES_OPEN: the single instance receives urnetwork:// deep links (wallet
+  // callbacks) via signal_open — the .desktop registers x-scheme-handler/urnetwork.
+  auto app = Gtk::Application::create(urnw::instance::kBusName,
+                                      Gio::Application::Flags::HANDLES_OPEN);
+  // The autostart entry's option, which GApplication would otherwise refuse;
+  // hidden from --help, as nobody types it.
+  app->add_main_option_entry(Gio::Application::OptionType::BOOL, "autostart", '\0', "", "",
+                             Glib::OptionEntry::Flags::HIDDEN);
+
+  // Which launch this is, and where it goes. A launch that finds the instance
+  // running hands itself over and exits here, and one that finds it exiting
+  // waits for it to end and then starts; either way before anything touches
+  // the storage or the log directory (InstanceHandover.hpp).
+  const urnw::instance::Arguments arguments = urnw::instance::ParseArguments(
+      argc > 1 ? std::vector<std::string>(argv + 1, argv + argc) : std::vector<std::string>(),
+      TakeAutostartFlag());
+  if (arguments.handover) {
+    const urnw::instance::Launch launch =
+        urnw::instance::LaunchFor(G_APPLICATION(app->gobj()), arguments);
+    const urnw::instance::Outcome outcome = urnw::instance::LaunchOnSessionBus(launch);
+    switch (outcome) {
+      case urnw::instance::Outcome::Start:
+      case urnw::instance::Outcome::Fallback:
+        break;
+      case urnw::instance::Outcome::HandedOver:
+        return 0;
+      case urnw::instance::Outcome::StillClosing:
+      case urnw::instance::Outcome::GaveUp:
+        g_warning("launch: not started, %s; start URnetwork again in a moment",
+                  urnw::instance::ToString(outcome));
+        return 1;
+    }
+  }
+
   auto host = std::make_shared<urnw::SdkHost>();
   const std::string storageDir = EnsureDir(Glib::get_user_data_dir(), "urnetwork");
   // glibmm on core24 (the 2.68 ABI series) has no Glib::get_user_state_dir wrapper;
   // call the C g_get_user_state_dir() (glib 2.72+) directly for XDG_STATE_HOME.
   const std::string logDir = EnsureDir(g_get_user_state_dir(), "urnetwork");
 
-  // Must match the .desktop StartupWMClass + common-id so the shell associates
-  // the window with the app (and the hide-to-tray window keeps its identity).
-  // HANDLES_OPEN: the single instance receives urnetwork:// deep links (wallet
-  // callbacks) via signal_open — the .desktop registers x-scheme-handler/urnetwork.
-  auto app = Gtk::Application::create("com.bringyour.network",
-                                      Gio::Application::Flags::HANDLES_OPEN);
-
-  // Hold the application so it survives with only the tray (window hidden).
-  app->hold();
-
   std::shared_ptr<urnw::MainWindow> window;
   std::shared_ptr<urnw::Tray> tray;
+  // This process's own launch is the first activation; every later one is a
+  // launch handed to this instance.
+  urnw::instance::Activations activations(arguments.kind);
+  // Every launch this instance serves: its links are routed, and the window
+  // shows unless it is the autostart entry's.
+  const auto serve = [&](const urnw::instance::Launch& launch) {
+    for (const std::string& uri : launch.uris) host->HandleDeepLink(uri);
+    if (window && urnw::instance::ShowsWindow(launch.kind)) window->present();
+  };
 
   app->signal_startup().connect([&] {
-    // SDK INIT BELONGS HERE, NOT BEFORE app->run(). GApplication only decides
-    // primary-vs-remote inside run(), so anything above it executes in EVERY
-    // launch -- including a duplicate that is about to hand off to the running
-    // instance and exit. signal_startup is emitted on the PRIMARY only.
+    // SDK INIT BELONGS HERE, NOT BEFORE app->run(). A launch the handover
+    // above leaves to GApplication is decided primary-vs-remote only inside
+    // run(), so anything above it can execute in a duplicate that is about to
+    // hand off to the running instance and exit. signal_startup is emitted on
+    // the PRIMARY only.
     //
     // That distinction is not cosmetic. SdkHost::Initialize calls
     // urnet::setLogDir(), which runs the SDK's glog init: it sweeps the log
@@ -102,6 +152,7 @@ int main(int argc, char** argv) {
     // touching.
     if (!host->Initialize(storageDir, logDir)) {
       g_printerr("failed to initialize SDK\n");
+      urnw::instance::BeginExiting();
       app->quit();
       return;
     }
@@ -118,6 +169,12 @@ int main(int argc, char** argv) {
     // the icon NAME kAppIconName must resolve for the window icon and the
     // tray, wherever the app runs from
     urnw::RegisterBrandIcons();
+    // Launch URnetwork on system startup: an autostart entry from before
+    // --autostart is brought up to date, so its logins show only the tray;
+    // none is made here (LaunchAtStartup.hpp).
+    urnw::startup::Locations startupLocations;
+    startupLocations.configDir = g_get_user_config_dir();
+    urnw::startup::Refresh(urnw::startup::PosixFiles(), startupLocations);
 
     window = std::make_shared<urnw::MainWindow>(*host);
     app->add_window(*window);
@@ -131,6 +188,11 @@ int main(int argc, char** argv) {
       if (window) window->DisconnectFromBalanceNotice();
     });
     tray->on_quit = [&] {
+      // Launches are refused from here on: the stop below holds the main
+      // loop, and whatever arrives meanwhile is read, if at all, by an
+      // instance about to end. A launch that meets it waits for it to end,
+      // then starts.
+      urnw::instance::BeginExiting();
       // teardown WITHOUT Logout(): Logout wipes the stored jwt, and for a
       // guest network that jwt is the only credential — quitting from the
       // tray was permanently destroying guest accounts (and any balance or
@@ -151,11 +213,26 @@ int main(int argc, char** argv) {
           return true;  // stop the default destroy
         },
         false);
+
+    // Hold the application so it survives with only the tray (window hidden).
+    // Held here, on the instance only: held before run(), it kept every
+    // GApplication remote (a launch handed to the instance) running forever.
+    app->hold();
+    // the window and the tray exist: launches handed to this instance are
+    // served from here on
+    urnw::instance::OpenLaunches(G_APPLICATION(app->gobj()), serve);
   });
 
   app->signal_activate().connect([&] {
-    if (window) window->present();
+    urnw::instance::Launch launch;
+    launch.kind = activations.Next();
+    serve(launch);
   });
+
+  // Every way the main loop ends begins the exit, before GtkApplication's own
+  // shutdown, which can run the main loop once more to store the clipboard:
+  // a launch read then is refused rather than served into a closing instance.
+  app->signal_shutdown().connect([] { urnw::instance::BeginExiting(); }, false);
 
   // Verification hook (the frame-capture half of the windows preview harness):
   // URNETWORK_SHOOT=<out.png> renders the window's content to a PNG ~5s after
@@ -229,14 +306,17 @@ int main(int argc, char** argv) {
         1000);
   }
 
-  // urnetwork:// deep links (wallet-connect callbacks) arrive here. GFile keeps
+  // urnetwork:// deep links (wallet-connect callbacks) of this process's own
+  // launch, or of a launch from before the handover, arrive here. GFile keeps
   // the original URI even for a custom scheme; route it into the SDK host.
   app->signal_open().connect(
       [&](const std::vector<Glib::RefPtr<Gio::File>>& files, const Glib::ustring&) {
+        urnw::instance::Launch launch;
+        launch.kind = urnw::instance::LaunchKind::Link;
         for (const auto& f : files) {
-          if (f) host->HandleDeepLink(f->get_uri());
+          if (f) launch.uris.push_back(f->get_uri());
         }
-        if (window) window->present();
+        serve(launch);
       });
 
   return app->run(argc, argv);

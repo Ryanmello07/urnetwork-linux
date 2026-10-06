@@ -3,7 +3,10 @@ Type=Application
 Name=URnetwork
 Comment=URnetwork VPN
 Icon=com.bringyour.network
-Exec=urnetwork
+# --autostart starts URnetwork with only its tray icon; a launch from the
+# menu or a link shows the window. The launcher hands it to the GUI as
+# URNETWORK_AUTOSTART=1 (urnetwork-launcher).
+Exec=urnetwork --autostart
 # TryExec self-disables this entry once the daemon package (and with it the
 # launcher) is removed, so a stale symlink cannot error at every login.
 # X-GNOME-Autostart-enabled is GNOME-only legacy and deliberately absent
@@ -16,5 +19,6 @@ Categories=Network;Security;
 # this file into ~/.config/autostart/ ATOMICALLY (temp name + rename(2) --
 # never remove-then-create, which leaves a window with no autostart entry
 # that becomes permanent if the process dies during shutdown), and opts out
-# by removing the symlink. Root-owned so an unprivileged process cannot
+# by removing the symlink: Settings > Launch URnetwork on system startup
+# (app/src/LaunchAtStartup.hpp). Root-owned so an unprivileged process cannot
 # rewrite what runs at every user's login.

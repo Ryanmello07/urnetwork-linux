@@ -193,6 +193,7 @@ if build_gui
 executable('urnetwork-gui',
   sources : [
     'src/main.cpp',
+    'src/SingleInstance.cpp',
     'src/ControlClient.cpp',
     'src/RpcSessionStore.cpp',
     'src/SecretServiceRpcSessionStore.cpp',
@@ -539,7 +540,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
 # lines and their filters, which device carries a feedback's log upload, for
-# how long, and the upload in flight off the daemon's main loop, and the daemon
+# how long, and the upload in flight off the daemon's main loop, how a launch
+# reaches the running instance and how it answers, the user's autostart entry
+# behind the startup toggle, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -646,6 +649,10 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/LogUploadTest.cpp',
     'tests/LogUploadWiringTest.cpp',
     'tests/DeveloperExitPresentationTest.cpp',
+    'tests/InstanceHandoverTest.cpp',
+    'tests/InstanceHandoverWiringTest.cpp',
+    'tests/LaunchAtStartupTest.cpp',
+    'tests/LaunchAtStartupWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -688,6 +695,10 @@ urnetwork_tests = executable('urnetwork-tests',
               # GUI call sites the same way, and DiagnosticLogWiringTest the support log's.
               # LogUploadWiringTest reads the log upload's daemon and GUI call sites the same way.
               # DeveloperExitPresentationTest reads DeveloperPage.cpp and po/ the same way.
+              # InstanceHandoverWiringTest reads the launch's call sites in main.cpp and
+              # SingleInstance.cpp, the autostart entry and the launcher the same way.
+              # LaunchAtStartupWiringTest reads the startup toggle's Settings and launch call
+              # sites, meson.build and ../../packaging/lib/common.sh the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
@@ -709,6 +720,13 @@ test('tarball-update-release-source',
 # nothing on the host touched.
 test('exclude-launcher',
      find_program('../packaging/urnetwork-exclude.test.sh'),
+     protocol : 'exitcode')
+
+# /usr/bin/urnetwork: the autostart entry's --autostart reaches the GUI as
+# URNETWORK_AUTOSTART=1, never as an option a GUI from before it refuses. Fake
+# GUI and flatpak, emptied environment, nothing on the host touched.
+test('launcher-autostart',
+     find_program('../packaging/urnetwork-launcher.test.sh'),
      protocol : 'exitcode')
 
 # ABI floor gate (APPIMAGE.md R9/§10c): the daemon and the vendored SDK must

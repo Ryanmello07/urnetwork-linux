@@ -18,6 +18,7 @@
 #include "ExcludeAppsSheet.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
+#include "LaunchAtStartup.hpp"
 #include "LicensesSheet.hpp"
 #include "PaneKit.hpp"
 #include "PostQuantumIdentity.hpp"  // ProviderIdentitiesSheet (reused as-is)
@@ -134,16 +135,25 @@ ProseRow MakeProseRow(const Glib::ustring& text, int padY) {
 
 // ToggleRow: the tall row with a platform switch right-aligned. The switch is
 // otherwise NAMELESS (its on/off content is empty), so it takes the row label
-// as its accessible name — a defect this project has shipped before.
+// as its accessible name — a defect this project has shipped before. rowOut,
+// when given, receives the whole row, for a row that hides.
 Gtk::Switch* AddToggleRow(Gtk::Box& host, const Glib::ustring& label,
-                          const Glib::ustring& note) {
+                          const Glib::ustring& note, Gtk::Widget** rowOut = nullptr) {
   auto row = kit::MakePaneTwoLineRow(label, note, kRowTall);
   auto* toggle = Gtk::make_managed<Gtk::Switch>();
   toggle->set_valign(Gtk::Align::CENTER);
   kit::SetAccessibleLabel(*toggle, label);
   row.trailing->append(*toggle);
   host.append(*row.root);
+  if (rowOut) *rowOut = row.root;
   return toggle;
+}
+
+// Where "Launch URnetwork on system startup" lives (LaunchAtStartup.hpp).
+startup::Locations StartupLocations() {
+  startup::Locations locations;
+  locations.configDir = g_get_user_config_dir();
+  return locations;
 }
 
 // ValueRow: the same row with a right-aligned, trimmed, muted readout. The
@@ -772,6 +782,7 @@ void SettingsPage::Load() {
 
   // 1. Local state first: no round trips, correct with no session at all.
   ApplyLocalDeviceState();
+  ApplyLaunchAtStartup();
 
   // 2. No session: EVERY server-backed field lands on NoSession and we return.
   //    Nothing may sit on a dash or an unresolving spinner. This branch is the
@@ -999,6 +1010,19 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
     }
   });
 
+  // Row 2b -- launch on system startup, as on macOS and Windows (owner
+  // decision, 2026-10-05). The user's own autostart entry, so it needs no
+  // session: off until the user turns it on, and a login then starts the app
+  // in the tray (LaunchAtStartup.hpp). Read again on every Load(), since the
+  // desktop's startup settings can switch it off too; hidden where the daemon
+  // package's template is missing.
+  launchAtStartup_ = AddToggleRow(
+      host, T_("launch_urnetwork_on_system_startup", "Launch URnetwork on system startup"), {},
+      &launchAtStartupRow_);
+  ApplyLaunchAtStartup();
+  launchAtStartup_->property_active().signal_changed().connect(
+      [this] { OnLaunchAtStartupToggled(); });
+
   // Row 3 -- the update notice. Hidden until a newer stable release is known
   // (UpdateChecker -> ApplyUpdate). The verb on the right follows the phase:
   // Install (the AppImage downloads, verifies and swaps itself), Relaunch,
@@ -1028,6 +1052,29 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
 }
 
 void SettingsPage::SetUpdateChecker(UpdateChecker* checker) { updates_ = checker; }
+
+// The entry as the filesystem has it, written under the echo guard.
+void SettingsPage::ApplyLaunchAtStartup() {
+  if (!launchAtStartup_) return;
+  const startup::Files files = startup::PosixFiles();
+  const startup::Locations locations = StartupLocations();
+  launchAtStartupRow_->set_visible(startup::Available(files, locations));
+  applyingLaunchAtStartup_ = true;
+  launchAtStartup_->set_active(startup::Enabled(files, locations));
+  applyingLaunchAtStartup_ = false;
+}
+
+// The user's switch: the entry is linked or removed, and the toggle then shows
+// what the filesystem says, also when that failed.
+void SettingsPage::OnLaunchAtStartupToggled() {
+  if (applyingLaunchAtStartup_) return;
+  const bool enabled = launchAtStartup_->get_active();
+  if (!startup::Set(startup::PosixFiles(), StartupLocations(), enabled)) {
+    g_warning("settings: launch on system startup could not be turned %s",
+              enabled ? "on" : "off");
+  }
+  ApplyLaunchAtStartup();
+}
 
 void SettingsPage::ApplyUpdate(const UpdateChecker::Snapshot& snap) {
   if (!updateRow_) return;
