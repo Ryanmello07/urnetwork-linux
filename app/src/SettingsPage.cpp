@@ -1234,10 +1234,20 @@ void SettingsPage::BuildConnectionsSection(Gtk::Box& host) {
                       "URnetwork can reach its servers; everything else stays blocked."),
                    kProsePadY)
                    .root);
-  // Row 3b — the kill switch exception for the safety rules: what they keep
-  // off the providers leaves from this device's own address while the switch
-  // is off, and is blocked while it is on (the same disclosure the connect
-  // drawer's kill switch exception popover carries).
+  // Rows 3b-3c — the kill switch exceptions, the two texts Windows shows
+  // behind "Show kill switch exception". The tunnel captures ::/0 minus the
+  // local scopes (CaptureV6Prefixes), so SMTP on TCP port 25 is the one
+  // public-route exception, even with the switch on.
+  host.append(*MakeProseRow(
+                   T_("kill_switch_exception_smtp_detail",
+                      "While the VPN is connected, IPv6 is routed through URnetwork like IPv4. "
+                      "Outbound SMTP on TCP port 25 bypasses the VPN, even when the kill switch "
+                      "is on, which may expose your local public IP to those mail servers. SMTP "
+                      "on ports 465 and 587 stays in the VPN and must establish TLS."),
+                   kProsePadY)
+                   .root);
+  // What the safety rules keep off the providers leaves from this device's
+  // own address while the switch is off, and is blocked while it is on.
   host.append(*MakeProseRow(
                    T_("kill_switch_exception_unrecognized_encrypted",
                       "When the kill switch is off, traffic that URnetwork safety rules keep off the "
