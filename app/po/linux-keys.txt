@@ -936,6 +936,10 @@ site_app_network_reliability
 site_app_no_reliability
 site_app_no_traffic
 site_app_support_intro
+site_payment_error_already_subscribed
+site_payment_error_plan_unavailable
+site_subscription_error_no_customer
+site_subscription_error_store_unavailable
 skip
 sn_payout_schedule
 sn_payout_schedule_times

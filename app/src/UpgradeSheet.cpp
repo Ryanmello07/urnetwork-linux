@@ -23,6 +23,7 @@
 #include "GuestConversion.hpp"
 #include "I18n.hpp"
 #include "PricePresentation.hpp"
+#include "ServerRefusalText.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -561,7 +562,15 @@ void UpgradeSheet::RequestSession(bool embedded) {
           }
           if (err) { fail(*err); return; }
           if (!result) { fail(""); return; }
-          if (result->error) { fail(result->error->message); return; }
+          if (result->error) {
+            // a refusal reads as its code's line, or as the sheet's own line with
+            // the server's words under it (ServerRefusalText.hpp)
+            const ServerRefusalText refusal =
+                ServerRefusalTextFor(result->error->code.value_or(std::string()),
+                                     result->error->message, kUpgradeSheetRefusalLine);
+            fail(ServerRefusalDisplay(T_(refusal.line.key, refusal.line.english), refusal));
+            return;
+          }
           if (!result->checkout_url || result->checkout_url->empty()) { fail(""); return; }
 
           // hosted checkout: hand off to the system browser, then poll so Pro

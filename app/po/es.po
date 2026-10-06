@@ -1103,7 +1103,7 @@ msgctxt "checkout_error_payment_form_unavailable"
 msgid "The payment form couldn't load. Check your internet connection, then try again."
 msgstr "No se pudo cargar el formulario de pago. Comprueba tu conexión a internet y vuelve a intentarlo."
 
-#. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.
+#. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.
 msgctxt "checkout_error_unavailable"
 msgid "Checkout isn't available right now. Please try again later."
 msgstr "El pago no está disponible en este momento. Inténtalo de nuevo más tarde."
@@ -8687,7 +8687,7 @@ msgctxt "site_pay_sheet_trial_line"
 msgid "Your card is saved today and charged {1} on {0}. Cancel anytime before then."
 msgstr "Tu tarjeta se guarda hoy y se cobra {1} el {0}. Cancela cuando quieras antes."
 
-#. ur.io checkout (the Pro upgrade sheet, the onboarding plan step, the offer screen, the free-trial panel): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.
+#. Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.
 msgctxt "site_payment_error_already_subscribed"
 msgid "You already have Pro, so nothing was charged. Manage your subscription from your account."
 msgstr "Ya tienes Pro, así que no se te cobró nada. Gestiona tu suscripción desde tu cuenta."
@@ -8757,7 +8757,7 @@ msgctxt "site_payment_error_offer_unavailable"
 msgid "The welcome offer is no longer available."
 msgstr "La oferta de bienvenida ya no está disponible."
 
-#. ur.io checkout: the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.
+#. Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.
 msgctxt "site_payment_error_plan_unavailable"
 msgid "This plan is not available right now. Try again later."
 msgstr "Este plan no está disponible en este momento. Inténtalo más tarde."
@@ -9049,7 +9049,7 @@ msgctxt "site_subscription_error_managed_by_google_play"
 msgid "This subscription is billed by Google Play. Cancel it there."
 msgstr "Esta suscripción se factura a través de Google Play. Cancélala allí."
 
-#. ur.io Manage subscription screen, opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).
+#. Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).
 msgctxt "site_subscription_error_no_customer"
 msgid "This network has no Stripe billing details."
 msgstr "Esta red no tiene datos de facturación en Stripe."
@@ -9064,7 +9064,7 @@ msgctxt "site_subscription_error_not_cancelable"
 msgid "This subscription cannot be changed here."
 msgstr "Esta suscripción no se puede cambiar aquí."
 
-#. ur.io Manage subscription screen: Stripe did not answer or refused the change; trying again usually works (error.code store_unavailable).
+#. Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).
 msgctxt "site_subscription_error_store_unavailable"
 msgid "Stripe could not be reached just now. Try again in a moment."
 msgstr "No se pudo contactar con Stripe en este momento. Inténtalo de nuevo en unos instantes."
