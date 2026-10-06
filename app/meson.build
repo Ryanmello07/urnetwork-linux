@@ -234,6 +234,8 @@ executable('urnetwork-gui',
     'src/TransportPresentation.cpp',
     'src/TransportBar.cpp',
     'src/TransportSheet.cpp',
+    'src/IpFamilyStatusRow.cpp',
+    'src/ExtenderPanel.cpp',
     'src/ExtenderSection.cpp',
     'src/ControlDohSection.cpp',
     'src/ExtenderShareSheet.cpp',
@@ -518,8 +520,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # ---- unit tests -------------------------------------------------------------
 # The pure-logic modules (orthographic projection math, the TopoJSON decoder,
 # the provider row/label helpers, the location-override state machine, the
-# transport bar's boundary-tween geometry, the extender ring geometry, the
-# provider extender row's reading of ExtenderProvideStatus
+# transport bar's boundary-tween geometry, the ip family status row's
+# counting and ranking, the extender ring geometry, the extender panel's reading of
+# ExtenderStatus, the provider extender row's reading of ExtenderProvideStatus
 # and the statistics sections' visibility, the compact count and count-rate
 # labels, the extender share/import decisions, the Solana payout wallet's card
 # and connect-sheet rules, the wallet bridge's return routing, the dual-stack
@@ -565,7 +568,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ConnectBlockedOutOfBalanceTest.cpp',
     'tests/TapSequenceGateTest.cpp',
     'tests/TransportBarGeometryTest.cpp',
+    'tests/IpFamilyStatusTest.cpp',
     'tests/ExtenderRingGeometryTest.cpp',
+    'tests/ExtenderStatusPresentationTest.cpp',
     'tests/ExtenderProvidePresentationTest.cpp',
     'tests/CountFormatTest.cpp',
     'tests/ExtenderSharePresentationTest.cpp',
@@ -628,6 +633,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProvideLifecycleTest.cpp',
     'tests/ProvideLineTest.cpp',
     'tests/LegacyHomeRemovedTest.cpp',
+    'tests/ConnectActivityRowsWiringTest.cpp',
     'tests/SignOutTest.cpp',
     'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
@@ -673,6 +679,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # ProvideLineTest reads the connect page's provide line the same way.
               # LegacyHomeRemovedTest reads the window, the shell and the build lists
               # the same way: the legacy home stays gone and every page is reachable.
+              # ConnectActivityRowsWiringTest reads the connect page's ip family row
+              # and extender panel, and their host feed, the same way.
               # SignOutWiringTest reads SdkHost and the health poll the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and

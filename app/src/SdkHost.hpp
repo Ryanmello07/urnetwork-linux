@@ -114,6 +114,7 @@ enum class DrawerEvent {
   ProviderIdentities,  // post-quantum identity set changed (identities list + badges)
   ProviderLocations,   // connected provider set/locations changed (locations sheet)
   ProviderSelection,   // the globe's selected provider changed (locations sheet)
+  ExtenderStatus,      // extender directory / gossip status changed (connect page panel)
   // this device's own extender role changed state or setting (the connect
   // page's extender row, the earnings page's read-only row and statistics)
   ExtenderProvideStatus,
@@ -967,10 +968,19 @@ class SdkHost {
   void SetSelectedProviderClientId(const std::string& clientId);
   void StepProviderSelection(int steps);
 
-  // ---- extenders (EXTENDER.md K6 to K8, N2 to N8) ---------------------------
+  // ---- extenders (EXTENDER.md K4 to K8, N2 to N8) ---------------------------
+  // The extender directory + gossip status, read off the DEVICE (K5: it lives
+  // on DeviceLocal and reaches DeviceRemote over the rpc with the last value
+  // cached, exactly as the provider family transport status), so the connect
+  // page's panel reads the DAEMON's directory rather than this process's.
+  // nullopt with no device, which the panel draws as the disconnected network
+  // (Windows' rule). Changes arrive as DrawerEvent::ExtenderStatus, coalesced
+  // by the SDK to one callback per second.
+  std::optional<urnet::ExtenderStatus> GetExtenderStatus();
+
   // The status of this device's OWN extender role (EXTENDER.md N2, N3), read
-  // off the DEVICE, because the role runs in the daemon's DeviceLocal.
-  // DeviceRemote reads it through the rpc with the last
+  // off the DEVICE like GetExtenderStatus, because the role runs in the
+  // daemon's DeviceLocal. DeviceRemote reads it through the rpc with the last
   // value cached, and answers the unsupported status against a device process
   // that lacks the method. With no device, the daemon's provider-only device's
   // as provider_stats last read it, only while the daemon takes the switch's

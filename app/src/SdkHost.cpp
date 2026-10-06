@@ -3073,7 +3073,16 @@ void SdkHost::SubscribeDrawer() {
   presentationSubs_.push_back(device_->addConnectedProviderLocationChangeListener(
       [this] { EmitDrawerEvent(DrawerEvent::ProviderLocations); }));
 
-  // this device's OWN extender role (EXTENDER.md N2, N7): the connect page's
+  // extenders (EXTENDER.md K4/K5): the directory + gossip status, read off the
+  // DEVICE so the connect page's panel shows the DAEMON's directory -- the one
+  // whose dials the rings describe -- rather than this process's. The SDK
+  // coalesces to one callback per second, so no throttle is needed here; the
+  // panel dedupes by value anyway.
+  presentationSubs_.push_back(device_->addExtenderStatusChangeListener(
+      [this](std::optional<urnet::ExtenderStatus>) {
+        EmitDrawerEvent(DrawerEvent::ExtenderStatus);
+      }));
+  // ...and this device's OWN extender role (N2, N7): the connect page's
   // extender row, and the earnings page's read-only row and the running state
   // behind its extender statistics (O4). The SDK coalesces it to one callback
   // per epoch (a second) after any change of the setting, the provide state or
@@ -3921,7 +3930,18 @@ void SdkHost::StepProviderSelection(int steps) {
   providerLocationsVc_->stepSelection(steps);
 }
 
-// ---- extenders (EXTENDER.md K6 to K8, N2 to N8) -----------------------------
+// ---- extenders (EXTENDER.md K4 to K8, N2 to N8) -----------------------------
+
+std::optional<urnet::ExtenderStatus> SdkHost::GetExtenderStatus() {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return std::nullopt;  // no session: the panel reads disconnected
+  try {
+    return device_->getExtenderStatus();
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] getExtenderStatus failed: %s\n", e.what());
+    return std::nullopt;
+  }
+}
 
 std::optional<urnet::ExtenderProvideStatus> SdkHost::DeviceExtenderProvideStatusLocked() {
   try {

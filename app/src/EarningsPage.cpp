@@ -5585,6 +5585,7 @@ void EarningsPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::ProviderIdentities:
     case DrawerEvent::ProviderLocations:
     case DrawerEvent::ProviderSelection:
+    case DrawerEvent::ExtenderStatus:
       // the connect page's and the window's surfaces
       break;
   }

@@ -77,19 +77,16 @@ UR_TEST(LegacyHome_EveryHomePageIsReachable) {
   }
 }
 
+// The drawer is gone; the ip family status row and the extender panel it
+// carried live on the connect page now (ConnectActivityRowsWiringTest.cpp).
 UR_TEST(LegacyHome_TheDrawerSourcesAreGone) {
-  for (const char* file : {"ConnectDrawer.cpp", "ConnectDrawer.hpp", "IpFamilyStatusRow.cpp",
-                           "IpFamilyStatusRow.hpp", "IpFamilyStatus.hpp", "ExtenderPanel.cpp",
-                           "ExtenderPanel.hpp", "ExtenderStatusPresentation.hpp"}) {
+  for (const char* file : {"ConnectDrawer.cpp", "ConnectDrawer.hpp"}) {
     std::ifstream in(std::string(UR_SRC_DIR) + "/" + file, std::ios::binary);
     UR_EXPECT_TRUE_MSG(file, !in.good());
   }
   const std::string build = ReadLegacyHomeSource("../meson.build");
   const std::string potfiles = ReadLegacyHomeSource("../po/POTFILES.in");
   UR_EXPECT_TRUE(!build.empty() && !potfiles.empty());
-  for (const char* gone : {"ConnectDrawer", "IpFamilyStatus", "ExtenderPanel",
-                           "ExtenderStatusPresentation"}) {
-    UR_EXPECT_TRUE_MSG(gone, !Contains(build, gone));
-    UR_EXPECT_TRUE_MSG(gone, !Contains(potfiles, gone));
-  }
+  UR_EXPECT_TRUE(!Contains(build, "ConnectDrawer"));
+  UR_EXPECT_TRUE(!Contains(potfiles, "ConnectDrawer"));
 }

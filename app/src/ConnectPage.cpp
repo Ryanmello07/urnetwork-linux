@@ -898,6 +898,23 @@ void ConnectPage::BuildPaneB() {
   if (auto* inner = RowInner(transportRow)) inner->append(*transportBar_);
   paneB_.content->append(*transportRow);
 
+  // Windows' next two rows (connect/IPV6.md D2, EXTENDER.md K4): the ip family
+  // status row directly under the transport bar, then the extender panel. Plain
+  // rows on the pane's 12px inset with no rule of their own: they are not
+  // tappable, and the connections group header below draws the separation.
+  ipFamilyStatusRow_ = Gtk::make_managed<IpFamilyStatusRow>();
+  ipFamilyStatusRow_->set_margin_start(12);
+  ipFamilyStatusRow_->set_margin_end(12);
+  ipFamilyStatusRow_->set_margin_top(8);
+  ipFamilyStatusRow_->set_margin_bottom(8);
+  paneB_.content->append(*ipFamilyStatusRow_);
+  extenderPanel_ = Gtk::make_managed<ExtenderPanel>();
+  extenderPanel_->set_margin_start(12);
+  extenderPanel_->set_margin_end(12);
+  extenderPanel_->set_margin_top(8);
+  extenderPanel_->set_margin_bottom(8);
+  paneB_.content->append(*extenderPanel_);
+
   // 3.3 the connections group header; its meta is the FULL feed count even
   // though the list caps at 200 rows
   auto connectionsHeader = kit::MakePaneGroupHeader(T_("connections", "Connections"));
@@ -1440,6 +1457,9 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
   // the hero's grid feed — fed unconditionally, empty list included (the
   // canvas renders it as the bare lattice; an empty grid is a NORMAL state)
   canvas_->SetGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
+  // the same grid, counted by proven address family; an empty grid reads as
+  // three "disconnected" columns
+  if (ipFamilyStatusRow_) ipFamilyStatusRow_->SetGrid(stats.gridPoints);
 
   // 3.1 pane B header carries the live throughput; with no session the line
   // COLLAPSES entirely rather than reading "0 bps"
@@ -2433,6 +2453,9 @@ void ConnectPage::RefreshFeeds(bool force) {
   // when something pushes. Cheap: ReadConnectReading takes no lock and reads
   // getters the stats feed already reads many times a second.
   ApplyConnectReading(host_.CurrentConnectReading());
+  // the extender network: no event fires when the device goes, so a device
+  // arriving or leaving is re-read here; the panel drops an unchanged reading
+  if (extenderPanel_) extenderPanel_->SetStatus(host_.GetExtenderStatus());
   {
     auto actions = host_.BlockActions();
     const uint64_t sig = BlockActionsSig(actions);
@@ -2710,6 +2733,11 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::ProviderSelection:
       // MainWindow owns the globe sheet and the location-override tracking, so
       // they must survive with this page unbuilt
+      break;
+    case DrawerEvent::ExtenderStatus:
+      // the SDK coalesces this to one callback per second; the panel drops a
+      // push that changes nothing, so this costs a read and a compare
+      if (extenderPanel_) extenderPanel_->SetStatus(host_.GetExtenderStatus());
       break;
     case DrawerEvent::ExtenderProvideStatus:
       ApplyExtenderProvideState();

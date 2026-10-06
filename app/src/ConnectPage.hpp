@@ -35,8 +35,10 @@
 #include "ContractsSheet.hpp"
 #include "DataInfoSheet.hpp"
 #include "DnsSheet.hpp"
+#include "ExtenderPanel.hpp"
 #include "ExtenderProvidePresentation.hpp"
 #include "InsufficientBalanceNotice.hpp"
+#include "IpFamilyStatusRow.hpp"
 #include "PaneKit.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
@@ -468,6 +470,11 @@ class ConnectPage : public Gtk::Box {
   // the window's remote traffic by transport, directly under the remote
   // chart; its click opens the transport settings sheet
   TransportBar* transportBar_ = nullptr;
+  // Windows' next two rows: the window's providers by address family, fed by
+  // the stats push's grid, then the extender network, fed by the device's
+  // extender status. Neither is tappable.
+  IpFamilyStatusRow* ipFamilyStatusRow_ = nullptr;
+  ExtenderPanel* extenderPanel_ = nullptr;
   Gtk::Label* connectionsCount_ = nullptr;
   Gtk::Box* connectionsArea_ = nullptr;
   Gtk::Box* connectionsHost_ = nullptr;
