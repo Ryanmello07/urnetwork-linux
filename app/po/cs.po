@@ -4366,6 +4366,11 @@ msgstr[0] "{} hvězdička"
 msgstr[1] "{} hvězdičky"
 msgstr[2] "{} hvězdiček"
 
+#. Feedback screen: the heading of the overlay shown after feedback is sent.
+msgctxt "feedback_submitted"
+msgid "Feedback submitted."
+msgstr "Zpětná vazba odeslána."
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4495,6 +4500,11 @@ msgstr "Host"
 msgctxt "guest_convert_explanation"
 msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
 msgstr "Přidejte e-mail a heslo, abyste se mohli k této síti přihlásit. Její tarif a zůstatek zůstanou u ní."
+
+#. Account switcher: the row of the guest account, checked while the app runs in guest mode.
+msgctxt "guest_mode"
+msgid "Guest Mode"
+msgstr "Režim pro hosty"
 
 msgctxt "hash_count"
 msgid "#{}"
@@ -6582,6 +6592,16 @@ msgctxt "purchase_found_confirming_your_plan"
 msgid "Purchase found. Confirming your plan — it will update automatically."
 msgstr "Nákup nalezen. Potvrzujeme váš tarif — aktualizuje se automaticky."
 
+#. Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.
+msgctxt "purchase_pending_body"
+msgid "Your purchase is waiting for approval. UR Pro will turn on by itself once it goes through — there's no need to buy again."
+msgstr "Váš nákup čeká na schválení. Jakmile projde, UR Pro se zapne samo — není třeba kupovat znovu."
+
+#. Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).
+msgctxt "purchase_pending_title"
+msgid "Almost there."
+msgstr "Už to skoro je."
+
 #. Error when a chosen photo or image file holds no QR code.
 msgctxt "qr_code_not_found"
 msgid "No QR code was found in the image."
@@ -6836,9 +6856,24 @@ msgctxt "refresh"
 msgid "Refresh"
 msgstr "Obnovit"
 
+#. Settings: the button that makes a new seedphrase in place of the current one.
+msgctxt "regenerate"
+msgid "Regenerate"
+msgstr "Vygenerovat znovu"
+
 msgctxt "regenerate_seedphrase"
 msgid "Regenerate Seedphrase"
 msgstr "Vygenerovat seed frázi znovu"
+
+#. Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.
+msgctxt "regenerate_seedphrase_body"
+msgid "Your current seedphrase will stop working. You'll be shown a new one to save."
+msgstr "Vaše současná seed fráze přestane fungovat. Zobrazí se vám nová, kterou si uložte."
+
+#. Settings: the title of the confirmation before a new seedphrase replaces the current one.
+msgctxt "regenerate_seedphrase_title"
+msgid "Regenerate your seedphrase?"
+msgstr "Vygenerovat seed frázi znovu?"
 
 #. Provider list group title for regions
 msgctxt "regions"
@@ -7556,6 +7591,11 @@ msgctxt "site_app_no_traffic"
 msgid "No traffic yet"
 msgstr "Zatím žádný provoz"
 
+#. ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.
+msgctxt "site_app_phone"
+msgid "Phone"
+msgstr "Telefon"
+
 #. Connect drawer: plan section label
 msgctxt "site_app_plan"
 msgid "Plan"
@@ -8184,7 +8224,7 @@ msgctxt "suggested_remote_dns_servers_description"
 msgid "Suggestions for the connected country are marked with its color. Turning one on adds it to the remote DNS servers."
 msgstr "Návrhy pro připojenou zemi jsou označeny její barvou. Zapnutím se server přidá mezi vzdálené servery DNS."
 
-#. Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.
+#. Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.
 msgctxt "support"
 msgid "Support"
 msgstr "Podpora"
@@ -8661,6 +8701,11 @@ msgstr "Odpojení"
 msgctxt "unlink_alert_description"
 msgid "When unlinking your referral network, you will no longer be able to earn points from {}"
 msgstr "Po zrušení propojení sítě doporučení již nebudete moci získávat body z {}."
+
+#. Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.
+msgctxt "unlink_alert_description_unnamed"
+msgid "When unlinking your referral network, you will no longer be able to earn points from that network"
+msgstr "Po zrušení propojení sítě doporučení již nebudete moci získávat body z této sítě."
 
 #. Call to action
 msgctxt "unlink_referral_network"
