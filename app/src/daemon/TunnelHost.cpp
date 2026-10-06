@@ -1702,6 +1702,47 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
   return reply;
 }
 
+TunnelHost::ExtenderResetResult TunnelHost::ResetExtenders(
+    const ctl::ResetExtendersRequest& request) {
+  ExtenderResetResult result;
+  std::optional<urnet::NetworkSpace> space;
+  {
+    std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
+    if (!lock.owns_lock()) {
+      // A bring-up owns the session and imports the space it was started
+      // with; the next import of this space applies the reset.
+      result.error = "a tunnel operation is in progress";
+      result.code = ctl::kCodeStartInProgress;
+      return result;
+    }
+    // The manager loads every space this daemon stores; without one no device
+    // has run yet and nothing is held.
+    if (spaceManager_) {
+      urnet::NetworkSpaceKey key;
+      key.host_name = request.host_name;
+      key.env_name = request.env_name;
+      if (urnet::NetworkSpace held = spaceManager_->getNetworkSpace(key)) {
+        space = std::move(held);
+      }
+    }
+  }
+  result.ok = true;
+  if (!space) {
+    DaemonLogf("[extender] reset %s of %s/%s: no space is held for the key; its next import "
+               "applies it\n",
+               request.extender_reset_id.c_str(), request.host_name.c_str(),
+               request.env_name.c_str());
+    return result;
+  }
+  // Outside opMutex_: the sdk joins the space's old extender client before the
+  // new one starts. The devices running in the space keep running.
+  result.reset = space->applyExtenderReset(request.extender_reset_id);
+  DaemonLogf("[extender] reset %s of %s/%s: %s\n", request.extender_reset_id.c_str(),
+             request.host_name.c_str(), request.env_name.c_str(),
+             result.reset ? "applied" : "nothing new to apply");
+  return result;
+}
+
 bool TunnelHost::SetProvideExtender(bool on, std::string* error) {
   std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
   if (!lock.owns_lock()) {

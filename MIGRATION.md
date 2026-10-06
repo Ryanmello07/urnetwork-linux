@@ -158,6 +158,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | `start_provider` | `by_jwt`, `instance_id`, `app_version`, `network_space_json`, `provide_mode`, `provider_transport_settings_json` | `ok` + the status |
 | `provider_stats` | `poll_status` | `running`, `has_provider_stats`, `provider_throughput_points_json`, `provider_transport_distribution_json`, `status_open`, `status_loaded`, `status_last_fetch_error`, `provider_status_json`, `extender_provide_status_json`, `extender_throughput_points_json`, `provide_extender`, `provide_extender_writable` |
 | `set_provide_extender` | `provide_extender` | `ok` |
+| `reset_extenders` | `host_name`, `env_name`, `extender_reset_id` | `ok`, `reset` |
 | `location_override_available` | — | `available`, `reason` |
 | `location_override_write` | `lat`, `lon`, `accuracy_m` | `ok` |
 | `location_override_clear` | — | `ok` |
@@ -252,6 +253,31 @@ applies the same value to its own process from its health poll. Absent (an older
 daemon) parses `""`, and a redacted status carries none. ModemManager is asked only
 while its bus name has an owner and never with auto-start, so a disabled ModemManager
 stays stopped.
+
+`reset_extenders` is Account > Extenders' Reset extenders (connect `EXTENDER.md` E7). The
+GUI resets its own network space with the SDK's `NetworkSpace::resetExtenders`, which
+clears what the space learned about extenders and what the user added (manual hosts, the
+private extender, the dns name, gossip url and root key overrides), persists the cleared
+values with the reset's id, and restarts the space's extender client and node. It then
+sends the space's key (`host_name`, `env_name`) and that id, and the daemon applies the
+same reset to the space it holds under the key (`applyExtenderReset`). The tunnel
+session's device and the provider-only device both run in that space, so one call covers
+both; their live extender paths keep running, and new dials draw from the fresh directory.
+`reset` is false when the daemon holds no space for the key (no device has run) or the
+space applied that reset, or a newer one, already. The verb only makes the reset
+immediate: the id travels in the space's values, so a daemon that was not reachable,
+busy (`start_in_progress`, refused while a bring-up owns the session, never waited
+behind) or never asked applies it at its next `start_tunnel` or `start_provider`
+import, and an id the space applied already changes nothing. Every field is required, at
+most 256 bytes and free of control bytes, since the daemon logs the key it reset. One
+daemon serves every user of the machine and its spaces are theirs in common, so one
+user's reset of a key resets the daemon's state for that key for everyone; that is
+intended (extender knowledge is per installation), and the verb is gated like
+`set_provide_extender`: `control-tunnel` while the caller owns the live session or none
+is live, `take-over-tunnel` while another uid's tunnel or provider session is live, a
+press, so interactive. Another user's own GUI space is untouched, and the older id their
+next import carries applies nothing. A daemon that predates the verb answers `unknown
+verb`.
 
 `set_provide_extender` is the connect page's Extender switch while there is no tunnel
 session. The provider extender setting belongs to the network space

@@ -67,7 +67,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
       ctl::Verb::StartTunnel,    ctl::Verb::AttachTunnel,
       ctl::Verb::StopTunnel,     ctl::Verb::SetProvide,
       ctl::Verb::StartProvider,  ctl::Verb::ProviderStats,
-      ctl::Verb::SetProvideExtender,
+      ctl::Verb::SetProvideExtender, ctl::Verb::ResetExtenders,
       ctl::Verb::LocationOverrideAvailable,
       ctl::Verb::LocationOverrideWrite, ctl::Verb::LocationOverrideClear,
       ctl::Verb::UploadLogs,
@@ -85,6 +85,7 @@ UR_TEST(controlVerbNamesRoundTrip) {
   UR_EXPECT_TRUE(ctl::VerbFromString("start_provider") == ctl::Verb::StartProvider);
   UR_EXPECT_TRUE(ctl::VerbFromString("provider_stats") == ctl::Verb::ProviderStats);
   UR_EXPECT_TRUE(ctl::VerbFromString("set_provide_extender") == ctl::Verb::SetProvideExtender);
+  UR_EXPECT_TRUE(ctl::VerbFromString("reset_extenders") == ctl::Verb::ResetExtenders);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_available") ==
                  ctl::Verb::LocationOverrideAvailable);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_write") ==
@@ -964,6 +965,133 @@ UR_TEST(controlProviderStatsFromAnOlderDaemonHasNoExtenderWriter) {
   UR_EXPECT_FALSE(back.provide_extender_writable);
   UR_EXPECT_FALSE(back.provide_extender);
   UR_EXPECT_FALSE(ctl::ProviderStatsReply().provide_extender_writable);
+}
+
+// ---- reset_extenders: Account > Extenders' Reset extenders --------------------
+
+namespace {
+
+ctl::ResetExtendersRequest SampleResetExtenders() {
+  ctl::ResetExtendersRequest req;
+  req.host_name = "network.example";
+  req.env_name = "main";
+  req.extender_reset_id = "f00dfeed-0000-4000-8000-000000000001";
+  return req;
+}
+
+}  // namespace
+
+// The space's key and the reset's id travel under their wire names, and the
+// reply says whether the daemon applied it; absent reads as nothing applied.
+UR_TEST(controlResetExtendersRoundTrip) {
+  const ctl::ResetExtendersRequest req = SampleResetExtenders();
+  const nlohmann::json wire = nlohmann::json(req);
+  UR_EXPECT_TRUE(wire.at("host_name") == "network.example");
+  UR_EXPECT_TRUE(wire.at("env_name") == "main");
+  UR_EXPECT_TRUE(wire.at("extender_reset_id") == "f00dfeed-0000-4000-8000-000000000001");
+  const auto back = ctl::DecodeFrame(
+      ctl::EncodeFrame(ctl::MakeRequest(ctl::Verb::ResetExtenders, 31, wire)));
+  UR_EXPECT_TRUE(ctl::RequestVerb(*back) == ctl::Verb::ResetExtenders);
+  const auto parsed = back->get<ctl::ResetExtendersRequest>();
+  UR_EXPECT_TRUE(parsed.host_name == req.host_name);
+  UR_EXPECT_TRUE(parsed.env_name == req.env_name);
+  UR_EXPECT_TRUE(parsed.extender_reset_id == req.extender_reset_id);
+
+  for (const bool reset : {false, true}) {
+    ctl::ResetExtendersReply reply;
+    reply.reset = reset;
+    const auto replyBack = ctl::DecodeFrame(
+        ctl::EncodeFrame(ctl::MakeReply(32, true, nlohmann::json(reply))));
+    UR_EXPECT_TRUE(ctl::ReplyOk(*replyBack));
+    UR_EXPECT_TRUE(replyBack->get<ctl::ResetExtendersReply>().reset == reset);
+  }
+  UR_EXPECT_FALSE(nlohmann::json::object().get<ctl::ResetExtendersReply>().reset);
+  // a daemon that predates the verb says so with the one error every daemon gives
+  const auto older =
+      ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(33, ctl::kErrorUnknownVerb)));
+  UR_EXPECT_TRUE(ctl::ReplyError(*older) == ctl::kErrorUnknownVerb);
+}
+
+// A reset that does not name its space and its id is refused when parsed, never
+// applied to a default: each field missing, null, empty or not a string throws,
+// which the daemon answers as an error reply.
+UR_TEST(controlResetExtendersWithoutASpaceOrAResetIsRefused) {
+  for (const char* field : {"host_name", "env_name", "extender_reset_id"}) {
+    const nlohmann::json complete = nlohmann::json(SampleResetExtenders());
+    nlohmann::json missing = complete;
+    missing.erase(field);
+    nlohmann::json null = complete;
+    null[field] = nullptr;
+    nlohmann::json empty = complete;
+    empty[field] = "";
+    nlohmann::json number = complete;
+    number[field] = 7;
+    for (const nlohmann::json& malformed : {missing, null, empty, number}) {
+      bool threw = false;
+      try {
+        (void)malformed.get<ctl::ResetExtendersRequest>();
+      } catch (const std::exception&) {
+        threw = true;
+      }
+      UR_EXPECT_TRUE_MSG(malformed.dump(), threw);
+    }
+  }
+  UR_EXPECT_FALSE(ctl::ValidateResetExtendersRequest(SampleResetExtenders()).has_value());
+}
+
+// The rule both halves apply: every field required, bounded and free of control
+// bytes, since the daemon logs the key it reset line by line.
+UR_TEST(controlResetExtendersValidation) {
+  ctl::ResetExtendersRequest longest = SampleResetExtenders();
+  longest.host_name = std::string(ctl::kMaxResetExtendersFieldBytes, 'a');
+  UR_EXPECT_FALSE(ctl::ValidateResetExtendersRequest(longest).has_value());
+  ctl::ResetExtendersRequest spaced = SampleResetExtenders();
+  spaced.env_name = "custom env";
+  UR_EXPECT_FALSE(ctl::ValidateResetExtendersRequest(spaced).has_value());
+
+  using Mutate = void (*)(ctl::ResetExtendersRequest&);
+  const Mutate bad[] = {
+      [](ctl::ResetExtendersRequest& r) { r.host_name.clear(); },
+      [](ctl::ResetExtendersRequest& r) { r.env_name.clear(); },
+      [](ctl::ResetExtendersRequest& r) { r.extender_reset_id.clear(); },
+      [](ctl::ResetExtendersRequest& r) {
+        r.host_name = std::string(ctl::kMaxResetExtendersFieldBytes + 1, 'a');
+      },
+      [](ctl::ResetExtendersRequest& r) { r.host_name = "network.example\nforged line"; },
+      [](ctl::ResetExtendersRequest& r) { r.env_name = std::string("ma\0in", 5); },
+      [](ctl::ResetExtendersRequest& r) { r.extender_reset_id += "\x7f"; },
+      [](ctl::ResetExtendersRequest& r) { r.extender_reset_id += "\r"; },
+  };
+  for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i) {
+    ctl::ResetExtendersRequest req = SampleResetExtenders();
+    bad[i](req);
+    UR_EXPECT_TRUE_MSG(std::to_string(i), ctl::ValidateResetExtendersRequest(req).has_value());
+    bool threw = false;
+    try {
+      (void)nlohmann::json(req).get<ctl::ResetExtendersRequest>();
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    UR_EXPECT_TRUE_MSG(std::to_string(i), threw);
+  }
+}
+
+// Priced like set_provide_extender: control-tunnel for the caller's own session
+// or none, the take-over action beside another uid's, since the daemon's spaces
+// are every user's. A confirmed press, so it may prompt.
+UR_TEST(controlResetExtendersIsGatedLikeSetProvideExtender) {
+  // "" for no action, so a verb that lost its row fails here rather than crash
+  auto action = [](ctl::Verb verb, bool crossUid) {
+    const char* id = ctl::ActionIdForVerb(verb, /*is_log_tail=*/false, crossUid);
+    return std::string(id == nullptr ? "" : id);
+  };
+  for (const bool crossUid : {false, true}) {
+    UR_EXPECT_TRUE(action(ctl::Verb::ResetExtenders, crossUid) ==
+                   action(ctl::Verb::SetProvideExtender, crossUid));
+  }
+  UR_EXPECT_TRUE(action(ctl::Verb::ResetExtenders, false) == ctl::kActionControlTunnel);
+  UR_EXPECT_TRUE(action(ctl::Verb::ResetExtenders, true) == ctl::kActionTakeOverTunnel);
+  UR_EXPECT_TRUE(ctl::VerbWantsInteraction(ctl::Verb::ResetExtenders, /*is_log_tail=*/false));
 }
 
 UR_TEST(controlLocationOverrideRoundTrips) {

@@ -1731,6 +1731,33 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         return;
       }
 
+      case ctl::Verb::ResetExtenders: {
+        // A reset the GUI made in its own space, applied to the space this
+        // daemon holds under the same key, behind the same owner gate as
+        // set_provide_extender: the space is shared by every user of the
+        // machine, and a reset changes what the live session dials through. A
+        // request that does not name a space and a reset throws out of the
+        // get<> as an error reply.
+        nlohmann::json denied;
+        bool crossUid = false;
+        if (!CheckTunnelOwner(conn, id, &denied, &crossUid, authorizedCrossUid)) {
+          reply(std::move(denied));
+          return;
+        }
+        const auto req = request.get<ctl::ResetExtendersRequest>();
+        const TunnelHost::ExtenderResetResult result = tunnel_.ResetExtenders(req);
+        if (!result.ok) {
+          reply(ctl::MakeErrorReply(
+              id, result.error.empty() ? "the extenders could not be reset" : result.error,
+              result.code));
+          return;
+        }
+        ctl::ResetExtendersReply payload;
+        payload.reset = result.reset;
+        reply(ctl::MakeReply(id, true, nlohmann::json(payload)));
+        return;
+      }
+
       case ctl::Verb::SetKillSwitch: {
         nlohmann::json denied;
         bool crossUid = false;

@@ -187,6 +187,27 @@ class TunnelHost {
   // change does).
   bool SetProvideExtender(bool on, std::string* error);
 
+  // Account > Extenders' Reset extenders (reset_extenders; connect EXTENDER.md
+  // E7): applies a reset the GUI made in its own space to the space this daemon
+  // holds under the request's key (applyExtenderReset), which clears what the
+  // space learned about extenders and restarts its extender client and node.
+  // The tunnel session's device and the provider-only device run in the
+  // manager's space for the key, so one call covers both, and their live
+  // extender paths keep running. `reset` says whether a space was held and the
+  // reset was new to it: with no space for the key (no device has run, or the
+  // key was never imported) nothing is held, and the next import of the space
+  // applies the id it carries. Refused, never waited behind, while a bring-up
+  // owns the session (ctl::kCodeStartInProgress). The space is looked up under
+  // opMutex_ and the reset applied outside it, since the sdk joins the space's
+  // old extender client. Main loop only.
+  struct ExtenderResetResult {
+    bool ok = false;
+    bool reset = false;
+    std::string error;
+    const char* code = nullptr;  // a ctl::kCode* when !ok
+  };
+  ExtenderResetResult ResetExtenders(const ctl::ResetExtendersRequest& request);
+
   // upload_logs (ControlProtocol.hpp; LogUpload.hpp carries the lifecycle):
   // "send feedback with logs" uploads this process's glog files, connected or
   // not. The sdk's UploadLogs runs on the tunnel session's device, else on the

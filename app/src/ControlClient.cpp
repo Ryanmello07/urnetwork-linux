@@ -874,6 +874,28 @@ bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request, std::strin
   return true;
 }
 
+bool ControlClient::ResetExtenders(const ctl::ResetExtendersRequest& request, bool* reset,
+                                   std::string* error, std::string* code) {
+  std::scoped_lock lock(mutex_);
+  if (const auto invalid = ctl::ValidateResetExtendersRequest(request)) {
+    ResetAuthLocked();
+    if (error) *error = *invalid;
+    return false;
+  }
+  // Re-sent once on a dead socket: a reset the space applied already changes
+  // nothing. A press, so polkit may put a dialog in front of it.
+  const auto reply = CallLocked(ctl::Verb::ResetExtenders, nlohmann::json(request), error,
+                                /*allowRetry=*/true, PolkitAwareTimeoutLocked());
+  if (!reply) return false;
+  if (!ctl::ReplyOk(*reply)) {
+    if (error) *error = ctl::ReplyError(*reply);
+    if (code) *code = ctl::ReplyCode(*reply);
+    return false;
+  }
+  if (reset) *reset = reply->is_object() && reply->get<ctl::ResetExtendersReply>().reset;
+  return true;
+}
+
 bool ControlClient::SetProvideExtender(bool on, std::string* error) {
   std::scoped_lock lock(mutex_);
   ctl::SetProvideExtenderRequest req;
