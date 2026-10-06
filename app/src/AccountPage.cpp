@@ -25,6 +25,7 @@
 #include "ManageSubscription.hpp"
 #include "PaneKit.hpp"
 #include "RuntimePaths.hpp"
+#include "ServerRefusalText.hpp"
 #include "Ui.hpp"
 #include "UrTheme.hpp"
 
@@ -1974,6 +1975,17 @@ void AccountPage::OpenCustomerPortal() {
           if (url.empty()) {
             g_warning("account: stripeCreateCustomerPortal failed: %s",
                       message.empty() ? "(no url)" : message.c_str());
+            if (result && result->error) {
+              // a refusal reads as its code's line, or as the row's own line with
+              // the server's words under it (ServerRefusalText.hpp)
+              const ServerRefusalText refusal =
+                  ServerRefusalTextFor(result->error->code.value_or(std::string()),
+                                       result->error->message, kManageSubscriptionRefusalLine);
+              Snack(Glib::ustring(
+                        ServerRefusalDisplay(T_(refusal.line.key, refusal.line.english), refusal)),
+                    true);
+              return;
+            }
             Snack(message.empty()
                       ? Glib::ustring(T_("something_went_wrong", "Something went wrong."))
                       : Glib::ustring(message),

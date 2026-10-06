@@ -1101,7 +1101,7 @@ msgctxt "checkout_error_payment_form_unavailable"
 msgid "The payment form couldn't load. Check your internet connection, then try again."
 msgstr "無法載入付款表格。請檢查您的網絡連線，然後再試一次。"
 
-#. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.
+#. Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.
 msgctxt "checkout_error_unavailable"
 msgid "Checkout isn't available right now. Please try again later."
 msgstr "結帳功能目前無法使用。請稍後再試。"
@@ -7654,6 +7654,16 @@ msgctxt "site_manage_subscription_hint"
 msgid "See your renewal date, auto-renew status and cancel options."
 msgstr "查看續訂日期、自動續訂狀態和取消選項。"
 
+#. Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.
+msgctxt "site_payment_error_already_subscribed"
+msgid "You already have Pro, so nothing was charged. Manage your subscription from your account."
+msgstr "你已擁有 Pro，因此沒有扣款。請在你的帳戶中管理訂閱。"
+
+#. Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.
+msgctxt "site_payment_error_plan_unavailable"
+msgid "This plan is not available right now. Try again later."
+msgstr "此方案暫時無法使用。請稍後再試。"
+
 #. Instant account creation: heading of the view that shows the new seedphrase once.
 msgctxt "site_save_your_seedphrase"
 msgid "Save Your Seedphrase"
@@ -7793,6 +7803,16 @@ msgstr "不會自動續訂。到期後請再次使用 Solana 上的 USDC 支付�
 msgctxt "site_sub_stripe_body"
 msgid "Your Pro subscription is billed through Stripe. Update your payment details or cancel anytime below."
 msgstr "您的 Pro 訂閱透過 Stripe 計費。您可以在下方隨時更新付款資料或取消訂閱。"
+
+#. Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).
+msgctxt "site_subscription_error_no_customer"
+msgid "This network has no Stripe billing details."
+msgstr "此網絡沒有 Stripe 帳單資料。"
+
+#. Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).
+msgctxt "site_subscription_error_store_unavailable"
+msgid "Stripe could not be reached just now. Try again in a moment."
+msgstr "暫時無法連接 Stripe。請稍後再試。"
 
 #. Small muted button at the top of the post-login onboarding flow that leaves the whole flow.
 msgctxt "skip"
