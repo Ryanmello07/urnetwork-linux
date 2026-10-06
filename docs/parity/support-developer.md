@@ -214,7 +214,7 @@ Per-row cells:
 | 2 | `{Tier}` normally; `{Tier}→{EffectiveTier}` (U+2192 arrow) when Tier < EffectiveTier (live demotion) | 12px muted |
 | 3 | `{FlowCount}` | 12px muted |
 | 4 | `{DialFailureCount}` | 12px; foreground **danger `#F8523B` when > 0**, else muted |
-| 5 | state parts joined by ` · ` (U+00B7): `benched` (if Quarantined) ELSE (if Warning) WarningCause **verbatim** or `warned` when cause empty; then `done` (Done); `p2p` (P2pOnly); `proven` (Proven — absence means "not yet proven", never "bad") | 12px wrap; foreground danger when Quarantined or Warning else muted (state keys: dev_state_benched/warned/done/p2p/proven) |
+| 5 | state parts joined by ` · ` (U+00B7): `benched` (if Quarantined) ELSE (if Warning) WarningCause **verbatim** or `warned` when cause empty; then `done` (Done); `p2p` (P2pOnly); `proven` (Proven — absence means "not yet proven", never "bad"); then the provider's security rules generation (DeveloperExitPresentation): `policy generation {n}` when ProviderDiagnosticsAvailable and ProviderSecurityPolicyGeneration > 0, `policy generation unknown` with diagnostics and generation 0 (a provider from before the generation, or a custom policy), nothing before the provider's first diagnostics | 12px wrap; foreground danger when Quarantined or Warning else muted (state keys: dev_state_benched/warned/done/p2p/proven, dev_exit_policy_generation, dev_exit_policy_generation_unknown) |
 | 6 | actions cluster — horizontal StackPanel Spacing 4, VCenter | all buttons `UrCardRowButtonStyle`, Padding {8,6,8,6} |
 
 Actions per row (D6):
@@ -360,7 +360,7 @@ ONE serial worker thread carries EVERY rpc this screen makes (`Submit(job)` → 
 - Preview: `ShowPreviewModeNotice()` raises a synthetic rpc-only notice (English literal in code, not localized) and latches `previewNotice_` so the ctor's async refresh (which lands ~20 ms later and would correctly clear it in a real run) cannot.
 
 ## 2.16 Preview snapshot (`--preview-ui=developer`)
-`ShowPreviewSnapshot()` builds the page and applies one synthetic `ReliabilitySnapshot` (haveDevice, remoteConnected, settings exercising 900ms/1.5s/5s/2m durations and the zero-labels Unlimited/All/1 (min), metrics unlocking every conditional row, three exits covering healthy / demoted+warned(probe_silence) / benched+p2p+done, three destinations incl. a no-client-id em-dash row and an IPv6, probe results covering ok+bytes / dns-only em-dashes / verbatim error, suite running) then latches `previewData_` so the real (empty) async poll cannot wipe it; also sets lastAction to `"Probed exits: affected 3"`. Writes nothing (no device ⇒ UpdateReliabilitySettings no-ops).
+`ShowPreviewSnapshot()` builds the page and applies one synthetic `ReliabilitySnapshot` (haveDevice, remoteConnected, settings exercising 900ms/1.5s/5s/2m durations and the zero-labels Unlimited/All/1 (min), metrics unlocking every conditional row, three exits covering healthy (policy generation 2) / demoted+warned(probe_silence) (policy generation unknown) / benched+p2p+done (no provider diagnostics), three destinations incl. a no-client-id em-dash row and an IPv6, probe results covering ok+bytes / dns-only em-dashes / verbatim error, suite running) then latches `previewData_` so the real (empty) async poll cannot wipe it; also sets lastAction to `"Probed exits: affected 3"`. Writes nothing (no device ⇒ UpdateReliabilitySettings no-ops).
 
 ## 2.17 Empty vs loading vs failed (Developer, summary)
 - No device (signed out / no session): only the intro card visible; hint = dev_no_device; Simulate/Sync disabled; Refresh + Check-updates live.
@@ -382,7 +382,7 @@ See the `sdk_calls` output field for the flat list. Notable shapes:
 - `FeedbackSendArgs { optional<FeedbackSendNeeds> needs; int64 star_count }`, `FeedbackSendNeeds { string other }`, `FeedbackSendResult { optional<string> feedback_id }` (no error field).
 - `UploadLogsResult { optional<UploadLogsError> error }`.
 - `ReliabilitySnapshot { bool haveDevice; bool remoteConnected; optional<ReliabilitySettings> settings; optional<ReliabilityMetrics> metrics; vector<Exit> exits; vector<DestinationExit> destinationExits; bool probeSuiteRunning; vector<ProbeResult> probeResults }`.
-- `Exit { optional<string> ClientId; string WindowType; bool Warning, Quarantined; string WarningCause; bool Done, P2pOnly; int32 FlowCount, DialFailureCount, Tier, EffectiveTier; bool Proven; int64 ProbeAgeSeconds }`.
+- `Exit { optional<string> ClientId; string WindowType; bool Warning, Quarantined; string WarningCause; bool Done, P2pOnly; int32 FlowCount, DialFailureCount, Tier, EffectiveTier; bool Proven; int64 ProbeAgeSeconds; bool ProviderDiagnosticsAvailable; int64 ProviderSecurityPolicyGeneration }` (the fields this page reads; the sdk's Exit also carries the provider's build version, policy hash and block counters).
 - `DestinationExit { string DestinationIp; optional<string> ClientId; int32 FlowCount }`.
 - `ProbeResult { string Name, Kind; bool Ok; string Error; int64 DnsMillis, ConnectMillis, TtfbMillis, TotalMillis, ByteCount, StartOffsetMillis }`.
 - `ProbeSuiteConfig { int32 Concurrency; int64 TimeoutMillis; int32 RepeatCount; bool IncludeDns, IncludeHttp, IncludeDownload; int64 DownloadByteCount }`.

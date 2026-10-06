@@ -642,6 +642,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/DiagnosticLogWiringTest.cpp',
     'tests/LogUploadTest.cpp',
     'tests/LogUploadWiringTest.cpp',
+    'tests/DeveloperExitPresentationTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -678,6 +679,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and
               # GUI call sites the same way, and DiagnosticLogWiringTest the support log's.
               # LogUploadWiringTest reads the log upload's daemon and GUI call sites the same way.
+              # DeveloperExitPresentationTest reads DeveloperPage.cpp and po/ the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

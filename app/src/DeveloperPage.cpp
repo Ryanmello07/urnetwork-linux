@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "DeveloperExitPresentation.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
@@ -1625,6 +1626,15 @@ void DeveloperPage::ApplyExits(const std::vector<urnet::Exit>& exits) {
     if (exit.P2pOnly) addPart(T_("dev_state_p2p", "p2p"));
     // absence of `proven` means "not yet proven", never "bad"
     if (exit.Proven) addPart(T_("dev_state_proven", "proven"));
+    // the provider's security rules generation, once its first diagnostics
+    // arrive. An exit with a lower number than the others runs older rules
+    if (const auto policy = developerexit::PolicyGenerationOf(exit)) {
+      addPart(policy->generation
+                  ? Glib::ustring(Format(T_("dev_exit_policy_generation", "policy generation {}"),
+                                         *policy->generation))
+                  : Glib::ustring(T_("dev_exit_policy_generation_unknown",
+                                     "policy generation unknown")));
+    }
     // The state cell TRIMS rather than wraps: the kit pins one height per list
     // (windows' auto-height grid rows can wrap; a fixed-height row would clip
     // the second line instead), and the full state rides the row's tooltip.

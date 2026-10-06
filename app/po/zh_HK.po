@@ -79,6 +79,11 @@ msgctxt "add_a_sign_in_method"
 msgid "Add a sign-in method"
 msgstr "添加登入方式"
 
+#. Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.
+msgctxt "add_an_app"
+msgid "Add an app"
+msgstr "新增應用程式"
+
 #. Call to action
 msgctxt "add_blocked_location"
 msgid "Add blocked location"
@@ -2293,6 +2298,16 @@ msgctxt "dev_exit_flows"
 msgid "{} flows"
 msgstr "{} 個流"
 
+#. Developer page exit readout: the security policy (safety rules) generation the exit's provider enforces. Connect raises this number with every reviewed change to the built-in rules, so a higher number is newer rules.
+msgctxt "dev_exit_policy_generation"
+msgid "policy generation {}"
+msgstr "策略世代 {}"
+
+#. Developer page exit readout: the exit's provider reported its security policy (safety rules) without a generation, because it predates the generation or runs a custom policy.
+msgctxt "dev_exit_policy_generation_unknown"
+msgid "policy generation unknown"
+msgstr "策略世代未知"
+
 #. Developer tools screen (reliability surface): exits control label.
 msgctxt "dev_exits"
 msgid "Exits"
@@ -3198,6 +3213,11 @@ msgstr "p2p"
 msgctxt "dev_state_proven"
 msgid "proven"
 msgstr "已驗證"
+
+#. Developer page exit readout: the exit's tier in its state line, the platform's rank for the provider (0 is best). The value is the tier number, or two numbers with an arrow ("1→3") when live demotion moved the rank that selection uses. The Windows and Linux pages show the same value in their Tier column (dev_col_tier).
+msgctxt "dev_state_tier"
+msgid "tier {}"
+msgstr "層級 {}"
 
 #. Developer page: exit state, warned.
 msgctxt "dev_state_warned"
@@ -5713,6 +5733,11 @@ msgctxt "open_source_transparent"
 msgid "100% open source and transparent"
 msgstr "100%開源及透明"
 
+#. macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.
+msgctxt "open_system_settings"
+msgid "Open System Settings"
+msgstr "打開系統設定"
+
 #. Tray menu item that shows the app window. The counterpart of quit_urnetwork.
 msgctxt "open_urnetwork"
 msgid "Open URnetwork"
@@ -7975,6 +8000,11 @@ msgctxt "split_rules_info_note_modes"
 msgid "Rules apply to the whole co-associated network cluster, so related traffic is caught together."
 msgstr "規則會套用至整個關聯網絡叢集，因此相關流量會一併處理。"
 
+#. Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.
+msgctxt "split_rules_match_sites_and_apps_macos"
+msgid "Split rules match sites and addresses. To keep an app off the VPN on this Mac, add it under Apps. Local network addresses already bypass the VPN."
+msgstr "分流規則針對的是網站和地址。如要讓這部 Mac 上的某個應用程式不經 VPN，請將它加入「應用程式」。本地網絡地址本來就不經過 VPN。"
+
 #. Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.
 msgctxt "split_rules_match_sites_not_apps"
 msgid "Split rules match sites and addresses, not apps: Apple allows per-app VPN only on devices managed by an organization (MDM). To keep an app off the VPN, route the sites it uses locally, or start from a preset. Local network addresses already bypass the VPN."
@@ -7989,6 +8019,16 @@ msgstr "各服務公佈、供在 VPN 以外使用的地址範圍"
 msgctxt "split_rules_start_from_preset"
 msgid "Start from a preset"
 msgstr "從預設開始"
+
+#. Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.
+msgctxt "split_tunnel_apps_not_bypassing"
+msgid "These apps can't bypass the VPN right now. Retry, and allow the proxy configuration if macOS asks."
+msgstr "這些應用程式目前無法繞過 VPN。請重試，並在 macOS 詢問時允許代理設定。"
+
+#. Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General > Login Items & Extensions > Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.
+msgctxt "split_tunnel_extension_needs_approval"
+msgid "To keep these apps off the VPN, allow the URnetwork Split Tunnel extension in System Settings."
+msgstr "如要讓這些應用程式不經 VPN，請在系統設定中允許 URnetwork Split Tunnel 延伸功能。"
 
 #. macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.
 msgctxt "sso_browser_open_failed"
