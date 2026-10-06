@@ -1048,6 +1048,30 @@ class SdkHost {
   std::optional<urnet::NetExtender> GetPrivateExtender();
   bool SetPrivateExtender(const std::string& ip, const std::string& secret);
 
+  // Account > Extenders' Reset extenders (connect EXTENDER.md E7): back to a
+  // fresh install's extender state. Resets this process's own network space
+  // (NetworkSpace::resetExtenders: what the space learned and what the user
+  // added go, the dns name, gossip url and root keys return to their defaults,
+  // the cleared values are persisted with the reset's id, and the space's
+  // extender client and node relearn), then hands the space's key and the id
+  // to urnetworkd (reset_extenders), which applies the reset to the space it
+  // holds under that key, the one its tunnel session's device and its
+  // provider-only device run in. Not the device rpc: the verb covers the
+  // provider-only device and no session too. A daemon that is unreachable or
+  // does not take it applies the reset at its next import of this space
+  // (start_tunnel, start_provider), whose values carry the id. The bootstrap
+  // DoH servers, the gossip mode and the provider extender setting stay.
+  //
+  // Runs on a worker, never on the main loop: the sdk joins the space's old
+  // extender client, and the daemon may put a polkit dialog in front of the
+  // verb. `done` runs on the main loop. False, with `done` never called,
+  // without a network space or while a reset is in flight.
+  struct ExtenderResetOutcome {
+    bool reset = false;        // this process's space was reset
+    bool daemonReset = false;  // urnetworkd applied it to the space it holds
+  };
+  bool ResetExtenders(std::function<void(ExtenderResetOutcome)> done);
+
   // ---- this device's provider status (support part P008) -------------------
   // The SDK's ProviderStatusViewController: GET /network/provider-status about
   // once a minute while it polls, publishing how often the network offered
@@ -1459,6 +1483,13 @@ class SdkHost {
   std::atomic<bool> reliabilityBusy_{false};
   std::mutex reliabilityWorkerMutex_;
   std::thread reliabilityWorker_;
+  // ResetExtenders' worker, guarded the same two ways: extenderResetBusy_ is
+  // its single-flight gate, cleared by the worker before it marshals `done`,
+  // and extenderResetWorkerMutex_ guards only the thread object, which ~SdkHost
+  // joins.
+  std::atomic<bool> extenderResetBusy_{false};
+  std::mutex extenderResetWorkerMutex_;
+  std::thread extenderResetWorker_;
 
   // ---- kill switch ----------------------------------------------------------
   // The last published snapshot (guarded by mutex_). Seeded requested-only at

@@ -195,8 +195,65 @@ void ExtenderSection::BuildActions(Gtk::Box& host) {
     if (on_import) on_import();
   });
   actions->append(*import_);
+  // Not red here: red belongs to the confirmation the page opens.
+  reset_ = Gtk::make_managed<Gtk::Button>(T_("reset_extenders", "Reset extenders"));
+  reset_->signal_clicked().connect([this] {
+    if (on_reset) on_reset();
+  });
+  actions->append(*reset_);
   row.content->append(*actions);
   host.append(*row.root);
+}
+
+void ExtenderSection::ResetExtenders() {
+  if (resetting_) return;
+  auto alive = alive_;
+  const bool started =
+      host_.ResetExtenders([this, alive](SdkHost::ExtenderResetOutcome outcome) {
+        if (!*alive) return;  // the page is gone; nothing to show
+        resetting_ = false;
+        FinishReset(outcome);
+      });
+  if (!started) {
+    // no network space to reset, or a reset already in flight
+    kit::ApplySupportingText(*status_, T_("something_went_wrong", "Something went wrong."),
+                             kit::ValidationState::Invalid);
+    Snack(T_("something_went_wrong", "Something went wrong."), true);
+    return;
+  }
+  resetting_ = true;
+  ApplyEnabled();
+}
+
+void ExtenderSection::FinishReset(const SdkHost::ExtenderResetOutcome& outcome) {
+  if (!outcome.reset) {
+    ApplyEnabled();
+    kit::ApplySupportingText(*status_, T_("something_went_wrong", "Something went wrong."),
+                             kit::ValidationState::Invalid);
+    Snack(T_("something_went_wrong", "Something went wrong."), true);
+    return;
+  }
+  // The settings from the view controller when a device is bound, the
+  // bootstrap DoH servers (a reset keeps them) and the private extender (a
+  // reset clears it), all from the GUI's own space.
+  Load();
+  if (!haveSettings_) {
+    // No controller to read the settings back from, and a reset leaves every
+    // one at its default: each field empty under the default it last showed,
+    // and no manual host.
+    dnsField_ = extender::ApplySettingsField(dnsField_, dnsField_.defaultValue,
+                                             /*isDefault=*/true);
+    gossipField_ = extender::ApplySettingsField(gossipField_, gossipField_.defaultValue,
+                                                /*isDefault=*/true);
+    dnsName_->set_text(dnsField_.text);
+    gossipUrl_->set_text(gossipField_.text);
+    hosts_->get_buffer()->set_text("");
+    ApplyPlaceholder(*dnsName_, dnsField_);
+    ApplyPlaceholder(*gossipUrl_, gossipField_);
+  }
+  kit::ApplySupportingText(*status_, T_("extenders_reset_done", "Extenders reset"),
+                           kit::ValidationState::Valid);
+  Snack(T_("extenders_reset_done", "Extenders reset"), false);
 }
 
 void ExtenderSection::Load() {
@@ -235,7 +292,9 @@ void ExtenderSection::ApplyEnabled() {
   // have. The private extender and the bootstrap DNS-over-HTTPS servers are not
   // gated -- they are written to the GUI's own space and need no tunnel, and a
   // network that blocks the built-in DoH servers keeps the tunnel from
-  // bootstrapping until the servers are set.
+  // bootstrapping until the servers are set. Neither is the reset, which resets
+  // the GUI's own space and hands the daemon the reset; it waits only for one
+  // in flight.
   const bool enabled = haveSettings_;
   dnsName_->set_sensitive(enabled);
   gossipUrl_->set_sensitive(enabled);
@@ -243,6 +302,7 @@ void ExtenderSection::ApplyEnabled() {
   save_->set_sensitive(enabled);
   share_->set_sensitive(enabled);
   import_->set_sensitive(enabled);
+  reset_->set_sensitive(!resetting_);
   if (!enabled) {
     kit::ApplySupportingText(
         *status_, T_("extenders_no_session", "Sign in and connect to manage extenders."),

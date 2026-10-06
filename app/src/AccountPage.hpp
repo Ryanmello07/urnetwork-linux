@@ -247,6 +247,9 @@ class AccountPage : public Gtk::Box {
   void ShowDeleteAccountSheet();
   void ShowExtenderShareSheet();
   void ShowExtenderImportSheet();
+  // The Extenders section's Reset extenders, confirmed in the page's modal
+  // before the section runs it.
+  void ConfirmResetExtenders();
 
   // ---- helpers ---------------------------------------------------------------
   // !previewUi && IsLoggedIn(): the gate on every server question AND every

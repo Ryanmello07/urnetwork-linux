@@ -19,6 +19,11 @@
 // The private extender is the exception to "the SDK owns the write": it has no
 // view-controller surface, so it goes onto the network space values directly
 // (SdkHost::SetPrivateExtender), with the daemon-split caveat documented there.
+//
+// Reset extenders (connect EXTENDER.md E7) sits with share and import. The page
+// confirms it, then the section runs it (SdkHost::ResetExtenders): this
+// process's space and the daemon's go back to a fresh install's extender state,
+// and the form shows what that leaves. It needs no device.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -48,10 +53,17 @@ class ExtenderSection : public Gtk::Box {
   void Load();
 
   // The page's snackbar, and its one-modal-at-a-time gate: this section owns
-  // no window, so the two sheets are opened by the page.
+  // no window, so the two sheets and the reset's confirmation are opened by
+  // the page.
   std::function<void(const Glib::ustring& message, bool error)> on_snackbar;
   std::function<void()> on_share;
   std::function<void()> on_import;
+  std::function<void()> on_reset;
+
+  // Runs a reset the page's confirmation accepted: Reset extenders goes
+  // insensitive until SdkHost::ResetExtenders reports, then the form is read
+  // again and says "Extenders reset".
+  void ResetExtenders();
 
  private:
   void BuildForm(Gtk::Box& host);
@@ -62,6 +74,9 @@ class ExtenderSection : public Gtk::Box {
   void ApplyEnabled();
   void Save();
   void SavePrivateExtender();
+  // The form after a reset reported: everything read again, and with no
+  // device's view controller to read the settings, the fields a reset leaves.
+  void FinishReset(const SdkHost::ExtenderResetOutcome& outcome);
   void Snack(const Glib::ustring& message, bool error);
 
   SdkHost& host_;
@@ -78,6 +93,8 @@ class ExtenderSection : public Gtk::Box {
   Gtk::Button* savePrivate_ = nullptr;
   Gtk::Button* share_ = nullptr;
   Gtk::Button* import_ = nullptr;
+  Gtk::Button* reset_ = nullptr;
+  bool resetting_ = false;  // a reset is in flight
 
   // the last defaults the SDK reported, carried forward so an overridden field
   // still shows what it is overriding

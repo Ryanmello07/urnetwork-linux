@@ -2021,6 +2021,7 @@ void AccountPage::BuildExtendersGroup(Gtk::Box& host) {
   };
   extenderSection_->on_share = [this] { ShowExtenderShareSheet(); };
   extenderSection_->on_import = [this] { ShowExtenderImportSheet(); };
+  extenderSection_->on_reset = [this] { ConfirmResetExtenders(); };
   host.append(*extenderSection_);
 }
 
@@ -2916,6 +2917,63 @@ void AccountPage::ShowExtenderImportSheet() {
   };
   WireSheet(*extenderImportSheet_);
   extenderImportSheet_->set_visible(true);
+}
+
+void AccountPage::ConfirmResetExtenders() {
+  Gtk::Window* root = RootWindow();
+  if (root == nullptr) {
+    g_warning("account: no window root; the reset extenders confirmation did not open");
+    return;
+  }
+  if (confirmDialog_ && confirmDialog_->get_visible()) return;  // one modal at a time
+  if (!BeginSheet("reset extenders")) return;
+
+  // The page's modal confirm, as for removing a login method: a reset removes
+  // the extenders the user added and clears everything learned, and nothing
+  // brings either back.
+  confirmDialog_ = std::make_unique<Gtk::Window>();
+  confirmDialog_->set_transient_for(*root);
+  confirmDialog_->set_modal(true);
+  confirmDialog_->set_title(T_("reset_extenders", "Reset extenders"));
+  confirmDialog_->set_resizable(false);
+  confirmDialog_->set_hide_on_close(true);
+  confirmDialog_->add_css_class("ur-sheet");
+  AddEscapeToClose(*confirmDialog_);
+  WireSheet(*confirmDialog_);
+
+  auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
+  box->set_margin(24);
+  box->set_size_request(kConfirmWidth, -1);
+
+  auto* heading = Gtk::make_managed<Gtk::Label>(T_("reset_extenders", "Reset extenders"));
+  heading->add_css_class("ur-step-heading");
+  heading->set_xalign(0);
+  box->append(*heading);
+  box->append(*MakeSizedLabel(
+      T_("reset_extenders_confirm",
+         "This removes the extenders you added and clears everything learned about extenders, "
+         "which are then discovered again from scratch."),
+      14, "ur-body"));
+
+  auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  actions->set_halign(Gtk::Align::END);
+  auto* cancel = Gtk::make_managed<Gtk::Button>(T_("cancel", "Cancel"));
+  cancel->signal_clicked().connect([this] { confirmDialog_->set_visible(false); });
+  actions->append(*cancel);
+  auto* reset = Gtk::make_managed<Gtk::Button>(T_("reset_extenders", "Reset extenders"));
+  reset->add_css_class("destructive-action");  // red is the confirmation context
+  reset->signal_clicked().connect([this] {
+    confirmDialog_->set_visible(false);
+    if (extenderSection_) extenderSection_->ResetExtenders();
+  });
+  actions->append(*reset);
+  box->append(*actions);
+
+  confirmDialog_->set_child(*box);
+  // the default is Cancel: Enter must not reset
+  cancel->set_receives_default(true);
+  confirmDialog_->set_default_widget(*cancel);
+  confirmDialog_->present();
 }
 
 void AccountPage::ShowDeleteAccountSheet() {
