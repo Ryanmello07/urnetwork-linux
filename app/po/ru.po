@@ -8644,6 +8644,11 @@ msgctxt "site_pay_sheet_trial_line"
 msgid "Your card is saved today and charged {1} on {0}. Cancel anytime before then."
 msgstr "Карта сохраняется сегодня, {1} спишется {0}. До этого можно отменить в любой момент."
 
+#. ur.io checkout (the Pro upgrade sheet, the onboarding plan step, the offer screen, the free-trial panel): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.
+msgctxt "site_payment_error_already_subscribed"
+msgid "You already have Pro, so nothing was charged. Manage your subscription from your account."
+msgstr "У вас уже есть Pro, поэтому оплата не списана. Управляйте подпиской в своём аккаунте."
+
 #. Pay page (/app/pay-sheet on ur.io): the bank's card verification (3D Secure) failed or was not completed. Nothing was charged.
 msgctxt "site_payment_error_authentication_failed"
 msgid "Your bank could not verify the card. Try again or use another card."
@@ -8653,6 +8658,11 @@ msgstr "Банку не удалось подтвердить карту. Поп
 msgctxt "site_payment_error_card_declined"
 msgid "Your card was declined. Try another card, or contact your bank."
 msgstr "Ваша карта отклонена. Попробуйте другую карту или обратитесь в свой банк."
+
+#. ur.io checkout: this deployment has no checkout configured (error.code checkout_unavailable). Nothing was charged.
+msgctxt "site_payment_error_checkout_unavailable"
+msgid "Checkout is not available right now. Try again later."
+msgstr "Оформление оплаты сейчас недоступно. Попробуйте позже."
 
 #. Pay page (/app/pay-sheet on ur.io): the card has expired, or the expiry date entered is in the past. Nothing was charged.
 msgctxt "site_payment_error_expired_card"
@@ -8674,10 +8684,40 @@ msgctxt "site_payment_error_insufficient_funds"
 msgid "Your card has insufficient funds. Try another card."
 msgstr "На карте недостаточно средств. Попробуйте другую карту."
 
+#. ur.io Buy data page, buying a code by email: the server refused the email address the code goes to (error.code invalid_email).
+msgctxt "site_payment_error_invalid_email"
+msgid "That email address does not look right. Check it and try again."
+msgstr "Этот адрес электронной почты выглядит неверно. Проверьте его и попробуйте снова."
+
+#. ur.io data pack checkout (account panel, Buy data page): the server cannot sell this data pack right now (error.code item_unavailable). Nothing was charged.
+msgctxt "site_payment_error_item_unavailable"
+msgid "This data pack is not available right now. Try again later."
+msgstr "Этот пакет данных сейчас недоступен. Попробуйте позже."
+
 #. Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: Stripe or URnetwork's server could not be reached (offline, timed out, or blocked by the network).
 msgctxt "site_payment_error_network"
 msgid "Could not connect. Check your internet connection and try again."
 msgstr "Не удалось подключиться. Проверьте подключение к интернету и попробуйте снова."
+
+#. ur.io Buy data page, paying with USDC: no network name was given for the data (error.code network_name_required).
+msgctxt "site_payment_error_network_name_required"
+msgid "Enter the network that should receive the data."
+msgstr "Введите сеть, которая должна получить данные."
+
+#. ur.io Buy data page: no network has the name the buyer entered (error.code network_not_found). Nothing was charged.
+msgctxt "site_payment_error_network_not_found"
+msgid "No network has that name. Check the name and try again."
+msgstr "Сети с таким именем нет. Проверьте имя и попробуйте снова."
+
+#. ur.io Pro upgrade sheet, paying with USDC: the welcome offer is not, or no longer, redeemable by this network (error.code offer_unavailable). Nothing was charged.
+msgctxt "site_payment_error_offer_unavailable"
+msgid "The welcome offer is no longer available."
+msgstr "Приветственное предложение больше недоступно."
+
+#. ur.io checkout: the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.
+msgctxt "site_payment_error_plan_unavailable"
+msgid "This plan is not available right now. Try again later."
+msgstr "Этот тариф сейчас недоступен. Попробуйте позже."
 
 #. Pay page (/app/pay-sheet on ur.io): Stripe or the bank could not process the payment just now (a temporary error); trying again usually works.
 msgctxt "site_payment_error_processing"
@@ -8951,6 +8991,41 @@ msgstr "Не продлевается. По окончании оплатите 
 msgctxt "site_sub_stripe_body"
 msgid "Your Pro subscription is billed through Stripe. Update your payment details or cancel anytime below."
 msgstr "Ваша подписка Pro оплачивается через Stripe. Ниже вы можете в любой момент обновить платёжные данные или отменить подписку."
+
+#. ur.io Manage subscription screen: a USDC payment covers one period and never renews, so there is nothing to cancel (error.code does_not_renew).
+msgctxt "site_subscription_error_does_not_renew"
+msgid "A USDC payment covers one period and does not renew, so there is nothing to cancel."
+msgstr "Оплата в USDC покрывает один период и не продлевается, поэтому отменять нечего."
+
+#. ur.io Manage subscription screen: the subscription is billed by the App Store, so it is cancelled there (error.code managed_by_app_store).
+msgctxt "site_subscription_error_managed_by_app_store"
+msgid "This subscription is billed by the App Store. Cancel it there."
+msgstr "Эта подписка оплачивается через App Store. Отмените её там."
+
+#. ur.io Manage subscription screen: the subscription is billed by Google Play, so it is cancelled there (error.code managed_by_google_play).
+msgctxt "site_subscription_error_managed_by_google_play"
+msgid "This subscription is billed by Google Play. Cancel it there."
+msgstr "Эта подписка оплачивается через Google Play. Отмените её там."
+
+#. ur.io Manage subscription screen, opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).
+msgctxt "site_subscription_error_no_customer"
+msgid "This network has no Stripe billing details."
+msgstr "У этой сети нет платёжных данных в Stripe."
+
+#. ur.io Manage subscription screen, cancelling or resuming: no Stripe subscription is billing this network (error.code no_subscription).
+msgctxt "site_subscription_error_no_subscription"
+msgid "No Stripe subscription is billing this network."
+msgstr "Для этой сети нет активной подписки Stripe."
+
+#. ur.io Manage subscription screen: the subscription's store is not one the server can change (error.code not_cancelable).
+msgctxt "site_subscription_error_not_cancelable"
+msgid "This subscription cannot be changed here."
+msgstr "Эту подписку нельзя изменить здесь."
+
+#. ur.io Manage subscription screen: Stripe did not answer or refused the change; trying again usually works (error.code store_unavailable).
+msgctxt "site_subscription_error_store_unavailable"
+msgid "Stripe could not be reached just now. Try again in a moment."
+msgstr "Сейчас не удаётся связаться со Stripe. Попробуйте ещё раз чуть позже."
 
 #. Account panel: generic unexpected error
 msgctxt "site_unexpected_error"
