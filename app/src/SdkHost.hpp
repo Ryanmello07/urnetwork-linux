@@ -1021,10 +1021,15 @@ class SdkHost {
   // window hidden or the tunnel down and the account section renders its
   // no-device state rather than an empty form.
   //
-  // Settings are the SPACE's, applied through the controller, which restarts
-  // the space's network client and node in place. On this platform that space
-  // belongs to urnetworkd, which is the correct one: the tunnel's dials are
-  // what the settings steer.
+  // The controller works on the device's space, and a DeviceRemote's space is
+  // this process's own (networkSpace_), not urnetworkd's. A settings save
+  // changes this process's space and restarts its extender client and node in
+  // place. urnetworkd takes the saved values at its next start_tunnel or
+  // start_provider import, which carries them in network_space_json, not
+  // directly: until then the tunnel and the provider-only device keep the
+  // values they were started with. A share is built from this process's
+  // directory, and an import adds its addresses there; those addresses never
+  // reach the daemon, while an import's settings travel like a save.
   std::optional<urnet::ExtenderSettings> GetExtenderSettings();
   std::optional<urnet::ExtenderSettings> SetExtenderSettings(const std::string& dnsName,
                                                              const std::string& gossipUrl,
@@ -1043,8 +1048,9 @@ class SdkHost {
   // builds its devices from the space the GUI sends with start_tunnel and
   // start_provider, so a tunnel takes a private extender set here at its next
   // connect, and a running provider-only device at once (the save sends
-  // start_provider again). Every other extender setting goes through the view
-  // controller above and therefore reaches the daemon directly.
+  // start_provider again). The settings the view controller above saves are
+  // in this same space and reach the daemon the same way, at its next import,
+  // except that their save sends no start_provider.
   std::optional<urnet::NetExtender> GetPrivateExtender();
   bool SetPrivateExtender(const std::string& ip, const std::string& secret);
 
