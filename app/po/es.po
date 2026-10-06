@@ -9930,16 +9930,6 @@ msgctxt "usdc_wallet_address"
 msgid "USDC wallet address"
 msgstr "Dirección del monedero USDC"
 
-#. Settings row (Connections) that opens the ur.io cloud proxies page so the user can run URnetwork as a proxy without taking the Android VPN slot.
-msgctxt "use_as_proxy_no_vpn"
-msgid "Use as a proxy instead (no VPN)"
-msgstr "Usar como proxy en su lugar (sin VPN)"
-
-#. Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.
-msgctxt "use_as_proxy_no_vpn_detail"
-msgid "Opens ur.io to run URnetwork as an HTTPS proxy without the VPN. SOCKS and WireGuard are available on Pro."
-msgstr "Abre ur.io para usar URnetwork como proxy HTTPS sin la VPN. SOCKS y WireGuard están disponibles con Pro."
-
 #. Toggle on the import screen: also apply the extender settings carried by the code.
 msgctxt "use_extender_settings"
 msgid "Use extender settings"
