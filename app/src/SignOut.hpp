@@ -1,14 +1,20 @@
 // What signing out of URnetwork asks of the system service (urnetworkd), in
 // what order, and what keeps the request standing until the daemon has done it
-// (owner decision, 2026-10-05: "Windows sign-out: stop the tunnel and
-// provider, the same as Quit"; the Linux app does the same).
+// (owner decisions, 2026-10-05: "Windows sign-out: stop the tunnel and
+// provider, the same as Quit", which the Linux app does too, and "logout
+// should not cross contaminate other networks. Each network should start
+// fresh").
 //
-// The request. Quit's (SdkHost::Shutdown): stop_tunnel, which ends this
-// user's session, retires the provider-only device with it (TunnelHost::Stop)
-// and lifts the kill-switch floor, as every explicit stop does. Another user's
-// session is theirs: a status redacted for this uid says nothing of this
-// user's runs, and stopping it would ask for an administrator's password
-// (kActionTakeOverTunnel), so a delivery leaves it alone.
+// The requests, in this order. Quit's (SdkHost::Shutdown): stop_tunnel, which
+// ends this user's session, retires the provider-only device with it
+// (TunnelHost::Stop) and lifts the kill-switch floor, as every explicit stop
+// does. Then logout, which deletes the device identity the daemon keeps and
+// logs out what its sdk stored for the account in the account's network space,
+// so the next account signed in starts on a new identity in a clean space
+// (TunnelHost::Logout). Another user's session is theirs: a status redacted
+// for this uid says nothing of this user's runs, stopping it would ask for an
+// administrator's password (kActionTakeOverTunnel), and the daemon refuses a
+// logout beside it, so a delivery sends neither.
 //
 // The obligation. A daemon that was not told still runs what it ran under the
 // signed-out account. So a sign-out is recorded as owed before the request
@@ -41,15 +47,16 @@
 
 namespace urnw::signout {
 
-enum class Request { StopTunnel };
+enum class Request { StopTunnel, Logout };
 
-// What every delivery sends, in this order: Quit's request.
-inline constexpr std::array<Request, 1> kRequests{Request::StopTunnel};
+// What every delivery sends, in this order: Quit's request, then the logout.
+inline constexpr std::array<Request, 2> kRequests{Request::StopTunnel, Request::Logout};
 
 // The wire names (ControlProtocol.hpp), for logs.
 constexpr const char* ToString(Request request) {
   switch (request) {
     case Request::StopTunnel: return "stop_tunnel";
+    case Request::Logout: return "logout";
   }
   return "unknown";
 }
@@ -83,7 +90,11 @@ struct Daemon {
   // Whether what the daemon runs belongs to another user: its status came back
   // redacted for this uid. nullopt when no status came back.
   std::function<std::optional<bool>()> otherUsersSession;
-  // Send one request; true when the daemon answered that it did it.
+  // Send one request; true when the daemon answered that it did it. A daemon
+  // that predates logout counts as having done it: it has nothing to clear the
+  // identity with, and a sign-out kept owed to it would hold every start. So
+  // does a logout refused beside another user's live session: what the daemon
+  // keeps is theirs, as when the status says so first.
   std::function<bool(Request)> send;
 };
 

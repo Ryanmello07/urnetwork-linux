@@ -1,9 +1,11 @@
-// The call sites of signing out (SignOut.hpp, owner decision 2026-10-05): the
-// sign-out stops this user's tunnel and provider as Quit does, stays owed to a
-// daemon that could not be told, and nothing of the signed-out account starts
-// again. The delivery itself is pure and runs in SignOutTest.cpp; SdkHost
-// needs glib and the SDK, so this reads its source with the line comments
-// blanked, so prose cannot satisfy a contract.
+// The call sites of signing out (SignOut.hpp, owner decisions 2026-10-05): the
+// sign-out stops this user's tunnel and provider as Quit does, then has the
+// daemon forget the account (its device identity and what its sdk stored), so
+// each network starts fresh; it stays owed to a daemon that could not be told,
+// and nothing of the signed-out account starts again. The delivery itself is
+// pure and runs in SignOutTest.cpp; SdkHost and the daemon need glib and the
+// SDK, so this reads their sources with the line comments blanked, so prose
+// cannot satisfy a contract.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -91,7 +93,10 @@ UR_TEST(SignOutWiring_LogoutStopsAsQuitThroughTheObligation) {
 }
 
 // The delivery: the session ensured, the status read for this uid, and
-// another user's session left alone; stop_tunnel otherwise.
+// another user's session left alone; stop_tunnel otherwise, then logout with
+// the account's network space, where an older daemon's `unknown verb` and a
+// refusal beside another user's live session count as done and every other
+// failure keeps the sign-out owed.
 UR_TEST(SignOutWiring_TheDeliveryStopsOnlyThisUsersWork) {
   const std::string daemon =
       SignOutBody(ReadSignOutSource("SdkHost.cpp"), "signout::Daemon SdkHost::SignOutDaemonLocked() {");
@@ -99,7 +104,91 @@ UR_TEST(SignOutWiring_TheDeliveryStopsOnlyThisUsersWork) {
                                   "control_.Status(&error);", "return std::nullopt;",
                                   "return status->redacted;",
                                   "case signout::Request::StopTunnel: {",
-                                  "if (control_.StopTunnel(&error)) return true;", "return false;"}));
+                                  "if (control_.StopTunnel(&error)) return true;", "return false;",
+                                  "case signout::Request::Logout: {",
+                                  "spaceJson = networkSpace_->toJson();", "return false;",
+                                  "switch (control_.Logout(spaceJson, &error, &code)) {",
+                                  "case ControlClient::LogoutOutcome::Done:", "return true;",
+                                  "case ControlClient::LogoutOutcome::Unsupported:", "return true;",
+                                  "case ControlClient::LogoutOutcome::Failed:",
+                                  "if (code == ctl::kCodeAuthNotTunnelOwner) {", "return true;",
+                                  "break;", "return false;"}));
+  // the client tells an older daemon's refusal from every other failure
+  const std::string client = ReadSignOutSource("ControlClient.cpp");
+  const std::string logout = SignOutBody(client, "ControlClient::LogoutOutcome ControlClient::Logout(");
+  UR_EXPECT_TRUE(InOrder(logout, {"req.network_space_json = networkSpaceJson;",
+                                  "CallLocked(ctl::Verb::Logout, nlohmann::json(req), error,",
+                                  "if (!reply) return LogoutOutcome::Failed;",
+                                  "replyError == ctl::kErrorUnknownVerb ? LogoutOutcome::Unsupported",
+                                  ": LogoutOutcome::Failed;", "return LogoutOutcome::Done;"}));
+}
+
+// Logout also ends what the leaving account had in flight in the app: a sign-in
+// method being added is cancelled before anything else (its late return would
+// add it to the next account), and the api's credential is cleared with the
+// local logout.
+UR_TEST(SignOutWiring_LogoutCancelsTheAccountsAddAndItsApiCredential) {
+  const std::string host = ReadSignOutSource("SdkHost.cpp");
+  const std::string logout = SignOutBody(host, "void SdkHost::Logout() {");
+  UR_EXPECT_TRUE(InOrder(logout, {"CancelPendingAddSignIn(\"superseded by signing out\");",
+                                  "std::scoped_lock lock(mutex_);", "pendingWalletAuth_.reset();",
+                                  "pendingSsoAuth_ = false;", "pendingSsoJwt_.clear();",
+                                  "pendingInstantJwt_.reset();", "asyncLocalState_->logout(",
+                                  "if (api_) api_->setByJwt(\"\");",
+                                  "signOut_.Begin(SignOutDaemonLocked());"}));
+  // and the post-sign-up onboarding of a network created here goes with a
+  // sign-out, never with a sign-in
+  const std::string apply =
+      SignOutBody(ReadSignOutSource("MainWindow.cpp"), "void MainWindow::ApplyAuthState(bool loggedIn) {");
+  const size_t signedOutBranch = apply.find("} else {");
+  if (signedOutBranch == std::string::npos) {
+    UR_EXPECT_TRUE_MSG("ApplyAuthState has a signed-out branch", false);
+    return;
+  }
+  UR_EXPECT_TRUE(SignOutHas(apply.substr(signedOutBranch), "prefs::Set(kOnboardingPendingKey, false);"));
+  UR_EXPECT_TRUE(!SignOutHas(apply.substr(0, signedOutBranch), "kOnboardingPendingKey, false"));
+}
+
+// The daemon's logout: refused beside another user's live session before
+// anything is read or cleared, whatever was authorized (never the take-over
+// action); otherwise owner-checked as stop_tunnel, done by TunnelHost::Logout,
+// and nobody owns the session after it.
+UR_TEST(SignOutWiring_TheDaemonsLogoutLeavesAnotherUsersSession) {
+  const std::string server = ReadSignOutSource("daemon/ControlServer.cpp");
+  const std::string dispatch = SignOutBody(server, "void ControlServer::DispatchAuthorized(");
+  const size_t at = dispatch.find("case ctl::Verb::Logout: {");
+  if (at == std::string::npos) {
+    UR_EXPECT_TRUE_MSG("DispatchAuthorized has a logout case", false);
+    return;
+  }
+  const std::string logout = dispatch.substr(at, dispatch.find("case ctl::Verb::SetProvide: {", at) - at);
+  UR_EXPECT_TRUE(InOrder(logout, {"if (TunnelOwnedByOtherUid(conn)) {", "ctl::kCodeAuthNotTunnelOwner",
+                                  "return;",
+                                  "CheckTunnelOwner(conn, id, &denied, &crossUid, /*authorizedTakeOver=*/false)",
+                                  "request.get<ctl::LogoutRequest>()",
+                                  "tunnel_.Logout(req.network_space_json, &error, &code)", "return;",
+                                  "tunnelOwnerUid_ = -1;", "tunnel_.SetOwnerUid(-1);",
+                                  "ctl::MakeReply(id, true, nlohmann::json(tunnel_.Status()))"}));
+  UR_EXPECT_TRUE(!SignOutHas(logout, "authorizedCrossUid"));
+}
+
+// TunnelHost::Logout: never waits behind a bring-up; stops what runs as an
+// explicit stop does and drops a queued upload (its credentials would make an
+// identity); forgets what the account asked for; deletes the three identity
+// files; and logs out the account's space.
+UR_TEST(SignOutWiring_TheDaemonForgetsTheAccount) {
+  const std::string host = ReadSignOutSource("daemon/TunnelHost.cpp");
+  const std::string logout = SignOutBody(host, "bool TunnelHost::Logout(");
+  UR_EXPECT_TRUE(InOrder(logout, {"std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);",
+                                  "if (!lock.owns_lock()) {", "ctl::kCodeStartInProgress",
+                                  "return false;", "StopInternalLocked(\"user\");",
+                                  "queuedUpload_.reset();", "pendingProvideMode_.clear();",
+                                  "killSwitchRequested_.store(false);",
+                                  "{kClientKeySeedFile, kProvideCertFile, kProvideKeyFile}",
+                                  "::unlink(path.c_str())",
+                                  "LoadNetworkSpaceLocked(networkSpaceJson);",
+                                  "networkSpace_->getAsyncLocalState().getLocalState().logout();",
+                                  "return true;"}));
 }
 
 // Every reconcile delivers an owed sign-out first; a signed-out reconcile acts

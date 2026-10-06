@@ -162,6 +162,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | `location_override_write` | `lat`, `lon`, `accuracy_m` | `ok` |
 | `location_override_clear` | — | `ok` |
 | `upload_logs` | `feedback_id`, `by_jwt`, `instance_id`, `app_version`, `network_space_json` | `ok`, `carrier`, `upload_id` |
+| `logout` | `network_space_json` | `ok` + the status |
 
 `attach_tunnel` re-adopts a tunnel that is already up by NAMING the live session
 (`instance_id` + `rpc_session_id`) instead of re-describing it, and answers with the
@@ -268,6 +269,34 @@ than written as a default. `provider_stats` carries the setting (`provide_extend
 only when that is true, polling `provider_stats` while the connect destination is on
 screen too (without `poll_status`). A daemon that predates the verb sends neither field,
 so the switch stays hidden while disconnected, as before.
+
+`logout` is the account signing out of the app (owner decision 2026-10-05: "logout should
+not cross contaminate other networks. Each network should start fresh"). The GUI sends it
+after `stop_tunnel` in every sign-out delivery (`app/src/SignOut.hpp`), with the account's
+network space. The daemon ends what runs as an explicit stop does (the session, the
+provider-only device, a log upload's standalone device and a queued upload, whose
+credentials would otherwise make an identity), forgets the provide mode and the kill switch
+the account asked for, deletes the device identity it keeps (`client_key_seed.bin`,
+`provide_cert.pem`, `provide_key.pem` in the state directory) and logs out what its SDK
+stored in that network space (`LocalState.logout`: the client credential and instance a
+device persists when it starts, among the rest), so the next account starts on a new
+identity in a clean space. The space's extender state (the extender directory, the gossip
+role, the extender identity and the provider extender setting) stays, as every sign-out
+leaves it: the SDK's `LocalState.logout` keeps it, and Account > Extenders has its own
+reset. It mirrors the Windows service's `logout`. A daemon runs one
+identity for every user of it, so the verb respects the multi-user daemon: while another
+uid's session (a tunnel or a provider-only device) is live, it is refused with
+`auth_not_tunnel_owner` and nothing is cleared, whatever was authorized; it is authorized
+as `control-tunnel` and never as `take-over-tunnel`, without a prompt, because the health
+poll re-sends an owed sign-out. It is refused while another client of the same uid owns the
+live tunnel (`tunnel_owned_by_other_client`) and while a bring-up owns the session
+(`start_in_progress`). The GUI keeps a refused sign-out owed and sends it again; it skips
+both requests when the status it reads is redacted for its uid, and counts a logout refused
+with `auth_not_tunnel_owner` (a group-mode daemon, whose status is not redacted, or a
+session that started meanwhile) as delivered, since what the daemon keeps is then the other
+user's. A daemon that predates the
+verb answers `unknown verb`, which the GUI counts as done: that daemon keeps its identity,
+as before, and a sign-out kept owed to it would hold every start.
 
 **`sdk_version` must match EXACTLY, and this is a second, independent check.**
 `protocol_version` guards *our* JSON control socket; the **device RPC has no version

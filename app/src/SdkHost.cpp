@@ -4739,14 +4739,29 @@ void SdkHost::Shutdown() {
 
 // See the contract in the header.
 void SdkHost::Logout() {
+  // A sign-in method being added belongs to the account that is leaving: its
+  // return, if it still comes, must not add it to the next account signed in.
+  // Answered "superseded by ..." (bridge::IsSuperseded), so its sheet settles
+  // quietly, and outside mutex_, which it takes.
+  CancelPendingAddSignIn("superseded by signing out");
   std::scoped_lock lock(mutex_);
   // Signed out from here: a posted reconcile, the health poll or a Connect that
   // runs after this starts nothing for the account that is leaving.
   signedOut_.store(true);
   pendingWalletAuth_.reset();
+  // so are sign-in flows left unfinished before this session (an sso identity
+  // with no network, an instant account never confirmed): they belong to no
+  // account, and the next sign-in starts clean (Windows' Logout drops them too)
+  pendingSsoAuth_ = false;
+  pendingSsoType_.clear();
+  pendingSsoJwt_.clear();
+  pendingInstantJwt_.reset();
   // The local credentials first, because nothing can hold them up: the app is
   // signed out on disk even if it is ended while the daemon is asked below.
   if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+  // and the credential the api attaches to its calls, which the next sign-in's
+  // own calls would otherwise carry until it installs its own
+  if (api_) api_->setByJwt("");
   if (events_) events_->NewSession();  // the next sign-in is a new session
   TeardownDeviceLocked();
   // The daemon as Quit stops it (Shutdown), owed until it has (SignOut.hpp). A
@@ -4806,6 +4821,42 @@ signout::Daemon SdkHost::SignOutDaemonLocked() {
         if (control_.StopTunnel(&error)) return true;
         g_warning("sdkhost: sign-out: stop_tunnel failed: %s",
                   error.empty() ? "no detail" : error.c_str());
+        return false;
+      }
+      case signout::Request::Logout: {
+        // The account's space, which the daemon's devices ran in. The space
+        // outlives the sign-out, so a delivery after a relaunch names it too.
+        std::string spaceJson;
+        try {
+          if (networkSpace_) spaceJson = networkSpace_->toJson();
+        } catch (const std::exception& e) {
+          g_warning("sdkhost: sign-out: the network space could not be read: %s", e.what());
+          return false;
+        }
+        std::string error;
+        std::string code;
+        switch (control_.Logout(spaceJson, &error, &code)) {
+          case ControlClient::LogoutOutcome::Done:
+            return true;
+          case ControlClient::LogoutOutcome::Unsupported:
+            g_warning("sdkhost: sign-out: urnetworkd predates logout, so it keeps the device "
+                      "identity it made; update it to clear it");
+            return true;
+          case ControlClient::LogoutOutcome::Failed:
+            // Another user's session is live (a daemon in group mode does not
+            // redact the status): what the daemon keeps is theirs now, and
+            // there is nothing of this user's to clear, as when the status
+            // says so first.
+            if (code == ctl::kCodeAuthNotTunnelOwner) {
+              g_message("sdkhost: sign-out: another user's session is live; the daemon cleared "
+                        "nothing of it");
+              return true;
+            }
+            break;
+        }
+        g_warning("sdkhost: sign-out: logout failed: %s%s%s",
+                  error.empty() ? "no detail" : error.c_str(), code.empty() ? "" : " ",
+                  code.c_str());
         return false;
       }
     }

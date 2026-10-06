@@ -648,17 +648,21 @@ class SdkHost {
   // parity: Device::refreshToken). No-op without a device.
   void RefreshJwt();
 
-  // Sign out of URnetwork (owner decision 2026-10-05: the tunnel and the
-  // provider stop as on Quit; the app keeps running, signed out). Signed out
-  // at once (signedOut_), so a reconcile or a connect that runs after this
-  // starts nothing for the account; the local credentials are logged out;
-  // the DeviceRemote goes, as Shutdown takes it down; then the sign-out is
-  // recorded as owed (SignOut.hpp) and delivered: Quit's stop_tunnel, which
-  // also lifts the kill-switch floor, unless the daemon runs another user's
-  // session. A delivery that does not complete (no daemon, a refusal) leaves
-  // it owed in a marker that outlives the app: the provider reconcile, which
-  // the health poll runs, delivers it first, and nothing starts until it has
-  // been delivered. The sign-out completes in the app either way.
+  // Sign out of URnetwork (owner decisions 2026-10-05: the tunnel and the
+  // provider stop as on Quit, the app keeps running, signed out; and each
+  // network starts fresh). A sign-in method being added is cancelled, so its
+  // late return cannot add it to the next account. Signed out at once
+  // (signedOut_), so a reconcile or a connect that runs after this starts
+  // nothing for the account; the local credentials are logged out and the
+  // api's credential cleared; the DeviceRemote goes, as Shutdown takes it
+  // down; then the sign-out is recorded as owed (SignOut.hpp) and delivered:
+  // Quit's stop_tunnel, which also lifts the kill-switch floor, then logout,
+  // which deletes the daemon's device identity and what its sdk stored for
+  // the account, unless the daemon runs another user's session. A delivery
+  // that does not complete (no daemon, a refusal) leaves it owed in a marker
+  // that outlives the app: the provider reconcile, which the health poll
+  // runs, delivers it first, and nothing starts until it has been delivered.
+  // The sign-out completes in the app either way.
   void Logout();
 
   // Quit-path teardown: bring the device and the daemon tunnel down WITHOUT

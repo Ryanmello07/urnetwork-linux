@@ -2,6 +2,7 @@
 #include "TunnelHost.hpp"
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <cerrno>
 #include <chrono>
@@ -1745,6 +1746,58 @@ bool TunnelHost::SetProvideExtender(bool on, std::string* error) {
   }
   DaemonLogf("[provide] provide extender %s (%s)\n", on ? "on" : "off",
              provide::ToString(target));
+  return true;
+}
+
+bool TunnelHost::Logout(const std::string& networkSpaceJson, std::string* error,
+                        const char** code) {
+  std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    // A bring-up owns the session. The GUI's stop_tunnel, sent first, joins
+    // one, so this is a start that came after it; the sign-out stays owed.
+    if (error) *error = "a tunnel start is in progress";
+    if (code) *code = ctl::kCodeStartInProgress;
+    return false;
+  }
+  // Nothing runs on the identity deleted below: the session as an explicit
+  // stop ends it (which also lifts the kill-switch floor and forgets the
+  // session's request, credentials included), and every teardown retires the
+  // provider-only device and a log upload's standalone device.
+  StopInternalLocked("user");
+  // A queued log upload carries the signed-out account's credentials, and
+  // building its device would make a new identity for them.
+  if (queuedUpload_) {
+    logUploadFlight_->Finish(queuedUploadId_, logupload::FlightState::Failed);
+    queuedUpload_.reset();
+    queuedUploadId_ = 0;
+  }
+  // What the account asked for: the next start brings its own.
+  {
+    std::scoped_lock statusLock(statusMutex_);
+    pendingProvideMode_.clear();
+  }
+  killSwitchRequested_.store(false);
+
+  bool cleared = true;
+  for (const char* file : {kClientKeySeedFile, kProvideCertFile, kProvideKeyFile}) {
+    const std::string path = storageRoot_ + "/" + file;
+    if (::unlink(path.c_str()) != 0 && errno != ENOENT) {
+      DaemonLogf("[tunnel] logout: %s could not be deleted: %s\n", file, std::strerror(errno));
+      cleared = false;
+    }
+  }
+  try {
+    LoadNetworkSpaceLocked(networkSpaceJson);
+    networkSpace_->getAsyncLocalState().getLocalState().logout();
+  } catch (const std::exception& e) {
+    DaemonLogf("[tunnel] logout: the account's sdk state could not be cleared: %s\n", e.what());
+    cleared = false;
+  }
+  if (!cleared) {
+    if (error) *error = "the signed-out account's state could not all be cleared";
+    return false;
+  }
+  DaemonLogf("[tunnel] logged out (cleared the device identity and the account's sdk state)\n");
   return true;
 }
 
