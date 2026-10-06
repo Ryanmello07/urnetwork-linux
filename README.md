@@ -42,7 +42,13 @@ binary names and artifact names.
   handler and autostart. It runs the first GUI it finds, in this order:
   `$URNETWORK_APPIMAGE`, `~/.local/lib/urnetwork/URnetwork.AppImage`,
   `~/Applications/URnetwork*.AppImage`, `/usr/lib/urnetwork/URnetwork.AppImage`,
-  `urnetwork-gui` on `$PATH`, then the `com.bringyour.network` Flatpak.
+  `urnetwork-gui` on `$PATH`, then the `com.bringyour.network` Flatpak. The
+  autostart entry runs it with `--autostart`, which it hands to the GUI as
+  `URNETWORK_AUTOSTART=1`: that launch shows only the tray icon, and every
+  other launch shows the window.
+- One GUI instance runs per session. A launch that finds it running hands
+  itself over (the window shows, or the link opens) and exits; a launch that
+  finds it quitting waits for it to end, then starts.
 
 ## Excluding an app from the tunnel
 

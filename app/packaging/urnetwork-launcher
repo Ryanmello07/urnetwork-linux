@@ -14,6 +14,19 @@
 #   5. any `urnetwork-gui` on $PATH
 #   6. the com.bringyour.network Flatpak, if installed
 # First hit is exec'd with "$@". No hit: one-line install hint, exit 127.
+#
+# --autostart, the autostart entry's argument, is taken here: the GUI is
+# started with URNETWORK_AUTOSTART=1 instead and shows only its tray icon. A
+# GUI from before the flag ignores it and shows its window, where the option
+# would make it refuse to start. Nothing else carries the flag in.
+
+if [ "${1:-}" = "--autostart" ]; then
+    shift
+    URNETWORK_AUTOSTART=1
+    export URNETWORK_AUTOSTART
+else
+    unset URNETWORK_AUTOSTART
+fi
 
 candidate=""
 
