@@ -4303,6 +4303,11 @@ msgctxt "extenders_no_session"
 msgid "Sign in and connect to manage extenders."
 msgstr "익스텐더를 관리하려면 로그인하고 연결하세요."
 
+#. Confirmation after the extenders were reset (Extenders section under account).
+msgctxt "extenders_reset_done"
+msgid "Extenders reset"
+msgstr "익스텐더를 재설정했습니다"
+
 #. Used in Shared/Intents/ConnectIntent.swift.
 msgctxt "failed_to_connect"
 msgid "Failed to connect"
@@ -6892,6 +6897,16 @@ msgstr "링크 재전송"
 msgctxt "resend_verify_code"
 msgid "Resend code"
 msgstr "코드 재전송"
+
+#. Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.
+msgctxt "reset_extenders"
+msgid "Reset extenders"
+msgstr "익스텐더 재설정"
+
+#. Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.
+msgctxt "reset_extenders_confirm"
+msgid "This removes the extenders you added and clears everything learned about extenders, which are then discovered again from scratch."
+msgstr "추가한 익스텐더가 삭제되고 익스텐더에 대해 알고 있던 정보가 모두 지워집니다. 이후 익스텐더를 처음부터 다시 찾습니다."
 
 #. Button text for resetting password
 msgctxt "reset_it"
