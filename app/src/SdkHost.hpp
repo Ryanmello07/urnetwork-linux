@@ -64,6 +64,11 @@ struct AuthResult {
   // With verification_required: whether the server sent the code (its
   // send_error); the verify page must not say a code was sent otherwise.
   VerifySendNotice sendNotice = {};
+  // A wallet refusal's code (signature_mismatch: a pasted signature from
+  // another account than the entered address) and the Bittensor wallet that
+  // signed ("" for none); the page words it (WalletProofRefusalText).
+  std::string errorCode = {};
+  std::string bittensorWalletId = {};
 };
 
 // Outcome of the authLogin account discovery (macOS LoginInitialViewModel
@@ -585,6 +590,9 @@ class SdkHost {
   struct AddSignInResult {
     bool ok = false;
     std::string error;
+    // the server's code for the refusal ("" for none): signature_mismatch for
+    // a pasted wallet signature from another account
+    std::string code = {};
   };
   void AddSignInWithSso(const std::string& provider, std::function<void(AddSignInResult)> done);
   void AddSignInWithSolana(WalletConnect::Provider provider,
@@ -1147,9 +1155,11 @@ class SdkHost {
  private:
   void RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done);
   // Shared routing for NetworkCreateResult (sign-up + wallet sign-up).
+  // `bittensorWalletId` is the Bittensor wallet that signed ("" for none).
   void HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult> result,
                                  std::optional<std::string> err,
-                                 std::function<void(AuthResult)> done);
+                                 std::function<void(AuthResult)> done,
+                                 const std::string& bittensorWalletId = std::string());
   // The body of StartTunnel(). Requires mutex_, so the recovery inside
   // ConnectBestAvailable can rebuild a session it has just discovered is dead
   // without re-entering a non-recursive lock. Every outcome logs, and the

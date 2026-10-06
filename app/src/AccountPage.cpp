@@ -915,11 +915,13 @@ class AccountAddAuthSheet : public Gtk::Window {
 
   // The answer of an Apple, Google or wallet add, on whatever thread it
   // arrives: posted to the main loop and dropped once the sheet moved on.
-  std::function<void(SdkHost::AddSignInResult)> Answer(addsignin::Method method) {
+  // `bittensorWalletId` is the Bittensor wallet that signed ("" for none).
+  std::function<void(SdkHost::AddSignInResult)> Answer(addsignin::Method method,
+                                                       std::string bittensorWalletId = {}) {
     auto epoch = epoch_;
     const uint64_t seen = *epoch_;
-    return [this, epoch, seen, method](SdkHost::AddSignInResult result) {
-      PostToMain([this, epoch, seen, method, result] {
+    return [this, epoch, seen, method, bittensorWalletId](SdkHost::AddSignInResult result) {
+      PostToMain([this, epoch, seen, method, bittensorWalletId, result] {
         if (*epoch != seen) return;
         providerBusy_ = false;
         if (result.ok) {
@@ -931,6 +933,12 @@ class AccountAddAuthSheet : public Gtk::Window {
         // the user closed the manual sheet, or started another method
         if (bittensor::IsCancelled(result.error) || bridge::IsSuperseded(result.error)) {
           providerError_.clear();
+        } else if (const std::string words =
+                       WalletProofRefusalText(result.code, result.error, bittensorWalletId);
+                   words != result.error) {
+          // a pasted signature from another account than the entered address:
+          // the user's to fix in the wallet, not a failure to log
+          providerError_ = words;
         } else {
           g_warning("account: add sign-in failed: %s",
                     result.error.empty() ? "(no error text)" : result.error.c_str());
@@ -981,7 +989,7 @@ class AccountAddAuthSheet : public Gtk::Window {
 
   void StartBittensor(const std::string& walletId) {
     if (!BeginProvider()) return;
-    host_.AddSignInWithBittensor(walletId, Answer(addsignin::Method::Wallet));
+    host_.AddSignInWithBittensor(walletId, Answer(addsignin::Method::Wallet, walletId));
   }
 
   void Render() {

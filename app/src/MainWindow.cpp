@@ -2176,7 +2176,10 @@ void MainWindow::OnWalletAuth(const AuthResult& result) {
                            result.authAllowed));
     } else if (!result.ok) {
       if (!result.error.empty()) {
-        SetLoginError(result.error.c_str());
+        // a pasted signature from another account than the entered address
+        // names the wallet; any other refusal reads as sent
+        SetLoginError(
+            WalletProofRefusalText(result.errorCode, result.error, result.bittensorWalletId));
       } else if (result.sso) {
         SetLoginError(T_("there_was_an_error_logging_in", "There was an error logging in"));
       } else {

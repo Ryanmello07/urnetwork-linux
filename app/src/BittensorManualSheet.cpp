@@ -54,6 +54,18 @@ GtkWidget* NewBittensorWalletChooser(GtkWindow* parent) {
   return dialog;
 }
 
+std::string WalletProofRefusalText(const std::string& code, const std::string& message,
+                                   const std::string& bittensorWalletId) {
+  if (bittensorWalletId.empty()) return message;
+  const bittensor::ErrorText words = bittensor::ConnectErrorTextFor(
+      code, urnet::bittensorWalletTransportFor(bittensorWalletId, std::string(bittensor::kPlatform)));
+  if (words.key.empty()) return message;
+  const std::string key(words.key);
+  const std::string english(words.english);
+  return Format(g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str()),
+                urnet::bittensorWalletDisplayName(bittensorWalletId));
+}
+
 BittensorManualSheet::BittensorManualSheet(Gtk::Window& parent, SdkHost& host,
                                            const SdkHost::BittensorManualRequest& request)
     : host_(host), flow_(request.flow) {

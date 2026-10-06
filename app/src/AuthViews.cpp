@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "AuthViews.hpp"
 
+#include "BittensorManualSheet.hpp"
+
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "Ui.hpp"
@@ -324,11 +326,13 @@ void CreateNetworkPage::OnContinue() {
         return;
       }
       if (!r.ok) {
+        // a pasted signature from another account than the entered address
+        // names the wallet; any other refusal reads as sent
         errorLabel_->set_text(
             r.error.empty()
-                ? T_("error_creating_network",
-                     "There was an error creating your network. Please try again later.")
-                : r.error);
+                ? std::string(T_("error_creating_network",
+                                 "There was an error creating your network. Please try again later."))
+                : WalletProofRefusalText(r.errorCode, r.error, r.bittensorWalletId));
         return;
       }
       if (on_success) on_success();

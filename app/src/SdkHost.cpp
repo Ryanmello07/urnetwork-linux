@@ -877,11 +877,15 @@ std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& coun
 // by_jwt -> RegisterNetworkClient; verification_required -> the verify page.
 void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult> result,
                                         std::optional<std::string> err,
-                                        std::function<void(AuthResult)> done) {
+                                        std::function<void(AuthResult)> done,
+                                        const std::string& bittensorWalletId) {
   if (err) { done({false, false, *err}); return; }
   if (!result) { done({false, false, "no result"}); return; }
   if (result->error && !result->error->message.empty()) {
-    done({false, false, result->error->message});
+    AuthResult r{false, false, result->error->message};
+    r.errorCode = result->error->code.value_or(std::string());
+    r.bittensorWalletId = bittensorWalletId;
+    done(r);
     return;
   }
   if (result->verification_required) {
@@ -1770,7 +1774,8 @@ void SdkHost::AddAuthMethod(const addsignin::Args& in, std::function<void(AddSig
                     return;
                   }
                   if (result->error) {
-                    done({false, result->error->message});
+                    done({false, result->error->message,
+                          result->error->code.value_or(std::string())});
                     return;
                   }
                   done({true, std::string()});
@@ -1988,11 +1993,20 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
   args.terms = true;
   args.verify_use_numeric = true;
   if (!referralCode.empty()) args.referral_code = referralCode;
+  // a signature from another account than the address comes back as
+  // result.error.code (a 401 error otherwise)
+  args.result_errors = true;
+  std::string bittensorWalletId;
+  if (walletAuth->blockchain.value_or(std::string()) == urnet::TAO) {
+    std::scoped_lock lock(mutex_);
+    bittensorWalletId = bittensorWalletId_;
+  }
   args.wallet_auth = walletAuth;
-  api_->networkCreate(args, [this, done = std::move(done)](
+  api_->networkCreate(args, [this, bittensorWalletId, done = std::move(done)](
                                 std::optional<urnet::NetworkCreateResult> result,
                                 std::optional<std::string> err) mutable {
-    HandleNetworkCreateResult(std::move(result), std::move(err), std::move(done));
+    HandleNetworkCreateResult(std::move(result), std::move(err), std::move(done),
+                              bittensorWalletId);
   });
 }
 
@@ -2033,8 +2047,16 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
   w.blockchain = blockchain;
   urnet::AuthLoginArgs args;
   args.wallet_auth = w;
-  api_->authLogin(args, [this, w](std::optional<urnet::AuthLoginResult> result,
-                                  std::optional<std::string> err) {
+  // a signature from another account than the address comes back as
+  // result.error.code (a 401 error otherwise)
+  args.result_errors = true;
+  std::string bittensorWalletId;
+  if (blockchain == urnet::TAO) {
+    std::scoped_lock lock(mutex_);
+    bittensorWalletId = bittensorWalletId_;
+  }
+  api_->authLogin(args, [this, w, bittensorWalletId](std::optional<urnet::AuthLoginResult> result,
+                                                     std::optional<std::string> err) {
     // SDK callback thread: consume walletAuthDone_ under the lock (it is set
     // on the UI thread; the wallet on_error path races this same slot)
     std::function<void(AuthResult)> done;
@@ -2046,7 +2068,10 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
     if (err) { if (done) done({false, false, *err}); return; }
     if (!result) { if (done) done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) {
-      if (done) done({false, false, result->error->message});
+      AuthResult r{false, false, result->error->message};
+      r.errorCode = result->error->code.value_or(std::string());
+      r.bittensorWalletId = bittensorWalletId;
+      if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
