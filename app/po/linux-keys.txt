@@ -531,6 +531,7 @@ extender_settings
 extender_settings_saved
 extender_start_failed
 extender_statistics
+extender_tcp_unavailable
 extenders
 extenders_active_of_reserve
 extenders_no_session
