@@ -1281,6 +1281,11 @@ msgctxt "code_sign_in_failed"
 msgid "Code sign in failed"
 msgstr "使用認證碼登入失敗"
 
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.
+msgctxt "collapsed"
+msgid "Collapsed"
+msgstr "已收合"
+
 #. Login initial
 msgctxt "commitment_issues"
 msgid "Commitment issues?"
@@ -4183,6 +4188,11 @@ msgctxt "excluded"
 msgid "Excluded"
 msgstr "已排除"
 
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.
+msgctxt "expanded"
+msgid "Expanded"
+msgstr "已展開"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "expires"
 msgid "Expires"
@@ -4368,6 +4378,17 @@ msgctxt "feedback_sending"
 msgid "Sending…"
 msgstr "正在發送…"
 
+#. Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).
+msgctxt "feedback_star_count"
+msgid "{} star"
+msgid_plural "{} stars"
+msgstr[0] "{} 顆星"
+
+#. Feedback screen: the heading of the overlay shown after feedback is sent.
+msgctxt "feedback_submitted"
+msgid "Feedback submitted."
+msgstr "已提交反饋。"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4495,6 +4516,11 @@ msgstr "訪客"
 msgctxt "guest_convert_explanation"
 msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
 msgstr "加入電郵地址和密碼即可登入此網絡。其計劃和餘額都會保留。"
+
+#. Account switcher: the row of the guest account, checked while the app runs in guest mode.
+msgctxt "guest_mode"
+msgid "Guest Mode"
+msgstr "訪客模式"
 
 msgctxt "hash_count"
 msgid "#{}"
@@ -4745,6 +4771,11 @@ msgstr "點按小工具即可將其加入主畫面。"
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
 msgstr "餘額碼無效"
+
+#. Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.
+msgctxt "invalid_input"
+msgid "Invalid input"
+msgstr "輸入無效"
 
 #. Call to action
 msgctxt "invalid_referral_code"
@@ -6552,6 +6583,16 @@ msgctxt "purchase_found_confirming_your_plan"
 msgid "Purchase found. Confirming your plan — it will update automatically."
 msgstr "已找到購買記錄。正在確認你的計劃，計劃會自動更新。"
 
+#. Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.
+msgctxt "purchase_pending_body"
+msgid "Your purchase is waiting for approval. UR Pro will turn on by itself once it goes through — there's no need to buy again."
+msgstr "你的購買正在等待批准。完成後 UR Pro 會自動開啟，無需再次購買。"
+
+#. Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).
+msgctxt "purchase_pending_title"
+msgid "Almost there."
+msgstr "快完成了。"
+
 #. Error when a chosen photo or image file holds no QR code.
 msgctxt "qr_code_not_found"
 msgid "No QR code was found in the image."
@@ -6800,9 +6841,24 @@ msgctxt "refresh"
 msgid "Refresh"
 msgstr "重新整理"
 
+#. Settings: the button that makes a new seedphrase in place of the current one.
+msgctxt "regenerate"
+msgid "Regenerate"
+msgstr "重新產生"
+
 msgctxt "regenerate_seedphrase"
 msgid "Regenerate Seedphrase"
 msgstr "重新產生助記詞"
+
+#. Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.
+msgctxt "regenerate_seedphrase_body"
+msgid "Your current seedphrase will stop working. You'll be shown a new one to save."
+msgstr "你目前的助記詞將會失效。系統會顯示新的助記詞，請妥善保存。"
+
+#. Settings: the title of the confirmation before a new seedphrase replaces the current one.
+msgctxt "regenerate_seedphrase_title"
+msgid "Regenerate your seedphrase?"
+msgstr "重新產生助記詞？"
 
 #. Provider list group title for regions
 msgctxt "regions"
@@ -7514,6 +7570,11 @@ msgctxt "site_app_no_traffic"
 msgid "No traffic yet"
 msgstr "暫無流量"
 
+#. ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.
+msgctxt "site_app_phone"
+msgid "Phone"
+msgstr "電話"
+
 #. Connect drawer: plan section label
 msgctxt "site_app_plan"
 msgid "Plan"
@@ -8120,6 +8181,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "強匿名化"
 
+#. Locations list: screen reader name of the icon on a location whose country has strong privacy laws.
+msgctxt "strong_privacy_laws"
+msgid "Strong privacy laws"
+msgstr "嚴格的私隱法例"
+
 #. Button on the plan picker for the monthly plan, which has no free trial.
 msgctxt "subscribe"
 msgid "Subscribe"
@@ -8150,7 +8216,7 @@ msgctxt "suggested_remote_dns_servers_description"
 msgid "Suggestions for the connected country are marked with its color. Turning one on adds it to the remote DNS servers."
 msgstr "適用於已連接國家的建議項目會以該國家的顏色標示。開啟後會將其加入遠端 DNS 伺服器。"
 
-#. Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.
+#. Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.
 msgctxt "support"
 msgid "Support"
 msgstr "支援"
@@ -8626,6 +8692,11 @@ msgctxt "unlink_alert_description"
 msgid "When unlinking your referral network, you will no longer be able to earn points from {}"
 msgstr "解除推薦網絡連結後，您將無法再從 {} 賺取積分"
 
+#. Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.
+msgctxt "unlink_alert_description_unnamed"
+msgid "When unlinking your referral network, you will no longer be able to earn points from that network"
+msgstr "解除推薦網絡連結後，您將無法再從該網絡賺取積分"
+
 #. Call to action
 msgctxt "unlink_referral_network"
 msgid "Unlink referral network"
@@ -8640,6 +8711,11 @@ msgstr "您將解鎖更快的速度，並優先體驗新功能，如強大的反
 msgctxt "unlock_supporter_tooltip"
 msgid "Unlock even faster speeds and first dibs on new features."
 msgstr "解鎖更快的速度，並優先體驗新功能。"
+
+#. Locations list: screen reader name of the warning icon on a location whose providers may be unstable.
+msgctxt "unstable_connection"
+msgid "Unstable connection"
+msgstr "連線不穩定"
 
 #. Call to action
 msgctxt "unstable_providers_warning"

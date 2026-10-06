@@ -1283,6 +1283,11 @@ msgctxt "code_sign_in_failed"
 msgid "Code sign in failed"
 msgstr "Accesso con codice non riuscito"
 
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.
+msgctxt "collapsed"
+msgid "Collapsed"
+msgstr "Compresso"
+
 #. Login initial
 msgctxt "commitment_issues"
 msgid "Commitment issues?"
@@ -4188,6 +4193,11 @@ msgctxt "excluded"
 msgid "Excluded"
 msgstr "Esclusa"
 
+#. Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.
+msgctxt "expanded"
+msgid "Expanded"
+msgstr "Espanso"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "expires"
 msgid "Expires"
@@ -4373,6 +4383,18 @@ msgctxt "feedback_sending"
 msgid "Sending…"
 msgstr "Invio in corso…"
 
+#. Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).
+msgctxt "feedback_star_count"
+msgid "{} star"
+msgid_plural "{} stars"
+msgstr[0] "{} stella"
+msgstr[1] "{} stelle"
+
+#. Feedback screen: the heading of the overlay shown after feedback is sent.
+msgctxt "feedback_submitted"
+msgid "Feedback submitted."
+msgstr "Feedback inviato."
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4501,6 +4523,11 @@ msgstr "Ospite"
 msgctxt "guest_convert_explanation"
 msgid "Add an email and a password to sign in to this network. Its plan and balance stay with it."
 msgstr "Aggiungi un’email e una password per accedere a questa rete. Il suo piano e il suo saldo restano con lei."
+
+#. Account switcher: the row of the guest account, checked while the app runs in guest mode.
+msgctxt "guest_mode"
+msgid "Guest Mode"
+msgstr "Modalità ospite"
 
 msgctxt "hash_count"
 msgid "#{}"
@@ -4753,6 +4780,11 @@ msgstr "Tocca un widget per aggiungerlo alla schermata Home."
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
 msgstr "Codice saldo non valido"
+
+#. Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.
+msgctxt "invalid_input"
+msgid "Invalid input"
+msgstr "Valore non valido"
 
 #. Call to action
 msgctxt "invalid_referral_code"
@@ -6573,6 +6605,16 @@ msgctxt "purchase_found_confirming_your_plan"
 msgid "Purchase found. Confirming your plan — it will update automatically."
 msgstr "Acquisto trovato. Conferma del piano in corso — si aggiornerà automaticamente."
 
+#. Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.
+msgctxt "purchase_pending_body"
+msgid "Your purchase is waiting for approval. UR Pro will turn on by itself once it goes through — there's no need to buy again."
+msgstr "Il tuo acquisto è in attesa di approvazione. UR Pro si attiverà da solo appena verrà completato: non serve acquistarlo di nuovo."
+
+#. Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).
+msgctxt "purchase_pending_title"
+msgid "Almost there."
+msgstr "Ci siamo quasi."
+
 #. Error when a chosen photo or image file holds no QR code.
 msgctxt "qr_code_not_found"
 msgid "No QR code was found in the image."
@@ -6824,9 +6866,24 @@ msgctxt "refresh"
 msgid "Refresh"
 msgstr "Aggiorna"
 
+#. Settings: the button that makes a new seedphrase in place of the current one.
+msgctxt "regenerate"
+msgid "Regenerate"
+msgstr "Rigenera"
+
 msgctxt "regenerate_seedphrase"
 msgid "Regenerate Seedphrase"
 msgstr "Rigenera frase seed"
+
+#. Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.
+msgctxt "regenerate_seedphrase_body"
+msgid "Your current seedphrase will stop working. You'll be shown a new one to save."
+msgstr "La tua frase seed attuale smetterà di funzionare. Te ne verrà mostrata una nuova da conservare."
+
+#. Settings: the title of the confirmation before a new seedphrase replaces the current one.
+msgctxt "regenerate_seedphrase_title"
+msgid "Regenerate your seedphrase?"
+msgstr "Rigenerare la frase seed?"
 
 #. Provider list group title for regions
 msgctxt "regions"
@@ -7541,6 +7598,11 @@ msgctxt "site_app_no_traffic"
 msgid "No traffic yet"
 msgstr "Ancora nessun traffico"
 
+#. ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.
+msgctxt "site_app_phone"
+msgid "Phone"
+msgstr "Telefono"
+
 #. Connect drawer: plan section label
 msgctxt "site_app_plan"
 msgid "Plan"
@@ -8148,6 +8210,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "Anonimizzazione avanzata"
 
+#. Locations list: screen reader name of the icon on a location whose country has strong privacy laws.
+msgctxt "strong_privacy_laws"
+msgid "Strong privacy laws"
+msgstr "Leggi rigorose sulla privacy"
+
 #. Button on the plan picker for the monthly plan, which has no free trial.
 msgctxt "subscribe"
 msgid "Subscribe"
@@ -8178,10 +8245,10 @@ msgctxt "suggested_remote_dns_servers_description"
 msgid "Suggestions for the connected country are marked with its color. Turning one on adds it to the remote DNS servers."
 msgstr "I suggerimenti per il paese connesso sono contrassegnati con il suo colore. Attivandone uno, viene aggiunto ai server DNS remoti."
 
-#. Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.
+#. Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.
 msgctxt "support"
 msgid "Support"
-msgstr "Supporto"
+msgstr "Assistenza"
 
 #. Upgrade subscription overlay
 msgctxt "support_us"
@@ -8655,6 +8722,11 @@ msgctxt "unlink_alert_description"
 msgid "When unlinking your referral network, you will no longer be able to earn points from {}"
 msgstr "Quando scolleghi la tua rete di riferimento, non potrai più guadagnare punti da {}"
 
+#. Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.
+msgctxt "unlink_alert_description_unnamed"
+msgid "When unlinking your referral network, you will no longer be able to earn points from that network"
+msgstr "Quando scolleghi la tua rete di riferimento, non potrai più guadagnare punti da quella rete"
+
 #. Call to action
 msgctxt "unlink_referral_network"
 msgid "Unlink referral network"
@@ -8669,6 +8741,11 @@ msgstr "Sbloccherai velocità ancora più elevate e avrai accesso prioritario a 
 msgctxt "unlock_supporter_tooltip"
 msgid "Unlock even faster speeds and first dibs on new features."
 msgstr "Sblocca velocità ancora più elevate e accesso prioritario alle nuove funzionalità."
+
+#. Locations list: screen reader name of the warning icon on a location whose providers may be unstable.
+msgctxt "unstable_connection"
+msgid "Unstable connection"
+msgstr "Connessione instabile"
 
 #. Call to action
 msgctxt "unstable_providers_warning"
