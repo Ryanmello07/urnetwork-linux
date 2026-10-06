@@ -4348,6 +4348,12 @@ msgctxt "feedback_sending"
 msgid "Sending…"
 msgstr "正在发送…"
 
+#. Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).
+msgctxt "feedback_star_count"
+msgid "{} star"
+msgid_plural "{} stars"
+msgstr[0] "{} 颗星"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4725,6 +4731,11 @@ msgstr "轻点小组件即可将其添加到主屏幕。"
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
 msgstr "余额码无效"
+
+#. Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.
+msgctxt "invalid_input"
+msgid "Invalid input"
+msgstr "输入无效"
 
 #. Call to action
 msgctxt "invalid_referral_code"
@@ -9168,6 +9179,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "强匿名化"
 
+#. Locations list: screen reader name of the icon on a location whose country has strong privacy laws.
+msgctxt "strong_privacy_laws"
+msgid "Strong privacy laws"
+msgstr "严格的隐私法"
+
 #. Button on the plan picker for the monthly plan, which has no free trial.
 msgctxt "subscribe"
 msgid "Subscribe"
@@ -9688,6 +9704,11 @@ msgstr "您将解锁更快的速度，并首先获得强大的反审查措施和
 msgctxt "unlock_supporter_tooltip"
 msgid "Unlock even faster speeds and first dibs on new features."
 msgstr "解锁更快的速度并首先获得新功能。"
+
+#. Locations list: screen reader name of the warning icon on a location whose providers may be unstable.
+msgctxt "unstable_connection"
+msgid "Unstable connection"
+msgstr "连接不稳定"
 
 #. Call to action
 msgctxt "unstable_providers_warning"

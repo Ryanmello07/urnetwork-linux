@@ -4348,6 +4348,12 @@ msgctxt "feedback_sending"
 msgid "Sending…"
 msgstr "보내는 중…"
 
+#. Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).
+msgctxt "feedback_star_count"
+msgid "{} star"
+msgid_plural "{} stars"
+msgstr[0] "별 {}개"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4725,6 +4731,11 @@ msgstr "위젯을 탭하면 홈 화면에 추가됩니다."
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
 msgstr "잘못된 잔액 코드"
+
+#. Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.
+msgctxt "invalid_input"
+msgid "Invalid input"
+msgstr "잘못된 입력"
 
 #. Call to action
 msgctxt "invalid_referral_code"
@@ -8080,6 +8091,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "강력한 익명화"
 
+#. Locations list: screen reader name of the icon on a location whose country has strong privacy laws.
+msgctxt "strong_privacy_laws"
+msgid "Strong privacy laws"
+msgstr "엄격한 개인정보 보호법"
+
 #. Button on the plan picker for the monthly plan, which has no free trial.
 msgctxt "subscribe"
 msgid "Subscribe"
@@ -8600,6 +8616,11 @@ msgstr "더 빠른 속도와 강력한 검열 방지 조치, 데이터 제어와
 msgctxt "unlock_supporter_tooltip"
 msgid "Unlock even faster speeds and first dibs on new features."
 msgstr "더 빠른 속도와 새로운 기능에 대한 우선 접근권을 얻으세요."
+
+#. Locations list: screen reader name of the warning icon on a location whose providers may be unstable.
+msgctxt "unstable_connection"
+msgid "Unstable connection"
+msgstr "불안정한 연결"
 
 #. Call to action
 msgctxt "unstable_providers_warning"

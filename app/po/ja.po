@@ -4348,6 +4348,12 @@ msgctxt "feedback_sending"
 msgid "Sending…"
 msgstr "送信中…"
 
+#. Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).
+msgctxt "feedback_star_count"
+msgid "{} star"
+msgid_plural "{} stars"
+msgstr[0] "星{}つ"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4725,6 +4731,11 @@ msgstr "ウィジェットをタップするとホーム画面に追加されま
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
 msgstr "無効な残高コード"
+
+#. Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.
+msgctxt "invalid_input"
+msgid "Invalid input"
+msgstr "無効な入力"
 
 #. Call to action
 msgctxt "invalid_referral_code"
@@ -8080,6 +8091,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "強力な匿名化"
 
+#. Locations list: screen reader name of the icon on a location whose country has strong privacy laws.
+msgctxt "strong_privacy_laws"
+msgid "Strong privacy laws"
+msgstr "厳格なプライバシー法"
+
 #. Button on the plan picker for the monthly plan, which has no free trial.
 msgctxt "subscribe"
 msgid "Subscribe"
@@ -8600,6 +8616,11 @@ msgstr "さらに高速な速度と、強力な検閲対策や制御データな
 msgctxt "unlock_supporter_tooltip"
 msgid "Unlock even faster speeds and first dibs on new features."
 msgstr "さらに高速な速度と新機能への優先アクセスをアンロックします。"
+
+#. Locations list: screen reader name of the warning icon on a location whose providers may be unstable.
+msgctxt "unstable_connection"
+msgid "Unstable connection"
+msgstr "不安定な接続"
 
 #. Call to action
 msgctxt "unstable_providers_warning"

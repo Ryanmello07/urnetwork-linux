@@ -4358,6 +4358,14 @@ msgctxt "feedback_sending"
 msgid "Sending…"
 msgstr "Odesílání…"
 
+#. Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).
+msgctxt "feedback_star_count"
+msgid "{} star"
+msgid_plural "{} stars"
+msgstr[0] "{} hvězdička"
+msgstr[1] "{} hvězdičky"
+msgstr[2] "{} hvězdiček"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4741,6 +4749,11 @@ msgstr "Klepnutím na widget ho přidáte na domovskou obrazovku."
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
 msgstr "Neplatný kód na zůstatek"
+
+#. Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.
+msgctxt "invalid_input"
+msgid "Invalid input"
+msgstr "Neplatný údaj"
 
 #. Call to action
 msgctxt "invalid_referral_code"
@@ -8136,6 +8149,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "Silná anonymizace"
 
+#. Locations list: screen reader name of the icon on a location whose country has strong privacy laws.
+msgctxt "strong_privacy_laws"
+msgid "Strong privacy laws"
+msgstr "Přísné zákony na ochranu soukromí"
+
 #. Button on the plan picker for the monthly plan, which has no free trial.
 msgctxt "subscribe"
 msgid "Subscribe"
@@ -8658,6 +8676,11 @@ msgstr "Získáte ještě vyšší rychlosti a jako první budete mít přístup
 msgctxt "unlock_supporter_tooltip"
 msgid "Unlock even faster speeds and first dibs on new features."
 msgstr "Odemkněte si ještě vyšší rychlost a přednostní právo na nové funkce."
+
+#. Locations list: screen reader name of the warning icon on a location whose providers may be unstable.
+msgctxt "unstable_connection"
+msgid "Unstable connection"
+msgstr "Nestabilní připojení"
 
 #. Call to action
 msgctxt "unstable_providers_warning"

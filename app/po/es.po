@@ -4353,6 +4353,13 @@ msgctxt "feedback_sending"
 msgid "Sending…"
 msgstr "Enviando…"
 
+#. Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).
+msgctxt "feedback_star_count"
+msgid "{} star"
+msgid_plural "{} stars"
+msgstr[0] "{} estrella"
+msgstr[1] "{} estrellas"
+
 #. A toggle that allows users to enable or disable a fixed IP for their connection.
 msgctxt "fixed_ip"
 msgid "Fixed IP"
@@ -4733,6 +4740,11 @@ msgstr "Toca un widget para añadirlo a tu pantalla de inicio."
 msgctxt "invalid_balance_code"
 msgid "Invalid balance code"
 msgstr "Código de saldo inválido"
+
+#. Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.
+msgctxt "invalid_input"
+msgid "Invalid input"
+msgstr "Entrada no válida"
 
 #. Call to action
 msgctxt "invalid_referral_code"
@@ -9199,6 +9211,11 @@ msgctxt "strong_anonymization"
 msgid "Strong Anonymization"
 msgstr "Anonimización fuerte"
 
+#. Locations list: screen reader name of the icon on a location whose country has strong privacy laws.
+msgctxt "strong_privacy_laws"
+msgid "Strong privacy laws"
+msgstr "Leyes de privacidad estrictas"
+
 #. Button on the plan picker for the monthly plan, which has no free trial.
 msgctxt "subscribe"
 msgid "Subscribe"
@@ -9720,6 +9737,11 @@ msgstr "Desbloquearás velocidades aún más rápidas y tendrás prioridad en la
 msgctxt "unlock_supporter_tooltip"
 msgid "Unlock even faster speeds and first dibs on new features."
 msgstr "Desbloquea velocidades aún más rápidas y obtén acceso prioritario a nuevas funciones."
+
+#. Locations list: screen reader name of the warning icon on a location whose providers may be unstable.
+msgctxt "unstable_connection"
+msgid "Unstable connection"
+msgstr "Conexión inestable"
 
 #. Call to action
 msgctxt "unstable_providers_warning"
