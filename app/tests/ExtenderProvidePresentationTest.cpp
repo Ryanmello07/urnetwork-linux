@@ -64,6 +64,7 @@ struct FullStatus {
   std::string Reason{};
   bool Enabled{};
   std::string StartError{};
+  std::string TcpUnavailableError{};
   bool Listening{};
   std::string ListenError{};
   bool ActivatedV4{};
@@ -75,10 +76,17 @@ struct FullStatus {
   bool LastActivationRefused{};
   int64_t RevokedTime{};
   std::string DnsPorts{};
+  int64_t PeerPingCount{};
+  int64_t PeerPingCosignedCount{};
+  int64_t PeerPingRejectedCount{};
+  int64_t PeerPingUnknownCount{};
+  int64_t LastPeerPingTime{};
+  int64_t LimitedBySubnetsCount{};
+  int64_t LimitedBySourceCount{};
   int64_t ConnectionCount{};
 };
 
-// A supported status with the fields the reading takes; the other eleven stay
+// A supported status with the fields the reading takes; the other nineteen stay
 // at their zero values.
 FullStatus SupportedStatus(const std::string& state, const std::string& errorCase = std::string(),
                            const std::string& reason = std::string(), bool activatedV4 = false,
@@ -207,6 +215,10 @@ UR_TEST(ExtenderProvide_EachErrorCaseByErrorCaseAlone) {
       {"revoked", "", "extender_revoked", "Revoked by the operator"},
       {"start", "no extender directory in this network space", "extender_start_failed",
        "Could not start: no extender directory in this network space"},
+      {"tcp_unavailable", "listen tcp :443: bind: address already in use",
+       "extender_tcp_unavailable",
+       "TCP port 443 is in use by another program. Trying again every few minutes: listen tcp "
+       ":443: bind: address already in use"},
       {"listen", "tcp: bind: permission denied; quic: bind: permission denied",
        "extender_listen_failed",
        "Could not listen: tcp: bind: permission denied; quic: bind: permission denied"},
@@ -310,8 +322,9 @@ UR_TEST(ExtenderProvide_EqualReadingsCompareEqual) {
 }
 
 // The reading takes Supported, State, ErrorCase, Reason, ActivatedV4,
-// ActivatedV6 and LastActivationRefused and nothing else: the other eleven
-// fields, set to noise, leave every reading as it was.
+// ActivatedV6 and LastActivationRefused and nothing else: the other nineteen
+// fields, set to noise, leave every reading as it was. The tcp 443 bind error
+// reaches the row as the Reason of its case, never as TcpUnavailableError.
 UR_TEST(ExtenderProvide_ReadsOnlyTheContractFields) {
   FullStatus unsupported = SupportedStatus("active", "", "", true, true);
   unsupported.Supported = false;
@@ -323,12 +336,14 @@ UR_TEST(ExtenderProvide_ReadsOnlyTheContractFields) {
       SupportedStatus("active", "", "the operator refused the activation", true, false, true),
       SupportedStatus("error", "revoked"),
       SupportedStatus("error", "listen", "tcp: bind: permission denied"),
+      SupportedStatus("error", "tcp_unavailable", "listen tcp :443: bind: address already in use"),
       unsupported,
   };
   for (const FullStatus& reading : readings) {
     FullStatus noisy = reading;
     noisy.Enabled = !reading.Enabled;
     noisy.StartError = "no extender directory in this network space";
+    noisy.TcpUnavailableError = "listen tcp 0.0.0.0:443: bind: permission denied";
     noisy.Listening = !reading.Listening;
     noisy.ListenError = "udp: bind: address already in use";
     noisy.Ipv4 = "192.0.2.10";
@@ -337,6 +352,13 @@ UR_TEST(ExtenderProvide_ReadsOnlyTheContractFields) {
     noisy.LastActivationError = "context deadline exceeded";
     noisy.RevokedTime = 1757800000001;
     noisy.DnsPorts = "53,4053";
+    noisy.PeerPingCount = 9;
+    noisy.PeerPingCosignedCount = 5;
+    noisy.PeerPingRejectedCount = 2;
+    noisy.PeerPingUnknownCount = 2;
+    noisy.LastPeerPingTime = 1757800000002;
+    noisy.LimitedBySubnetsCount = 3;
+    noisy.LimitedBySourceCount = 4;
     noisy.ConnectionCount = 42;
     const std::string label = reading.State + "/" + reading.ErrorCase;
     UR_EXPECT_TRUE_MSG(label, RowOf(reading, true) == RowOf(noisy, true));
@@ -426,6 +448,7 @@ UR_TEST(ExtenderProvide_KeysAreTheCatalogs) {
       Row("active", "", "x", true, false, false),
       Row("error", "revoked"),
       Row("error", "start", "x"),
+      Row("error", "tcp_unavailable", "x"),
       Row("error", "listen", "x"),
       Row("error", "activation_refused", "x"),
       Row("error", "activation_failed", "x"),
@@ -443,9 +466,9 @@ UR_TEST(ExtenderProvide_KeysAreTheCatalogs) {
     expectInCatalog(row.familiesKey, row.familiesEnglish);
     expectInCatalog(row.detailKey, row.detailEnglish);
   }
-  // off, the three plain states, active and its three families, and the five
+  // off, the three plain states, active and its three families, and the six
   // error cases, two of which also serve as the active line's detail
-  UR_EXPECT_EQ(12, static_cast<int>(keys.size()));
+  UR_EXPECT_EQ(13, static_cast<int>(keys.size()));
 }
 
 // The O8 rule over every combination of its three inputs, as a literal table
