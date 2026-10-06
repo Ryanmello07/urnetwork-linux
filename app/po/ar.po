@@ -8756,6 +8756,91 @@ msgctxt "site_pay_sheet_trial_line"
 msgid "Your card is saved today and charged {1} on {0}. Cancel anytime before then."
 msgstr "سيتم حفظ بطاقتك اليوم وتحصيل {1} في {0}. يمكنك الإلغاء في أي وقت قبل ذلك."
 
+#. ur.io checkout (the Pro upgrade sheet, the onboarding plan step, the offer screen, the free-trial panel): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.
+msgctxt "site_payment_error_already_subscribed"
+msgid "You already have Pro, so nothing was charged. Manage your subscription from your account."
+msgstr "لديك Pro بالفعل، لذا لم يتم تحصيل أي مبلغ. يمكنك إدارة اشتراكك من حسابك."
+
+#. Pay page (/app/pay-sheet on ur.io): the bank's card verification (3D Secure) failed or was not completed. Nothing was charged.
+msgctxt "site_payment_error_authentication_failed"
+msgid "Your bank could not verify the card. Try again or use another card."
+msgstr "تعذّر على البنك الذي تتعامل معه التحقق من البطاقة. حاول مرة أخرى أو استخدم بطاقة أخرى."
+
+#. Pay page (/app/pay-sheet, the card form the desktop apps and the F-Droid app open on ur.io): the card's bank declined the payment (Stripe card_declined). Nothing was charged.
+msgctxt "site_payment_error_card_declined"
+msgid "Your card was declined. Try another card, or contact your bank."
+msgstr "تم رفض بطاقتك. جرّب بطاقة أخرى، أو تواصل مع البنك الذي تتعامل معه."
+
+#. ur.io checkout: this deployment has no checkout configured (error.code checkout_unavailable). Nothing was charged.
+msgctxt "site_payment_error_checkout_unavailable"
+msgid "Checkout is not available right now. Try again later."
+msgstr "الدفع غير متاح حاليًا. حاول مرة أخرى لاحقًا."
+
+#. Pay page (/app/pay-sheet on ur.io): the card has expired, or the expiry date entered is in the past. Nothing was charged.
+msgctxt "site_payment_error_expired_card"
+msgid "Your card has expired. Try another card."
+msgstr "انتهت صلاحية بطاقتك. جرّب بطاقة أخرى."
+
+#. Pay page (/app/pay-sheet on ur.io): Stripe's card form did not load (usually no internet connection, or a network or content blocker that blocks Stripe). Nothing was charged.
+msgctxt "site_payment_error_form_unavailable"
+msgid "The payment form could not load. Check your internet connection and try again."
+msgstr "تعذّر تحميل نموذج الدفع. تحقق من اتصالك بالإنترنت وحاول مرة أخرى."
+
+#. Pay page (/app/pay-sheet on ur.io): a card number, expiry date, security code or postal code in the payment form is wrong or missing. Stripe's own sentence naming the field is shown under this line. Nothing was charged.
+msgctxt "site_payment_error_incorrect_details"
+msgid "Some payment details are incorrect or incomplete. Check them and try again."
+msgstr "بعض بيانات الدفع غير صحيحة أو غير مكتملة. تحقق منها وحاول مرة أخرى."
+
+#. Pay page (/app/pay-sheet on ur.io): the card was declined because it does not have enough funds (Stripe decline code insufficient_funds). Nothing was charged.
+msgctxt "site_payment_error_insufficient_funds"
+msgid "Your card has insufficient funds. Try another card."
+msgstr "رصيد بطاقتك غير كافٍ. جرّب بطاقة أخرى."
+
+#. ur.io Buy data page, buying a code by email: the server refused the email address the code goes to (error.code invalid_email).
+msgctxt "site_payment_error_invalid_email"
+msgid "That email address does not look right. Check it and try again."
+msgstr "يبدو أن عنوان البريد الإلكتروني هذا غير صحيح. تحقق منه وحاول مرة أخرى."
+
+#. ur.io data pack checkout (account panel, Buy data page): the server cannot sell this data pack right now (error.code item_unavailable). Nothing was charged.
+msgctxt "site_payment_error_item_unavailable"
+msgid "This data pack is not available right now. Try again later."
+msgstr "باقة البيانات هذه غير متاحة حاليًا. حاول مرة أخرى لاحقًا."
+
+#. Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: Stripe or URnetwork's server could not be reached (offline, timed out, or blocked by the network).
+msgctxt "site_payment_error_network"
+msgid "Could not connect. Check your internet connection and try again."
+msgstr "تعذّر الاتصال. تحقق من اتصالك بالإنترنت وحاول مرة أخرى."
+
+#. ur.io Buy data page, paying with USDC: no network name was given for the data (error.code network_name_required).
+msgctxt "site_payment_error_network_name_required"
+msgid "Enter the network that should receive the data."
+msgstr "أدخل الشبكة التي ستتلقى البيانات."
+
+#. ur.io Buy data page: no network has the name the buyer entered (error.code network_not_found). Nothing was charged.
+msgctxt "site_payment_error_network_not_found"
+msgid "No network has that name. Check the name and try again."
+msgstr "لا توجد شبكة بهذا الاسم. تحقق من الاسم وحاول مرة أخرى."
+
+#. ur.io Pro upgrade sheet, paying with USDC: the welcome offer is not, or no longer, redeemable by this network (error.code offer_unavailable). Nothing was charged.
+msgctxt "site_payment_error_offer_unavailable"
+msgid "The welcome offer is no longer available."
+msgstr "عرض الترحيب لم يعد متاحًا."
+
+#. ur.io checkout: the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.
+msgctxt "site_payment_error_plan_unavailable"
+msgid "This plan is not available right now. Try again later."
+msgstr "هذه الخطة غير متاحة حاليًا. حاول مرة أخرى لاحقًا."
+
+#. Pay page (/app/pay-sheet on ur.io): Stripe or the bank could not process the payment just now (a temporary error); trying again usually works.
+msgctxt "site_payment_error_processing"
+msgid "The payment could not be processed right now. Try again in a moment."
+msgstr "تعذّرت معالجة الدفع الآن. حاول مرة أخرى بعد قليل."
+
+#. Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: too many payment attempts in a short time, so Stripe or URnetwork's server turned this one away. Nothing was charged.
+msgctxt "site_payment_error_rate_limited"
+msgid "Too many attempts. Wait a minute, then try again."
+msgstr "محاولات كثيرة جدًا. انتظر دقيقة، ثم حاول مرة أخرى."
+
 #. Upgrade sheet: give-up state body — the payment may still be processing and will appear under Account
 msgctxt "site_payment_not_seen_body"
 msgid "We haven't seen your payment yet. If you completed it in your wallet, it may still be processing — your plan will update automatically under Account once it lands."
@@ -9021,6 +9106,41 @@ msgstr "لا يتجدد. ادفع مجددًا بـ USDC على Solana عند ا
 msgctxt "site_sub_stripe_body"
 msgid "Your Pro subscription is billed through Stripe. Update your payment details or cancel anytime below."
 msgstr "يتم تحصيل اشتراك Pro الخاص بك عبر Stripe. حدّث تفاصيل الدفع أو ألغِ الاشتراك في أي وقت أدناه."
+
+#. ur.io Manage subscription screen: a USDC payment covers one period and never renews, so there is nothing to cancel (error.code does_not_renew).
+msgctxt "site_subscription_error_does_not_renew"
+msgid "A USDC payment covers one period and does not renew, so there is nothing to cancel."
+msgstr "دفعة USDC تغطي فترة واحدة ولا تتجدد، لذا لا يوجد ما يتم إلغاؤه."
+
+#. ur.io Manage subscription screen: the subscription is billed by the App Store, so it is cancelled there (error.code managed_by_app_store).
+msgctxt "site_subscription_error_managed_by_app_store"
+msgid "This subscription is billed by the App Store. Cancel it there."
+msgstr "يتم إصدار فواتير هذا الاشتراك عبر App Store. ألغه من هناك."
+
+#. ur.io Manage subscription screen: the subscription is billed by Google Play, so it is cancelled there (error.code managed_by_google_play).
+msgctxt "site_subscription_error_managed_by_google_play"
+msgid "This subscription is billed by Google Play. Cancel it there."
+msgstr "يتم إصدار فواتير هذا الاشتراك عبر Google Play. ألغه من هناك."
+
+#. ur.io Manage subscription screen, opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).
+msgctxt "site_subscription_error_no_customer"
+msgid "This network has no Stripe billing details."
+msgstr "لا توجد تفاصيل فوترة Stripe لهذه الشبكة."
+
+#. ur.io Manage subscription screen, cancelling or resuming: no Stripe subscription is billing this network (error.code no_subscription).
+msgctxt "site_subscription_error_no_subscription"
+msgid "No Stripe subscription is billing this network."
+msgstr "لا يوجد اشتراك Stripe يُفوتر لهذه الشبكة."
+
+#. ur.io Manage subscription screen: the subscription's store is not one the server can change (error.code not_cancelable).
+msgctxt "site_subscription_error_not_cancelable"
+msgid "This subscription cannot be changed here."
+msgstr "لا يمكن تغيير هذا الاشتراك هنا."
+
+#. ur.io Manage subscription screen: Stripe did not answer or refused the change; trying again usually works (error.code store_unavailable).
+msgctxt "site_subscription_error_store_unavailable"
+msgid "Stripe could not be reached just now. Try again in a moment."
+msgstr "تعذّر الوصول إلى Stripe الآن. حاول مرة أخرى بعد قليل."
 
 #. Account panel: generic unexpected error
 msgctxt "site_unexpected_error"
