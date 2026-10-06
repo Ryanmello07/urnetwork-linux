@@ -1185,6 +1185,12 @@ struct StatusReply {
   // disconnected.
   int64_t provider_mode = 0;
   bool provider_network_key = false;
+  // How many clients it provides to: its connected network peers, the count
+  // the GUI reads off a tunnel session's device (getNetworkPeers), for the
+  // provide line under the connect controls. -1 = not read: no provider runs,
+  // the read failed, or the daemon predates the field (absent parses -1). The
+  // GUI then shows no count, never a 0 it did not read.
+  int64_t provider_client_count = -1;
 
   // ---- the network country (P052) -----------------------------------------
   // The country of the mobile network this machine is on, as the daemon reads
@@ -1247,6 +1253,7 @@ inline void to_json(nlohmann::json& j, const StatusReply& v) {
   j["provider_control_mode"] = v.provider_control_mode;
   j["provider_mode"] = v.provider_mode;
   j["provider_network_key"] = v.provider_network_key;
+  j["provider_client_count"] = v.provider_client_count;
   j["network_country_code"] = v.network_country_code;
   j["log_upload_id"] = v.log_upload_id;
   j["log_upload_state"] = v.log_upload_state;
@@ -1282,6 +1289,7 @@ inline void from_json(const nlohmann::json& j, StatusReply& v) {
   detail::Get(j, "provider_control_mode", v.provider_control_mode);
   detail::Get(j, "provider_mode", v.provider_mode);
   detail::Get(j, "provider_network_key", v.provider_network_key);
+  detail::Get(j, "provider_client_count", v.provider_client_count);  // absent = not read
   detail::Get(j, "network_country_code", v.network_country_code);  // absent = no country
   detail::Get(j, "log_upload_id", v.log_upload_id);        // absent = no upload
   detail::Get(j, "log_upload_state", v.log_upload_state);

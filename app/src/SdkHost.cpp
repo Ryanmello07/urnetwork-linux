@@ -2862,6 +2862,11 @@ LiveStats SdkHost::ReadStats() {
     s.provideMode = daemonProviderMode_.load();
     s.provideEnabled = daemonProviderRunning_.load() && s.provideMode != 0;
     s.provideHasNetworkKey = daemonProviderNetworkKey_.load();
+    // The provide line's count, from the same status: a count it did not
+    // give is unknown, never 0.
+    const int64_t clientCount = daemonProviderClientCount_.load();
+    s.provideClients = clientCount < 0 ? 0 : clientCount;
+    s.provideClientsUnknown = s.provideEnabled && clientCount < 0;
   }
   return s;
 }
@@ -4611,9 +4616,11 @@ void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {
   const bool running = status.provider_running && !status.redacted;
   const int64_t tier = running ? status.provider_mode : 0;
   const bool networkKey = running && status.provider_network_key;
+  const int64_t clientCount = running ? status.provider_client_count : -1;
   bool changed = daemonProviderRunning_.exchange(running) != running;
   changed = daemonProviderMode_.exchange(tier) != tier || changed;
   changed = daemonProviderNetworkKey_.exchange(networkKey) != networkKey || changed;
+  changed = daemonProviderClientCount_.exchange(clientCount) != clientCount || changed;
   if (changed) PublishStats();
 }
 
@@ -4734,6 +4741,7 @@ void SdkHost::Shutdown() {
   daemonProviderRunning_.store(false);
   daemonProviderMode_.store(0);
   daemonProviderNetworkKey_.store(false);
+  daemonProviderClientCount_.store(-1);
   DropDaemonProviderStatsLocked();
 }
 
@@ -4770,6 +4778,7 @@ void SdkHost::Logout() {
   daemonProviderRunning_.store(false);
   daemonProviderMode_.store(0);
   daemonProviderNetworkKey_.store(false);
+  daemonProviderClientCount_.store(-1);
   DropDaemonProviderStatsLocked();
   providerStateKnown_ = false;
   providerBackoff_.NoteSuccess();

@@ -1,5 +1,6 @@
-// The call sites of the provider-only device (support inbox 1521, P008). The
-// lifecycle itself is pure and tested in ProvideLifecycleTest.cpp; what keeps a
+// The call sites of the provider-only device (support inbox 1521, P008), and
+// of its client count on the way to the provide line. The lifecycle itself is
+// pure and tested in ProvideLifecycleTest.cpp; what keeps a
 // Linux provider earning while disconnected — and keeps its device from ever
 // touching this machine's own routing — lives in the daemon and the GUI, which
 // need glib, GTK and the SDK, so this reads their sources: a decision with no
@@ -176,4 +177,43 @@ UR_TEST(ProvideWiring_TheStatsShowTheProviderWithoutADevice) {
   UR_EXPECT_TRUE(Has(stats, "s.provideMode = daemonProviderMode_.load();"));
   UR_EXPECT_TRUE(Has(stats, "s.provideEnabled = daemonProviderRunning_.load() && s.provideMode != 0;"));
   UR_EXPECT_TRUE(Has(stats, "s.provideHasNetworkKey = daemonProviderNetworkKey_.load();"));
+}
+
+// The daemon counts the provider-only device's clients where it reads its tier
+// and keys, as a tunnel session's device counts them (its connected network
+// peers), and a count it could not read stays unread rather than 0.
+UR_TEST(ProvideWiring_TheStatusCountsTheProviderClients) {
+  const std::string host = ReadProvideSource("daemon/TunnelHost.cpp");
+  const std::string refresh = FunctionBody(host, "void TunnelHost::RefreshProviderStatusLocked()");
+  UR_EXPECT_TRUE(Before(refresh, "int64_t clientCount = -1;", "try {"));
+  UR_EXPECT_TRUE(Before(refresh, "providerDevice_->getNetworkPeers()", "} catch ("));
+  UR_EXPECT_TRUE(Has(refresh, "peers && peers->Connected ? static_cast<int64_t>(peers->Connected->size()) : 0"));
+  UR_EXPECT_TRUE(Has(refresh, "status_.provider_client_count = clientCount;"));
+  const std::string retire = FunctionBody(host, "void TunnelHost::RetireProviderDeviceLocked()");
+  UR_EXPECT_TRUE(Has(retire, "status_.provider_client_count = -1;"));
+}
+
+// With no DeviceRemote the provide line's count is the provider-only device's,
+// from the same status as the provide dot, and a count the status did not give
+// is unknown, never 0. Quit and sign-out forget it with the rest.
+UR_TEST(ProvideWiring_TheStatsCountTheProviderClientsWithoutADevice) {
+  const std::string host = ReadProvideSource("SdkHost.cpp");
+  const std::string stats = FunctionBody(host, "LiveStats SdkHost::ReadStats()");
+  // the branch with no DeviceRemote, from its first daemon read on
+  const size_t noDeviceStart = stats.find("s.provideMode = daemonProviderMode_.load();");
+  UR_EXPECT_TRUE(noDeviceStart != std::string::npos);
+  if (noDeviceStart == std::string::npos) return;
+  const std::string noDevice = stats.substr(noDeviceStart);
+  UR_EXPECT_TRUE(Has(noDevice, "const int64_t clientCount = daemonProviderClientCount_.load();"));
+  UR_EXPECT_TRUE(Has(noDevice, "s.provideClients = clientCount < 0 ? 0 : clientCount;"));
+  UR_EXPECT_TRUE(Before(noDevice, "s.provideEnabled = daemonProviderRunning_.load()",
+                        "s.provideClientsUnknown = s.provideEnabled && clientCount < 0;"));
+  const std::string note = FunctionBody(host, "void SdkHost::NoteDaemonProviderLocked(");
+  UR_EXPECT_TRUE(Has(note, "const int64_t clientCount = running ? status.provider_client_count : -1;"));
+  UR_EXPECT_TRUE(Before(note, "daemonProviderClientCount_.exchange(clientCount) != clientCount",
+                        "if (changed) PublishStats();"));
+  for (const char* signature : {"void SdkHost::Shutdown()", "void SdkHost::Logout()"}) {
+    UR_EXPECT_TRUE_MSG(signature, Has(FunctionBody(host, signature),
+                                      "daemonProviderClientCount_.store(-1);"));
+  }
 }

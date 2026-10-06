@@ -563,6 +563,38 @@ UR_TEST(controlStatusCarriesTheProviderOnlyDevice) {
   UR_EXPECT_FALSE(redacted.provider_network_key);
 }
 
+// The provider-only device's client count, which the provide line reads
+// while disconnected. A count of 0 is a count; nothing read, a daemon that
+// predates the field and another user's view all give -1.
+UR_TEST(controlStatusCarriesTheProviderClientCount) {
+  ctl::StatusReply status;
+  status.provider_running = true;
+  status.provider_mode = 3;
+  status.provider_client_count = 3;
+  const nlohmann::json wire = nlohmann::json(status);
+  UR_EXPECT_TRUE(wire.contains("provider_client_count"));
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(10, true, wire)))->get<ctl::StatusReply>();
+  UR_EXPECT_EQ(3, back.provider_client_count);
+
+  status.provider_client_count = 0;
+  const auto none = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(11, true, nlohmann::json(status))))->get<ctl::StatusReply>();
+  UR_EXPECT_EQ(0, none.provider_client_count);
+
+  UR_EXPECT_EQ(-1, ctl::StatusReply().provider_client_count);
+
+  nlohmann::json older = wire;
+  older.erase("provider_client_count");
+  const auto fromOlder = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(12, true, older)))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(fromOlder.provider_running);
+  UR_EXPECT_EQ(-1, fromOlder.provider_client_count);
+
+  status.provider_client_count = 3;
+  UR_EXPECT_EQ(-1, ctl::RedactStatusForForeignUid(status).provider_client_count);
+}
+
 // The network country the daemon read (P052) reaches the GUI; a daemon that
 // predates it reports none, and another user's view names none.
 UR_TEST(controlStatusCarriesTheNetworkCountry) {

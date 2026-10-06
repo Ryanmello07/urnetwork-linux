@@ -156,6 +156,11 @@ struct LiveStats {
   bool provideEnabled = false;
   bool providePaused = false;
   int64_t provideClients = 0;
+  // provideClients could not be read: the provider-only device's count, from
+  // a daemon that predates it or a read that failed. provideClients is then 0
+  // and no count is shown. Never true with a DeviceRemote, whose peers are
+  // read directly.
+  bool provideClientsUnknown = false;
   // the LIVE effective provide mode (protocol values: 0 none, 1 network,
   // 2 friends-and-family, 3 public — a bit set, compare per-case)
   int64_t provideMode = 0;
@@ -1394,11 +1399,13 @@ class SdkHost {
   signout::Obligation signOut_{SignOutMarker()};
   provide::ProviderStepBackoff signOutBackoff_;  // guarded by mutex_
   // What ReadStats shows with no DeviceRemote: the provider-only device's
-  // running bit, live tier and network-key bit as `status` last said. Atomic
-  // for the same reason provideHasNetworkKey_ is.
+  // running bit, live tier, network-key bit and client count as `status` last
+  // said, the count -1 while not said. Atomic for the same reason
+  // provideHasNetworkKey_ is.
   std::atomic<bool> daemonProviderRunning_{false};
   std::atomic<int64_t> daemonProviderMode_{0};
   std::atomic<bool> daemonProviderNetworkKey_{false};
+  std::atomic<int64_t> daemonProviderClientCount_{-1};
   // The network country last applied to this process (FollowDaemonNetworkCountry).
   // Main loop only.
   std::string followedNetworkCountry_;

@@ -274,8 +274,8 @@ class TunnelHost {
   // require opMutex_.
   void OpenProviderViewControllersLocked();
   void CloseProviderViewControllersLocked();
-  // Publishes the provider-only device's live tier and network key into
-  // status_. Requires opMutex_.
+  // Publishes the provider-only device's live tier, network key and client
+  // count into status_. Requires opMutex_.
   void RefreshProviderStatusLocked();
   // UploadLogs' body once no bring-up owns the session: admits the upload
   // (or starts the queued one, `queuedUploadId`), then hands it to its thread
