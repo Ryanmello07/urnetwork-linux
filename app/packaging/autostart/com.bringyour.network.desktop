@@ -19,5 +19,6 @@ Categories=Network;Security;
 # this file into ~/.config/autostart/ ATOMICALLY (temp name + rename(2) --
 # never remove-then-create, which leaves a window with no autostart entry
 # that becomes permanent if the process dies during shutdown), and opts out
-# by removing the symlink. Root-owned so an unprivileged process cannot
+# by removing the symlink: Settings > Launch URnetwork on system startup
+# (app/src/LaunchAtStartup.hpp). Root-owned so an unprivileged process cannot
 # rewrite what runs at every user's login.

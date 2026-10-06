@@ -21,6 +21,7 @@
 
 #include "I18n.hpp"
 #include "InstanceHandover.hpp"
+#include "LaunchAtStartup.hpp"
 #include "MainWindow.hpp"
 #include "RuntimePaths.hpp"
 #include "SdkHost.hpp"
@@ -168,6 +169,12 @@ int main(int argc, char** argv) {
     // the icon NAME kAppIconName must resolve for the window icon and the
     // tray, wherever the app runs from
     urnw::RegisterBrandIcons();
+    // Launch URnetwork on system startup: an autostart entry from before
+    // --autostart is brought up to date, so its logins show only the tray;
+    // none is made here (LaunchAtStartup.hpp).
+    urnw::startup::Locations startupLocations;
+    startupLocations.configDir = g_get_user_config_dir();
+    urnw::startup::Refresh(urnw::startup::PosixFiles(), startupLocations);
 
     window = std::make_shared<urnw::MainWindow>(*host);
     app->add_window(*window);

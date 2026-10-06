@@ -93,7 +93,9 @@ The Windows app uses the same SDK surface. Build: meson + ninja.
   referrals, redeem codes, upgrade (Stripe checkout), support, settings and
   licenses.
 - Tray icon (StatusNotifierItem + `com.canonical.dbusmenu` over raw GDBus),
-  hide-to-tray, and autostart.
+  hide-to-tray, and launch on system startup (a Settings switch that links
+  the autostart template into `~/.config/autostart`; a login then shows only
+  the tray icon).
 - Localized with gettext. `app/po/` is generated from the shared localization
   store and is never edited by hand.
 

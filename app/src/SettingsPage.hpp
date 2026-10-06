@@ -198,6 +198,14 @@ class SettingsPage : public Gtk::Box {
   bool applyingPreference_ = false;  // echo guard: the load writes IsOn
   bool preferencesLoaded_ = false;   // the toggle is inert until the value is known
   Gtk::Switch* autoCheckUpdates_ = nullptr;
+  // Launch URnetwork on system startup (LaunchAtStartup.hpp): the user's
+  // autostart entry, so no session gate and no pref; the row hides without
+  // the template.
+  Gtk::Switch* launchAtStartup_ = nullptr;
+  Gtk::Widget* launchAtStartupRow_ = nullptr;
+  bool applyingLaunchAtStartup_ = false;  // echo guard
+  void ApplyLaunchAtStartup();
+  void OnLaunchAtStartupToggled();
   // The update notice (hidden until a newer release is known): a two-line row
   // whose action verb follows the checker's phase, plus a selectable prose
   // row carrying the command or the saved file's path.
