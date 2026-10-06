@@ -10,6 +10,9 @@
 //     its own and outside its lock, then hands the space's key and the reset's
 //     id to urnetworkd (reset_extenders), never through the device rpc, and
 //     the section reads the form again and says "Extenders reset";
+//   * a reset the daemon refused because a bring-up owned its session is noted
+//     on the main loop and sent again, once, on the same worker, when the
+//     window's health poll reads a status that shows the bring-up settled;
 //   * the daemon dispatches the verb behind set_provide_extender's owner gate,
 //     looks the space up under opMutex_ (refusing, never waiting, while a
 //     bring-up owns the session) and applies the reset outside it, to the one
@@ -220,6 +223,45 @@ UR_TEST(ExtenderResetWiring_TheHostResetsItsSpaceThenTellsTheDaemon) {
                           "extenderResetWorker_ = std::thread("));
   const std::string destructor = ExtenderResetBody(source, "SdkHost::~SdkHost()");
   UR_EXPECT_TRUE(Contains(destructor, "if (extenderResetWorker_.joinable()) extenderResetWorker_.join();"));
+}
+
+// A reset the daemon refused because a bring-up owned its session is owed from
+// the press's answer, noted on the main loop, and sent again by the health poll
+// once its status shows the bring-up settled: on the same worker, once, and
+// never owed again by the second answer.
+UR_TEST(ExtenderResetWiring_ABusyRefusalIsSentAgainAfterTheBringUp) {
+  const std::string source = ReadExtenderResetSource("SdkHost.cpp");
+  const std::string reset = ExtenderResetBody(source, "bool SdkHost::ResetExtenders(");
+  UR_EXPECT_TRUE(
+      Contains(reset, "taken = control_.ResetExtenders(request, &daemonReset, &error, &code);"));
+  const std::string marshal = Between(reset, "PostToMain(", "return true;");
+  UR_EXPECT_TRUE(Precedes(marshal, "if (sent) owedExtenderReset_.NoteAnswer(request, taken, code);",
+                          "done(outcome);"));
+
+  const std::string poll =
+      ExtenderResetBody(source, "void SdkHost::FollowDaemonExtenderReset() {");
+  UR_EXPECT_TRUE(Precedes(poll, "if (!owedExtenderReset_.Owed()) return;", "control_.Status()"));
+  UR_EXPECT_TRUE(Contains(poll, "FollowDaemonExtenderReset(*status);"));
+  const std::string settle = ExtenderResetBody(
+      source, "void SdkHost::FollowDaemonExtenderReset(const ctl::StatusReply& status) {");
+  UR_EXPECT_TRUE(Precedes(settle, "extenderResetBusy_.compare_exchange_strong(expected, true)",
+                          "owedExtenderReset_.TakeIfSettled(status)"));
+  UR_EXPECT_TRUE(Precedes(settle, "extenderResetWorker_.joinable()",
+                          "extenderResetWorker_ = std::thread("));
+  const size_t worker = settle.find("extenderResetWorker_ = std::thread(");
+  const std::string resend = worker == std::string::npos ? std::string() : settle.substr(worker);
+  UR_EXPECT_TRUE(Contains(resend, "control_.ResetExtenders(request, &daemonReset, &error, &code)"));
+  UR_EXPECT_TRUE(Contains(resend, "extenderResetBusy_.store(false);"));
+  UR_EXPECT_TRUE(!Contains(resend, "owedExtenderReset_"));
+
+  // both branches of the window's health poll follow it, with the status the
+  // connected branch already read
+  const std::string health = ExtenderResetBody(ReadExtenderResetSource("MainWindow.cpp"),
+                                               "bool MainWindow::PollDaemonHealth()");
+  UR_EXPECT_TRUE(
+      Contains(Between(health, "if (!connected_) {", "return true;"), "host_.FollowDaemonExtenderReset();"));
+  UR_EXPECT_TRUE(Precedes(health, "if (!status) return true;",
+                          "host_.FollowDaemonExtenderReset(*status);"));
 }
 
 // The connect page's extender panel stays a read-only status: the reset lives

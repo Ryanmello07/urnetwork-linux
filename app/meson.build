@@ -525,8 +525,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # counting and ranking, the extender ring geometry, the extender panel's reading of
 # ExtenderStatus, the provider extender row's reading of ExtenderProvideStatus
 # and the statistics sections' visibility, the compact count and count-rate
-# labels, the extender share/import decisions and the reset's call sites, the
-# Solana payout wallet's card
+# labels, the extender share/import decisions, the reset's owed re-send and its
+# call sites, the Solana payout wallet's card
 # and connect-sheet rules, the wallet bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
@@ -575,6 +575,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ExtenderProvidePresentationTest.cpp',
     'tests/CountFormatTest.cpp',
     'tests/ExtenderSharePresentationTest.cpp',
+    'tests/ExtenderResetTest.cpp',
     'tests/ExtenderResetWiringTest.cpp',
     'tests/ControlDohWiringTest.cpp',
     'tests/PotfilesTest.cpp',

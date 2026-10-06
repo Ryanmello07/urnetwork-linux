@@ -31,6 +31,7 @@
 
 #include "ClientEvents.hpp"
 #include "ControlClient.hpp"
+#include "ExtenderReset.hpp"
 #include "LogUpload.hpp"
 #include "Health.hpp"
 #include "ProvideLifecycle.hpp"
@@ -752,6 +753,12 @@ class SdkHost {
   // loop (MainWindow::PollDaemonHealth).
   void FollowDaemonLogUpload();
   void FollowDaemonLogUpload(const ctl::StatusReply& status);
+  // A Reset extenders urnetworkd refused because a bring-up owned its session
+  // (OwedExtenderReset), sent again, once, on the reset's worker when the
+  // status shows that bring-up settled. The first asks for a status only while
+  // a reset is owed. Main loop (MainWindow::PollDaemonHealth).
+  void FollowDaemonExtenderReset();
+  void FollowDaemonExtenderReset(const ctl::StatusReply& status);
 
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
   // A STANDING STATE, not an event: loaded from app_prefs at startup into an
@@ -1065,8 +1072,10 @@ class SdkHost {
   // provider-only device run in. Not the device rpc: the verb covers the
   // provider-only device and no session too. A daemon that is unreachable or
   // does not take it applies the reset at its next import of this space
-  // (start_tunnel, start_provider), whose values carry the id. The bootstrap
-  // DoH servers, the gossip mode and the provider extender setting stay.
+  // (start_tunnel, start_provider), whose values carry the id, except that one
+  // refusing it because a bring-up owns its session gets it again once that
+  // bring-up settled (FollowDaemonExtenderReset). The bootstrap DoH servers, the
+  // gossip mode and the provider extender setting stay.
   //
   // Runs on a worker, never on the main loop: the sdk joins the space's old
   // extender client, and the daemon may put a polkit dialog in front of the
@@ -1435,6 +1444,10 @@ class SdkHost {
   // The daemon's id of the log upload this process waits on (UploadDaemonLogs),
   // 0 for none. Main loop only, like the calls that read and write it.
   int64_t pendingLogUploadId_ = 0;
+  // The Reset extenders owed to urnetworkd (FollowDaemonExtenderReset). Main
+  // loop only: a press's answer is noted from the main loop, where the health
+  // poll takes it. Never persisted, so a GUI that quits drops it.
+  OwedExtenderReset owedExtenderReset_;
   // ---- the provider-only device's statistics (provider_stats) ---------------
   // What the daemon's view controllers on the provider-only device last said,
   // in the SDK's types. The provider statistics accessors, ProviderStatusNow,

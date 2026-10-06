@@ -967,6 +967,9 @@ bool MainWindow::PollDaemonHealth() {
     host_.FollowDaemonNetworkCountry();
     // The outcome of a feedback's log upload, while one is pending.
     host_.FollowDaemonLogUpload();
+    // A Reset extenders the daemon refused during a tunnel bring-up, sent again
+    // once the bring-up settled.
+    host_.FollowDaemonExtenderReset();
     // Disconnected is when the provider-only device is the provider: start it
     // after a launch without auto-connect, bring it back after a service
     // restart or an unexpected drop, and stop one the mode no longer wants.
@@ -976,6 +979,7 @@ bool MainWindow::PollDaemonHealth() {
   const auto status = host_.Control().Status();
   if (!status) return true;      // unreachable is StartTunnelUi's business
   host_.FollowDaemonNetworkCountry(*status);
+  host_.FollowDaemonExtenderReset(*status);
   host_.FollowDaemonLogUpload(*status);
   // Feed the drawer the daemon's own DNS verdict. Until this existed, the DNS
   // card was drawn entirely from the SDK's resolver PREFERENCES and could sit

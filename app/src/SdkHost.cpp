@@ -4187,6 +4187,10 @@ bool SdkHost::ResetExtenders(std::function<void(ExtenderResetOutcome)> done) {
   extenderResetWorker_ = std::thread([this, space = std::move(*space), request,
                                       done = std::move(done)]() mutable {
     ExtenderResetOutcome outcome;
+    // The daemon's answer, which decides whether the reset is owed to it.
+    bool sent = false;
+    bool taken = false;
+    std::string code;
     // An escaping exception on a worker thread is std::terminate.
     try {
       request.extender_reset_id = space.resetExtenders();
@@ -4194,18 +4198,23 @@ bool SdkHost::ResetExtenders(std::function<void(ExtenderResetOutcome)> done) {
       if (outcome.reset) {
         bool daemonReset = false;
         std::string error;
-        std::string code;
-        if (control_.ResetExtenders(request, &daemonReset, &error, &code)) {
+        sent = true;
+        taken = control_.ResetExtenders(request, &daemonReset, &error, &code);
+        if (taken) {
           outcome.daemonReset = daemonReset;
           g_message("extender: reset %s; urnetworkd %s", request.extender_reset_id.c_str(),
                     daemonReset ? "reset the space it holds"
                                 : "holds no space to reset, or reset it already");
+        } else if (code == ctl::kCodeStartInProgress) {
+          g_message("extender: reset %s; urnetworkd is bringing a tunnel up, so it gets the "
+                    "reset again once that settles",
+                    request.extender_reset_id.c_str());
         } else if (error == ctl::kErrorUnknownVerb) {
           g_message("extender: reset %s; the system service predates reset_extenders",
                     request.extender_reset_id.c_str());
         } else {
-          // unreachable, a bring-up in progress or a refused authorization: the
-          // daemon's next import of this space carries the reset
+          // unreachable or a refused authorization: the daemon's next import of
+          // this space carries the reset
           g_message("extender: reset %s; urnetworkd did not take it now (code=%s): %s; its "
                     "next tunnel or provider start carries it",
                     request.extender_reset_id.c_str(), code.empty() ? "none" : code.c_str(),
@@ -4222,7 +4231,11 @@ bool SdkHost::ResetExtenders(std::function<void(ExtenderResetOutcome)> done) {
     // Cleared here, before the marshal, so a main loop that never runs the
     // completion cannot wedge the next reset.
     extenderResetBusy_.store(false);
-    PostToMain([done = std::move(done), outcome]() mutable { done(outcome); });
+    PostToMain([this, sent, taken, code, request, done = std::move(done), outcome]() mutable {
+      // on the main loop, where the health poll takes what is owed
+      if (sent) owedExtenderReset_.NoteAnswer(request, taken, code);
+      done(outcome);
+    });
   });
   return true;
 }
@@ -4686,6 +4699,55 @@ void SdkHost::FollowDaemonLogUpload(const ctl::StatusReply& status) {
     g_warning("support: urnetworkd's log upload ended %s (%s device)",
               status.log_upload_state.c_str(), status.log_upload_carrier.c_str());
   }
+}
+
+void SdkHost::FollowDaemonExtenderReset() {
+  // nothing owed: no status call
+  if (!owedExtenderReset_.Owed()) return;
+  if (const std::optional<ctl::StatusReply> status = control_.Status()) {
+    FollowDaemonExtenderReset(*status);
+  }
+}
+
+void SdkHost::FollowDaemonExtenderReset(const ctl::StatusReply& status) {
+  if (!owedExtenderReset_.Owed()) return;
+  // A reset in flight answers for itself, and its answer replaces what is owed;
+  // until it is done this waits for the next poll.
+  bool expected = false;
+  if (!extenderResetBusy_.compare_exchange_strong(expected, true)) return;
+  std::optional<ctl::ResetExtendersRequest> request = owedExtenderReset_.TakeIfSettled(status);
+  if (!request) {
+    extenderResetBusy_.store(false);
+    return;
+  }
+  std::scoped_lock lock(extenderResetWorkerMutex_);
+  // As in ResetExtenders: the previous worker may still be joinable.
+  if (extenderResetWorker_.joinable()) extenderResetWorker_.join();
+  extenderResetWorker_ = std::thread([this, request = std::move(*request)] {
+    // Sent once: the answer is logged and never makes the reset owed again. A
+    // daemon that does not take it applies the reset at its next import.
+    try {
+      bool daemonReset = false;
+      std::string error;
+      std::string code;
+      if (control_.ResetExtenders(request, &daemonReset, &error, &code)) {
+        g_message("extender: reset %s sent again after the bring-up; urnetworkd %s",
+                  request.extender_reset_id.c_str(),
+                  daemonReset ? "reset the space it holds"
+                              : "holds no space to reset, or reset it already");
+      } else {
+        g_message("extender: reset %s sent again after the bring-up; urnetworkd did not take "
+                  "it (code=%s): %s; its next tunnel or provider start carries it",
+                  request.extender_reset_id.c_str(), code.empty() ? "none" : code.c_str(),
+                  error.empty() ? "no detail" : error.c_str());
+      }
+    } catch (const std::exception& e) {
+      g_warning("extender: sending the reset again threw: %s", e.what());
+    } catch (...) {
+      g_warning("extender: sending the reset again threw");
+    }
+    extenderResetBusy_.store(false);
+  });
 }
 
 void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {

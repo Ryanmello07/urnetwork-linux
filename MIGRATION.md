@@ -265,10 +265,12 @@ session's device and the provider-only device both run in that space, so one cal
 both; their live extender paths keep running, and new dials draw from the fresh directory.
 `reset` is false when the daemon holds no space for the key (no device has run) or the
 space applied that reset, or a newer one, already. The verb only makes the reset
-immediate: the id travels in the space's values, so a daemon that was not reachable,
-busy (`start_in_progress`, refused while a bring-up owns the session, never waited
-behind) or never asked applies it at its next `start_tunnel` or `start_provider`
-import, and an id the space applied already changes nothing. Every field is required, at
+immediate: the id travels in the space's values, so a daemon that was not reachable or
+never asked applies it at its next `start_tunnel` or `start_provider` import, and an id
+the space applied already changes nothing. A daemon whose session a bring-up owns refuses
+it (`start_in_progress`, never waited behind), and that bring-up imports the space as it
+was before the reset, so the GUI sends the same request again, once, when its health
+poll reads a status that shows the bring-up settled. Every field is required, at
 most 256 bytes and free of control bytes, since the daemon logs the key it reset. One
 daemon serves every user of the machine and its spaces are theirs in common, so one
 user's reset of a key resets the daemon's state for that key for everyone; that is

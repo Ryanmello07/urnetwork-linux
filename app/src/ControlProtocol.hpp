@@ -1013,7 +1013,10 @@ inline void from_json(const nlohmann::json& j, SetProvideExtenderRequest& v) {
 // than the last one the daemon's storage applied when the space is imported, so
 // a daemon that was unreachable, busy or never asked applies it at its next
 // start_tunnel or start_provider. An id the space applied already, or an older
-// one, changes nothing, which also makes the verb safe to send again.
+// one, changes nothing, which also makes the verb safe to send again: a busy
+// refusal (kCodeStartInProgress) comes while a bring-up imports the space as it
+// was before the reset, so the GUI sends the same request again once that
+// bring-up settled (ExtenderReset.hpp).
 //
 // One daemon serves every user of the machine and keeps its spaces in
 // /var/lib/urnetwork/sdk for all of them, so one user's reset of a key resets
