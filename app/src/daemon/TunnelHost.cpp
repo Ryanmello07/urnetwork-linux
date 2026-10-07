@@ -1646,7 +1646,7 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
   // its DeviceRemote with a tunnel (getExtenderProvideStatus).
   try {
     if (auto status = providerDevice_->getExtenderProvideStatus()) {
-      reply.extender_provide_status_json = nlohmann::json(*status).dump();
+      reply.extender_provide_status_json = ctl::DumpForWire(nlohmann::json(*status));
     }
   } catch (const std::exception& e) {
     noteReadFailure("extender status", e);
@@ -1663,10 +1663,11 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
   if (providerContractVc_) {
     try {
       if (auto points = providerContractVc_->getProviderThroughputPoints()) {
-        reply.provider_throughput_points_json = nlohmann::json(*points).dump();
+        reply.provider_throughput_points_json = ctl::DumpForWire(nlohmann::json(*points));
       }
       if (auto distribution = providerContractVc_->getProviderTransportDistribution()) {
-        reply.provider_transport_distribution_json = nlohmann::json(*distribution).dump();
+        reply.provider_transport_distribution_json =
+            ctl::DumpForWire(nlohmann::json(*distribution));
       }
     } catch (const std::exception& e) {
       reply.provider_throughput_points_json.clear();
@@ -1675,7 +1676,7 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
     }
     try {
       if (auto points = providerContractVc_->getExtenderThroughputPoints()) {
-        reply.extender_throughput_points_json = nlohmann::json(*points).dump();
+        reply.extender_throughput_points_json = ctl::DumpForWire(nlohmann::json(*points));
       }
     } catch (const std::exception& e) {
       noteReadFailure("extender series", e);
@@ -1690,7 +1691,7 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
       reply.status_loaded = providerStatusVc_->getIsLoaded();
       reply.status_last_fetch_error = providerStatusVc_->getLastFetchError();
       if (auto status = providerStatusVc_->getProviderStatus()) {
-        reply.provider_status_json = nlohmann::json(*status).dump();
+        reply.provider_status_json = ctl::DumpForWire(nlohmann::json(*status));
       }
     } catch (const std::exception& e) {
       // a malformed document reads as a failed poll, as the GUI's own read

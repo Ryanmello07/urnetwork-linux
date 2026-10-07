@@ -50,6 +50,74 @@ UR_TEST(controlFrameRejectsGarbageAndNonObjects) {
   UR_EXPECT_TRUE(ctl::DecodeFrame("{}\n").has_value());
 }
 
+// The daemon replies with strings it did not write (SDK errors, tool output,
+// SDK log lines). A byte that is not UTF-8 must cost one U+FFFD, never the
+// frame: a plain dump() throws, and the daemon sends from glib callbacks.
+UR_TEST(controlFrameInvalidUtf8BecomesReplacementCharacter) {
+  const std::string invalid = "x\xe2\x82";  // a three-byte sequence cut after two
+  const nlohmann::json reply = ctl::MakeErrorReply(9, invalid, ctl::kCodeTunOpenFailed);
+  bool plainDumpThrew = false;
+  try {
+    (void)reply.dump();
+  } catch (const nlohmann::json::type_error&) {
+    plainDumpThrew = true;
+  }
+  UR_EXPECT_TRUE(plainDumpThrew);  // why EncodeFrame does not use the plain dump
+
+  std::string frame;
+  bool threw = false;
+  try {
+    frame = ctl::EncodeFrame(reply);
+  } catch (const std::exception&) {
+    threw = true;
+  }
+  UR_EXPECT_FALSE(threw);
+  UR_EXPECT_TRUE(frame.find('\n') == frame.size() - 1);
+  UR_EXPECT_TRUE(frame.find("\xef\xbf\xbd") != std::string::npos);
+  const auto decoded = ctl::DecodeFrame(frame);
+  UR_EXPECT_TRUE(decoded.has_value());
+  if (decoded) {
+    UR_EXPECT_TRUE(ctl::FrameId(*decoded) == 9);
+    UR_EXPECT_FALSE(ctl::ReplyOk(*decoded));
+    UR_EXPECT_TRUE(ctl::ReplyCode(*decoded) == ctl::kCodeTunOpenFailed);
+    UR_EXPECT_TRUE(ctl::ReplyError(*decoded) == "x\xef\xbf\xbd");
+  }
+}
+
+UR_TEST(controlFrameStatusWithInvalidUtf8KeepsItsFields) {
+  ctl::StatusReply status;
+  status.tunnel_state = ctl::TunnelState::Up;
+  status.kill_switch = ctl::KillSwitchState::Armed;
+  status.dns_detail = "resolvectl: \xff";
+  status.kill_switch_detail = "nft: \xc3";
+  nlohmann::json payload = status;
+  std::string frame;
+  bool threw = false;
+  try {
+    frame = ctl::EncodeFrame(ctl::MakeReply(4, true, payload));
+  } catch (const std::exception&) {
+    threw = true;
+  }
+  UR_EXPECT_FALSE(threw);
+  const auto decoded = ctl::DecodeFrame(frame);
+  UR_EXPECT_TRUE(decoded.has_value());
+  if (decoded) {
+    const auto parsed = decoded->get<ctl::StatusReply>();
+    UR_EXPECT_TRUE(parsed.tunnel_state == ctl::TunnelState::Up);
+    UR_EXPECT_TRUE(parsed.kill_switch == ctl::KillSwitchState::Armed);
+    UR_EXPECT_TRUE(parsed.dns_detail == "resolvectl: \xef\xbf\xbd");
+    UR_EXPECT_TRUE(parsed.kill_switch_detail == "nft: \xef\xbf\xbd");
+  }
+}
+
+// Valid text, multibyte included, goes out byte for byte.
+UR_TEST(controlFrameValidUtf8IsUnchanged) {
+  const std::string text = "caf\xc3\xa9 \xe2\x82\xac \xf0\x9f\x90\xb8";
+  const auto decoded = ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(1, text)));
+  UR_EXPECT_TRUE(decoded.has_value());
+  if (decoded) UR_EXPECT_TRUE(ctl::ReplyError(*decoded) == text);
+}
+
 UR_TEST(controlFrameUnknownVerbAndMissingIdAreExplicit) {
   auto j = ctl::DecodeFrame("{\"verb\":\"frobnicate\",\"id\":3}");
   UR_EXPECT_TRUE(j.has_value());

@@ -657,6 +657,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/InstanceHandoverWiringTest.cpp',
     'tests/LaunchAtStartupTest.cpp',
     'tests/LaunchAtStartupWiringTest.cpp',
+    'tests/Utf8TruncateTest.cpp',
+    'tests/ControlReplyWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -705,6 +707,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # SingleInstance.cpp, the autostart entry and the launcher the same way.
               # LaunchAtStartupWiringTest reads the startup toggle's Settings and launch call
               # sites, meson.build and ../../packaging/lib/common.sh the same way.
+              # ControlReplyWiringTest reads the daemon's reply sends and log ring the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

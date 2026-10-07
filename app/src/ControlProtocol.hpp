@@ -1963,9 +1963,25 @@ inline std::string ReplyCode(const nlohmann::json& j) {
   return code;
 }
 
+// The one way a frame becomes bytes on the socket, for both binaries.
+//
+// A plain dump() throws type_error.316 on a string that is not valid UTF-8, and
+// the frames carry strings neither binary wrote: SDK errors, resolvectl and nft
+// output, SDK log lines. The daemon sends from glib callbacks, so that throw
+// was std::terminate in a root process holding the capture routes. With
+// error_handler_t::replace a bad byte becomes U+FFFD instead. The strings at
+// risk are human-readable diagnostics; the peer acts on codes, flags and
+// states, which the daemon writes itself. DecodeFrame stays strict.
+//
+// dump() can still throw on allocation, so senders keep their try.
+inline std::string DumpForWire(const nlohmann::json& j) {
+  return j.dump(/*indent=*/-1, /*indent_char=*/' ', /*ensure_ascii=*/false,
+                nlohmann::json::error_handler_t::replace);
+}
+
 // One frame per line. nlohmann's dump() never emits raw newlines (they are
 // escaped inside strings), so '\n' is an unambiguous frame terminator.
-inline std::string EncodeFrame(const nlohmann::json& j) { return j.dump() + "\n"; }
+inline std::string EncodeFrame(const nlohmann::json& j) { return DumpForWire(j) + "\n"; }
 
 // Parses one line (with or without its trailing newline). Returns nullopt for
 // anything that is not a single JSON object — the caller treats that as a

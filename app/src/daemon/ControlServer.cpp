@@ -1214,7 +1214,18 @@ bool ControlServer::PumpConnection(uint64_t connId) {
     if (conn == nullptr) return false;
     if (!state->haveSync) return true;  // deferred; authPending stays set
     conn->authPending = false;
-    if (!SendFrame(conn, state->reply)) return false;
+    // Guarded as DeliverDeferredReply's send is: encoding the reply runs here,
+    // on the same glib callback, and a throw out of it would end the daemon.
+    // The caller closes the connection on false.
+    try {
+      if (!SendFrame(conn, state->reply)) return false;
+    } catch (const std::exception& e) {
+      DaemonLogf("[control] reply failed: %s\n", e.what());
+      return false;
+    } catch (...) {
+      DaemonLogf("[control] reply failed\n");
+      return false;
+    }
   }
 }
 
