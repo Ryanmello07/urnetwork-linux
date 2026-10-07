@@ -44,6 +44,11 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
   modeNotice_.set_visible(false);
   contentColumn_.append(modeNotice_);
 
+  // Sized by the page on screen, not by the widest of the seven: a homogeneous
+  // stack carried the Account page's wide-layout minimum (825) under every
+  // destination, so a window opened at its default width could not be
+  // narrowed below 1045, and no page reached a fold below that.
+  stack_.set_hhomogeneous(false);
   stack_.set_transition_type(Gtk::StackTransitionType::CROSSFADE);
   stack_.set_transition_duration(motion::kBaseMs);  // the page-swap default
   stack_.set_vexpand(true);
