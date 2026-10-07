@@ -1323,7 +1323,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "Imezimwa kwa chaguomsingi. Ikiwashwa, URnetwork huunganisha kwa mtoa huduma uliyemchagua mara tu unapofungua programu. Hii hubadilisha uzinduzi ujao - haiunganishi sasa."
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "Muunganisho umedhoofika — unaunganisha upya"
@@ -1388,12 +1388,12 @@ msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "Kikomo cha maombi kimefikiwa — inasubiri…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "Hakuna mtoa huduma anayefanya kazi sasa hivi — trafiki yako imezuiwa, haijafichuliwa. Tenganisha ili urudi kwenye muunganisho wako wa kawaida."
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "Hakuna mtoa huduma anayefanya kazi sasa hivi — trafiki inayotumwa kwenye handaki haifiki popote, na kinga ya uvujaji imezimwa, kwa hivyo baadhi ya trafiki inaweza kuikwepa. Tenganisha ili urudi kwenye muunganisho wako wa kawaida."

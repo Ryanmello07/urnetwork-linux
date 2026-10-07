@@ -1321,7 +1321,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "默认关闭。开启后，URnetwork 会在你打开应用时立即连接到所选提供者。这会影响下次启动 - 现在不会连接。"
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "连接质量下降 — 正在重新连接"
@@ -1386,12 +1386,12 @@ msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "请求受限 — 正在等待…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "目前没有可用的提供商 — 你的流量已被阻断，而不是暴露。断开连接即可恢复正常网络。"
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "目前没有可用的提供商 — 发送到隧道的流量无处可去，而且防泄漏保护已关闭，因此部分流量可能会绕过它。断开连接即可恢复正常网络。"

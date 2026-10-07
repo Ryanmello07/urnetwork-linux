@@ -180,9 +180,12 @@ code_sign_in_failed
 community_edition
 conn_connect_on_launch
 conn_connect_on_launch_note
+conn_degraded
 conn_failed
 conn_finding_providers
 conn_not_protected
+conn_traffic_blocked
+conn_traffic_blocked_unprotected
 connect
 connect_bittensor_wallet
 connect_bittensor_wallet_to_add_sign_in_method

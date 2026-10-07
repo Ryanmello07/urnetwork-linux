@@ -1321,7 +1321,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "ปิดไว้เป็นค่าเริ่มต้น เมื่อเปิด URnetwork จะเชื่อมต่อกับผู้ให้บริการที่คุณเลือกทันทีที่เปิดแอป มีผลในการเปิดครั้งถัดไป - ไม่ได้เชื่อมต่อตอนนี้"
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "การเชื่อมต่อลดคุณภาพลง — กำลังเชื่อมต่อใหม่"
@@ -1386,12 +1386,12 @@ msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "ถูกจำกัดจำนวนคำขอ — กำลังรอ…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "ขณะนี้ไม่มีผู้ให้บริการที่ใช้งานได้ — ทราฟฟิกของคุณถูกบล็อก ไม่ได้ถูกเปิดเผย ตัดการเชื่อมต่อเพื่อกลับไปใช้การเชื่อมต่อตามปกติ"
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "ขณะนี้ไม่มีผู้ให้บริการที่ใช้งานได้ — ทราฟฟิกที่ส่งเข้าอุโมงค์ไปไม่ถึงไหน และการป้องกันการรั่วไหลปิดอยู่ ทราฟฟิกบางส่วนจึงอาจเลี่ยงผ่านไปได้ ตัดการเชื่อมต่อเพื่อกลับไปใช้การเชื่อมต่อตามปกติ"

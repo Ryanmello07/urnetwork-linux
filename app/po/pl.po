@@ -1325,7 +1325,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "Domyślnie wyłączone. Gdy włączone, URnetwork łączy się z wybranym dostawcą zaraz po otwarciu aplikacji. Zmiana dotyczy następnego uruchomienia - teraz nie łączy."
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "Połączenie pogorszone — ponowne łączenie"
@@ -1390,12 +1390,12 @@ msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "Osiągnięto limit żądań — oczekiwanie…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "Brak działającego dostawcy — Twój ruch jest zablokowany, a nie odsłonięty. Rozłącz się, aby wrócić do zwykłego połączenia."
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "Brak działającego dostawcy — ruch wysyłany do tunelu nigdzie nie trafia, a ochrona przed wyciekami jest wyłączona, więc część ruchu może go omijać. Rozłącz się, aby wrócić do zwykłego połączenia."

@@ -1325,7 +1325,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "Типово вимкнено. Коли ввімкнено, URnetwork підключається до вибраного провайдера одразу після відкриття застосунку. Це діє з наступного запуску - зараз підключення не буде."
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "З’єднання погіршилося — перепідключення"
@@ -1390,12 +1390,12 @@ msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "Перевищено ліміт запитів — очікування…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "Зараз немає робочого провайдера — ваш трафік заблоковано, а не відкрито. Відключіться, щоб повернутися до звичайного з’єднання."
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "Зараз немає робочого провайдера — трафік, надісланий у тунель, нікуди не йде, а захист від витоків вимкнено, тож частина трафіку може йти в обхід. Відключіться, щоб повернутися до звичайного з’єднання."
