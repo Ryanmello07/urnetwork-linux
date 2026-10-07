@@ -360,6 +360,7 @@ Pane MakePane(const Glib::ustring& title, const Glib::ustring& meta) {
   scroller->set_child(*pane.content);
   scroller->set_vexpand(true);
   pane.root->append(*scroller);
+  pane.scroller = scroller;
   return pane;
 }
 

@@ -493,6 +493,10 @@ ConnectPage::~ConnectPage() {
 void ConnectPage::BuildPaneA() {
   paneA_ = kit::MakePane(T_("connect", "Connect"));
   paneA_.root->set_size_request(kPaneAWidth, -1);
+  // the peers list at the foot of the pane fades out at the bottom edge while
+  // it overflows (UrTheme.cpp). Pane B's live list does not: rows churning
+  // under a fade flicker.
+  paneA_.scroller->add_css_class("ur-fade-bottom");
   kit::SetAccessibleLabel(*paneA_.root, T_("connect", "Connect"));
   // §0 Simple Mode: "MaxWidth 480 and HorizontalAlignment Center". GTK has no
   // max-width and set_size_request is a FLOOR (it would push the window's own

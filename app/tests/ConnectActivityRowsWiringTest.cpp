@@ -290,3 +290,18 @@ UR_TEST(ConnectActivity_TheListKeepsAFloor) {
                              "connectionsScroll_->set_min_content_height(kConnectionsListFloor);",
                              "paneB_.content->append(*connectionsScroll_);"}));
 }
+
+// Pane A's scroller fades its bottom edge while the peers list overflows;
+// the activity pane's live list does not, since rows churning under a fade
+// flicker. GTK draws the bottom undershoot only while content continues
+// below, so the CSS is the whole rule.
+UR_TEST(ConnectActivity_OnlyThePeersPaneFades) {
+  const std::string page = ReadActivitySource("ConnectPage.cpp");
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::BuildPaneA()"),
+                            {"paneA_ = kit::MakePane(", "paneA_.scroller->add_css_class(\"ur-fade-bottom\");"}));
+  UR_EXPECT_TRUE(!Mentions(ActivityBody(page, "void ConnectPage::BuildPaneB()"), "ur-fade-bottom"));
+  UR_EXPECT_TRUE(Mentions(ReadActivitySource("PaneKit.cpp"), "pane.scroller = scroller;"));
+  UR_EXPECT_TRUE(InSequence(ReadActivitySource("UrTheme.cpp"),
+                            {"scrolledwindow.ur-fade-bottom > undershoot.bottom {",
+                             "background-image: linear-gradient(to top, #101010, alpha(#101010, 0) 28px);"}));
+}

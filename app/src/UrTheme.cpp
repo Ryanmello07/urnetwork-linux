@@ -136,6 +136,13 @@ button.link:hover label { color: #8AA9FF; }
    shadow inside a pane — a row's separation is its hairline and its hover
    fill. Fills are the existing #101010/#151515/#1C1C1C ramp. */
 .ur-pane { background-color: #101010; }
+/* a pane list's bottom edge fade (windows ecf805b): 28px into the pane fill.
+   GTK draws the bottom undershoot only while content continues below the
+   viewport, which is exactly while the list overflows, so the fade needs no
+   code and dissolves at the last row. */
+scrolledwindow.ur-fade-bottom > undershoot.bottom {
+  background-image: linear-gradient(to top, #101010, alpha(#101010, 0) 28px);
+}
 .ur-pane-header {
   background-color: #151515;
   border-bottom: 1px solid alpha(#ffffff, .12);
