@@ -1,10 +1,10 @@
 // The signed-in shell's width (HomeShell, ShellLayout.hpp): the window can be
 // narrowed to the widths the pages fold at, because the shell's page stack is
 // sized by the page on screen rather than by the widest of its seven pages;
-// and the nav rail is the expanded one from 1008 dip and the compact icon rail
-// at every narrower width, as Windows has it, with no mode that hides it.
-// HomeShell and MainWindow need gtkmm, so the wiring cases read their sources
-// with the comments blanked.
+// the nav rail is the expanded one from 1008 dip and the compact icon rail at
+// every narrower width, as Windows has it, with no mode that hides it; and the
+// status strip spans the window under both. HomeShell and MainWindow need
+// gtkmm, so the wiring cases read their sources with the comments blanked.
 // SPDX-License-Identifier: MPL-2.0
 #include <fstream>
 #include <sstream>
@@ -111,4 +111,16 @@ UR_TEST(ShellLayout_TheWindowSetsTheRailModeOnEveryWidth) {
   const std::string apply = ShellBody(shell, "void HomeShell::ApplyCompact(NavItem& item) {");
   UR_EXPECT_TRUE(ShellHas(apply, "item.label->set_visible(!compact_);"));
   UR_EXPECT_TRUE(ShellHas(apply, "item.button->set_tooltip_text(item.label->get_text());"));
+}
+
+// The status strip is the shell's last row and spans the window, under the
+// rail and the content, as Windows' root grid has it.
+UR_TEST(ShellLayout_TheStatusStripSpansTheWindow) {
+  const std::string shell = ReadShellSource("HomeShell.cpp");
+  UR_EXPECT_TRUE(
+      ShellHas(shell, "HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {"));
+  const std::string build = ShellBody(shell, "HomeShell::HomeShell()");
+  UR_EXPECT_TRUE(ShellInOrder(build, {"body_.append(navRail_);", "body_.append(contentOverlay_);",
+                                      "append(body_);", "append(statusStrip_);"}));
+  UR_EXPECT_FALSE(ShellHas(build, "contentColumn_.append(statusStrip_);"));
 }

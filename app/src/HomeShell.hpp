@@ -3,8 +3,9 @@
 // items, selected = card-fill pill + 3px #EFF7BB accent bar), a content stack
 // of sibling destination pages toggled by visibility (no navigation frame —
 // page swaps ride CrossfadePageSwap), the window-level ModeNoticeBar, and the
-// persistent bottom status strip (normal 3 fields; Advanced Mode adds
-// Network / Session / Routes / RPC / Raw to the same row).
+// persistent bottom status strip under the rail and the content (normal 3
+// fields; Advanced Mode adds Network / Session / Routes / RPC / Raw and an
+// Advanced tag to the same row).
 //
 // The shell owns navigation + chrome ONLY. Destination pages are registered
 // with SetPage and load their data through the on_navigate hook (the windows
@@ -80,6 +81,7 @@ class HomeShell : public Gtk::Box {
   // shows or hides the strip's Advanced fields, faded when animations are on
   void FadeAdvancedFields(bool show);
 
+  Gtk::Box body_{Gtk::Orientation::HORIZONTAL, 0};  // the rail and the content
   Gtk::Box navRail_{Gtk::Orientation::VERTICAL, 0};
   Gtk::Box navPrimary_{Gtk::Orientation::VERTICAL, 2};
   Gtk::Box navFooter_{Gtk::Orientation::VERTICAL, 2};

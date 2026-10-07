@@ -16,7 +16,7 @@ constexpr int kAdvancedFadeInMs = 180;
 constexpr int kAdvancedFadeOutMs = 120;
 }  // namespace
 
-HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
+HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   // ---- the left rail --------------------------------------------------------
   navRail_.add_css_class("ur-nav");
   navRail_.set_size_request(kNavExpandedWidth, -1);
@@ -39,7 +39,7 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
   MakeNavItem(navFooter_, "support", NavIcon::Kind::Help, T_("support", "Support"));
   MakeNavItem(navFooter_, "settings", NavIcon::Kind::Gear, T_("settings", "Settings"));
 
-  append(navRail_);
+  body_.append(navRail_);
 
   // ---- the content column ---------------------------------------------------
   // the standing session-mode notice (never closable; persists across
@@ -102,14 +102,18 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
   advancedFields_.append(*modeField_.root);
   advancedFields_.set_visible(false);
   statusStrip_.append(advancedFields_);
-  contentColumn_.append(statusStrip_);
 
   // snackbar overlays the content bottom-center (windows AccountSnackbar,
   // MaxWidth 480)
   contentOverlay_.set_child(contentColumn_);
   contentOverlay_.add_overlay(snackbar_.root());
   contentOverlay_.set_hexpand(true);
-  append(contentOverlay_);
+  body_.append(contentOverlay_);
+  body_.set_vexpand(true);
+  append(body_);
+  // The strip is the last row and spans the window, under the rail and the
+  // content, as Windows' root grid has it: its room is the window's width.
+  append(statusStrip_);
 
   PaintSelection();
 }
