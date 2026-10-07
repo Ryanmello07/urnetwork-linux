@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "TunnelHost.hpp"
 
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -26,6 +27,7 @@
 #include "daemon/HostMemory.hpp"
 #include "daemon/DaemonLog.hpp"
 #include "daemon/GlogFlusher.hpp"
+#include "daemon/SelfRestart.hpp"
 #include "daemon/SupportDiagnostics.hpp"
 
 namespace urnw {
@@ -203,6 +205,40 @@ const std::string& PlannedTunName() {
   return kName;
 }
 
+// The stop record for the next daemon (SelfRestart.hpp): written beside the
+// file and renamed over it, so the next daemon reads a whole record or none.
+// Plain syscalls: nothing here may call into the SDK.
+bool WriteStopRecord(const selfrestart::StopRecord& record, std::string* error) {
+  const std::string text = selfrestart::EncodeStopRecord(record);
+  const std::string path = selfrestart::kStopRecordPath;
+  const std::string staged = path + ".new";
+  ::mkdir(ctl::kControlSocketDir, 0755);
+  const int fd = ::open(staged.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+  if (fd < 0) {
+    *error = std::strerror(errno);
+    return false;
+  }
+  size_t written = 0;
+  while (written < text.size()) {
+    const ssize_t n = ::write(fd, text.data() + written, text.size() - written);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) {
+      *error = std::strerror(errno);
+      ::close(fd);
+      ::unlink(staged.c_str());
+      return false;
+    }
+    written += static_cast<size_t>(n);
+  }
+  ::close(fd);
+  if (::rename(staged.c_str(), path.c_str()) != 0) {
+    *error = std::strerror(errno);
+    ::unlink(staged.c_str());
+    return false;
+  }
+  return true;
+}
+
 // The file-local PortFromHostPort that used to live here is GONE. It parsed
 // with std::atoi, so "127.0.0.1:notaport" yielded 0 and the published rpc_port
 // silently stayed at the SDK default while the listener was somewhere else —
@@ -236,6 +272,33 @@ TunnelHost::TunnelHost(std::string storageRoot)
   resolvedWatchId_ = g_bus_watch_name(G_BUS_TYPE_SYSTEM, "org.freedesktop.resolve1",
                                       G_BUS_NAME_WATCHER_FLAGS_NONE,
                                       &TunnelHost::OnResolvedAppeared, nullptr, this, nullptr);
+}
+
+void TunnelHost::RestoreStopRecord() {
+  std::ifstream in(selfrestart::kStopRecordPath, std::ios::binary);
+  if (!in) return;
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  in.close();
+  // Read once, whatever it held: a record is about one stop.
+  ::unlink(selfrestart::kStopRecordPath);
+  const std::optional<selfrestart::StopRecord> record =
+      selfrestart::DecodeStopRecord(text, WatchdogMillis());
+  if (!record) {
+    DaemonLogf("[daemon] dropped a stop record from a previous daemon: stale or unreadable\n");
+    return;
+  }
+  {
+    std::scoped_lock lock(statusMutex_);
+    status_.tunnel_state = ctl::TunnelState::Error;
+    status_.stop_reason = record->stopReason;
+    status_.error = record->error;
+    status_.error_code = record->code;
+  }
+  DaemonLogf("[daemon] the previous daemon ended itself after it stopped its tunnel (%s); "
+             "status reports that stop until the next start\n",
+             record->stopReason.c_str());
+  // The stopping daemon could not write this line: it was the SDK's log.
+  support::LogTunnelEnded("stopped", record->stopReason, record->code);
 }
 
 void TunnelHost::AdoptArmedFloor() {
@@ -1419,7 +1482,8 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
 // blocked and what lifts it.
 void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
                                          const std::string& message,
-                                         const std::string& code, const char* why) {
+                                         const std::string& code, const char* why,
+                                         bool sdkWedged) {
   // 1) The machine, firewall untouched: DNS, routes and policy rules, and no
   //    call that waits on the device, so the landing below cannot be held up
   //    by an SDK that stopped answering.
@@ -1492,6 +1556,11 @@ void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
   //    twice over: it keeps ApplyFilterLocked(Off) — the floor lift — out of
   //    this path, and it keeps the tail of StopInternalLocked from clearing the
   //    error we are about to publish.
+  //
+  //    Unless the SDK has stopped answering: then every call left on the
+  //    device waits for good, so the process ends itself here instead, for
+  //    systemd to start a clean daemon that publishes what step 4 would have.
+  if (sdkWedged) RestartForWedgedSdkLocked(reason, detail, code);
   StopInternalLocked(std::string());
 
   // 4) PUBLISH LAST, AND ON PURPOSE.
@@ -1521,6 +1590,36 @@ void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
   }
   // Touches no status_ field, so the rule above holds.
   support::LogTunnelEnded("stopped", reason, code);
+}
+
+// THE WAY OUT OF A WEDGED SDK (SelfRestart.hpp). The machine is already given
+// back: the routes, the DNS and the firewall's landing are done and published.
+// What is left would all wait on the device's state lock, so none of it is
+// done here: the process ends, and the next daemon says why.
+void TunnelHost::RestartForWedgedSdkLocked(const std::string& reason, const std::string& error,
+                                           const std::string& code) {
+  selfrestart::StopRecord record;
+  record.stopReason = reason;
+  record.error = error;
+  record.code = code;
+  record.writtenMillis = WatchdogMillis();
+  std::string writeError;
+  if (!WriteStopRecord(record, &writeError)) {
+    DaemonLogf("[tunnel] the stop record could not be written to %s (%s); the next daemon "
+               "will not say why this tunnel stopped\n",
+               selfrestart::kStopRecordPath, writeError.c_str());
+  }
+  // The program stays attached to this service's cgroup after the process
+  // ends; nothing needs it now that the capture routes are gone.
+  egressMarker_.Detach();
+  DaemonLogf("[tunnel] the sdk stopped answering, so the session's device cannot be closed "
+             "without waiting on it, and neither can anything else in this daemon. The machine "
+             "is given back already. Ending this daemon now (exit status %d): under systemd, "
+             "Restart=on-failure starts a clean one in 2 s, which reports this stop.\n",
+             selfrestart::kExitStatus);
+  // _exit, never exit or a return: unwinding runs destructors that call into
+  // the SDK, where a thread is stuck.
+  ::_exit(selfrestart::kExitStatus);
 }
 
 // ---- provide mode / kill switch --------------------------------------------
@@ -2529,7 +2628,7 @@ const char* DeadTunnelMessage(watchdog::DeadTunnelReason reason) {
              "its traffic for 90 seconds.";
     case watchdog::DeadTunnelReason::SdkUnresponsive:
       return "The connection was stopped because it carried nothing: the URnetwork engine "
-             "stopped answering for 30 seconds.";
+             "stopped answering for 30 seconds, so the URnetwork service restarted itself.";
     case watchdog::DeadTunnelReason::None:
       break;
   }
@@ -2649,7 +2748,9 @@ bool TunnelHost::CheckDeadTunnelLocked() {
   // said, and everything published last.
   StopUnsafeSessionLocked(watchdog::StopReasonOf(tick.verdict.reason),
                           DeadTunnelMessage(tick.verdict.reason), ctl::kCodeTunnelDead,
-                          "because it carried nothing");
+                          "because it carried nothing",
+                          /*sdkWedged=*/tick.verdict.reason ==
+                              watchdog::DeadTunnelReason::SdkUnresponsive);
   return true;
 }
 

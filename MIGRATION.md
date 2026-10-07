@@ -281,6 +281,18 @@ is `tunnel_dead` and `error` says whether the machine is now blocked.
 firing, so the GUI can warn first. Both are additive within v1 (an older daemon sends
 neither, and `failsafe_armed` parses false), and a redacted status carries no countdown.
 
+For `failsafe_sdk_unresponsive` the daemon cannot finish the teardown: every call left on
+the session's device would wait on the lock the SDK is stuck behind. It lands the machine
+as above, writes the stop to `/run/urnetwork/last-stop.json` and exits with status 75
+(`app/src/daemon/SelfRestart.hpp`); `Restart=on-failure` starts a clean daemon 2 s later,
+which publishes that stop as its `status` (`tunnel_state` `error`, the same
+`stop_reason`, `error_code` and `error`) until the next start, and deletes the file. The
+GUI sees its control connection drop and come back, as after any service restart. What
+is left: a stop that reaches a wedged device before the failsafe's 30 s verdict (a
+Disconnect, the IoLoop's death, the daemon's own SIGTERM) still waits on it on the main
+loop, since the bounded, abandonable SDK teardown of `docs/linux_agent_help.md` 6.5 is
+not ported.
+
 `reset_extenders` is Account > Extenders' Reset extenders (connect `EXTENDER.md` E7). The
 GUI resets its own network space with the SDK's `NetworkSpace::resetExtenders`, which
 clears what the space learned about extenders and what the user added (manual hosts, the

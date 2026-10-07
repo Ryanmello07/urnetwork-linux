@@ -1252,6 +1252,9 @@ int main(int argc, char** argv) {
   // it down. Adopting after construction (not inside it) keeps the sweep and
   // the host independent of each other's ordering.
   if (sweptArmedFloor) tunnel.AdoptArmedFloor();
+  // A daemon that ended itself over a wedged SDK left why its tunnel stopped;
+  // the app reads it from this one (SelfRestart.hpp).
+  tunnel.RestoreStopRecord();
   // Off by default: a tunnel survives a GUI crash or restart and is adoptable.
   // Set $URNETWORK_ORPHAN_TIMEOUT_SECONDS to have the daemon stop a tunnel
   // nobody has owned for that long — the "captured machine with no UI"

@@ -182,6 +182,11 @@ LimitNOFILE=65536
 # back" as the missing start limit above: once the other daemon is gone, this
 # unit serves again without anyone starting it. Stop the unit before running a
 # daemon by hand.
+#
+# It is also how the daemon gets out of an SDK that stopped answering: it gives
+# the machine back, leaves the reason for the next daemon and exits with status
+# 75 (src/daemon/SelfRestart.hpp), and this starts a clean one. 75 must never
+# be in RestartPreventExitStatus= or SuccessExitStatus=.
 Restart=on-failure
 RestartSec=2
 # A wedged SIGTERM teardown must not hold the machine hostage for the 90s

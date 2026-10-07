@@ -670,6 +670,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/FailsafeNoticeTest.cpp',
     'tests/FailsafeNoticeWiringTest.cpp',
     'tests/TeardownOrderWiringTest.cpp',
+    'tests/SelfRestartTest.cpp',
+    'tests/SelfRestartWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -726,6 +728,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # DeadTunnelWiringTest reads the dead-tunnel failsafe's daemon call sites the
               # same way, and FailsafeNoticeWiringTest its health poll and connect page.
               # TeardownOrderWiringTest reads TunnelHost's teardowns the same way.
+              # SelfRestartWiringTest reads the daemon's self-restart and the unit the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
