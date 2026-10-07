@@ -5901,6 +5901,11 @@ msgctxt "on"
 msgid "On"
 msgstr "Увімк."
 
+#. Linux desktop notification, shown once ever, the first time closing the window hides it to the system tray (only while a tray has the app's icon). Its title is the product name. Windows shows a tray balloon at the same moment under this key.
+msgctxt "onb_tray_balloon_hide"
+msgid "Still running — URnetwork closed to the tray. Click its icon there to open it again."
+msgstr "Продовжує працювати — URnetwork згорнуто в системний трей. Натисніть його значок там, щоб відкрити знову."
+
 #. Accessibility description of the onboarding step bubbles: the current step and the total.
 msgctxt "onboarding_step_of"
 msgid "Step {0} of {1}"
