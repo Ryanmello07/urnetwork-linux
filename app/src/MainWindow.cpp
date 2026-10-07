@@ -2448,14 +2448,23 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
 // One fixed notification id, so a post replaces and a withdraw always finds it.
 constexpr const char* kBalanceNoticeId = "insufficient-balance";
 
+namespace {
+// The application the desktop notifications go through. Never the window's
+// get_application(): gtkmm's Gtk::Window removes itself from its application
+// when it is hidden (its constructor connects the hide signal to
+// Application::remove_window) and nothing adds it back when it shows again,
+// so after the first hide to the tray every post and withdraw through it went
+// nowhere.
+Glib::RefPtr<Gio::Application> NotifyingApp() { return Gio::Application::get_default(); }
+}  // namespace
+
 // Out of balance with a connection requested, the tunnel holds traffic with no
 // provider behind it. Tell the user once per episode, with a Disconnect button;
 // the tracker decides, this only talks to GApplication. It never disconnects.
 void MainWindow::UpdateBalanceNotice() {
   struct Sink {
-    MainWindow& window;
     void Post() {
-      auto app = window.get_application();
+      auto app = NotifyingApp();
       if (!app) return;
       auto notification =
           Gio::Notification::create(T_("insufficient_balance", "Insufficient balance"));
@@ -2467,7 +2476,7 @@ void MainWindow::UpdateBalanceNotice() {
       app->send_notification(kBalanceNoticeId, notification);
     }
     void Withdraw() {
-      if (auto app = window.get_application()) app->withdraw_notification(kBalanceNoticeId);
+      if (auto app = NotifyingApp()) app->withdraw_notification(kBalanceNoticeId);
     }
   };
   balance_notice::Signals signals;
@@ -2476,7 +2485,7 @@ void MainWindow::UpdateBalanceNotice() {
   signals.polling = balance_.IsPolling();
   signals.connectRequested = reading_.destinationSelected;
   if (connectPage_) connectPage_->ApplyBalanceNotice(signals);
-  Sink sink{*this};
+  Sink sink;
   balanceNotice_.Observe(signals, sink);
 
   balance_notice::OutOfBalanceLatch::Observation observation;
