@@ -62,6 +62,10 @@ button.ur-pane-row.ur-pane-row-34 { min-height: 33px; }
 /* the 12px supporting voice ON TOP of a key/value type role (§4.1 inspector
    verdict, §4.6 dns state cells) — a size beside a role, one provider */
 .ur-key.ur-text-12, .ur-value.ur-text-12 { font-size: 12px; }
+/* a text action in a 28px group header (the activity filter's Clear) */
+button.ur-pane-action.ur-text-action {
+  padding: 0 6px; font-family: "PP Neue Montreal"; font-size: 11px; color: #F8F8F8;
+}
 )CSS";
 
 void EnsurePageCss() {
@@ -276,6 +280,18 @@ std::string ConnectionRowMeta(int64_t timeMs, int64_t byteCount, int64_t packetC
   if (0 < timeMs) meta = RelativeTime((nowMs - timeMs) / 1000) + "   ";
   return meta + FormatByteCountCompact(byteCount) + "   " + FormatCountCompact(packetCount) +
          " pkt";
+}
+
+// What the activity filter reads of a decision: its own lists, never copies.
+connection_filter::Decision FilterDecision(const urnet::BlockAction& action) {
+  connection_filter::Decision decision;
+  decision.hosts = action.Hosts ? &*action.Hosts : nullptr;
+  decision.ips = action.Ips ? &*action.Ips : nullptr;
+  decision.matchedHosts = action.MatchedHosts ? &*action.MatchedHosts : nullptr;
+  decision.matchedIps = action.MatchedIps ? &*action.MatchedIps : nullptr;
+  decision.block = action.Block;
+  decision.local = action.Local;
+  return decision;
 }
 
 // The one-row empty sentence a pane group renders instead of a HOLE: the
@@ -940,7 +956,66 @@ void ConnectPage::BuildPaneB() {
   // though the list caps at 200 rows
   auto connectionsHeader = kit::MakePaneGroupHeader(T_("connections", "Connections"));
   connectionsCount_ = connectionsHeader.meta;
+  // the one-click reset, shown only while the filter or the search holds rows
+  // back (ApplyConnectionsList writes it); its text is its accessible name
+  connectionsClear_ = Gtk::make_managed<Gtk::Button>(T_("clear", "Clear"));
+  connectionsClear_->add_css_class("ur-pane-action");
+  connectionsClear_->add_css_class("ur-text-action");
+  connectionsClear_->set_valign(Gtk::Align::CENTER);
+  connectionsClear_->set_visible(false);
+  connectionsClear_->signal_clicked().connect([this] { OnConnectionsClearFilters(); });
+  connectionsHeader.trailing->append(*connectionsClear_);
   paneB_.content->append(*connectionsHeader.root);
+
+  // 3.3a the verdict filter (Windows' SelectorBar): the three verdicts the row
+  // dots print, plus All. The labels ellipsize so the four fit the narrowest
+  // two-pane activity column without widening it.
+  {
+    auto* row = kit::MakePaneRow(40);
+    auto* segmented = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 0);
+    segmented->add_css_class("linked");
+    segmented->set_hexpand(true);
+    segmented->set_valign(Gtk::Align::CENTER);
+    auto segment = [this, segmented](Gtk::ToggleButton*& slot, const char* text,
+                                     connection_filter::Verdict verdict) {
+      slot = Gtk::make_managed<Gtk::ToggleButton>();
+      auto* label = Gtk::make_managed<Gtk::Label>(text);
+      label->set_ellipsize(Pango::EllipsizeMode::END);
+      slot->set_child(*label);
+      slot->set_hexpand(true);
+      kit::SetAccessibleLabel(*slot, text);
+      if (slot != verdictAll_) slot->set_group(*verdictAll_);
+      Gtk::ToggleButton* button = slot;
+      button->signal_toggled().connect([this, button, verdict] {
+        if (updatingControls_ || !button->get_active()) return;
+        OnConnectionsVerdictChanged(verdict);
+      });
+      segmented->append(*slot);
+    };
+    segment(verdictAll_, T_("adv_filter_all", "All"), connection_filter::Verdict::All);
+    segment(verdictBlocked_, T_("blocked", "Blocked"), connection_filter::Verdict::Blocked);
+    segment(verdictTunnelled_, T_("adv_filter_tunnelled", "Tunnelled"),
+            connection_filter::Verdict::Tunnelled);
+    segment(verdictBypassed_, T_("adv_filter_bypassed", "Bypassed"),
+            connection_filter::Verdict::Bypassed);
+    verdictAll_->set_active(true);  // before any handler can read it
+    if (auto* inner = RowInner(row)) inner->append(*segmented);
+    paneB_.content->append(*row);
+  }
+  // 3.3b the host/address search (NetworkPage's search row): view-side over
+  // the cached feed, so typing re-runs the reconcile and reads from the top
+  {
+    auto search = kit::MakePaneSearchRow(T_("adv_search_connections", "Search hosts or IPs"));
+    connectionsSearch_ = search.box;
+    connectionsSearch_->signal_changed().connect([this] {
+      if (updatingControls_) return;
+      std::string query = connection_filter::NormalizeQuery(connectionsSearch_->get_text());
+      if (query == connectionsQuery_) return;
+      connectionsQuery_ = std::move(query);
+      ApplyConnectionsList(/*resetScroll=*/true);
+    });
+    paneB_.content->append(*search.root);
+  }
 
   // 3.4 the list area: the list and the empty reading SWAP, never coexist.
   // ONLY this row scrolls (§3: header/chart/group header are auto rows, the
@@ -963,11 +1038,11 @@ void ConnectPage::BuildPaneB() {
   connectionsEmpty_->set_vexpand(true);
   connectionsEmpty_->set_valign(Gtk::Align::CENTER);
   connectionsArea_->append(*connectionsEmpty_);
-  auto* connectionsScroll = Gtk::make_managed<Gtk::ScrolledWindow>();
-  connectionsScroll->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
-  connectionsScroll->set_child(*connectionsArea_);
-  connectionsScroll->set_vexpand(true);
-  paneB_.content->append(*connectionsScroll);
+  connectionsScroll_ = Gtk::make_managed<Gtk::ScrolledWindow>();
+  connectionsScroll_->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+  connectionsScroll_->set_child(*connectionsArea_);
+  connectionsScroll_->set_vexpand(true);
+  paneB_.content->append(*connectionsScroll_);
 
   append(*paneB_.root);
 }
@@ -1665,9 +1740,11 @@ void ConnectPage::AnnounceConnectionRow(ConnectionRow& row) {
 // keyboard focus and hover of an Advanced row and re-announced the list to a
 // screen reader. Rows are keyed by block action id (ConnectionRowKey) and
 // reconciled against the visible slice (KeyedReconcile.hpp): a new decision
-// is inserted, a living row is rewritten in place, a row past the cap or out
-// of the feed is removed.
-void ConnectPage::ApplyConnectionsList() {
+// is inserted, a living row is rewritten in place, a row past the cap, out of
+// the feed or filtered out is removed. The verdict filter and the search
+// re-evaluate membership through this same pass, so a filter change is an
+// edit, not a rebuild; resetScroll reads its new result set from the top.
+void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   if (!connectionsHost_) return;
   // The Advanced Mode flip changes the row type (static <-> selectable),
   // which an in-place update cannot morph: the one path that still clears,
@@ -1685,11 +1762,18 @@ void ConnectPage::ApplyConnectionsList() {
   // consumer does the same (SplitRulesSheet: "live activity, newest first").
   // Read forward, the 200-row cap would keep the 200 OLDEST decisions and no
   // newly contacted host would ever appear again on a busy session.
+  // The filter runs over the whole cached feed (the count needs every match),
+  // and the cap applies to what passes.
   std::vector<const urnet::BlockAction*> visible;
   std::vector<std::string> keys;
+  int64_t passed = 0;
   if (blockActions_) {
     for (auto it = blockActions_->rbegin(); it != blockActions_->rend(); ++it) {
-      if (visible.size() >= kMaxConnectionRows) break;  // a cap, not a scroll budget
+      if (!connection_filter::Passes(verdictFilter_, connectionsQuery_, FilterDecision(*it))) {
+        continue;
+      }
+      ++passed;
+      if (visible.size() >= kMaxConnectionRows) continue;  // a cap, not a scroll budget
       visible.push_back(&*it);
       keys.push_back(ConnectionRowKey(*it));
     }
@@ -1734,15 +1818,24 @@ void ConnectPage::ApplyConnectionsList() {
     }
   }
 
+  if (resetScroll && connectionsScroll_) connectionsScroll_->get_vadjustment()->set_value(0.0);
+
+  const bool filtered = connection_filter::FilterActive(verdictFilter_, connectionsQuery_);
   if (connectionsCount_) {
-    // ALWAYS the full feed count, even though rendering caps at 200 rows
-    kit::SetTextOrCollapse(
-        *connectionsCount_,
-        blockActions_ ? Glib::ustring(Format(TN_("host_count", "{} host", "{} hosts",
-                                                 static_cast<unsigned long>(total)),
-                                             total))
-                      : Glib::ustring());
+    // the full feed count, even though rendering caps at 200 rows; while a
+    // filter holds rows back, "N hosts of M"
+    const auto count = connection_filter::CountFor(verdictFilter_, connectionsQuery_, passed,
+                                                   static_cast<int64_t>(total));
+    std::string text;
+    if (blockActions_) {
+      text = Format(TN_("host_count", "{} host", "{} hosts",
+                        static_cast<unsigned long>(count.shown)),
+                    count.shown);
+      if (count.ofTotal) text += " " + Format(T_("of_total", "of {}"), count.of);
+    }
+    kit::SetTextOrCollapse(*connectionsCount_, text);
   }
+  if (connectionsClear_) connectionsClear_->set_visible(filtered);
   ApplySessionCardsVisibility();
   ApplyConnectionSelectionVisuals();
   ApplyInspector();  // a selection that aged out of the feed must SAY so
@@ -1775,10 +1868,44 @@ void ConnectPage::ApplyConnectionSelectionVisuals() {
   }
 }
 
+// The verdict filter's change, from its segment. A changed filter is a new
+// result set: the same incremental pass, read from the top.
+void ConnectPage::OnConnectionsVerdictChanged(connection_filter::Verdict verdict) {
+  if (verdict == verdictFilter_) return;
+  verdictFilter_ = verdict;
+  ApplyConnectionsList(/*resetScroll=*/true);
+}
+
+// What the leaving account searched for and selected must not greet the
+// next one (SignOut.hpp: each network starts fresh): Clear's own reset, in
+// its one pass, with nothing selected.
+void ConnectPage::ResetForSignOut() {
+  selectedConnectionId_.clear();
+  OnConnectionsClearFilters();
+}
+
+// The one-click reset: the state first, then the controls behind the echo
+// guard so their handlers do not run the pass again, then one pass.
+void ConnectPage::OnConnectionsClearFilters() {
+  verdictFilter_ = connection_filter::Verdict::All;
+  connectionsQuery_.clear();
+  const bool wasUpdating = updatingControls_;
+  updatingControls_ = true;
+  if (verdictAll_) verdictAll_->set_active(true);
+  if (connectionsSearch_) connectionsSearch_->set_text("");
+  updatingControls_ = wasUpdating;
+  ApplyConnectionsList(/*resetScroll=*/true);
+}
+
 void ConnectPage::ApplySessionCardsVisibility() {
   if (!connectionsHost_ || !connectionsEmpty_) return;
-  // the list and the sentence SWAP; the connected flag gates which
-  const bool showList = ConnectedNow() && connectionsHost_->get_first_child() != nullptr;
+  // The list and the sentence SWAP; the connected flag gates which. A filter
+  // that hides every row of a session that has some keeps the (empty) list:
+  // the count above it says "0 hosts of M", which the sentence would deny.
+  const bool showList = connection_filter::ShowList(
+      ConnectedNow(), connectionsHost_->get_first_child() != nullptr,
+      connection_filter::FilterActive(verdictFilter_, connectionsQuery_),
+      blockActions_ ? static_cast<int64_t>(blockActions_->size()) : 0);
   connectionsHost_->set_visible(showList);
   connectionsEmpty_->set_visible(!showList);
 }

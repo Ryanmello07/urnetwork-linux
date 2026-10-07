@@ -147,6 +147,14 @@ UR_TEST(SignOutWiring_LogoutCancelsTheAccountsAddAndItsApiCredential) {
   }
   UR_EXPECT_TRUE(SignOutHas(apply.substr(signedOutBranch), "prefs::Set(kOnboardingPendingKey, false);"));
   UR_EXPECT_TRUE(!SignOutHas(apply.substr(0, signedOutBranch), "kOnboardingPendingKey, false"));
+  // so does the leaving account's view of its activity on Home: its filters
+  // and its selection, in one pass
+  UR_EXPECT_TRUE(InOrder(apply.substr(signedOutBranch),
+                         {"accountPage_->ResetForSignOut();", "connectPage_->ResetForSignOut();"}));
+  UR_EXPECT_TRUE(!SignOutHas(apply.substr(0, signedOutBranch), "ResetForSignOut();"));
+  const std::string reset = SignOutBody(ReadSignOutSource("ConnectPage.cpp"),
+                                        "void ConnectPage::ResetForSignOut() {");
+  UR_EXPECT_TRUE(InOrder(reset, {"selectedConnectionId_.clear();", "OnConnectionsClearFilters();"}));
 }
 
 // The daemon's logout: refused beside another user's live session before

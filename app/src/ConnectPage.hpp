@@ -33,6 +33,7 @@
 #include <gtkmm.h>
 
 #include "ConnectCanvas.hpp"
+#include "ConnectionFilter.hpp"
 #include "ContractsSheet.hpp"
 #include "DataInfoSheet.hpp"
 #include "DnsSheet.hpp"
@@ -87,6 +88,9 @@ class ConnectPage : public Gtk::Box {
   // Re-seed every pane B/C cache from the Current* getters (login, tab entry,
   // window re-show). Idempotent.
   void Resync();
+  // A sign-out: the activity view's filters and selection back to their
+  // defaults, so the next account's session starts fresh (SignOut.hpp).
+  void ResetForSignOut();
 
   void SetAdvancedMode(bool on);   // structural: Simple <-> Advanced
   // The provide mode picker, opened from the earnings page (its provide mode
@@ -234,8 +238,13 @@ class ConnectPage : public Gtk::Box {
   // the row's accessible name, with ", selected" while it is the selection
   void AnnounceConnectionRow(ConnectionRow& row);
   // Reconciles the rows in place (KeyedReconcile.hpp); only the Advanced Mode
-  // flip, which changes the row type, still clears the list.
-  void ApplyConnectionsList();
+  // flip, which changes the row type, still clears the list. The verdict
+  // filter and the search (ConnectionFilter.hpp) choose the rows over the
+  // cached feed; resetScroll, for a filter change, reads from the top.
+  void ApplyConnectionsList(bool resetScroll = false);
+  void OnConnectionsVerdictChanged(connection_filter::Verdict verdict);
+  // Clear: the filter and the search back to their defaults, in one pass
+  void OnConnectionsClearFilters();
   // the meta lines' age on the 1s clock, from each row's own counters
   void RefreshConnectionRowTimes();
   void ApplyConnectionSelectionVisuals();
@@ -516,11 +525,23 @@ class ConnectPage : public Gtk::Box {
   Gtk::Box* connectionsArea_ = nullptr;
   Gtk::Box* connectionsHost_ = nullptr;
   Gtk::Widget* connectionsEmpty_ = nullptr;
-  // The rows on screen. The selection is held by block-action id, never by
+  Gtk::ScrolledWindow* connectionsScroll_ = nullptr;
+  // the rows on screen. The selection is held by block-action id, never by
   // index: rows move as the feed moves.
   std::vector<ConnectionRow> connectionRows_;
   // the mode the rows on screen were built for (static or selectable)
   bool connectionRowsSelectable_ = false;
+  // the activity filter (ConnectionFilter.hpp): the verdict segments, the
+  // search field and the Clear in the Connections header, all echo-guarded
+  // by updatingControls_; the query is NormalizeQuery's
+  Gtk::ToggleButton* verdictAll_ = nullptr;
+  Gtk::ToggleButton* verdictBlocked_ = nullptr;
+  Gtk::ToggleButton* verdictTunnelled_ = nullptr;
+  Gtk::ToggleButton* verdictBypassed_ = nullptr;
+  Gtk::Entry* connectionsSearch_ = nullptr;
+  Gtk::Button* connectionsClear_ = nullptr;
+  connection_filter::Verdict verdictFilter_ = connection_filter::Verdict::All;
+  std::string connectionsQuery_;
 
   // ---- pane C: statistics / inspector ----------------------------------------
   Gtk::Box* inspectorGroup_ = nullptr;

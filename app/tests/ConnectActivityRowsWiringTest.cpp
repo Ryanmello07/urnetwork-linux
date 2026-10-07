@@ -7,7 +7,8 @@
 // ExtenderStatusPresentationTest.cpp's; the page, the panel and the host need
 // GTK and the SDK, so this reads their sources. So do the routing-decision
 // rows under them, which are reconciled in place (KeyedReconcileTest.cpp has
-// the plan) and aged by the clock.
+// the plan), aged by the clock, and filtered by verdict and search
+// (ConnectionFilterTest.cpp has the rules).
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
@@ -154,4 +155,62 @@ UR_TEST(ConnectActivity_TheClockAgesTheRows) {
   const std::string ages = ActivityBody(page, "void ConnectPage::RefreshConnectionRowTimes()");
   UR_EXPECT_TRUE(Mentions(ages, "WriteConnectionRowMeta(row, nowMs);"));
   UR_EXPECT_TRUE(!Mentions(ages, "host_."));
+}
+
+// Under the Connections header: the verdict segments, then the search row,
+// then the list; Clear rides the header's trailing slot.
+UR_TEST(ConnectActivity_TheFilterRowsSitOverTheList) {
+  const std::string pane =
+      ActivityBody(ReadActivitySource("ConnectPage.cpp"), "void ConnectPage::BuildPaneB()");
+  UR_EXPECT_TRUE(InSequence(pane, {"T_(\"connections\", \"Connections\")",
+                                   "connectionsClear_ = Gtk::make_managed<Gtk::Button>(T_(\"clear\", \"Clear\"));",
+                                   "connectionsHeader.trailing->append(*connectionsClear_);",
+                                   "T_(\"adv_filter_all\", \"All\")",
+                                   "T_(\"blocked\", \"Blocked\")",
+                                   "T_(\"adv_filter_tunnelled\", \"Tunnelled\")",
+                                   "T_(\"adv_filter_bypassed\", \"Bypassed\")",
+                                   "kit::MakePaneSearchRow(T_(\"adv_search_connections\"",
+                                   "paneB_.content->append(*connectionsScroll_);"}));
+  // a segment's or the field's own handler stands down under the echo guard
+  UR_EXPECT_TRUE(InSequence(pane, {"if (updatingControls_ || !button->get_active()) return;",
+                                   "OnConnectionsVerdictChanged(verdict);"}));
+  UR_EXPECT_TRUE(InSequence(pane, {"connectionsSearch_->signal_changed().connect(",
+                                   "if (updatingControls_) return;",
+                                   "connection_filter::NormalizeQuery(",
+                                   "ApplyConnectionsList(/*resetScroll=*/true);"}));
+}
+
+// The filter runs over the cached feed inside the one pass, before the cap,
+// and a filter change reads its result from the top.
+UR_TEST(ConnectActivity_TheFilterRunsInsideTheReconcile) {
+  const std::string page = ReadActivitySource("ConnectPage.cpp");
+  const std::string list = ActivityBody(page, "void ConnectPage::ApplyConnectionsList(");
+  UR_EXPECT_TRUE(InSequence(list, {"connection_filter::Passes(verdictFilter_, connectionsQuery_,",
+                                   "++passed;",
+                                   "if (visible.size() >= kMaxConnectionRows) continue;",
+                                   "reconcile::Plan(onScreen, keys)",
+                                   "if (resetScroll && connectionsScroll_)",
+                                   "connection_filter::CountFor(",
+                                   "T_(\"of_total\", \"of {}\")",
+                                   "connectionsClear_->set_visible(filtered);"}));
+  UR_EXPECT_TRUE(!Mentions(list, "host_."));
+  UR_EXPECT_TRUE(Mentions(ActivityBody(page, "void ConnectPage::ApplySessionCardsVisibility()"),
+                          "connection_filter::ShowList("));
+}
+
+// Clear puts the verdict and the search back behind the echo guard, so the
+// controls' own handlers stay quiet, and runs the pass once.
+UR_TEST(ConnectActivity_ClearResetsEverythingInOnePass) {
+  const std::string clear = ActivityBody(ReadActivitySource("ConnectPage.cpp"),
+                                         "void ConnectPage::OnConnectionsClearFilters()");
+  UR_EXPECT_TRUE(InSequence(clear, {"verdictFilter_ = connection_filter::Verdict::All;",
+                                    "connectionsQuery_.clear();",
+                                    "updatingControls_ = true;",
+                                    "verdictAll_->set_active(true);",
+                                    "connectionsSearch_->set_text(\"\");",
+                                    "updatingControls_ = wasUpdating;",
+                                    "ApplyConnectionsList(/*resetScroll=*/true);"}));
+  const size_t pass = clear.find("ApplyConnectionsList(");
+  UR_EXPECT_TRUE(pass != std::string::npos &&
+                 clear.find("ApplyConnectionsList(", pass + 1) == std::string::npos);
 }
