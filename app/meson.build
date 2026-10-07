@@ -742,7 +742,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # the same way.
               # ConnectFoldDoorsWiringTest reads the connect page's second doors the same
               # way.
-              # SignOutWiringTest reads SdkHost and the health poll the same way.
+              # SignOutWiringTest reads SdkHost, the health poll and the pages' sign-out
+              # resets the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and
               # GUI call sites the same way, and DiagnosticLogWiringTest the support log's.

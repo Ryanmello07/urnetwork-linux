@@ -2286,7 +2286,9 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // that started it
     guestUpgrade_.Clear();
     if (guestConversionSheet_) guestConversionSheet_->set_visible(false);
-    if (earningsPage_) earningsPage_->Load();  // settles every panel on empty
+    // Earnings forgets the departed network's own row, emoji and public
+    // switches, then its reload settles every panel on empty
+    if (earningsPage_) earningsPage_->ResetForSignOut();
     if (settingsPage_) settingsPage_->Load();
     // Account carries account-SUBJECT state (name, login methods, referral
     // code, the departed plan): a sign-out must wipe it, not merely reload it.
