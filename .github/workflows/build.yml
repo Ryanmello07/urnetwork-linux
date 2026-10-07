@@ -1,0 +1,210 @@
+# CI ONLY, NEVER MERGE. Upstream removed this workflow (bcf8774: builds run
+# on the team's own hardware). It is restored on the fork's ci/ branch to
+# build and test the Windows-to-Linux port with the gate upstream last used.
+# Three changes from 62a554c: the SDK's go.mod now replaces gvisor with
+# ../gvisor, so gvisor is checked out beside connect; Go comes from the
+# SDK's go.mod (go 1.26.5) instead of "stable"; and the GUI job installs
+# libsoup-3.0-dev, which the in-app updater has needed since this workflow
+# was last run.
+#
+# Build and test the Linux client on every push and pull request.
+#
+# THIS WORKFLOW DOES NOT RELEASE ANYTHING. It builds the three halves that can
+# break independently and runs the test suite. No tags, no artifacts attached
+# to releases, no publishing — a gate, not a pipeline.
+#
+# The three jobs exist because they fail for different reasons:
+#   build-sdk  the cgo/Go half. Cross-compiled with zig against a pinned glibc,
+#              and the C++ halves cannot compile without its headers.
+#   daemon     built in ubuntu:22.04 ON PURPOSE. The daemon ships to distros
+#              older than the runner, so its glibc symbol floor is asserted
+#              here against the version the packaging declares. Building it on
+#              ubuntu-latest would silently raise that floor.
+#   gui        needs the GTK4/libadwaita/libsecret stack, which the daemon
+#              image deliberately does not have — libsecret is GUI-only, and
+#              this job is what proves the daemon still builds without it.
+name: Build and test
+
+on:
+  push:
+    branches: [ci/linux-port-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UR_SDK_REPO: urnetwork/sdk
+  UR_SDK_REF: main
+  UR_CONNECT_REF: main
+  UR_ZIG_VERSION: "0.14.1"
+  DEBIAN_FRONTEND: noninteractive
+  # Layer 2 of the anti-hang fix (layer 1 is timeout-minutes on every job).
+  # apt's DEFAULT is to wait forever on a stalled mirror connection: two runs
+  # died that way -- one an hour on `apt-get install zip`, one six hours split
+  # across the AppImage and Flatpak dependency steps. Different packages, same
+  # cause, so this is bounded at the transport rather than per call site.
+  # Retries covers the transient 503s the azure mirrors serve under load.
+  UR_APT_OPTS: >-
+    -o Acquire::Retries=3
+    -o Acquire::http::Timeout=30
+    -o Acquire::https::Timeout=30
+    -o Acquire::http::No-Cache=true
+
+jobs:
+  build-sdk:
+    name: SDK (cgo shared objects)
+    runs-on: ubuntu-latest
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 45
+    steps:
+      - name: Check out the SDK
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UR_SDK_REPO }}
+          ref: ${{ env.UR_SDK_REF }}
+          path: sdk
+
+      # connect/glog/goidenticons are `replace ../<name>` directives in the
+      # SDK's go.mod, so they must sit as siblings of the sdk checkout.
+      - name: Check out the sibling modules
+        run: |
+          git clone --depth 1 --branch "$UR_CONNECT_REF" https://github.com/urnetwork/connect.git connect
+          git clone --depth 1 https://github.com/urnetwork/glog.git glog
+          git clone --depth 1 https://github.com/urnetwork/goidenticons.git goidenticons
+          git clone --depth 1 https://github.com/urnetwork/gvisor.git gvisor
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sdk/cgo/go.mod
+          cache-dependency-path: sdk/cgo/go.sum
+
+      - name: Install zip
+        run: sudo apt-get $UR_APT_OPTS update && sudo apt-get $UR_APT_OPTS install -y zip
+
+      # The Makefile's LINUX_*_CC default to `zig cc -target <arch>-linux-gnu.2.35`,
+      # which is what holds the glibc floor the daemon job then asserts.
+      - name: Install zig (pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zigvenv"
+          "$RUNNER_TEMP/zigvenv/bin/pip" install --quiet "ziglang==${UR_ZIG_VERSION}"
+          printf '#!/bin/sh\nexec %s -m ziglang "$@"\n' "$RUNNER_TEMP/zigvenv/bin/python" \
+            | sudo tee /usr/local/bin/zig >/dev/null
+          sudo chmod +x /usr/local/bin/zig
+          zig version
+
+      - name: Build the SDK shared objects
+        working-directory: sdk/cgo
+        run: |
+          # go.sum is generated and git-ignored, so a build straight from a
+          # branch has not staged one.
+          if [ ! -f go.sum ]; then go mod download all; fi
+          # amd64 only: this is a PR gate, and the arm64 cross-compile doubles
+          # it for a target the same toolchain and floor already cover.
+          make build_linux_amd64
+          ls -la build/linux/amd64
+
+      # The Makefile chains recipes with `; \`, so a failing `go build` does not
+      # fail the target — assert the artifact instead of trusting the exit code.
+      - name: Assert the SDK actually built
+        working-directory: sdk/cgo
+        run: |
+          for f in build/linux/amd64/libURnetworkSdk.so build/linux/amd64/urnetwork_sdk.hpp; do
+            [ -s "$f" ] || { echo "::error::$f is missing or empty"; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-linux-amd64
+          path: sdk/cgo/build/linux/amd64
+          if-no-files-found: error
+
+  daemon:
+    name: Daemon + tests (glibc floor)
+    runs-on: ubuntu-latest
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 40
+    needs: build-sdk
+    container: ubuntu:22.04
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get $UR_APT_OPTS update
+          apt-get $UR_APT_OPTS install -y --no-install-recommends \
+            build-essential meson ninja-build pkg-config gettext \
+            libglib2.0-dev nlohmann-json3-dev ca-certificates git binutils
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-linux-amd64
+          path: app/third_party/urnetwork-sdk/amd64
+
+      # -Dgui=disabled: this image has no GTK and no libsecret by design. The
+      # daemon must build without either, and this job is what proves it.
+      - name: Configure and build the daemon
+        working-directory: app
+        run: |
+          meson setup build -Dgui=disabled
+          ninja -C build
+
+      - name: Run the test suite
+        working-directory: app
+        run: ./build/urnetwork-tests
+
+      # The daemon ships to distros older than this runner. The floor is
+      # asserted against the version the packaging declares, so a toolchain
+      # bump cannot silently strand users.
+      - name: Assert the glibc symbol floor
+        working-directory: app
+        run: tests/glibc-floor-gate.sh 2.35 build/urnetworkd
+
+  gui:
+    name: GUI (GTK4 + libadwaita + libsecret)
+    runs-on: ubuntu-latest
+    # Bounded on purpose: an apt mirror stall used to hang this job
+    # until GitHub's 6h default killed it. Fail in minutes instead.
+    timeout-minutes: 40
+    needs: build-sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-linux-amd64
+          path: app/third_party/urnetwork-sdk/amd64
+
+      - name: Install the GUI stack
+        run: |
+          sudo apt-get $UR_APT_OPTS update
+          sudo apt-get $UR_APT_OPTS install -y --no-install-recommends \
+            build-essential meson ninja-build pkg-config gettext \
+            libglib2.0-dev nlohmann-json3-dev \
+            libgtkmm-4.0-dev libadwaita-1-dev libsecret-1-dev \
+            libzxing-dev libsoup-3.0-dev \
+            appstream
+
+      - name: Configure and build the GUI
+        working-directory: app
+        run: |
+          meson setup build -Dgui=enabled
+          ninja -C build
+
+      - name: Run the test suite
+        working-directory: app
+        run: ./build/urnetwork-tests
+
+      # app/meson.build stamps the release version and date into the metainfo
+      # from -Dapp_version, so this validates the GENERATED file, not the
+      # template. appstreamcli is the same validator Flathub gates on, and
+      # nothing checked this file before.
+      - name: Validate the AppStream metainfo
+        working-directory: app
+        run: appstreamcli validate --no-net --pedantic build/com.bringyour.network.metainfo.xml
