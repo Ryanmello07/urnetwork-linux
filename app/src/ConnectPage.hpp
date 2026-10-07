@@ -5,7 +5,8 @@
 //                       options, network peers.
 //   Pane B  ACTIVITY    star: live throughput header, the transport
 //                       distribution bar under it (opens the transport
-//                       settings editor) + the routing-decision list
+//                       settings editor) + the routing-decision list,
+//                       filtered by verdict and search and foldable by host
 //                       (selectable in Advanced Mode).
 //   Pane C  STATISTICS  380dip: session figures, contracts, split rules, DNS
 //                       (and the connection inspector in Advanced Mode).
@@ -210,8 +211,9 @@ class ConnectPage : public Gtk::Box {
   // selectable row in Advanced Mode, and the counters its meta line was
   // written from, so the clock can age the line without a feed push.
   struct ConnectionRow {
-    std::string key;       // the reconcile key (ConnectionRowKey)
+    std::string key;       // the reconcile key (ConnectionRowKey, or "g:" + host)
     std::string actionId;  // the selection's id; empty when the feed sent none
+    bool group = false;       // a host's group row (group by host)
     bool selectable = false;  // root is a button (Advanced Mode)
     Gtk::Widget* root = nullptr;
     Gtk::Label* dot = nullptr;
@@ -228,11 +230,18 @@ class ConnectPage : public Gtk::Box {
     int64_t timeMs = 0;
     int64_t byteCount = 0;
     int64_t packetCount = 0;
+    int64_t groupConnections = 0;  // the fold count; group rows only
+  };
+  // The reconcile's unit: one routing decision, or one host's group. Exactly
+  // one of the two is set, and it is the row's kind.
+  struct ConnectionItem {
+    const urnet::BlockAction* action = nullptr;
+    const connection_filter::Group* group = nullptr;
   };
   // a new row for a key, in the form the mode asks for (static or a button)
-  ConnectionRow BuildConnectionRow(const std::string& key, const urnet::BlockAction& action);
+  ConnectionRow BuildConnectionRow(const std::string& key, const ConnectionItem& item);
   // a push's changes to a row already on screen, written in place
-  void UpdateConnectionRow(ConnectionRow& row, const urnet::BlockAction& action);
+  void UpdateConnectionRow(ConnectionRow& row, const ConnectionItem& item);
   // the meta line at nowMs, written only when its text changed
   void WriteConnectionRowMeta(ConnectionRow& row, int64_t nowMs);
   // the row's accessible name, with ", selected" while it is the selection
@@ -243,8 +252,11 @@ class ConnectPage : public Gtk::Box {
   // cached feed; resetScroll, for a filter change, reads from the top.
   void ApplyConnectionsList(bool resetScroll = false);
   void OnConnectionsVerdictChanged(connection_filter::Verdict verdict);
-  // Clear: the filter and the search back to their defaults, in one pass
+  // Clear: the filter, the search and the fold back to their defaults, in
+  // one pass
   void OnConnectionsClearFilters();
+  // a group row's click: search for the host, fold off
+  void DrillIntoConnectionGroup(const std::string& host);
   // the meta lines' age on the 1s clock, from each row's own counters
   void RefreshConnectionRowTimes();
   void ApplyConnectionSelectionVisuals();
@@ -532,16 +544,19 @@ class ConnectPage : public Gtk::Box {
   // the mode the rows on screen were built for (static or selectable)
   bool connectionRowsSelectable_ = false;
   // the activity filter (ConnectionFilter.hpp): the verdict segments, the
-  // search field and the Clear in the Connections header, all echo-guarded
-  // by updatingControls_; the query is NormalizeQuery's
+  // search field, the group-by-host switch and the Clear in the Connections
+  // header, all echo-guarded by updatingControls_; the query is
+  // NormalizeQuery's
   Gtk::ToggleButton* verdictAll_ = nullptr;
   Gtk::ToggleButton* verdictBlocked_ = nullptr;
   Gtk::ToggleButton* verdictTunnelled_ = nullptr;
   Gtk::ToggleButton* verdictBypassed_ = nullptr;
   Gtk::Entry* connectionsSearch_ = nullptr;
   Gtk::Button* connectionsClear_ = nullptr;
+  Gtk::Switch* connectionsGroupToggle_ = nullptr;
   connection_filter::Verdict verdictFilter_ = connection_filter::Verdict::All;
   std::string connectionsQuery_;
+  bool connectionsGrouped_ = false;
 
   // ---- pane C: statistics / inspector ----------------------------------------
   Gtk::Box* inspectorGroup_ = nullptr;

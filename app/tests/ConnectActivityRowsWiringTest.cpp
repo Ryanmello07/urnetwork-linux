@@ -7,8 +7,8 @@
 // ExtenderStatusPresentationTest.cpp's; the page, the panel and the host need
 // GTK and the SDK, so this reads their sources. So do the routing-decision
 // rows under them, which are reconciled in place (KeyedReconcileTest.cpp has
-// the plan), aged by the clock, and filtered by verdict and search
-// (ConnectionFilterTest.cpp has the rules).
+// the plan), aged by the clock, filtered by verdict and search and folded by
+// host (ConnectionFilterTest.cpp has the rules).
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
@@ -132,7 +132,7 @@ UR_TEST(ConnectActivity_TheRowsReconcileInPlace) {
   UR_EXPECT_TRUE(clear != std::string::npos);
   UR_EXPECT_TRUE(list.find("RemoveAllChildren(", clear + 1) == std::string::npos);
   UR_EXPECT_TRUE(Mentions(list, "case reconcile::StepKind::Update:"));
-  UR_EXPECT_TRUE(Mentions(list, "UpdateConnectionRow(*at, *visible[step.wantedIndex]);"));
+  UR_EXPECT_TRUE(Mentions(list, "UpdateConnectionRow(*at, visible[step.wantedIndex]);"));
   UR_EXPECT_TRUE(Mentions(list, "connectionsHost_->remove(*at->root);"));
   UR_EXPECT_TRUE(Mentions(list, "connectionsHost_->reorder_child_after("));
   UR_EXPECT_TRUE(Mentions(list, "connectionsHost_->insert_child_after("));
@@ -147,7 +147,7 @@ UR_TEST(ConnectActivity_TheRowsReconcileInPlace) {
 UR_TEST(ConnectActivity_TheClockAgesTheRows) {
   const std::string page = ReadActivitySource("ConnectPage.cpp");
   UR_EXPECT_TRUE(InSequence(ActivityBody(page, "std::string ConnectionRowMeta("),
-                            {"if (0 < timeMs) meta = RelativeTime((nowMs - timeMs) / 1000)",
+                            {"if (0 < timeMs) meta += RelativeTime((nowMs - timeMs) / 1000)",
                              "FormatByteCountCompact(byteCount)",
                              "FormatCountCompact(packetCount)"}));
   UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::Tick()"),
@@ -192,25 +192,65 @@ UR_TEST(ConnectActivity_TheFilterRunsInsideTheReconcile) {
                                    "if (resetScroll && connectionsScroll_)",
                                    "connection_filter::CountFor(",
                                    "T_(\"of_total\", \"of {}\")",
-                                   "connectionsClear_->set_visible(filtered);"}));
+                                   "connectionsClear_->set_visible("}));
   UR_EXPECT_TRUE(!Mentions(list, "host_."));
   UR_EXPECT_TRUE(Mentions(ActivityBody(page, "void ConnectPage::ApplySessionCardsVisibility()"),
                           "connection_filter::ShowList("));
 }
 
-// Clear puts the verdict and the search back behind the echo guard, so the
-// controls' own handlers stay quiet, and runs the pass once.
+// Clear puts the verdict, the search and the fold back behind the echo
+// guard, so the controls' own handlers stay quiet, and runs the pass once.
 UR_TEST(ConnectActivity_ClearResetsEverythingInOnePass) {
   const std::string clear = ActivityBody(ReadActivitySource("ConnectPage.cpp"),
                                          "void ConnectPage::OnConnectionsClearFilters()");
   UR_EXPECT_TRUE(InSequence(clear, {"verdictFilter_ = connection_filter::Verdict::All;",
                                     "connectionsQuery_.clear();",
+                                    "connectionsGrouped_ = false;",
                                     "updatingControls_ = true;",
                                     "verdictAll_->set_active(true);",
                                     "connectionsSearch_->set_text(\"\");",
+                                    "connectionsGroupToggle_->set_active(false);",
                                     "updatingControls_ = wasUpdating;",
                                     "ApplyConnectionsList(/*resetScroll=*/true);"}));
   const size_t pass = clear.find("ApplyConnectionsList(");
   UR_EXPECT_TRUE(pass != std::string::npos &&
                  clear.find("ApplyConnectionsList(", pass + 1) == std::string::npos);
+}
+
+// Group by host rides the search row and folds the filtered decisions inside
+// the same pass, one row per host keyed by the host; a group row's click
+// searches for its host with the fold off, in one pass.
+UR_TEST(ConnectActivity_GroupByHostFoldsInsideThePass) {
+  const std::string page = ReadActivitySource("ConnectPage.cpp");
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::BuildPaneB()"),
+                            {"kit::MakePaneSearchRow(T_(\"adv_search_connections\"",
+                             "T_(\"adv_group_by_host\", \"Group by host\")",
+                             "connectionsGroupToggle_->property_active().signal_changed()",
+                             "if (updatingControls_) return;",
+                             "connectionsGrouped_ = grouped;",
+                             "ApplyConnectionsList(/*resetScroll=*/true);",
+                             "paneB_.content->append(*search.root);"}));
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::ApplyConnectionsList("),
+                            {"connection_filter::Passes(", "if (connectionsGrouped_) {",
+                             "members.push_back(FoldMemberOf(*it));",
+                             "connection_filter::FoldGroups(members);",
+                             "keys.push_back(\"g:\" + group.host);", "reconcile::Plan(",
+                             "connectionsGrouped_,", "connection_filter::ClearOffered("}));
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "ConnectPage::ConnectionRow ConnectPage::BuildConnectionRow("),
+                            {"if (row.group) {", "DrillIntoConnectionGroup(host);", "} else {",
+                             "SelectConnection(id);"}));
+  const std::string drill =
+      ActivityBody(page, "void ConnectPage::DrillIntoConnectionGroup(const std::string& host)");
+  UR_EXPECT_TRUE(InSequence(drill, {"if (host.empty()) return;", "connectionsGrouped_ = false;",
+                                    "connectionsQuery_ = connection_filter::NormalizeQuery(host);",
+                                    "updatingControls_ = true;",
+                                    "connectionsGroupToggle_->set_active(false);",
+                                    "connectionsSearch_->set_text(host);",
+                                    "updatingControls_ = wasUpdating;",
+                                    "ApplyConnectionsList(/*resetScroll=*/true);"}));
+  // a group row's figures lead with its count
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "std::string ConnectionRowMeta("),
+                            {"if (0 < groupConnections) meta = ConnectionCountText(", "RelativeTime("}));
+  UR_EXPECT_TRUE(Mentions(ActivityBody(page, "std::string ConnectionCountText("),
+                          "TN_(\"adv_connection_count\", \"{} connection\", \"{} connections\","));
 }

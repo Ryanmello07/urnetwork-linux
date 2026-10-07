@@ -241,17 +241,20 @@ std::string BlockActionTitle(const urnet::BlockAction& action) {
 
 // THREE verdicts, not two: blocked (coral), local — sent around the tunnel,
 // allowed and unprotected (amber), tunnelled (green).
-const char* VerdictDot(const urnet::BlockAction& action) {
-  if (action.Block) return kDotCoral;
-  if (action.Local) return kDotAmber;
+const char* VerdictDot(bool block, bool local) {
+  if (block) return kDotCoral;
+  if (local) return kDotAmber;
   return kDotGreen;
+}
+const char* VerdictDot(const urnet::BlockAction& action) {
+  return VerdictDot(action.Block, action.Local);
 }
 
 // the dot is decorative, so the WORD is the only place the color's meaning
 // exists for a screen reader
-const char* VerdictWord(const urnet::BlockAction& action) {
-  if (action.Block) return T_("blocked", "Blocked");
-  if (action.Local) return T_("local", "Local");
+const char* VerdictWord(bool block, bool local) {
+  if (block) return T_("blocked", "Blocked");
+  if (local) return T_("local", "Local");
   return T_("allowed", "Allowed");
 }
 
@@ -271,15 +274,37 @@ std::string ConnectionRowKey(const urnet::BlockAction& action) {
   return "t:" + std::to_string(action.Time) + ":" + BlockActionTitle(action);
 }
 
+// "N connections": how many decisions a host's group row stands for.
+std::string ConnectionCountText(int64_t connections) {
+  return Format(TN_("adv_connection_count", "{} connection", "{} connections",
+                    static_cast<unsigned long>(connections)),
+                connections);
+}
+
 // An activity row's meta line: how long ago the decision was made, then the
 // totals the line has always carried ("12s ago   3.4 MiB   120 pkt"). A
-// decision without a time (0) has no age rather than a 56-year one.
-std::string ConnectionRowMeta(int64_t timeMs, int64_t byteCount, int64_t packetCount,
-                              int64_t nowMs) {
+// decision without a time (0) has no age rather than a 56-year one. A host's
+// group row (groupConnections > 0) leads with its count, then the same
+// figures summed, aged by its latest decision.
+std::string ConnectionRowMeta(int64_t groupConnections, int64_t timeMs, int64_t byteCount,
+                              int64_t packetCount, int64_t nowMs) {
   std::string meta;
-  if (0 < timeMs) meta = RelativeTime((nowMs - timeMs) / 1000) + "   ";
+  if (0 < groupConnections) meta = ConnectionCountText(groupConnections) + "   ";
+  if (0 < timeMs) meta += RelativeTime((nowMs - timeMs) / 1000) + "   ";
   return meta + FormatByteCountCompact(byteCount) + "   " + FormatCountCompact(packetCount) +
          " pkt";
+}
+
+// What the fold reads of a decision that passed the filter.
+connection_filter::FoldMember FoldMemberOf(const urnet::BlockAction& action) {
+  connection_filter::FoldMember member;
+  member.host = BlockActionTitle(action);
+  member.block = action.Block;
+  member.local = action.Local;
+  member.timeMs = action.Time;
+  member.byteCount = action.ByteCount;
+  member.packetCount = action.PacketCount;
+  return member;
 }
 
 // What the activity filter reads of a decision: its own lists, never copies.
@@ -1014,6 +1039,27 @@ void ConnectPage::BuildPaneB() {
       connectionsQuery_ = std::move(query);
       ApplyConnectionsList(/*resetScroll=*/true);
     });
+    // group by host rides the search row, whose field is the one control
+    // here that shrinks gracefully
+    if (auto* inner = RowInner(search.root)) {
+      const char* groupText = T_("adv_group_by_host", "Group by host");
+      auto* groupLabel = Gtk::make_managed<Gtk::Label>(groupText);
+      groupLabel->add_css_class("ur-key");
+      groupLabel->set_ellipsize(Pango::EllipsizeMode::END);
+      kit::MarkDecorative(*groupLabel);  // the switch carries the name
+      inner->append(*groupLabel);
+      connectionsGroupToggle_ = Gtk::make_managed<Gtk::Switch>();
+      connectionsGroupToggle_->set_valign(Gtk::Align::CENTER);
+      kit::SetAccessibleLabel(*connectionsGroupToggle_, groupText);
+      connectionsGroupToggle_->property_active().signal_changed().connect([this] {
+        if (updatingControls_) return;
+        const bool grouped = connectionsGroupToggle_->get_active();
+        if (grouped == connectionsGrouped_) return;
+        connectionsGrouped_ = grouped;
+        ApplyConnectionsList(/*resetScroll=*/true);
+      });
+      inner->append(*connectionsGroupToggle_);
+    }
     paneB_.content->append(*search.root);
   }
 
@@ -1660,12 +1706,15 @@ void ConnectPage::ApplyLiveStatsGroup() {
 // tab stop (200 of them on the way to Connect would be hostile). Advanced: the
 // same row as a real button, clickable, in tab order, Enter/Space; a row whose
 // id the feed omitted cannot be inspected, so it renders inert rather than
-// looking like its neighbours and swallowing the click.
+// looking like its neighbours and swallowing the click. A host's group row
+// is the same row over the host's aggregate, and its click is the drill-in,
+// not a selection.
 ConnectPage::ConnectionRow ConnectPage::BuildConnectionRow(const std::string& key,
-                                                           const urnet::BlockAction& action) {
+                                                           const ConnectionItem& item) {
   ConnectionRow row;
   row.key = key;
-  row.actionId = action.BlockActionId.value_or(std::string());
+  row.group = item.group != nullptr;
+  if (!row.group) row.actionId = item.action->BlockActionId.value_or(std::string());
   row.selectable = advanced_;
   if (advanced_) {
     row.button = kit::MakePaneListRowButton(kListRowHeight);
@@ -1674,10 +1723,16 @@ ConnectPage::ConnectionRow ConnectPage::BuildConnectionRow(const std::string& ke
     row.dot = row.button.dot;
     row.title = row.button.title;
     row.meta = row.button.meta;
-    row.button.root->set_sensitive(!row.actionId.empty());
-    const std::string id = row.actionId;
-    row.button.root->signal_clicked().connect(
-        [this, id] { SelectConnection(id); });  // by id, captured by value
+    if (row.group) {
+      const std::string host = item.group->host;
+      row.button.root->set_sensitive(!host.empty());
+      row.button.root->signal_clicked().connect([this, host] { DrillIntoConnectionGroup(host); });
+    } else {
+      row.button.root->set_sensitive(!row.actionId.empty());
+      const std::string id = row.actionId;
+      row.button.root->signal_clicked().connect(
+          [this, id] { SelectConnection(id); });  // by id, captured by value
+    }
   } else {
     auto plain = kit::MakePaneListRow(kListRowHeight);
     row.root = plain.root;
@@ -1689,42 +1744,52 @@ ConnectPage::ConnectionRow ConnectPage::BuildConnectionRow(const std::string& ke
   // out again after it
   kit::MarkDecorative(*row.title);
   kit::MarkDecorative(*row.meta);
-  UpdateConnectionRow(row, action);
+  UpdateConnectionRow(row, item);
   return row;
 }
 
 // Everything a push can change about a row already on screen, written in
 // place: the counters and the meta line, the title, the verdict's dot and
-// word. The widget, its focus and its hover are untouched.
-void ConnectPage::UpdateConnectionRow(ConnectionRow& row, const urnet::BlockAction& action) {
-  row.timeMs = action.Time;
-  row.byteCount = action.ByteCount;
-  row.packetCount = action.PacketCount;
-  std::string title = BlockActionTitle(action);
+// word. The widget, its focus and its hover are untouched. A group row
+// writes the host's aggregate: the precedence verdict, the sums, the latest
+// decision's age.
+void ConnectPage::UpdateConnectionRow(ConnectionRow& row, const ConnectionItem& item) {
+  const connection_filter::Group* group = item.group;
+  const urnet::BlockAction* action = item.action;
+  row.timeMs = group ? group->latestMs : action->Time;
+  row.byteCount = group ? group->byteCount : action->ByteCount;
+  row.packetCount = group ? group->packetCount : action->PacketCount;
+  row.groupConnections = group ? group->connections : 0;
+  const bool block = group ? group->blocked() : action->Block;
+  const bool local = group ? group->bypassed() : action->Local;
+  std::string title = group ? group->host : BlockActionTitle(*action);
   if (title.empty()) title = T_("unknown", "unknown");
   row.title->set_text(title);
-  const char* dot = VerdictDot(action);
+  const char* dot = VerdictDot(block, local);
   if (row.dotColor != dot) {
     row.dotColor = dot;
     row.dot->set_markup(DotMarkup(7, dot));
   }
   WriteConnectionRowMeta(row, NowMillis());
   // the dot is decorative: the NAME is the only place the color's meaning
-  // exists for a screen reader
-  row.name = Glib::ustring(title) + ", " + VerdictWord(action);
+  // exists for a screen reader; a group's name carries its count too
+  row.name = title;
+  if (group) row.name += ", " + ConnectionCountText(row.groupConnections);
+  row.name += Glib::ustring(", ") + VerdictWord(block, local);
   AnnounceConnectionRow(row);
 }
 
 void ConnectPage::WriteConnectionRowMeta(ConnectionRow& row, int64_t nowMs) {
-  std::string meta = ConnectionRowMeta(row.timeMs, row.byteCount, row.packetCount, nowMs);
+  std::string meta =
+      ConnectionRowMeta(row.groupConnections, row.timeMs, row.byteCount, row.packetCount, nowMs);
   if (meta == row.metaText) return;  // a quiet second costs no layout
   row.metaText = std::move(meta);
   row.meta->set_text(row.metaText);
 }
 
 void ConnectPage::AnnounceConnectionRow(ConnectionRow& row) {
-  const bool selected =
-      row.selectable && !selectedConnectionId_.empty() && row.actionId == selectedConnectionId_;
+  const bool selected = row.selectable && !row.group && !selectedConnectionId_.empty() &&
+                        row.actionId == selectedConnectionId_;
   // selection rides THREE channels: the fill step and the 2px accent bar
   // (ApplyConnectionSelectionVisuals), and the announced name gaining the
   // suffix
@@ -1744,6 +1809,9 @@ void ConnectPage::AnnounceConnectionRow(ConnectionRow& row) {
 // the feed or filtered out is removed. The verdict filter and the search
 // re-evaluate membership through this same pass, so a filter change is an
 // edit, not a rebuild; resetScroll reads its new result set from the top.
+// Group-by-host folds the same filtered feed into one row per display host,
+// keyed by the host: a second kind of row in the same pass, not a second
+// list, and the cap counts groups.
 void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   if (!connectionsHost_) return;
   // The Advanced Mode flip changes the row type (static <-> selectable),
@@ -1764,8 +1832,9 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   // newly contacted host would ever appear again on a busy session.
   // The filter runs over the whole cached feed (the count needs every match),
   // and the cap applies to what passes.
-  std::vector<const urnet::BlockAction*> visible;
+  std::vector<ConnectionItem> visible;
   std::vector<std::string> keys;
+  std::vector<connection_filter::FoldMember> members;
   int64_t passed = 0;
   if (blockActions_) {
     for (auto it = blockActions_->rbegin(); it != blockActions_->rend(); ++it) {
@@ -1773,10 +1842,21 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
         continue;
       }
       ++passed;
+      if (connectionsGrouped_) {
+        members.push_back(FoldMemberOf(*it));
+        continue;
+      }
       if (visible.size() >= kMaxConnectionRows) continue;  // a cap, not a scroll budget
-      visible.push_back(&*it);
+      visible.push_back(ConnectionItem{&*it, nullptr});
       keys.push_back(ConnectionRowKey(*it));
     }
+  }
+  // the groups outlive the reconcile below, which points into them
+  const std::vector<connection_filter::Group> groups = connection_filter::FoldGroups(members);
+  for (const auto& group : groups) {
+    if (visible.size() >= kMaxConnectionRows) break;
+    visible.push_back(ConnectionItem{nullptr, &group});
+    keys.push_back("g:" + group.host);
   }
 
   std::vector<std::string> onScreen;
@@ -1790,12 +1870,12 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
         connectionRows_.erase(at);
         break;
       case reconcile::StepKind::Update:
-        UpdateConnectionRow(*at, *visible[step.wantedIndex]);
+        UpdateConnectionRow(*at, visible[step.wantedIndex]);
         break;
       case reconcile::StepKind::Move: {
         ConnectionRow row = std::move(connectionRows_[step.from]);
         connectionRows_.erase(connectionRows_.begin() + static_cast<std::ptrdiff_t>(step.from));
-        UpdateConnectionRow(row, *visible[step.wantedIndex]);
+        UpdateConnectionRow(row, visible[step.wantedIndex]);
         if (step.index == 0) {
           connectionsHost_->reorder_child_at_start(*row.root);
         } else {
@@ -1806,7 +1886,7 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
         break;
       }
       case reconcile::StepKind::Insert: {
-        ConnectionRow row = BuildConnectionRow(keys[step.wantedIndex], *visible[step.wantedIndex]);
+        ConnectionRow row = BuildConnectionRow(keys[step.wantedIndex], visible[step.wantedIndex]);
         if (step.index == 0) {
           connectionsHost_->insert_child_at_start(*row.root);
         } else {
@@ -1820,12 +1900,13 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
 
   if (resetScroll && connectionsScroll_) connectionsScroll_->get_vadjustment()->set_value(0.0);
 
-  const bool filtered = connection_filter::FilterActive(verdictFilter_, connectionsQuery_);
   if (connectionsCount_) {
     // the full feed count, even though rendering caps at 200 rows; while a
-    // filter holds rows back, "N hosts of M"
-    const auto count = connection_filter::CountFor(verdictFilter_, connectionsQuery_, passed,
-                                                   static_cast<int64_t>(total));
+    // filter holds rows back, "N hosts of M", and folded, the hosts of the
+    // decisions that passed
+    const auto count = connection_filter::CountFor(
+        verdictFilter_, connectionsQuery_, connectionsGrouped_,
+        static_cast<int64_t>(groups.size()), passed, static_cast<int64_t>(total));
     std::string text;
     if (blockActions_) {
       text = Format(TN_("host_count", "{} host", "{} hosts",
@@ -1835,7 +1916,10 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
     }
     kit::SetTextOrCollapse(*connectionsCount_, text);
   }
-  if (connectionsClear_) connectionsClear_->set_visible(filtered);
+  if (connectionsClear_) {
+    connectionsClear_->set_visible(
+        connection_filter::ClearOffered(verdictFilter_, connectionsQuery_, connectionsGrouped_));
+  }
   ApplySessionCardsVisibility();
   ApplyConnectionSelectionVisuals();
   ApplyInspector();  // a selection that aged out of the feed must SAY so
@@ -1862,8 +1946,8 @@ void ConnectPage::ApplyConnectionSelectionVisuals() {
   // repaint WITHOUT rebuilding: a rebuild would destroy keyboard focus
   for (auto& row : connectionRows_) {
     if (!row.selectable) continue;
-    kit::SetPaneListRowSelected(
-        row.button, !selectedConnectionId_.empty() && row.actionId == selectedConnectionId_);
+    kit::SetPaneListRowSelected(row.button, !row.group && !selectedConnectionId_.empty() &&
+                                                row.actionId == selectedConnectionId_);
     AnnounceConnectionRow(row);
   }
 }
@@ -1889,10 +1973,28 @@ void ConnectPage::ResetForSignOut() {
 void ConnectPage::OnConnectionsClearFilters() {
   verdictFilter_ = connection_filter::Verdict::All;
   connectionsQuery_.clear();
+  connectionsGrouped_ = false;
   const bool wasUpdating = updatingControls_;
   updatingControls_ = true;
   if (verdictAll_) verdictAll_->set_active(true);
   if (connectionsSearch_) connectionsSearch_->set_text("");
+  if (connectionsGroupToggle_) connectionsGroupToggle_->set_active(false);
+  updatingControls_ = wasUpdating;
+  ApplyConnectionsList(/*resetScroll=*/true);
+}
+
+// A group row's click, and the whole of its interaction: the search takes
+// the host and the fold goes off, so the group opens in place through the
+// filter that already exists. Not a selection (a group has no one connection
+// to inspect). The same shape as Clear: state, guarded controls, one pass.
+void ConnectPage::DrillIntoConnectionGroup(const std::string& host) {
+  if (host.empty()) return;  // an unnamed group has nothing to search for
+  connectionsGrouped_ = false;
+  connectionsQuery_ = connection_filter::NormalizeQuery(host);
+  const bool wasUpdating = updatingControls_;
+  updatingControls_ = true;
+  if (connectionsGroupToggle_) connectionsGroupToggle_->set_active(false);
+  if (connectionsSearch_) connectionsSearch_->set_text(host);
   updatingControls_ = wasUpdating;
   ApplyConnectionsList(/*resetScroll=*/true);
 }
