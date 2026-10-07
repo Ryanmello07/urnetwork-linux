@@ -202,8 +202,8 @@ int main(int argc, char** argv) {
       app->release();
       app->quit();
     };
-    window->on_connected_change = [&](bool connected) {
-      if (tray) tray->SetConnected(connected);
+    window->on_tray_state = [&](bool sessionUp, bool proven, const std::string& status) {
+      if (tray) tray->SetState(sessionUp, proven, status);
     };
 
     // Close = hide to tray (tunnel keeps running); Quit from the tray truly exits.

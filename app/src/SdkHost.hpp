@@ -197,6 +197,10 @@ struct ConnectReading {
   // The degrade hold's verdict on this session (health::DegradeHold), so the
   // page, the strip and the tray read one verdict.
   health::ProofLoss proofLoss = health::ProofLoss::None;
+  // A controller status is in hand: the presentation is open, or this session
+  // latched one before it closed. False for a session started while the
+  // window was hidden, where the tray keeps the session's own claim.
+  bool statusObserved = false;
 
   // Value equality, so a consumer can skip a rebuild when nothing moved. It
   // compares EVERY field on purpose: a partial comparison would be one more
@@ -205,7 +209,7 @@ struct ConnectReading {
     return sdk == o.sdk && rawStatus == o.rawStatus &&
            destinationSelected == o.destinationSelected && tunnelBound == o.tunnelBound &&
            providerCount == o.providerCount && insufficientBalance == o.insufficientBalance &&
-           proofLoss == o.proofLoss;
+           proofLoss == o.proofLoss && statusObserved == o.statusObserved;
   }
   bool operator!=(const ConnectReading& o) const { return !(*this == o); }
 

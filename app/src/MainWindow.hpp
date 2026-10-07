@@ -69,7 +69,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // The screenshot hook (main.cpp URNETWORK_SHOOT) renders this window when a
   // URNW_ONBOARDING_PREVIEW review has it open, else null.
   Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
-  std::function<void(bool connected)> on_connected_change;
+  // The tray: the session (its Connect/Disconnect item), whether a provider
+  // is proven (its icon) and the state's words (its tooltip), on change.
+  std::function<void(bool sessionUp, bool proven, const std::string& status)> on_tray_state;
 
  private:
   void BuildChrome();         // 48px title bar: 20px app icon + PP NeueBit wordmark
@@ -306,7 +308,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // FIRST reading — which for an idle app equals the default-constructed one —
   // would be skipped as "unchanged" and no surface would ever be seeded.
   bool readingApplied_ = false;
-  bool trayConnectedPushed_ = false;
+  bool trayStatePushed_ = false;
+  bool trayProven_ = false;
+  std::string trayStatus_;
   bool connected_ = false;
   // The out-of-balance desktop notification (InsufficientBalanceNotice.hpp),
   // fed from the connect reading and the balance store.

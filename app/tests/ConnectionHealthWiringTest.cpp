@@ -3,8 +3,10 @@
 // Connect page, the status strip and the tray read one verdict; it reads
 // again when a running hold ends, because nothing else may; and every
 // deliberate connect or disconnect starts it over. The Connect page shows the
-// held line under the status. SdkHost and ConnectPage need glib, gtkmm and
-// the SDK, so this reads their sources with the comments blanked.
+// held line under the status, and the tray's connected icon means proven
+// while its item follows the session and its tooltip names the state.
+// SdkHost, ConnectPage, MainWindow and the tray need glib, gtkmm and the SDK,
+// so this reads their sources with the comments blanked.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -83,7 +85,7 @@ UR_TEST(ConnectionHealthWiring_EveryReadingCarriesTheHold) {
                 "self->onReading_(self->CurrentConnectReading());", "return r;"}));
   // the verdict is part of the reading: compared, and handed to the table
   const std::string header = ReadHealthWiringSource("SdkHost.hpp");
-  UR_EXPECT_TRUE(HealthWiringHas(header, "proofLoss == o.proofLoss;"));
+  UR_EXPECT_TRUE(HealthWiringHas(header, "proofLoss == o.proofLoss"));
   UR_EXPECT_TRUE(HealthWiringHas(header, "s.proofLoss = proofLoss;"));
   // the timeout holds `this`, so it goes with the host
   UR_EXPECT_TRUE(HealthWiringInOrder(HealthWiringBody(host, "SdkHost::~SdkHost() {"),
@@ -119,4 +121,41 @@ UR_TEST(ConnectionHealthWiring_ThePageShowsTheHeldLine) {
                "killSwitch.installed == ctl::KillSwitchState::Connected",
                "held = T_(line.key, line.english);",
                "kit::SetTextOrCollapse(*trafficHeldText_, held);"}));
+}
+
+// The window pushes the tray the session, the proof and the state's words
+// from the one reading, a session with no status observed keeping its own
+// claim, and the tray shows each where it belongs.
+UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
+  const std::string window = ReadHealthWiringSource("MainWindow.cpp");
+  const std::string reading = HealthWiringBody(
+      window, "void MainWindow::ApplyConnectReading(const ConnectReading& reading) {");
+  UR_EXPECT_TRUE(HealthWiringInOrder(
+      reading,
+      {"const health::Reading view = health::Render(signals);",
+       "connected_ = view.action == health::Action::Disconnect;",
+       "health::TrayReading(view, signals, reading.statusObserved);",
+       "const bool proven = health::Proven(tray);",
+       "const std::string status = T_(tray.textKey, tray.textEnglish);",
+       "on_tray_state(connected_, proven, status);"}));
+  // observed means the presentation is open or the session latched a status
+  const std::string host = ReadHealthWiringSource("SdkHost.cpp");
+  const std::string facts = HealthWiringBody(host, "ConnectReading SdkHost::ReadConnectFacts() {");
+  UR_EXPECT_TRUE(HealthWiringInOrder(
+      facts, {"r.statusObserved = connectVc_.has_value();", "return r;",
+              "r.statusObserved = connectVc_.has_value() || "
+              "r.sdk != health::SdkStatus::Unknown;"}));
+  UR_EXPECT_TRUE(HealthWiringHas(ReadHealthWiringSource("SdkHost.hpp"),
+                                 "statusObserved == o.statusObserved"));
+  UR_EXPECT_TRUE(HealthWiringHas(ReadHealthWiringSource("main.cpp"),
+                                 "if (tray) tray->SetState(sessionUp, proven, status);"));
+  const std::string tray = ReadHealthWiringSource("Tray.cpp");
+  UR_EXPECT_TRUE(HealthWiringHas(tray, "self->provenForIcon() ? \"urnetwork-tray-connected\""));
+  UR_EXPECT_TRUE(HealthWiringHas(tray, "ConnectLabel(self->sessionUp())"));
+  UR_EXPECT_TRUE(HealthWiringHas(tray, "<property name=\"ToolTip\" type=\"(sa(iiay)ss)\""));
+  UR_EXPECT_TRUE(HealthWiringHas(tray, "self->statusForToolTip().c_str()"));
+  UR_EXPECT_TRUE(HealthWiringInOrder(
+      HealthWiringBody(tray, "void Tray::SetState(bool sessionUp, bool proven, "
+                             "const std::string& status) {"),
+      {"\"NewIcon\"", "\"NewToolTip\"", "\"LayoutUpdated\""}));
 }

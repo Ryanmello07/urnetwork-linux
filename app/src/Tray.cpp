@@ -41,10 +41,12 @@ constexpr const char* kSniXml = R"XML(
     <property name="IconThemePath" type="s" access="read"/>
     <property name="Menu" type="o" access="read"/>
     <property name="ItemIsMenu" type="b" access="read"/>
+    <property name="ToolTip" type="(sa(iiay)ss)" access="read"/>
     <method name="Activate"><arg name="x" type="i" direction="in"/><arg name="y" type="i" direction="in"/></method>
     <method name="SecondaryActivate"><arg name="x" type="i" direction="in"/><arg name="y" type="i" direction="in"/></method>
     <method name="Scroll"><arg name="delta" type="i" direction="in"/><arg name="orientation" type="s" direction="in"/></method>
     <signal name="NewIcon"/>
+    <signal name="NewToolTip"/>
     <signal name="NewStatus"><arg name="status" type="s"/></signal>
   </interface>
 </node>)XML";
@@ -125,8 +127,8 @@ static GVariant* SniGetProp(GDBusConnection*, const gchar*, const gchar*, const 
   if (g_strcmp0(prop, "Title") == 0) return g_variant_new_string("URnetwork");
   if (g_strcmp0(prop, "Status") == 0) return g_variant_new_string("Active");
   if (g_strcmp0(prop, "IconName") == 0)
-    return g_variant_new_string(self->connectedForIcon() ? "urnetwork-tray-connected"
-                                                         : "urnetwork-tray-disconnected");
+    return g_variant_new_string(self->provenForIcon() ? "urnetwork-tray-connected"
+                                                      : "urnetwork-tray-disconnected");
   // Where our tray PNGs actually live. IconName above is a bare name, so
   // without this the host can only resolve it from the icon THEME -- and our
   // art is installed to <pkgdatadir>/icons, not into hicolor, so the tray
@@ -138,6 +140,12 @@ static GVariant* SniGetProp(GDBusConnection*, const gchar*, const gchar*, const 
   }
   if (g_strcmp0(prop, "Menu") == 0) return g_variant_new_object_path("/MenuBar");
   if (g_strcmp0(prop, "ItemIsMenu") == 0) return g_variant_new_boolean(FALSE);
+  // (icon name, icon pixmaps, title, text): the product and the state's words
+  if (g_strcmp0(prop, "ToolTip") == 0) {
+    GVariant* noPixmaps = g_variant_new_array(G_VARIANT_TYPE("(iiay)"), nullptr, 0);
+    return g_variant_new("(s@a(iiay)ss)", "", noPixmaps, "URnetwork",
+                         self->statusForToolTip().c_str());
+  }
   return nullptr;
 }
 
@@ -150,7 +158,8 @@ static void MenuMethod(GDBusConnection*, const gchar*, const gchar*, const gchar
   if (g_strcmp0(method, "GetLayout") == 0) {
     GVariantBuilder kids;
     g_variant_builder_init(&kids, G_VARIANT_TYPE("av"));
-    g_variant_builder_add(&kids, "v", BuildItem(kIdConnect, ConnectLabel(self->connectedForIcon()), false));
+    g_variant_builder_add(&kids, "v",
+                          BuildItem(kIdConnect, ConnectLabel(self->sessionUp()), false));
     g_variant_builder_add(&kids, "v", BuildItem(kIdSep, "", true));
     g_variant_builder_add(&kids, "v",
                           BuildItem(kIdShow, T_("show_urnetwork", "Show URnetwork"), false));
@@ -259,12 +268,17 @@ void Tray::RegisterWithWatcher() {
                          G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
 }
 
-void Tray::SetConnected(bool connected) {
-  connected_ = connected;
+void Tray::SetState(bool sessionUp, bool proven, const std::string& status) {
+  session_up_ = sessionUp;
+  proven_ = proven;
+  status_ = status;
   if (!conn_) return;
-  // Tell the host the icon changed and bump the menu so "Connect"/"Disconnect" refreshes.
+  // Tell the host the icon and the tooltip changed, and bump the menu so
+  // "Connect"/"Disconnect" refreshes.
   g_dbus_connection_emit_signal(conn_, nullptr, "/StatusNotifierItem",
                                 "org.kde.StatusNotifierItem", "NewIcon", nullptr, nullptr);
+  g_dbus_connection_emit_signal(conn_, nullptr, "/StatusNotifierItem",
+                                "org.kde.StatusNotifierItem", "NewToolTip", nullptr, nullptr);
   menu_revision_++;
   g_dbus_connection_emit_signal(conn_, nullptr, "/MenuBar", "com.canonical.dbusmenu",
                                 "LayoutUpdated", g_variant_new("(ui)", menu_revision_, 0), nullptr);

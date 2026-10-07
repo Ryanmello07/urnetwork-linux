@@ -254,6 +254,23 @@ inline Reading Render(const Signals& s) {
   return r;
 }
 
+// A provider is proven to carry the session: the tray's connected icon, as
+// Windows' tray has it, where it used to mean only that a session was up.
+inline bool Proven(const Reading& r) { return r.state == State::Connected; }
+
+// The tray's reading of the window's one. The controller is open only while
+// the window presents, so a session started while it was hidden has no status
+// at all, and reads Connecting for as long as it stays hidden. With no
+// evidence the session's own claim stands, Connected in icon and words, as
+// Windows' tray has it. A status that was observed is never upgraded, and a
+// teardown, a block or no session reads as the window's.
+inline Reading TrayReading(const Reading& r, const Signals& s, bool statusObserved) {
+  if (statusObserved || r.state != State::Connecting) return r;
+  Signals claimed = s;
+  claimed.sdk = SdkStatus::Connected;
+  return Render(claimed);
+}
+
 // Nothing proven carries the session's traffic: it is routed into the tunnel
 // and held there. True for Evaluating, Degraded and Failed over a session.
 inline bool TrafficHeld(const Reading& r, const Signals& s) {

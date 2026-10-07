@@ -2994,17 +2994,22 @@ ConnectReading SdkHost::ReadConnectFacts() {
     // controller's last word ("CONNECTING") beside a torn-down session is the
     // same lie in miniature.
     r.rawStatus = "DISCONNECTED";
+    r.statusObserved = connectVc_.has_value();
     return r;
   }
   const health::SdkStatus parsed = health::ParseSdkStatus(r.rawStatus);
   if (parsed != health::SdkStatus::Unknown && parsed != health::SdkStatus::Disconnected) {
     lastKnownSdk_.store(static_cast<int>(parsed));
     r.sdk = parsed;
-    return r;
+  } else {
+    // Nothing usable came back this time (a controller that has just been
+    // reopened, or none at all): keep the last thing this session actually
+    // said.
+    r.sdk = static_cast<health::SdkStatus>(lastKnownSdk_.load());
   }
-  // Nothing usable came back this time (a controller that has just been
-  // reopened, or none at all): keep the last thing this session actually said.
-  r.sdk = static_cast<health::SdkStatus>(lastKnownSdk_.load());
+  // With the presentation closed since before the session's first status
+  // there is no evidence at all, and the tray keeps the session's claim.
+  r.statusObserved = connectVc_.has_value() || r.sdk != health::SdkStatus::Unknown;
   return r;
 }
 

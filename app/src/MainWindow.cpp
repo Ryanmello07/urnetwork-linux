@@ -2195,7 +2195,7 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
 // page yet (the login view), connected_ is the only answer there is.
 void MainWindow::ToggleConnect() {
   // THE TRAY'S ENTRY POINT, and it must decide from what the TRAY IS SHOWING.
-  // The tray's label is set from on_connected_change, i.e. from connected_
+  // The tray's label is set from on_tray_state, i.e. from connected_
   // alone (main.cpp). ConnectPage's button uses a wider predicate — connected
   // OR connecting — so routing the tray through the page's predicate made the
   // two disagree for the whole connecting window: the menu said "Connect"
@@ -2300,9 +2300,19 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   if (connectPage_) connectPage_->ApplyConnectReading(reading);
   if (sessionChanged) ApplyStatusStripDetails();
   UpdateBalanceNotice();
-  if (on_connected_change && (connected_ != wasConnected || !trayConnectedPushed_)) {
-    trayConnectedPushed_ = true;
-    on_connected_change(connected_);
+  // The tray: its item follows the session, its connected icon means proven
+  // (a session still building, held or degraded is not), and its tooltip
+  // names the state, all from this one reading. A session the window has not
+  // seen a status for keeps its own claim (health::TrayReading).
+  const health::Reading tray = health::TrayReading(view, signals, reading.statusObserved);
+  const bool proven = health::Proven(tray);
+  const std::string status = T_(tray.textKey, tray.textEnglish);
+  if (on_tray_state && (connected_ != wasConnected || proven != trayProven_ ||
+                        status != trayStatus_ || !trayStatePushed_)) {
+    trayStatePushed_ = true;
+    trayProven_ = proven;
+    trayStatus_ = status;
+    on_tray_state(connected_, proven, status);
   }
 }
 

@@ -307,3 +307,52 @@ UR_TEST(trafficIsHeldOnlyWhileNothingProvenCarriesASession) {
   UR_EXPECT_TRUE(std::string(HeldLineFor(true).key) == "conn_traffic_blocked");
   UR_EXPECT_TRUE(std::string(HeldLineFor(false).key) == "conn_traffic_blocked_unprotected");
 }
+
+// The tray's connected icon means proven: a held blip still is, and nothing
+// that is building, held, degraded, failed, blocked or going down is.
+UR_TEST(onlyAProvenConnectionIsProven) {
+  Signals held = Session(SdkStatus::Connecting, 4);
+  held.proofLoss = ProofLoss::Held;
+  UR_EXPECT_TRUE(Proven(Render(Session(SdkStatus::Connected, 4))));
+  UR_EXPECT_TRUE(Proven(Render(held)));
+  Signals lost = held;
+  lost.proofLoss = ProofLoss::Lost;
+  Signals blocked = Session(SdkStatus::Connected, 4);
+  blocked.insufficientBalance = true;
+  Signals leaving = Session(SdkStatus::Connected, 4);
+  leaving.disconnectRequested = true;
+  for (const Signals& s : {Session(SdkStatus::Connecting, 0), Session(SdkStatus::Connecting, 4),
+                           Session(SdkStatus::Failed, 4), lost, blocked, leaving, Signals{}}) {
+    UR_EXPECT_FALSE(Proven(Render(s)));
+  }
+}
+
+// The tray keeps a session's own claim while no status has been observed for
+// it (started or still unproven with the window hidden), icon and words, and
+// never upgrades one that was observed.
+UR_TEST(theTrayKeepsTheSessionsClaimWithNoStatusObserved) {
+  const Signals hidden = Session(SdkStatus::Unknown, 0);
+  const Reading claimed = TrayReading(Render(hidden), hidden, /*statusObserved=*/false);
+  UR_EXPECT_TRUE(Proven(claimed));
+  UR_EXPECT_TRUE(std::string(claimed.textKey) == "connected");
+  UR_EXPECT_TRUE(std::string(claimed.textEnglish) == "Connected");
+  // an observed Connecting, or one building in the window, is not proven
+  const Signals building = Session(SdkStatus::Connecting, 0);
+  const Reading observed = TrayReading(Render(building), building, /*statusObserved=*/true);
+  UR_EXPECT_FALSE(Proven(observed));
+  UR_EXPECT_TRUE(std::string(observed.textEnglish) == "Connecting to providers");
+  UR_EXPECT_FALSE(Proven(TrayReading(Render(hidden), hidden, /*statusObserved=*/true)));
+  // no session, a teardown and a block read as the window's, evidence or not
+  Signals leaving = hidden;
+  leaving.disconnectRequested = true;
+  Signals blocked = hidden;
+  blocked.insufficientBalance = true;
+  for (const Signals& s : {Signals{}, leaving, blocked}) {
+    const Reading tray = TrayReading(Render(s), s, /*statusObserved=*/false);
+    UR_EXPECT_FALSE(Proven(tray));
+    UR_EXPECT_TRUE(tray.state == Render(s).state);
+  }
+  // an observed proof stays proven
+  const Signals carrying = Session(SdkStatus::Connected, 4);
+  UR_EXPECT_TRUE(Proven(TrayReading(Render(carrying), carrying, /*statusObserved=*/true)));
+}
