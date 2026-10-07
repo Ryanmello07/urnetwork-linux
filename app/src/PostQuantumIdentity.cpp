@@ -63,15 +63,6 @@ void RoundedRectPath(const Cairo::RefPtr<Cairo::Context>& cr, double inset, doub
   cr->close_path();
 }
 
-// click-to-copy: pointer cursor + released gesture
-void MakeClickable(Gtk::Widget& widget, std::function<void()> action) {
-  SetPointerCursor(widget);
-  auto gesture = Gtk::GestureClick::create();
-  gesture->signal_released().connect(
-      [action = std::move(action)](int, double, double) { action(); });
-  widget.add_controller(gesture);
-}
-
 }  // namespace
 
 // The providers with an established, identity-verified e2e session, decoded
@@ -208,13 +199,16 @@ void ProviderIdentitiesSheet::Refresh() {
 
   RemoveAllChildren(listBox_);
   auto copyable = [this](Gtk::Label* label, std::string value, bool isHash) {
-    MakeClickable(*label, [this, value = std::move(value), isHash] {
-      get_clipboard()->set_text(value);
-      adw_toast_overlay_add_toast(
-          toastOverlay_,
-          adw_toast_new(isHash ? T_("identity_key_hash_copied", "Provider identity key hash copied")
-                               : T_("client_id_copied", "Client ID copied")));
-    });
+    return MakeCopyTextButton(
+        *label, T_("copy_to_clipboard", "Copy to Clipboard"),
+        [this, value = std::move(value), isHash] {
+          get_clipboard()->set_text(value);
+          adw_toast_overlay_add_toast(
+              toastOverlay_,
+              adw_toast_new(isHash ? T_("identity_key_hash_copied",
+                                        "Provider identity key hash copied")
+                                   : T_("client_id_copied", "Client ID copied")));
+        });
   };
   for (const IdentityRow& row : rows) {
     auto* rowBox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 16);
@@ -235,8 +229,7 @@ void ProviderIdentitiesSheet::Refresh() {
     hashLabel->add_css_class("ur-mono-13");
     hashLabel->set_xalign(0);
     hashLabel->set_wrap(true);
-    copyable(hashLabel, row.hash, /*isHash=*/true);
-    column->append(*hashLabel);
+    column->append(*copyable(hashLabel, row.hash, /*isHash=*/true));
 
     // the client id, click to copy
     auto* idLabel = Gtk::make_managed<Gtk::Label>(row.clientId);
@@ -244,8 +237,7 @@ void ProviderIdentitiesSheet::Refresh() {
     idLabel->add_css_class("ur-label-faint");
     idLabel->set_xalign(0);
     idLabel->set_wrap(true);
-    copyable(idLabel, row.clientId, /*isHash=*/false);
-    column->append(*idLabel);
+    column->append(*copyable(idLabel, row.clientId, /*isHash=*/false));
 
     rowBox->append(*column);
     listBox_.append(*rowBox);

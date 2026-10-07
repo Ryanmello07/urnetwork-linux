@@ -37,6 +37,11 @@ window.background { background-color: #101010; color: #f8f8f8; }
    off, so it looks like the box it replaces; the focus ring stays */
 button.ur-card-tappable { background: none; box-shadow: none; padding: 0;
   min-height: 0; min-width: 0; font-weight: normal; }
+/* click-to-copy text as a button: the text's own look and no chrome, a
+   faint fill on hover; the focus ring stays */
+button.ur-copy-text { background: none; box-shadow: none; padding: 0;
+  min-height: 0; min-width: 0; font-weight: normal; border-radius: 4px; }
+button.ur-copy-text:hover { background-color: alpha(#ffffff, .04); }
 .ur-banner { background-color: #1c1c1c; border-radius: 12px; padding: 12px; }
 /* dns recommendation pill: a small left-aligned coral-tinted capsule atop the
    Custom DNS card, nudging when the applied dns settings differ from the
@@ -219,6 +224,22 @@ void RemoveAllChildren(Gtk::Box& box) {
 
 void SetPointerCursor(Gtk::Widget& widget) {
   gtk_widget_set_cursor_from_name(widget.gobj(), "pointer");
+}
+
+Gtk::Button* MakeCopyTextButton(Gtk::Label& label, const Glib::ustring& hint,
+                                std::function<void()> copy) {
+  auto* button = Gtk::make_managed<Gtk::Button>();
+  button->add_css_class("ur-copy-text");
+  button->set_child(label);
+  button->set_tooltip_text(hint);
+  SetPointerCursor(*button);
+  // a button whose child is set has no name of its own: the text is the name
+  gtk_accessible_update_property(GTK_ACCESSIBLE(button->gobj()), GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                 label.get_text().c_str(), GTK_ACCESSIBLE_PROPERTY_DESCRIPTION,
+                                 hint.c_str(), -1);
+  gtk_accessible_update_state(GTK_ACCESSIBLE(label.gobj()), GTK_ACCESSIBLE_STATE_HIDDEN, TRUE, -1);
+  button->signal_clicked().connect([copy = std::move(copy)] { copy(); });
+  return button;
 }
 
 void ShowToast(Gtk::Widget& context, const std::string& message) {

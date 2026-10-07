@@ -433,16 +433,13 @@ Gtk::Widget* ProviderLocationsSheet::BuildRow(size_t index, RowWidgets& out) {
   out.clientId->set_xalign(0);
   out.clientId->set_hexpand(true);
   out.clientId->set_ellipsize(Pango::EllipsizeMode::END);
-  out.clientId->set_tooltip_text(T_("copy_to_clipboard", "Copy to Clipboard"));
-  SetPointerCursor(*out.clientId);
   {
-    auto gesture = Gtk::GestureClick::create();
     const std::string clientId = row.clientId;
-    gesture->signal_released().connect(
-        [this, clientId](int, double, double) { CopyClientId(clientId); });
-    out.clientId->add_controller(gesture);
+    auto* copy = MakeCopyTextButton(*out.clientId, T_("copy_to_clipboard", "Copy to Clipboard"),
+                                    [this, clientId] { CopyClientId(clientId); });
+    copy->set_hexpand(true);
+    idRow->append(*copy);
   }
-  idRow->append(*out.clientId);
   if (auto it = identityByClientId_.find(row.clientId); it != identityByClientId_.end()) {
     const IdentityRow* identity = it->second;
     auto* badge = Gtk::make_managed<IdenticonWidget>(kBadgeIdenticonSize);

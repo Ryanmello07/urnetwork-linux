@@ -697,6 +697,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/DaemonStatusPollWiringTest.cpp',
     'tests/LocationRowNameTest.cpp',
     'tests/LocationsSheetWiringTest.cpp',
+    'tests/CopyTextButtonWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -776,6 +777,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # the same way.
               # LocationsSheetWiringTest reads the location chooser's rows, the Network
               # page's row name and their css the same way.
+              # CopyTextButtonWiringTest reads the click-to-copy texts' sheets and their
+              # button the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
