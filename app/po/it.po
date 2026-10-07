@@ -8812,10 +8812,25 @@ msgctxt "upd_available_title_version"
 msgid "Update available: v{}"
 msgstr "Aggiornamento disponibile: v{}"
 
+#. Linux Settings > General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.
+msgctxt "upd_check_held_message"
+msgid "GitHub asked this network to wait until {} before it is asked again, and the app waits until then."
+msgstr "GitHub ha chiesto a questa rete di attendere fino a {} prima di interrogarlo di nuovo, e l’app attende fino ad allora."
+
 #. Linux Settings > General: the button on the "Check for updates" row that checks for a new release now. The last check's outcome shows on the line under the row.
 msgctxt "upd_check_now"
 msgid "Check now"
 msgstr "Cerca ora"
+
+#. Linux Settings > General: the sentence under upd_check_stale_title ("Couldn't check for updates since {date}"). The app checks again every six hours while automatic checks are on; "the button" is the row's Check now button.
+msgctxt "upd_check_stale_message"
+msgid "A newer release may be out. The app keeps trying every six hours, and the button tries now."
+msgstr "Potrebbe essere uscita una versione più recente. L’app continua a riprovare ogni sei ore, e il pulsante riprova subito."
+
+#. Linux Settings > General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).
+msgctxt "upd_check_stale_title"
+msgid "Couldn't check for updates since {}"
+msgstr "Impossibile cercare aggiornamenti dal {}"
 
 #. Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.
 msgctxt "upd_downloaded_message"

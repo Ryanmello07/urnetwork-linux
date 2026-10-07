@@ -1022,7 +1022,10 @@ upd_auto_check_note
 upd_available_appimage_message
 upd_available_package_message
 upd_available_title_version
+upd_check_held_message
 upd_check_now
+upd_check_stale_message
+upd_check_stale_title
 upd_downloaded_message
 upd_failed_checksum
 upd_failed_download
