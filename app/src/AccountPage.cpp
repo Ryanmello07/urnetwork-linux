@@ -1768,13 +1768,13 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
     SetToned(*dailyValue_, kOffWhite, daily);
     kit::SetAccessibleLabel(
         *dailyValue_,
-        Glib::ustring(T_("daily_data_balance_label", "Daily Data Balance:")) + ", " + daily);
+        Glib::ustring(T_("daily_data_balance", "Daily Data Balance")) + ", " + daily);
   } else {
     ApplyFieldState(*dailyValue_, CanCallApi() ? AccountFieldState::Loading
                                                : AccountFieldState::NoSession);
     kit::SetAccessibleLabel(
         *dailyValue_,
-        Glib::ustring(T_("daily_data_balance_label", "Daily Data Balance:")) + ", " +
+        Glib::ustring(T_("daily_data_balance", "Daily Data Balance")) + ", " +
             dailyValue_->get_text());
   }
 
@@ -1892,7 +1892,7 @@ void AccountPage::BuildPlanPane() {
   // 5. daily balance.
   {
     auto row = kit::MakePaneKeyValueRow(
-        T_("daily_data_balance_label", "Daily Data Balance:"), {}, kRowKeyValue);
+        T_("daily_data_balance", "Daily Data Balance"), {}, kRowKeyValue);
     dailyValue_ = row.value;
     content->append(*row.root);
   }
