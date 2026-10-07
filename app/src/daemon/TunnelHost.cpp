@@ -2455,18 +2455,19 @@ bool TunnelHost::CheckEgressWitnessLocked() {
 }
 
 void TunnelHost::Reap() {
-  {
-    std::scoped_lock lock(opMutex_);
-    ReapRetiredLoopsLocked();
-    if (CheckTunnelStormLocked()) return;  // the tunnel is gone; nothing else to reap
-    // Ordered AFTER the storm guard: if traffic is already amplifying, stop it
-    // on the cheap byte-counter read rather than spending an nft fork first.
-    if (CheckEgressWitnessLocked()) return;
-  }
-  if (busy_.load()) return;  // a bring-up owns the session AND the filter
-
+  // Try-locked, as every main-loop callback here is. A bring-up holds opMutex_
+  // for the whole of its run, and waiting for it here froze the control loop,
+  // `status` included, from the first tick of an async start to its end. The
+  // guards below cannot judge a session mid-bring-up anyway; they run on the
+  // next tick that finds the lock free.
   std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
   if (!lock.owns_lock()) return;  // next tick
+  ReapRetiredLoopsLocked();
+  if (CheckTunnelStormLocked()) return;  // the tunnel is gone; nothing else to reap
+  // Ordered AFTER the storm guard: if traffic is already amplifying, stop it
+  // on the cheap byte-counter read rather than spending an nft fork first.
+  if (CheckEgressWitnessLocked()) return;
+  if (busy_.load()) return;  // a bring-up owns the session AND the filter
 
   // The log upload's standalone device once its upload has reported, and a
   // request that waited for a bring-up which is now over.
