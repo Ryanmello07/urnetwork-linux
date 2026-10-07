@@ -106,6 +106,7 @@ app_too_old_for_daemon
 app_version
 apple
 apple_sign_in_method_added
+apps
 apps_listed_bypass_vpn
 are_you_sure_delete_account
 auth_code
@@ -536,6 +537,7 @@ exclude_app_launcher_name
 exclude_apps_from_vpn
 exclude_apps_from_vpn_note
 exclude_apps_launcher_note
+excluded
 expires
 export_logs
 extender

@@ -711,7 +711,7 @@ msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "تمت إضافة طريقة تسجيل الدخول عبر Apple"
 
-#. transfer stats and split rules
+#. transfer stats and split rules; Linux: the header over the apps not yet excluded in Settings > Exclude apps from the VPN.
 msgctxt "apps"
 msgid "Apps"
 msgstr "التطبيقات"
@@ -4324,7 +4324,7 @@ msgctxt "exclude_apps_launcher_note"
 msgid "Each app you turn on gets a second launcher in your app menu, with (outside VPN) after its name. An app opened from that launcher bypasses the VPN and the kill switch. An app that is already running stays in the VPN until you quit it, and Flatpak and Snap apps are not listed."
 msgstr "يحصل كل تطبيق تفعّله على مشغّل ثانٍ في قائمة التطبيقات، يتبع اسمه (خارج VPN). التطبيق الذي يُفتح من هذا المشغّل يتجاوز VPN ومفتاح القتل. التطبيق الذي يعمل بالفعل يبقى داخل VPN حتى تغلقه، ولا تُدرج تطبيقات Flatpak وSnap."
 
-#. transfer stats and split rules
+#. transfer stats and split rules; Linux: the header over the apps already excluded in Settings > Exclude apps from the VPN.
 msgctxt "excluded"
 msgid "Excluded"
 msgstr "مستثنى"
