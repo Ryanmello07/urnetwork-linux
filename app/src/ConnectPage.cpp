@@ -19,6 +19,7 @@
 #include "I18n.hpp"
 #include "KeyedReconcile.hpp"
 #include "KillSwitchCopy.hpp"
+#include "LocationSelection.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
 #include "ProvideLine.hpp"
 #include "Ui.hpp"
@@ -1668,6 +1669,13 @@ void ConnectPage::ClearDisconnectIntent() {
 // the relay stays because the page re-renders BEFORE relaying, and a question
 // asked after the relay would get the POST-press answer.
 void ConnectPage::RelayConnectPress() {
+  // Retry stops the failed session and connects again; it is no disconnect
+  // for the user to wait on
+  if (actionIsRetry_) {
+    disconnectRequestedAtUs_ = 0;
+    if (on_retry_connect) on_retry_connect();
+    return;
+  }
   const bool disconnect = actionIsDisconnect_;
   disconnectRequestedAtUs_ = disconnect ? g_get_monotonic_time() : 0;
   // NOTHING IS CLEARED HERE ANY MORE. The previous fix had to drop the pushed
@@ -1696,7 +1704,8 @@ void ConnectPage::ApplyConnectStatus() {
   // Asked once, here, because DisconnectIntentLive SETTLES the intent as a
   // side effect and the label has to see the same answer the headline did.
   const bool disconnecting = DisconnectIntentLive();
-  const health::Reading view = health::Render(reading_.ToSignals(disconnecting));
+  const health::Signals signals = reading_.ToSignals(disconnecting);
+  const health::Reading view = health::Render(signals);
   renderedState_ = view.state;
 
   const Glib::ustring text = T_(view.textKey, view.textEnglish);
@@ -1727,6 +1736,23 @@ void ConnectPage::ApplyConnectStatus() {
                              ? T_("conn_not_protected",
                                   "Your internet traffic is not protected.")
                              : "");
+  // Traffic held, not exposed (Windows #27): nothing proven carries the
+  // session, so what is routed into the tunnel goes nowhere, and the line says
+  // whether the kill switch's floor keeps it from leaving another way.
+  Glib::ustring held;
+  if (health::TrafficHeld(view, signals)) {
+    const KillSwitchStatus killSwitch = host_.CurrentKillSwitchStatus();
+    const health::HeldLine line =
+        health::HeldLineFor(killSwitch.installed_known &&
+                            killSwitch.installed == ctl::KillSwitchState::Connected);
+    held = T_(line.key, line.english);
+  }
+  kit::SetTextOrCollapse(*trafficHeldText_, held);
+  // why it is not connected yet, or what Retry does (the SDK's window diagnosis)
+  const health::ReasonLine reason = health::ReasonLineFor(view.state, reading_.stallReason);
+  const Glib::ustring reasonText =
+      reason.key ? Glib::ustring(T_(reason.key, reason.english)) : Glib::ustring();
+  kit::SetTextOrCollapse(*statusReasonText_, reasonText);
   // The daemon's notice first: it says what already happened. The failsafe's
   // warning says what happens next if nothing changes.
   Glib::ustring notice = daemonNotice_;
@@ -1753,8 +1779,10 @@ void ConnectPage::ApplyConnectStatus() {
   // button labelled Disconnect run the connect path.
   const bool isDisconnect = view.action == health::Action::Disconnect;
   actionIsDisconnect_ = isDisconnect;
-  connectBtn_->set_label(isDisconnect ? T_("disconnect", "Disconnect")
-                                      : T_("connect", "Connect"));
+  actionIsRetry_ = view.action == health::Action::Retry;
+  connectBtn_->set_label(actionIsRetry_ ? T_("retry", "Retry")
+                         : isDisconnect ? T_("disconnect", "Disconnect")
+                                        : T_("connect", "Connect"));
   connectBtn_->remove_css_class(isDisconnect ? "ur-pane-primary" : "ur-pane-secondary");
   connectBtn_->add_css_class(isDisconnect ? "ur-pane-secondary" : "ur-pane-primary");
   // A teardown the user asked for is IN FLIGHT, not offered again. Leaving the
@@ -1764,6 +1792,13 @@ void ConnectPage::ApplyConnectStatus() {
   // (kDisconnectIntentUs), so this can never latch off.
   connectBtn_->set_sensitive(!disconnecting);
   hero_->set_sensitive(!disconnecting);
+  // the strip says what this row says, from this render
+  if (on_status_rendered) on_status_rendered(text, dot);
+}
+
+void ConnectPage::RepublishStatus() {
+  ApplyConnectStatus();
+  ApplyLocationRow();
 }
 
 void ConnectPage::ApplyBalanceNotice(const balance_notice::Signals& signals) {
@@ -3204,19 +3239,13 @@ void ConnectPage::ApplyLocationRow() {
   // device call + a JSON parse
   const auto& location = selectedLocation_;
   Glib::ustring text = T_("best_available_provider", "Best available provider");
-  const bool bestAvailable =
-      !location || (location->connect_location_id &&
-                    location->connect_location_id->best_available.value_or(false));
-  if (!bestAvailable) {
+  if (!IsBestAvailableSelected(location)) {
     std::string displayName = location->name.value_or(std::string());
-    if (location->connect_location_id && location->connect_location_id->client_id &&
-        !location->connect_location_id->client_id->empty()) {
-      if (peers_) {
-        for (const auto& peer : *peers_) {
-          if (peer.ClientId && *peer.ClientId == *location->connect_location_id->client_id) {
-            displayName = PeerDisplayName(peer);
-            break;
-          }
+    if (peers_) {
+      for (const auto& peer : *peers_) {
+        if (IsPeerSelected(location, peer)) {
+          displayName = PeerDisplayName(peer);
+          break;
         }
       }
     }
@@ -3227,6 +3256,7 @@ void ConnectPage::ApplyLocationRow() {
   kit::SetAccessibleLabel(*locationRow_,
                           Glib::ustring(T_("selected_provider", "Selected provider")) + ", " +
                               text);
+  if (on_location_rendered) on_location_rendered(text);
 }
 
 // §2.8 PeersLine: a stale zero is never presented as fact — with the peer feed
@@ -3360,22 +3390,9 @@ void ConnectPage::RefreshFeeds(bool force) {
   // is shown by its device name), so the location lands first and the row is
   // rendered at most once per pass.
   bool locationRowDirty = false;
-  {
-    // the connected country drives the dns recommendation, and the selected
-    // location drives the provider row: ONE locked read, on change only
-    auto location = host_.SelectedLocation();
-    const uint64_t sig = LocationSig(location);
-    if (force || sig != locationSig_) {
-      locationSig_ = sig;
-      selectedLocation_ = std::move(location);
-      countryCode_ = selectedLocation_ && selectedLocation_->country_code
-                         ? LowerCopy(*selectedLocation_->country_code)
-                         : std::string();
-      countryName_ =
-          selectedLocation_ ? selectedLocation_->country.value_or(std::string()) : std::string();
-      locationRowDirty = true;
-      ApplyDnsRecommendationPill();
-    }
+  if (ReadLocations(force)) {
+    locationRowDirty = true;
+    ApplyDnsRecommendationPill();
   }
   {
     // the peers feed drives BOTH the peers group and the provider row's peer
@@ -3421,6 +3438,8 @@ void ConnectPage::RefreshFeeds(bool force) {
     host_.RefreshKillSwitchStatus([this, epoch, seen](KillSwitchStatus) {
       if (*epoch != seen) return;
       ApplyKillSwitchUi();
+      // the held line names whether the floor is in force
+      if (trafficHeldText_->get_visible()) ApplyConnectStatus();
     });
   }
 }
@@ -3476,6 +3495,21 @@ void ConnectPage::ApplyOverrides(std::optional<urnet::BlockActionOverrideList> o
 // only what actually changed (each read is fingerprinted, so an idle session
 // rebuilds nothing). Once a real event has landed the poll steps back to 5 s.
 void ConnectPage::PollFeeds() { RefreshFeeds(false); }
+
+bool ConnectPage::ReadLocations(bool force) {
+  // The provider row shows the selection, which a Disconnect leaves in place;
+  // the dns pill's regional recommendation follows the connected country.
+  auto selected = host_.SelectedLocation();
+  auto connected = host_.ConnectedLocation();
+  const uint64_t sig = HashMix(LocationSig(selected), LocationSig(connected));
+  if (!force && sig == locationSig_) return false;
+  locationSig_ = sig;
+  selectedLocation_ = std::move(selected);
+  countryCode_ = connected && connected->country_code ? LowerCopy(*connected->country_code)
+                                                      : std::string();
+  countryName_ = connected ? connected->country.value_or(std::string()) : std::string();
+  return true;
+}
 
 void ConnectPage::Resync() {
   ++(*epoch_);  // anything in flight against the old reading is stale
@@ -3564,16 +3598,7 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       if (contractsSheet_ && contractsSheet_->is_visible()) contractsSheet_->Refresh();
       break;
     case DrawerEvent::Location: {
-      // the provider row and the dns pill's regional recommendation both
-      // follow the connected location — ONE locked read for both
-      auto location = host_.SelectedLocation();
-      locationSig_ = LocationSig(location);
-      selectedLocation_ = std::move(location);
-      countryCode_ = selectedLocation_ && selectedLocation_->country_code
-                         ? LowerCopy(*selectedLocation_->country_code)
-                         : std::string();
-      countryName_ =
-          selectedLocation_ ? selectedLocation_->country.value_or(std::string()) : std::string();
+      ReadLocations(/*force=*/true);
       ApplyLocationRow();
       ApplyDnsRecommendationPill();
       break;

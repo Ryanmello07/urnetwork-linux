@@ -145,9 +145,11 @@ UR_TEST(ProvideWiring_TheGuiReconcilesAfterDisconnectAndModeChanges) {
   UR_EXPECT_TRUE(Has(FunctionBody(host, "void SdkHost::SetProviderTransportSettings("),
                      "/*settingsChanged=*/true"));
   const std::string poll =
-      FunctionBody(ReadProvideSource("MainWindow.cpp"), "bool MainWindow::PollDaemonHealth()");
+      FunctionBody(ReadProvideSource("MainWindow.cpp"),
+                   "void MainWindow::ApplyDaemonHealth("
+                   "const std::optional<ctl::StatusReply>& status)");
   const size_t idle = poll.find("if (!connected_) {");
-  const size_t idleEnd = poll.find("return true;", idle);
+  const size_t idleEnd = poll.find("return;", idle);
   UR_EXPECT_TRUE(idle != std::string::npos && idleEnd != std::string::npos);
   if (idle == std::string::npos || idleEnd == std::string::npos) return;
   UR_EXPECT_TRUE(Has(poll.substr(idle, idleEnd - idle), "host_.ReconcileProvider("));

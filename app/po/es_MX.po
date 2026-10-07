@@ -380,7 +380,7 @@ msgctxt "adv_mode_rpc_only"
 msgid "rpc-only"
 msgstr "solo RPC"
 
-#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
 msgctxt "adv_mode_tunnel"
 msgid "tunnel"
 msgstr "túnel"
@@ -465,17 +465,17 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "Anulación de ruta"
 
-#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
 msgctxt "adv_routes"
 msgid "Routes"
 msgstr "Rutas"
 
-#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
 msgctxt "adv_routes_dns_degraded"
 msgid "on, dns not applied"
 msgstr "activas, DNS sin aplicar"
 
-#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
 msgctxt "adv_routes_kill_switch_armed"
 msgid "off, kill switch armed"
 msgstr "inactivas, Kill switch armado"
@@ -485,7 +485,7 @@ msgctxt "adv_routes_no_firewall"
 msgid "on, no leak guard"
 msgstr "activas, sin protección contra fugas"
 
-#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
 msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
@@ -530,7 +530,7 @@ msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "País de salida de la sesión"
 
-#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
 msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "Sesión"
@@ -1445,7 +1445,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "Desactivado por defecto. Cuando está activado, URnetwork se conecta a tu proveedor seleccionado en cuanto abres la app. Esto cambia el próximo inicio - no conecta ahora."
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "Conexión degradada: reconectando"
@@ -1460,7 +1460,7 @@ msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "No se pudo conectar"
 
-#. Windows Connect page reason line when connecting failed.
+#. Windows and Linux Connect page reason line when connecting failed.
 msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "No se pudo contactar a ningún proveedor. Reintentar reconstruye la conexión desde cero."
@@ -1490,32 +1490,32 @@ msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "Tu tráfico de internet no está protegido."
 
-#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+#. Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
 msgctxt "conn_reason_auth"
 msgid "Signing in to the platform is failing…"
 msgstr "El inicio de sesión en la plataforma está fallando…"
 
-#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+#. Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
 msgctxt "conn_reason_platform"
 msgid "Contacting the platform…"
 msgstr "Contactando a la plataforma…"
 
-#. Windows Connect page reason line while the selected providers do not answer.
+#. Windows and Linux Connect page reason line while the selected providers do not answer.
 msgctxt "conn_reason_providers"
 msgid "Providers not responding — retrying…"
 msgstr "Los proveedores no responden: reintentando…"
 
-#. Windows Connect page reason line while the platform asks the app to slow down.
+#. Windows and Linux Connect page reason line while the platform asks the app to slow down.
 msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "Límite de solicitudes alcanzado: esperando…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "No hay ningún proveedor que funcione en este momento: tu tráfico está bloqueado, no expuesto. Desconéctate para volver a tu conexión normal."
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "No hay ningún proveedor que funcione en este momento: el tráfico que entra en el túnel no llega a ninguna parte y la protección contra fugas está desactivada, así que parte del tráfico puede evitarla. Desconéctate para volver a tu conexión normal."
@@ -9084,7 +9084,7 @@ msgctxt "urnetwork_referral_code"
 msgid "URnetwork Referral Code"
 msgstr "Código de referencia URnetwork"
 
-#. Used in NetworkApp.swift.
+#. Used in NetworkApp.swift. Also the Windows and Linux status strip's name for its connection state field, read by screen readers.
 msgctxt "urnetwork_status"
 msgid "URnetwork Status"
 msgstr "Estado de URnetwork"

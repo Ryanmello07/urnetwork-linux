@@ -87,8 +87,9 @@ UR_TEST(stateTableConnectingAndEvaluating) {
 }
 
 UR_TEST(stateTableFailedAndDisconnected) {
+  // the failed state's one action is Retry: stop, then connect again
   ExpectRow("window failed", Session(SdkStatus::Failed, 0), State::Failed, "Couldn't connect",
-            Dot::Coral, Hero::Error, Action::Disconnect);
+            Dot::Coral, Hero::Error, Action::Retry);
   ExpectRow("idle", Signals{}, State::Disconnected, "Disconnected", Dot::Idle, Hero::Disconnected,
             Action::Connect);
   UR_EXPECT_TRUE(Render(Signals{}).showNotProtected);
@@ -194,8 +195,12 @@ UR_TEST(theButtonAndTheHeadlineComeFromTheSameReading) {
               s.insufficientBalance = balance != 0;
               s.disconnectRequested = intent != 0;
               const Reading r = Render(s);
-              const bool offersDisconnect = r.action == Action::Disconnect;
+              // Retry stops the failed session before it connects again
+              const bool offersDisconnect = r.action != Action::Connect;
               const bool somethingToStop = SessionUp(s) || s.disconnectRequested;
+              if ((r.action == Action::Retry) != (r.state == State::Failed)) {
+                UR_FAIL("Retry is offered outside the failed state, or not in it");
+              }
               if (offersDisconnect != somethingToStop) {
                 UR_FAIL("button action disagrees with the session reading");
               }
@@ -230,5 +235,163 @@ UR_TEST(theButtonAndTheHeadlineComeFromTheSameReading) {
         }
       }
     }
+  }
+}
+
+// ---- the degrade hold (Windows' Tracker, over CONNECTED) -------------------
+
+UR_TEST(degradeHoldKeepsABlipConnectedAndCallsALossDegraded) {
+  DegradeHold hold;
+  UR_EXPECT_TRUE(hold.Update(true, false, 0) == ProofLoss::None);  // never proven: nothing held
+  UR_EXPECT_TRUE(hold.Update(true, true, 1000) == ProofLoss::None);
+  // the controller stops saying CONNECTED: held for the hold, then lost
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000) == ProofLoss::Held);
+  UR_EXPECT_EQ(2000 + DegradeHold::kDegradeHoldMillis, hold.ReevalAtMillis());
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000 + DegradeHold::kDegradeHoldMillis - 1) ==
+                 ProofLoss::Held);
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000 + DegradeHold::kDegradeHoldMillis) ==
+                 ProofLoss::Lost);
+  UR_EXPECT_EQ(0, hold.ReevalAtMillis());
+  // one CONNECTED recovers at once, and the next loss starts a fresh hold
+  UR_EXPECT_TRUE(hold.Update(true, true, 20000) == ProofLoss::None);
+  UR_EXPECT_TRUE(hold.Update(true, false, 21000) == ProofLoss::Held);
+  UR_EXPECT_EQ(21000 + DegradeHold::kDegradeHoldMillis, hold.ReevalAtMillis());
+}
+
+UR_TEST(degradeHoldStartsOverWithTheSessionOrANewAttempt) {
+  DegradeHold hold;
+  hold.Update(true, true, 0);
+  // a session that goes down takes its proof with it
+  UR_EXPECT_TRUE(hold.Update(false, false, 1000) == ProofLoss::None);
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000) == ProofLoss::None);
+  // and so does a deliberate connect: a new location's window is not a loss
+  hold.Update(true, true, 3000);
+  hold.NoteNewAttempt();
+  UR_EXPECT_TRUE(hold.Update(true, false, 4000) == ProofLoss::None);
+  UR_EXPECT_TRUE(hold.Update(true, false, 4000 + 10 * DegradeHold::kDegradeHoldMillis) ==
+                 ProofLoss::None);
+  UR_EXPECT_EQ(0, hold.ReevalAtMillis());
+}
+
+UR_TEST(stateTableDegraded) {
+  Signals held = Session(SdkStatus::Connecting, 4);
+  held.proofLoss = ProofLoss::Held;
+  ExpectRow("a blip in the hold", held, State::Connected, "Connected", Dot::Green,
+            Hero::Connected, Action::Disconnect);
+  Signals lost = Session(SdkStatus::Connecting, 4);
+  lost.proofLoss = ProofLoss::Lost;
+  ExpectRow("a loss past the hold", lost, State::Degraded, "Connection degraded — reconnecting",
+            Dot::Coral, Hero::Connecting, Action::Disconnect);
+  UR_EXPECT_TRUE(std::string(Render(lost).textKey) == "conn_degraded");
+  // a session that was working and settled on failure since is degraded
+  lost.sdk = SdkStatus::Failed;
+  ExpectRow("lost, then failed", lost, State::Degraded, "Connection degraded — reconnecting",
+            Dot::Coral, Hero::Connecting, Action::Disconnect);
+  // the user's Disconnect and a session that is down still outrank it
+  lost.disconnectRequested = true;
+  UR_EXPECT_TRUE(Render(lost).state == State::Disconnecting);
+  Signals down = lost;
+  down.disconnectRequested = false;
+  down.tunnelBound = false;
+  UR_EXPECT_TRUE(Render(down).state == State::Disconnected);
+}
+
+UR_TEST(trafficIsHeldOnlyWhileNothingProvenCarriesASession) {
+  Signals evaluating = Session(SdkStatus::Connecting, 4);
+  UR_EXPECT_TRUE(TrafficHeld(Render(evaluating), evaluating));
+  Signals failed = Session(SdkStatus::Failed, 4);
+  UR_EXPECT_TRUE(TrafficHeld(Render(failed), failed));
+  Signals lost = Session(SdkStatus::Connecting, 4);
+  lost.proofLoss = ProofLoss::Lost;
+  UR_EXPECT_TRUE(TrafficHeld(Render(lost), lost));
+  for (const Signals& s : {Session(SdkStatus::Connected, 4), Session(SdkStatus::Connecting, 0),
+                           Signals{}}) {
+    UR_EXPECT_FALSE(TrafficHeld(Render(s), s));
+  }
+  // the held line claims "blocked, not exposed" only with the floor in force
+  UR_EXPECT_TRUE(std::string(HeldLineFor(true).key) == "conn_traffic_blocked");
+  UR_EXPECT_TRUE(std::string(HeldLineFor(false).key) == "conn_traffic_blocked_unprotected");
+}
+
+// The tray's connected icon means proven: a held blip still is, and nothing
+// that is building, held, degraded, failed, blocked or going down is.
+UR_TEST(onlyAProvenConnectionIsProven) {
+  Signals held = Session(SdkStatus::Connecting, 4);
+  held.proofLoss = ProofLoss::Held;
+  UR_EXPECT_TRUE(Proven(Render(Session(SdkStatus::Connected, 4))));
+  UR_EXPECT_TRUE(Proven(Render(held)));
+  Signals lost = held;
+  lost.proofLoss = ProofLoss::Lost;
+  Signals blocked = Session(SdkStatus::Connected, 4);
+  blocked.insufficientBalance = true;
+  Signals leaving = Session(SdkStatus::Connected, 4);
+  leaving.disconnectRequested = true;
+  for (const Signals& s : {Session(SdkStatus::Connecting, 0), Session(SdkStatus::Connecting, 4),
+                           Session(SdkStatus::Failed, 4), lost, blocked, leaving, Signals{}}) {
+    UR_EXPECT_FALSE(Proven(Render(s)));
+  }
+}
+
+// The tray keeps a session's own claim while no status has been observed for
+// it (started or still unproven with the window hidden), icon and words, and
+// never upgrades one that was observed.
+UR_TEST(theTrayKeepsTheSessionsClaimWithNoStatusObserved) {
+  const Signals hidden = Session(SdkStatus::Unknown, 0);
+  const Reading claimed = TrayReading(Render(hidden), hidden, /*statusObserved=*/false);
+  UR_EXPECT_TRUE(Proven(claimed));
+  UR_EXPECT_TRUE(std::string(claimed.textKey) == "connected");
+  UR_EXPECT_TRUE(std::string(claimed.textEnglish) == "Connected");
+  // an observed Connecting, or one building in the window, is not proven
+  const Signals building = Session(SdkStatus::Connecting, 0);
+  const Reading observed = TrayReading(Render(building), building, /*statusObserved=*/true);
+  UR_EXPECT_FALSE(Proven(observed));
+  UR_EXPECT_TRUE(std::string(observed.textEnglish) == "Connecting to providers");
+  UR_EXPECT_FALSE(Proven(TrayReading(Render(hidden), hidden, /*statusObserved=*/true)));
+  // no session, a teardown and a block read as the window's, evidence or not
+  Signals leaving = hidden;
+  leaving.disconnectRequested = true;
+  Signals blocked = hidden;
+  blocked.insufficientBalance = true;
+  for (const Signals& s : {Signals{}, leaving, blocked}) {
+    const Reading tray = TrayReading(Render(s), s, /*statusObserved=*/false);
+    UR_EXPECT_FALSE(Proven(tray));
+    UR_EXPECT_TRUE(tray.state == Render(s).state);
+  }
+  // an observed proof stays proven
+  const Signals carrying = Session(SdkStatus::Connected, 4);
+  UR_EXPECT_TRUE(Proven(TrayReading(Render(carrying), carrying, /*statusObserved=*/true)));
+}
+
+// ---- the reason line (the SDK's window diagnosis) --------------------------
+
+UR_TEST(theReasonLineNamesTheStallWhileTheAttemptIsNotThere) {
+  struct Row {
+    const char* reason;
+    const char* key;
+  };
+  const Row rows[] = {{"platform-unreachable", "conn_reason_platform"},
+                      {"providers-unresponsive", "conn_reason_providers"},
+                      {"rate-limited", "conn_reason_rate_limited"},
+                      {"auth-failing", "conn_reason_auth"}};
+  for (const State state :
+       {State::Connecting, State::Evaluating, State::Degraded, State::Failed}) {
+    for (const Row& row : rows) {
+      const ReasonLine line = ReasonLineFor(state, row.reason);
+      if (!line.key || std::string(line.key) != row.key) UR_FAIL(std::string(row.reason));
+    }
+    // evaluating, an unknown token and an SDK without the field say nothing
+    // the headline does not
+    for (const char* quiet : {"evaluating", "", "something-new"}) {
+      const ReasonLine line = ReasonLineFor(state, quiet);
+      const bool expectDetail = state == State::Failed;
+      if ((line.key != nullptr) != expectDetail) UR_FAIL(std::string("quiet: ") + quiet);
+    }
+  }
+  // a failure with no reason says what Retry does
+  UR_EXPECT_TRUE(std::string(ReasonLineFor(State::Failed, "").key) == "conn_failed_detail");
+  // and nothing is said over a connection, an idle page, a teardown or a block
+  for (const State state :
+       {State::Connected, State::Disconnected, State::Disconnecting, State::Blocked}) {
+    UR_EXPECT_TRUE(ReasonLineFor(state, "providers-unresponsive").key == nullptr);
   }
 }

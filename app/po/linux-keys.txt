@@ -62,6 +62,7 @@ adv_kill_switch_state_unknown
 adv_kill_switch_still_installed_fix
 adv_last_decision
 adv_matched
+adv_mode_tunnel
 adv_na
 adv_no_activity_matches
 adv_no_selection
@@ -78,6 +79,10 @@ adv_reason_block
 adv_reason_default
 adv_reason_override
 adv_reason_route
+adv_routes
+adv_routes_dns_degraded
+adv_routes_kill_switch_armed
+adv_rpc
 adv_rule_active
 adv_rule_removed
 adv_search_activity_placeholder
@@ -86,6 +91,7 @@ adv_select_a_row
 adv_selected
 adv_selection_gone
 adv_session_exit_country
+adv_session_mode
 adv_split_rules_note
 adv_undo
 adv_unknown_exit
@@ -199,12 +205,20 @@ code_sign_in_failed
 community_edition
 conn_connect_on_launch
 conn_connect_on_launch_note
+conn_degraded
 conn_failed
+conn_failed_detail
 conn_failsafe_armed
 conn_failsafe_blocked
 conn_failsafe_restored
 conn_finding_providers
 conn_not_protected
+conn_reason_auth
+conn_reason_platform
+conn_reason_providers
+conn_reason_rate_limited
+conn_traffic_blocked
+conn_traffic_blocked_unprotected
 conn_tray_force_tunnel_off
 conn_tray_lift_kill_switch
 connect
@@ -908,6 +922,7 @@ reset_link_sent_to
 resolvers
 restore_default_transports
 restore_most_secure_settings
+retry
 route_internet
 route_you
 rules
@@ -1074,6 +1089,7 @@ update
 update_password
 update_referral_network
 upgrade
+urnetwork_status
 usdc_payouts_until_migration
 usdc_waiting
 usdc_wallet_address

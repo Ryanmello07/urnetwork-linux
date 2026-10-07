@@ -379,7 +379,7 @@ msgctxt "adv_mode_rpc_only"
 msgid "rpc-only"
 msgstr "RPC のみ"
 
-#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
 msgctxt "adv_mode_tunnel"
 msgid "tunnel"
 msgstr "トンネル"
@@ -464,17 +464,17 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "ルートのオーバーライド"
 
-#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
 msgctxt "adv_routes"
 msgid "Routes"
 msgstr "ルート"
 
-#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
 msgctxt "adv_routes_dns_degraded"
 msgid "on, dns not applied"
 msgstr "オン、DNS 未適用"
 
-#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
 msgctxt "adv_routes_kill_switch_armed"
 msgid "off, kill switch armed"
 msgstr "オフ、キルスイッチ待機中"
@@ -484,7 +484,7 @@ msgctxt "adv_routes_no_firewall"
 msgid "on, no leak guard"
 msgstr "オン、漏洩防止なし"
 
-#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
 msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
@@ -529,7 +529,7 @@ msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "セッションの出口国"
 
-#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
 msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "セッション"
@@ -1442,7 +1442,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "デフォルトはオフ。オンにすると、アプリを開くとすぐに URnetwork が選択したプロバイダーに接続します。次回の起動から適用され、今は接続しません。"
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "接続が低下しています — 再接続中"
@@ -1457,7 +1457,7 @@ msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "接続できませんでした"
 
-#. Windows Connect page reason line when connecting failed.
+#. Windows and Linux Connect page reason line when connecting failed.
 msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "どのプロバイダーにも接続できませんでした。再試行すると接続を最初から作り直します。"
@@ -1487,32 +1487,32 @@ msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "インターネット通信は保護されていません。"
 
-#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+#. Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
 msgctxt "conn_reason_auth"
 msgid "Signing in to the platform is failing…"
 msgstr "プラットフォームへのサインインに失敗しています…"
 
-#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+#. Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
 msgctxt "conn_reason_platform"
 msgid "Contacting the platform…"
 msgstr "プラットフォームに接続しています…"
 
-#. Windows Connect page reason line while the selected providers do not answer.
+#. Windows and Linux Connect page reason line while the selected providers do not answer.
 msgctxt "conn_reason_providers"
 msgid "Providers not responding — retrying…"
 msgstr "プロバイダーが応答しません — 再試行中…"
 
-#. Windows Connect page reason line while the platform asks the app to slow down.
+#. Windows and Linux Connect page reason line while the platform asks the app to slow down.
 msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "リクエスト制限中 — 待機しています…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "現在、機能しているプロバイダーがありません — 通信はブロックされており、露出していません。通常の接続に戻るには切断してください。"
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "現在、機能しているプロバイダーがありません — トンネルに送られた通信はどこにも届かず、漏洩防止もオフのため、一部の通信がトンネルを迂回する可能性があります。通常の接続に戻るには切断してください。"
@@ -9053,7 +9053,7 @@ msgctxt "urnetwork_referral_code"
 msgid "URnetwork Referral Code"
 msgstr "URnetwork 紹介コード"
 
-#. Used in NetworkApp.swift.
+#. Used in NetworkApp.swift. Also the Windows and Linux status strip's name for its connection state field, read by screen readers.
 msgctxt "urnetwork_status"
 msgid "URnetwork Status"
 msgstr "URnetworkステータス"

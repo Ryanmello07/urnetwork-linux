@@ -293,6 +293,7 @@ entry.ur-pane-search, entry.ur-pane-search:focus {
 }
 .ur-status-caption { font-family: "PP Neue Montreal"; font-size: 11px; color: #5A5A5A; }
 .ur-status-value { font-family: "PP Neue Montreal"; font-size: 12px; color: #989898; }
+.ur-status-value.ur-status-mode { color: #638BFC; }
 
 /* ---- the stat tile (windows UrStatLabel/UrStatValue) ------------------- */
 .ur-stat-label { font-family: "PP Neue Montreal"; font-size: 12px; color: #989898; }
@@ -316,6 +317,8 @@ button.ur-nav-item:active { background-color: #242424; }
 button.ur-nav-item.selected { background-color: #242424; color: #F8F8F8; }
 button.ur-nav-item.selected:hover { background-color: #2A2A2A; }
 button.ur-nav-item image { color: inherit; }
+/* the compact rail (48px): the accent bar and the icon alone */
+.ur-nav.compact button.ur-nav-item { padding: 0 6px; margin: 1px 4px; }
 .ur-nav-accent { background-color: #EFF7BB; border-radius: 2px; }
 
 /* ---- the window-level mode notice + snackbar surfaces ------------------ */

@@ -21,6 +21,8 @@
 #include "Formatters.hpp"
 #include "UrTheme.hpp"
 #include "I18n.hpp"
+#include "LocationSelection.hpp"
+#include "StatusStripPresentation.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -237,6 +239,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (upgradeSheet_) upgradeSheet_->OnBalanceChanged();
     // a converted guest's purchase continues once the server stops reporting a guest
     guestUpgrade_.Poll(balance_.IsGuest());
+    ApplyStatusStripDetails();  // the strip's Network field names a guest
     UpdateBalanceNotice();  // a Pro upgrade or a settled poll moves the gate
     // Earnings gates its upgrade door and its plan-flavoured copy on the
     // plan's two bits.
@@ -391,6 +394,12 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // host directly; the host asks the same gate.
   host_.SetConnectGate(
       [this](std::function<void()> retry) { return ConnectBlockedByBalance(std::move(retry)); });
+  // ...and a pick starts the tunnel when there is none, through the same start
+  // path as the Connect button (its notices, its gate), to the row's location.
+  host_.SetRowConnect([this](const std::optional<urnet::ConnectLocation>& location) {
+    if (connectPage_) connectPage_->ClearDisconnectIntent();
+    StartTunnelUi("location row", location);
+  });
 
   if (host_.IsLoggedIn()) {
     // AUTO-CONNECT IS OPT IN, DEFAULT OFF. Being signed in is not a request to
@@ -403,7 +412,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     // Nothing about StartTunnelUi changes, and no other path to it moves. The
     // post-login handlers still connect on a fresh sign-in — that is a user
     // action with an obvious intent, not a launch.
-    if (prefs::Get<bool>(prefs::kConnectOnLaunchKey, false)) StartTunnelUi();
+    if (prefs::Get<bool>(prefs::kConnectOnLaunchKey, false)) StartTunnelUi("connect on launch");
     ApplyAuthState(true);
   } else {
     ApplyAuthState(false);
@@ -489,11 +498,17 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
 // through TunnelStartResult::Failed with an authorization verdict on the
 // control client (DaemonAuthOutcome). It is rendered from its own copy table
 // below and never through the DaemonUnreachable arm.
-TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
+TunnelStartResult MainWindow::StartTunnelUi(const char* reason) {
+  return StartTunnelUi(reason, host_.SelectedLocation());
+}
+
+TunnelStartResult MainWindow::StartTunnelUi(const char* reason,
+                                            const std::optional<urnet::ConnectLocation>& target) {
   // Out of balance, a new connection is not started at all: no tunnel, no
   // routes, the upgrade path instead. Every caller (the Connect press, connect
-  // on launch, the post-sign-in connect) passes through here.
-  if (ConnectBlockedByBalance([this, connectDestination] { StartTunnelUi(connectDestination); })) {
+  // on launch, the post-sign-in connect) passes through here, and a stale
+  // balance read repeats the whole start, connect included, once it lands.
+  if (ConnectBlockedByBalance([this, reason, target] { StartTunnelUi(reason, target); })) {
     return TunnelStartResult::Failed;
   }
   // Snapshot the reply counter BEFORE the attempt. LastAuthOutcome() describes
@@ -503,7 +518,9 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   // rendered under an unrelated failure — a confidently wrong sentence, which
   // is worse than the generic one. Only a verdict this attempt produced counts.
   const uint64_t replySerialBefore = host_.Control().ReplySerial();
-  const TunnelStartResult result = host_.StartTunnel();
+  // what the daemon said about the last session does not describe this one
+  ForgetDaemonStatus();
+  const TunnelStartResult result = host_.StartTunnel(reason);
   const DaemonAuthOutcome authOutcome = host_.Control().ReplySerial() != replySerialBefore
                                             ? host_.Control().LastAuthOutcome()
                                             : DaemonAuthOutcome::None;
@@ -589,19 +606,17 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   // the point: a rule that has to be remembered ten times is a rule that will
   // be missed again.
   //
-  // SelectedLocation() is respected: a user who has chosen a specific provider
-  // must not be silently moved to "best available". Only an empty selection
-  // asks the SDK to pick.
-  if (result == TunnelStartResult::Started && connectDestination) {
-    // Honour an explicit choice. ConnectBestAvailable() always asks the SDK to
-    // pick, so using it unconditionally would silently move a user off the
-    // provider they selected.
-    if (const auto selected = host_.SelectedLocation(); selected.has_value()) {
-      g_message("connect: routing to the selected provider");
-      host_.Connect(selected);
-    } else {
+  // The target is respected: a user who has chosen a specific provider must
+  // not be silently moved to "best available", which the Connect button did
+  // while the provider row above it named their choice. Only no choice, or a
+  // choice of best available, asks the SDK to pick.
+  if (result == TunnelStartResult::Started) {
+    if (IsBestAvailableSelected(target)) {
       g_message("connect: no destination selected, choosing the best available");
       host_.ConnectBestAvailable();
+    } else {
+      g_message("connect: routing to the selected provider");
+      host_.Connect(target);
     }
   }
   return result;
@@ -952,40 +967,74 @@ void MainWindow::size_allocate_vfunc(int width, int height, int baseline) {
 // A user sitting idle would keep a green "Connected" while the daemon had
 // already stopped the session and possibly armed the kill switch.
 bool MainWindow::PollDaemonHealth() {
+  // On a worker (SdkHost::RequestDaemonStatus): a daemon that accepts the
+  // socket but no longer answers used to hold this window for the control
+  // client's 30 s timeout on every tick. A read still in flight skips the
+  // tick. The one reply serves every follow-up in ApplyDaemonHealth, which
+  // while disconnected used to read the status once each.
+  const uint64_t epoch = daemonStatusEpoch_;
+  // `this` outlives the reply: main.cpp holds the window until main returns,
+  // past app->run() and with it the last main-loop dispatch
+  host_.RequestDaemonStatus([this, epoch](std::optional<ctl::StatusReply> status) {
+    // a start, a Disconnect or a sign-in or -out since the read: its reply
+    // describes a session that is not this one (a "stopped" read before a
+    // start is no stop of the session it started)
+    if (epoch != daemonStatusEpoch_) return;
+    ApplyDaemonHealth(status);
+  });
+  return true;
+}
+
+void MainWindow::ForgetDaemonStatus() {
+  daemonStatus_.reset();
+  ++daemonStatusEpoch_;
+  ApplyStatusStripDetails();
+}
+
+void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status) {
+  // the strip's Routes, with a session or without one, when the kill
+  // switch's floor can be armed with no tunnel
+  if (status) {
+    daemonStatus_ = status;
+    ApplyStatusStripDetails();
+  }
   if (!connected_) {
     // A countdown belongs to a live tunnel, and there is none.
     if (connectPage_) connectPage_->SetFailsafeArmed(false);
-    // The network country the daemon reads (P052), for this process's own
-    // dials: from the sign-in screen on, signed in or not.
-    host_.FollowDaemonNetworkCountry();
-    // The outcome of a feedback's log upload, while one is pending.
-    host_.FollowDaemonLogUpload();
-    // A Reset extenders the daemon refused during a tunnel bring-up, sent again
-    // once the bring-up settled.
-    host_.FollowDaemonExtenderReset();
-    // Disconnected is when the provider-only device is the provider: start it
-    // after a launch without auto-connect, bring it back after a service
-    // restart or an unexpected drop, and stop one the mode no longer wants.
-    host_.ReconcileProvider("health poll");
+    // A daemon that did not answer the worker is asked again next tick: a
+    // read here would hold the window for as long as the worker's took.
+    if (status) {
+      // The network country the daemon reads (P052), for this process's own
+      // dials: from the sign-in screen on, signed in or not.
+      host_.FollowDaemonNetworkCountry(*status);
+      // The outcome of a feedback's log upload, while one is pending.
+      host_.FollowDaemonLogUpload(*status);
+      // A Reset extenders the daemon refused during a tunnel bring-up, sent
+      // again once the bring-up settled.
+      host_.FollowDaemonExtenderReset(*status);
+      // Disconnected is when the provider-only device is the provider: start
+      // it after a launch without auto-connect, bring it back after a service
+      // restart or an unexpected drop, and stop one the mode no longer wants.
+      // Served by this reply, so a steady tick reads nothing on the main loop.
+      host_.ReconcileProvider("health poll", *status);
+    }
     // What the daemon holds while this window holds no session: the tray's
     // recovery items, and the stop of a session this window saw end, which
     // Windows explains in exactly this state. The connect feed can report the
     // disconnect before any poll reads the stop, or the daemon can be
     // restarting, so the explanation waits until a status is read.
-    const std::optional<ctl::StatusReply> daemon = host_.Control().Status();
-    PushTrayRecovery(daemon ? failsafe_notice::TrayRecoveryFor(/*windowConnected=*/false, *daemon)
+    PushTrayRecovery(status ? failsafe_notice::TrayRecoveryFor(/*windowConnected=*/false, *status)
                             : failsafe_notice::TrayRecovery{});
-    if (daemon && stopExplanationOwed_) {
+    if (status && stopExplanationOwed_) {
       stopExplanationOwed_ = false;
       if (const auto failsafe =
-              failsafe_notice::StoppedCopy(daemon->stop_reason, daemon->kill_switch)) {
+              failsafe_notice::StoppedCopy(status->stop_reason, status->kill_switch)) {
         if (connectPage_) connectPage_->SetDaemonNotice(T_(failsafe->key, failsafe->english));
       }
     }
-    return true;
+    return;
   }
-  const auto status = host_.Control().Status();
-  if (!status) return true;      // unreachable is StartTunnelUi's business
+  if (!status) return;  // unreachable is StartTunnelUi's business
   // The window holds the session, so its own Disconnect is the recovery.
   PushTrayRecovery(failsafe_notice::TrayRecoveryFor(/*windowConnected=*/true, *status));
   host_.FollowDaemonNetworkCountry(*status);
@@ -999,7 +1048,7 @@ bool MainWindow::PollDaemonHealth() {
   }
   if (status->tunnel_state != ctl::TunnelState::Error &&
       status->tunnel_state != ctl::TunnelState::Stopped) {
-    return true;
+    return;
   }
   // …UNLESS WE ARE THE ONES WHO ASKED. A user disconnect ends with
   // SdkHost::Disconnect -> control_.StopTunnel(), so the daemon's very next
@@ -1012,7 +1061,7 @@ bool MainWindow::PollDaemonHealth() {
   if (connectPage_ && connectPage_->DisconnectPending()) {
     ApplyConnectReading(DaemonTunnelGoneReading());
     stopExplanationOwed_ = false;
-    return true;
+    return;
   }
   // The daemon stopped carrying traffic without us asking. Say so, verbatim —
   // the daemon composes the plain-language reason (including whether the machine
@@ -1038,7 +1087,6 @@ bool MainWindow::PollDaemonHealth() {
   // Explained here: the disconnected poll owes nothing more for this stop.
   stopExplanationOwed_ = false;
   if (connectPage_) connectPage_->SetDaemonNotice(detail);
-  return true;
 }
 
 void MainWindow::PushTrayRecovery(const failsafe_notice::TrayRecovery& recovery) {
@@ -1071,6 +1119,8 @@ void MainWindow::LiftKillSwitch() {
 }
 
 void MainWindow::ApplyPageBreakpoint(int widthDip) {
+  // the shell first: its rail takes its width out of the room the pages get
+  if (shell_) shell_->ApplyBreakpoint(widthDip);
   if (connectPage_) connectPage_->ApplyBreakpoint(widthDip);
   if (networkPage_) networkPage_->ApplyBreakpoint(widthDip);
   if (settingsPage_) settingsPage_->ApplyBreakpoint(widthDip);
@@ -1086,6 +1136,7 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 MainWindow::~MainWindow() {
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
+  host_.SetRowConnect(nullptr);   // and so does the row's start path
 }
 
 void MainWindow::TrackAppFocus() {
@@ -1415,7 +1466,7 @@ void MainWindow::OnSeedphraseSubmit() {
                             : r.error.c_str());
         return;
       }
-      StartTunnelUi();  // auth handler flips the view
+      StartTunnelUi("seedphrase sign-in");  // auth handler flips the view
     });
   });
 }
@@ -1537,7 +1588,7 @@ void MainWindow::OnInstantSubmit() {
               return;
             }
             prefs::Set(kOnboardingPendingKey, true);  // an instant account is a new network
-            StartTunnelUi();  // auth handler flips the view
+            StartTunnelUi("instant account");  // auth handler flips the view
           });
         });
       };
@@ -1561,6 +1612,7 @@ void MainWindow::BuildHome() {
   // what left the window re-deriving the action from a stricter reading, and a
   // button reading "Disconnect" starting a tunnel.
   connectPage_->on_connect_action = [this](bool disconnect) { ToggleConnect(disconnect); };
+  connectPage_->on_retry_connect = [this] { RetryConnect(); };
   connectPage_->on_open_locations = [this] { OpenLocationChooser(); };
   // "Connected to N providers" -> the provider sheet. MainWindow owns it
   // because the GeoClue location override must keep following the window
@@ -1574,6 +1626,15 @@ void MainWindow::BuildHome() {
   connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
   connectPage_->on_open_data_info = [this] { OpenDataInfo(); };
   connectPage_->on_cancel_balance_recovery = [this] { ClearBalanceRecovery(); };
+  // The strip's state and provider are the page's own render, as on Windows,
+  // so the strip and the Connect page cannot disagree.
+  connectPage_->on_status_rendered = [this](const Glib::ustring& text, const std::string& dot) {
+    if (shell_) shell_->SetStatusState(text, dot);
+  };
+  connectPage_->on_location_rendered = [this](const Glib::ustring& text) {
+    if (shell_) shell_->SetStatusProvider(text);
+  };
+  connectPage_->RepublishStatus();
   shell_->SetPage("connect", *connectPage_);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
     auto* page = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
@@ -1754,7 +1815,7 @@ void MainWindow::BuildAuthPages() {
   createPage_->on_success = [this] {
     // a network was just created: the onboarding flow follows the sign-in
     prefs::Set(kOnboardingPendingKey, true);
-    StartTunnelUi();  // auth handler flips the view
+    StartTunnelUi("network created");  // auth handler flips the view
   };
   createPage_->on_verify = [this](std::string userAuth, VerifySendNotice notice) {
     NavigateVerify(userAuth);
@@ -1769,7 +1830,7 @@ void MainWindow::BuildAuthPages() {
   verifyPage_ = Gtk::make_managed<VerifyPage>(host_);
   verifyPage_->on_success = [this] {
     prefs::Set(kOnboardingPendingKey, true);  // a verified sign-up is a new network
-    StartTunnelUi();  // auth handler flips the view
+    StartTunnelUi("sign-up verified");  // auth handler flips the view
   };
   verifyPage_->on_back = [this] { stack_.set_visible_child("login"); };
   stack_.add(*wrapInScroller(*verifyPage_), "verify");
@@ -1810,7 +1871,7 @@ void MainWindow::OnGetStarted() {
       SetLoginBusy(false);
       switch (routing.route) {
         case LoginRoute::Login:
-          StartTunnelUi();  // auth handler flips the view
+          StartTunnelUi("sign-in");  // auth handler flips the view
           break;
         case LoginRoute::Password:
           loginUserAuth_ = routing.userAuth;
@@ -1866,7 +1927,7 @@ void MainWindow::OnSignIn() {
         passwordError_.set_text(r.error.empty() ? T_("sign_in_failed", "Sign in failed")
                                                 : r.error);
       } else {
-        StartTunnelUi();  // auth handler flips the view
+        StartTunnelUi("password sign-in");  // auth handler flips the view
       }
     });
   });
@@ -1947,7 +2008,7 @@ void MainWindow::OnUseCode() {
                   r.error.empty() ? T_("code_sign_in_failed", "Code sign in failed")
                                   : r.error.c_str());
             } else {
-              self->StartTunnelUi();
+              self->StartTunnelUi("code sign-in");
             }
           });
         });
@@ -2083,7 +2144,7 @@ void MainWindow::OnWalletAuth(const AuthResult& result) {
       }
     } else {
       loginError_.set_text("");
-      StartTunnelUi();  // auth handler flips the view
+      StartTunnelUi("wallet or sso sign-in");  // auth handler flips the view
     }
   });
 }
@@ -2177,6 +2238,7 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
   stack_.set_visible_child(loggedIn ? "home" : "login");
   // a known out-of-balance state belongs to the session that observed it
   outOfBalance_.Reset();
+  ForgetDaemonStatus();
   if (loggedIn) {
     ApplyConnectReading(host_.CurrentConnectReading());
     // (re)seed the balance/plan store from the (possibly new) jwt: login and
@@ -2229,7 +2291,7 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
 // page yet (the login view), connected_ is the only answer there is.
 void MainWindow::ToggleConnect() {
   // THE TRAY'S ENTRY POINT, and it must decide from what the TRAY IS SHOWING.
-  // The tray's label is set from on_connected_change, i.e. from connected_
+  // The tray's label is set from on_tray_state, i.e. from connected_
   // alone (main.cpp). ConnectPage's button uses a wider predicate — connected
   // OR connecting — so routing the tray through the page's predicate made the
   // two disagree for the whole connecting window: the menu said "Connect"
@@ -2260,6 +2322,7 @@ void MainWindow::ToggleConnect(bool disconnect) {
     CancelBalanceCheck();
     ClearBalanceRecovery();
     host_.Disconnect();
+    ForgetDaemonStatus();
     // Re-read every window surface once, now. The page is already showing
     // "Disconnecting…" from its own intent; this keeps the tray, the legacy
     // headline and the status strip from holding "Connected" until whatever the
@@ -2279,15 +2342,25 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // the press into a device with nothing behind it. StartTunnel is cheap when
   // the session is genuinely live (one status read) and self-heals when it is
   // not; the caller is not the right place to guess.
-  // false: this path issues its own connect immediately below, deliberately
-  // unconditional so a Connect press also self-heals a stale session.
-  // Out of balance, nothing starts (ConnectBlockedByBalance) and this press
-  // opens the upgrade path instead. Asked here first so that a stale balance
-  // read repeats the whole press, connect included, once it lands.
-  if (ConnectBlockedByBalance([this] { ToggleConnect(/*disconnect=*/false); })) return;
-  if (StartTunnelUi(/*connectDestination=*/false) != TunnelStartResult::Started) return;
-  host_.ConnectBestAvailable();
+  // The press goes where the provider row says: the selected location, or the
+  // best available with none. Out of balance, nothing starts
+  // (ConnectBlockedByBalance) and this press opens the upgrade path instead.
+  // It is immediate, and supersedes a location row click still settling.
+  host_.CancelRowConnect("connect press");
+  StartTunnelUi("connect press");
   // the connect-reading feed reflects the real state as it changes
+}
+
+// Retry, the Failed state's one action, as Windows has it: stop the failed
+// session and connect to the same selection again, the manual sequence that
+// recovers a window the SDK has given up on. The selection is read before the
+// disconnect, which clears the device's.
+void MainWindow::RetryConnect() {
+  const auto target = host_.SelectedLocation();
+  g_message("connect: retry pressed");
+  host_.Disconnect();
+  ForgetDaemonStatus();
+  StartTunnelUi("retry", target);
 }
 
 // THE DAEMON'S OWN VERDICT, WRITTEN INTO THE READING. The status poll has just
@@ -2313,6 +2386,12 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // unchanged reading must not re-emit the tray's NewIcon/LayoutUpdated DBus
   // pair or rebuild the page's panes underneath the user.
   if (reading == reading_ && readingApplied_) return;
+  // The strip's session fields move with the session, not with each grid
+  // step. A Disconnect keeps the DeviceRemote, so tunnelBound outlives it.
+  const auto sessionUp = [](const ConnectReading& r) {
+    return health::SessionUp(r.ToSignals(/*disconnectRequested=*/false));
+  };
+  const bool sessionChanged = !readingApplied_ || sessionUp(reading) != sessionUp(reading_);
   readingApplied_ = true;
   const bool wasConnected = connected_;
   reading_ = reading;
@@ -2322,27 +2401,28 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // used to be asked for, now asked once: the tray's label, the tray's action
   // and this window's press logging all read this one bit, so the menu can no
   // longer say "Connect" over a press that disconnects.
-  connected_ = view.action == health::Action::Disconnect;
+  connected_ = view.action != health::Action::Connect;
   // A session this window held has ended: the next disconnected poll reads why.
   if (connected_ != wasConnected) stopExplanationOwed_ = wasConnected;
   if (view.state == health::State::Connected) NoteConnected();
-  // The strip's raw status field carries the controller's OWN token now
-  // (CONNECTING/CONNECTED/CONNECT_FAILED), not the two-word destination
-  // vocabulary the old push could produce.
-  const std::string rawStatus =
-      reading.rawStatus.empty() ? std::string("DISCONNECTED") : reading.rawStatus;
-  // the status strip's state field: dot color per state (§8.1 connect dots).
-  // Green only for the state the hero calls Connected — the strip used to go
-  // green the moment a destination was picked.
-  if (shell_) {
-    shell_->SetStatusState(
-        rawStatus, view.state == health::State::Connected ? "#87FB67" : "#2A60FF");
-  }
+  // The page renders the status strip's state field with its own status row
+  // (on_status_rendered).
   if (connectPage_) connectPage_->ApplyConnectReading(reading);
+  if (sessionChanged) ApplyStatusStripDetails();
   UpdateBalanceNotice();
-  if (on_connected_change && (connected_ != wasConnected || !trayConnectedPushed_)) {
-    trayConnectedPushed_ = true;
-    on_connected_change(connected_);
+  // The tray: its item follows the session, its connected icon means proven
+  // (a session still building, held or degraded is not), and its tooltip
+  // names the state, all from this one reading. A session the window has not
+  // seen a status for keeps its own claim (health::TrayReading).
+  const health::Reading tray = health::TrayReading(view, signals, reading.statusObserved);
+  const bool proven = health::Proven(tray);
+  const std::string status = T_(tray.textKey, tray.textEnglish);
+  if (on_tray_state && (connected_ != wasConnected || proven != trayProven_ ||
+                        status != trayStatus_ || !trayStatePushed_)) {
+    trayStatePushed_ = true;
+    trayProven_ = proven;
+    trayStatus_ = status;
+    on_tray_state(connected_, proven, status);
   }
 }
 
@@ -2607,18 +2687,63 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
   };
   if (connectPage_) connectPage_->ApplyStats(stats);
   if (earningsPage_) earningsPage_->ApplyProvideState(stats);  // the provide row + gate
-  // the status strip: provider + traffic (+ the Advanced raw field)
+  // the status strip: traffic (+ the Advanced raw field); the provider is the
+  // Connect page's row (on_location_rendered)
   if (shell_) {
-    shell_->SetStatusProvider(T_("best_available_provider", "Best available provider"));
     if (stats.connected) {
       shell_->SetStatusTraffic("↓ " + rate(stats.downBitsPerSecond) +
                                "  ↑ " + rate(stats.upBitsPerSecond));
     } else {
       shell_->SetStatusTraffic(T_("site_app_no_traffic", "No traffic yet"));
     }
-    shell_->SetStatusRaw(stats.connectionStatus);
-    shell_->SetStatusSession(host_.hasDevice() ? "tunnel" : "none");
+    shell_->SetStatusRaw(stats.connectionStatus.empty() ? Glib::ustring(T_("adv_none", "none"))
+                                                        : Glib::ustring(stats.connectionStatus));
   }
+}
+
+void MainWindow::ApplyStatusStripDetails() {
+  if (!shell_) return;
+  // signed out there is no jwt to read, and the read would say so on stderr
+  auto byJwt = host_.IsLoggedIn() ? host_.ParseByJwt() : std::nullopt;
+  const std::string networkName = byJwt ? byJwt->NetworkName : std::string();
+  shell_->SetStatusNetwork(balance_.IsGuest() || networkName.empty()
+                               ? Glib::ustring(T_("guest", "Guest"))
+                               : Glib::ustring(networkName));
+  // a session to disconnect from: a DeviceRemote still bound over the current
+  // control session outlives a Disconnect, and is not one
+  const bool haveSession = health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
+  switch (status_strip::SessionWordFor(haveSession)) {
+    case status_strip::SessionWord::Tunnel:
+      shell_->SetStatusSession(T_("adv_mode_tunnel", "tunnel"));
+      break;
+    case status_strip::SessionWord::None:
+      shell_->SetStatusSession(T_("adv_none", "none"));
+      break;
+  }
+  std::optional<status_strip::RouteFacts> facts;
+  if (daemonStatus_) {
+    facts = status_strip::RouteFacts{daemonStatus_->routes_installed, daemonStatus_->dns_applied,
+                                     daemonStatus_->kill_switch == ctl::KillSwitchState::Armed};
+  }
+  switch (status_strip::RoutesWordFor(haveSession, facts)) {
+    case status_strip::RoutesWord::Unknown:
+      shell_->SetStatusRoutes(T_("adv_none", "none"));
+      break;
+    case status_strip::RoutesWord::Off:
+      shell_->SetStatusRoutes(T_("off", "Off"));
+      break;
+    case status_strip::RoutesWord::KillSwitchArmed:
+      shell_->SetStatusRoutes(T_("adv_routes_kill_switch_armed", "off, kill switch armed"));
+      break;
+    case status_strip::RoutesWord::DnsNotApplied:
+      shell_->SetStatusRoutes(T_("adv_routes_dns_degraded", "on, dns not applied"));
+      break;
+    case status_strip::RoutesWord::On:
+      shell_->SetStatusRoutes(T_("on", "On"));
+      break;
+  }
+  const std::string rpc = status_strip::RpcText(haveSession, host_.RpcHostPort());
+  shell_->SetStatusRpc(rpc.empty() ? Glib::ustring(T_("adv_none", "none")) : Glib::ustring(rpc));
 }
 
 // ---- the Pro celebration ----------------------------------------------------

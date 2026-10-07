@@ -67,14 +67,14 @@ bool InOrder(const std::string& text, const std::vector<std::string>& needles) {
 
 }  // namespace
 
-// Relayed from every status the poll reads, ahead of the return that ends a
-// healthy poll, and cleared while there is no tunnel to count down on.
+// Relayed from every status the poll's worker reads, ahead of the return that
+// ends a healthy poll, and cleared while there is no tunnel to count down on.
 UR_TEST(FailsafeNoticeWiring_ThePollRelaysTheCountdown) {
   const std::string window = ReadNoticeSource("MainWindow.cpp");
-  const std::string poll = NoticeBody(window, "bool MainWindow::PollDaemonHealth() {");
+  const std::string poll = NoticeBody(window, "void MainWindow::ApplyDaemonHealth(");
   UR_EXPECT_TRUE(!poll.empty());
-  UR_EXPECT_TRUE(InOrder(poll, {"if (!connected_) {", "SetFailsafeArmed(false);", "return true;",
-                                "host_.Control().Status();",
+  UR_EXPECT_TRUE(InOrder(poll, {"if (!connected_) {", "SetFailsafeArmed(false);", "return;",
+                                "if (!status) return;",
                                 "failsafe_notice::ShowsArmedWarning(status->failsafe_armed, "
                                 "status->tunnel_state)",
                                 "status->tunnel_state != ctl::TunnelState::Error"}));
@@ -84,7 +84,7 @@ UR_TEST(FailsafeNoticeWiring_ThePollRelaysTheCountdown) {
 // daemon reports, translated, in place of the daemon's English.
 UR_TEST(FailsafeNoticeWiring_AFailsafeStopShowsTheStoresLine) {
   const std::string window = ReadNoticeSource("MainWindow.cpp");
-  const std::string poll = NoticeBody(window, "bool MainWindow::PollDaemonHealth() {");
+  const std::string poll = NoticeBody(window, "void MainWindow::ApplyDaemonHealth(");
   UR_EXPECT_TRUE(InOrder(poll, {"Glib::ustring(status->error)",
                                 "failsafe_notice::StoppedCopy(status->stop_reason, "
                                 "status->kill_switch)",
@@ -110,19 +110,19 @@ UR_TEST(FailsafeNoticeWiring_TheDisconnectedPollExplainsAStopItOwes) {
   const std::string window = ReadNoticeSource("MainWindow.cpp");
   const std::string apply = NoticeBody(window, "void MainWindow::ApplyConnectReading(");
   UR_EXPECT_TRUE(InOrder(apply, {"const bool wasConnected = connected_;",
-                                 "connected_ = view.action == health::Action::Disconnect;",
+                                 "connected_ = view.action != health::Action::Connect;",
                                  "if (connected_ != wasConnected) stopExplanationOwed_ = "
                                  "wasConnected;"}));
-  const std::string poll = NoticeBody(window, "bool MainWindow::PollDaemonHealth() {");
+  const std::string poll = NoticeBody(window, "void MainWindow::ApplyDaemonHealth(");
   const size_t idle = poll.find("if (!connected_) {");
-  const size_t idleEnd = poll.find("return true;", idle);
+  const size_t idleEnd = poll.find("return;", idle);
   UR_EXPECT_TRUE(idle != std::string::npos && idleEnd != std::string::npos);
   if (idle == std::string::npos || idleEnd == std::string::npos) return;
   UR_EXPECT_TRUE(InOrder(poll.substr(idle, idleEnd - idle),
-                         {"host_.Control().Status();", "if (daemon && stopExplanationOwed_) {",
+                         {"if (status && stopExplanationOwed_) {",
                           "stopExplanationOwed_ = false;",
-                          "failsafe_notice::StoppedCopy(daemon->stop_reason, "
-                          "daemon->kill_switch)",
+                          "failsafe_notice::StoppedCopy(status->stop_reason, "
+                          "status->kill_switch)",
                           "connectPage_->SetDaemonNotice(T_(failsafe->key, failsafe->english));"}));
   // The connected branch, when it explains the stop itself, leaves nothing owed.
   UR_EXPECT_TRUE(InOrder(poll.substr(idleEnd), {"connectPage_->DisconnectPending()",
@@ -137,11 +137,11 @@ UR_TEST(FailsafeNoticeWiring_TheDisconnectedPollExplainsAStopItOwes) {
 // a click on an item the menu no longer offers does nothing.
 UR_TEST(FailsafeNoticeWiring_TheTrayOffersWhatThePollDecides) {
   const std::string window = ReadNoticeSource("MainWindow.cpp");
-  const std::string poll = NoticeBody(window, "bool MainWindow::PollDaemonHealth() {");
+  const std::string poll = NoticeBody(window, "void MainWindow::ApplyDaemonHealth(");
   UR_EXPECT_TRUE(InOrder(poll, {"if (!connected_) {",
                                 "failsafe_notice::TrayRecoveryFor(/*windowConnected=*/false, "
-                                "*daemon)",
-                                "return true;", "if (!status) return true;",
+                                "*status)",
+                                "return;", "if (!status) return;",
                                 "failsafe_notice::TrayRecoveryFor(/*windowConnected=*/true, "
                                 "*status)"}));
   const std::string force = NoticeBody(window, "void MainWindow::ForceTunnelOff() {");

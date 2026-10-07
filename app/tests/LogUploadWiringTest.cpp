@@ -297,18 +297,20 @@ UR_TEST(LogUploadWiring_TheGuiAsksTheDaemonFirstAndFallsBack) {
 }
 
 // The outcome reaches the GUI: the health poll follows the daemon's status in
-// both branches, asking for one only while an upload is pending, and the
-// upload the reply named ends the wait once status names it finished.
+// both branches, with the one status its worker read, and the upload the
+// reply named ends the wait once status names it finished.
 UR_TEST(LogUploadWiring_TheGuiLearnsTheOutcomeFromStatus) {
   const std::string window = ReadUploadSource("MainWindow.cpp");
-  const std::string poll = UploadFunctionBody(window, "bool MainWindow::PollDaemonHealth()");
-  UR_EXPECT_TRUE(Contains(poll, "host_.FollowDaemonLogUpload();"));
-  UR_EXPECT_TRUE(Contains(poll, "host_.FollowDaemonLogUpload(*status);"));
-  UR_EXPECT_TRUE(Ahead(poll, "host_.FollowDaemonLogUpload();", "const auto status ="));
+  const std::string poll = UploadFunctionBody(
+      window, "void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status)");
+  const size_t idle = poll.find("if (!connected_) {");
+  const size_t connected = poll.find("if (!status) return;");
+  UR_EXPECT_TRUE(idle != std::string::npos && connected != std::string::npos);
+  UR_EXPECT_TRUE(Ahead(poll, "if (!connected_) {", "host_.FollowDaemonLogUpload(*status);"));
+  UR_EXPECT_TRUE(Ahead(poll.substr(connected == std::string::npos ? 0 : connected),
+                       "if (!status) return;", "host_.FollowDaemonLogUpload(*status);"));
 
   const std::string sdk = ReadUploadSource("SdkHost.cpp");
-  const std::string pending = UploadFunctionBody(sdk, "void SdkHost::FollowDaemonLogUpload() {");
-  UR_EXPECT_TRUE(Ahead(pending, "if (pendingLogUploadId_ == 0) return;", "control_.Status()"));
   const std::string follow =
       UploadFunctionBody(sdk, "void SdkHost::FollowDaemonLogUpload(const ctl::StatusReply& status)");
   UR_EXPECT_TRUE(Ahead(follow, "if (status.redacted) return;", "logupload::CompletionFor("));

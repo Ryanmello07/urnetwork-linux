@@ -96,7 +96,8 @@ bool DnsSheet::Open() {
 
   countryCode_.clear();
   countryName_.clear();
-  if (auto location = host_.SelectedLocation()) {
+  // the country of the connection, not of a choice a Disconnect left behind
+  if (auto location = host_.ConnectedLocation()) {
     if (location->country_code) countryCode_ = Lowercased(*location->country_code);
     if (location->country) countryName_ = *location->country;
   }

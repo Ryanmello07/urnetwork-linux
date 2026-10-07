@@ -379,7 +379,7 @@ msgctxt "adv_mode_rpc_only"
 msgid "rpc-only"
 msgstr "RPC เท่านั้น"
 
-#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
 msgctxt "adv_mode_tunnel"
 msgid "tunnel"
 msgstr "อุโมงค์"
@@ -464,17 +464,17 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "การแทนที่เส้นทาง"
 
-#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
 msgctxt "adv_routes"
 msgid "Routes"
 msgstr "เส้นทาง"
 
-#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
 msgctxt "adv_routes_dns_degraded"
 msgid "on, dns not applied"
 msgstr "เปิด, ยังไม่ใช้ DNS"
 
-#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
 msgctxt "adv_routes_kill_switch_armed"
 msgid "off, kill switch armed"
 msgstr "ปิด, สวิตช์หยุดการเชื่อมต่อพร้อมทำงาน"
@@ -484,7 +484,7 @@ msgctxt "adv_routes_no_firewall"
 msgid "on, no leak guard"
 msgstr "เปิด, ไม่มีการป้องกันการรั่วไหล"
 
-#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
 msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
@@ -529,7 +529,7 @@ msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "ประเทศทางออกของเซสชัน"
 
-#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
 msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "เซสชัน"
@@ -1442,7 +1442,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "ปิดไว้เป็นค่าเริ่มต้น เมื่อเปิด URnetwork จะเชื่อมต่อกับผู้ให้บริการที่คุณเลือกทันทีที่เปิดแอป มีผลในการเปิดครั้งถัดไป - ไม่ได้เชื่อมต่อตอนนี้"
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "การเชื่อมต่อลดคุณภาพลง — กำลังเชื่อมต่อใหม่"
@@ -1457,7 +1457,7 @@ msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "เชื่อมต่อไม่ได้"
 
-#. Windows Connect page reason line when connecting failed.
+#. Windows and Linux Connect page reason line when connecting failed.
 msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "ติดต่อผู้ให้บริการรายใดไม่ได้เลย การลองอีกครั้งจะสร้างการเชื่อมต่อใหม่ตั้งแต่ต้น"
@@ -1487,32 +1487,32 @@ msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "ทราฟฟิกอินเทอร์เน็ตของคุณไม่ได้รับการป้องกัน"
 
-#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+#. Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
 msgctxt "conn_reason_auth"
 msgid "Signing in to the platform is failing…"
 msgstr "การลงชื่อเข้าใช้แพลตฟอร์มล้มเหลว…"
 
-#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+#. Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
 msgctxt "conn_reason_platform"
 msgid "Contacting the platform…"
 msgstr "กำลังติดต่อแพลตฟอร์ม…"
 
-#. Windows Connect page reason line while the selected providers do not answer.
+#. Windows and Linux Connect page reason line while the selected providers do not answer.
 msgctxt "conn_reason_providers"
 msgid "Providers not responding — retrying…"
 msgstr "ผู้ให้บริการไม่ตอบสนอง — กำลังลองใหม่…"
 
-#. Windows Connect page reason line while the platform asks the app to slow down.
+#. Windows and Linux Connect page reason line while the platform asks the app to slow down.
 msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "ถูกจำกัดจำนวนคำขอ — กำลังรอ…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "ขณะนี้ไม่มีผู้ให้บริการที่ใช้งานได้ — ทราฟฟิกของคุณถูกบล็อก ไม่ได้ถูกเปิดเผย ตัดการเชื่อมต่อเพื่อกลับไปใช้การเชื่อมต่อตามปกติ"
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "ขณะนี้ไม่มีผู้ให้บริการที่ใช้งานได้ — ทราฟฟิกที่ส่งเข้าอุโมงค์ไปไม่ถึงไหน และการป้องกันการรั่วไหลปิดอยู่ ทราฟฟิกบางส่วนจึงอาจเลี่ยงผ่านไปได้ ตัดการเชื่อมต่อเพื่อกลับไปใช้การเชื่อมต่อตามปกติ"
@@ -9053,7 +9053,7 @@ msgctxt "urnetwork_referral_code"
 msgid "URnetwork Referral Code"
 msgstr "รหัสแนะนำ URnetwork"
 
-#. Used in NetworkApp.swift.
+#. Used in NetworkApp.swift. Also the Windows and Linux status strip's name for its connection state field, read by screen readers.
 msgctxt "urnetwork_status"
 msgid "URnetwork Status"
 msgstr "สถานะ URnetwork"

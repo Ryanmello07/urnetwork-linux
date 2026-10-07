@@ -223,17 +223,20 @@ UR_TEST(SignOutWiring_TheReconcileDeliversFirstAndStartsNothingWhileOwed) {
                                   "signOut_.Settle(SignOutDaemonLocked());",
                                   "signOutBackoff_.NoteFailure(nowMillis);"}));
   // the health poll runs the reconcile while disconnected, signed in or not
-  const std::string poll =
-      SignOutBody(ReadSignOutSource("MainWindow.cpp"), "bool MainWindow::PollDaemonHealth() {");
-  UR_EXPECT_TRUE(InOrder(poll, {"if (!connected_) {", "host_.ReconcileProvider(\"health poll\");"}));
+  const std::string poll = SignOutBody(
+      ReadSignOutSource("MainWindow.cpp"),
+      "void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status) {");
+  UR_EXPECT_TRUE(
+      InOrder(poll, {"if (!connected_) {", "host_.ReconcileProvider(\"health poll\", *status);"}));
   UR_EXPECT_TRUE(!SignOutHas(poll.substr(0, poll.find("host_.ReconcileProvider(")), "IsLoggedIn("));
 }
 
 // A connect delivers it first, is refused for a signed-out app whatever the
 // stored jwt says, and attaches or starts nothing while a sign-out is owed.
 UR_TEST(SignOutWiring_AConnectDeliversFirstAndStartsNothingWhileOwed) {
-  const std::string start = SignOutBody(ReadSignOutSource("SdkHost.cpp"),
-                                        "TunnelStartResult SdkHost::StartTunnelLocked() {");
+  const std::string start =
+      SignOutBody(ReadSignOutSource("SdkHost.cpp"),
+                  "TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {");
   UR_EXPECT_TRUE(InOrder(
       start, {"SettleSignOutLocked(\"connect\", /*userInitiated=*/true);",
               "signedOut_.load() ? std::string() : localState_->getByClientJwt();",

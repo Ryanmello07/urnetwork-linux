@@ -687,6 +687,14 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/SelfRestartWiringTest.cpp',
     'tests/SettingsFoldTest.cpp',
     'tests/SettingsFoldDoorsWiringTest.cpp',
+    'tests/StatusStripWiringTest.cpp',
+    'tests/LocationSelectionTest.cpp',
+    'tests/ConnectFunnelWiringTest.cpp',
+    'tests/RowConnectCoalescerTest.cpp',
+    'tests/ShellLayoutTest.cpp',
+    'tests/StatusStripPresentationTest.cpp',
+    'tests/ConnectionHealthWiringTest.cpp',
+    'tests/DaemonStatusPollWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -750,6 +758,20 @@ urnetwork_tests = executable('urnetwork-tests',
               # same way, and FailsafeNoticeWiringTest its health poll and connect page.
               # TeardownOrderWiringTest reads TunnelHost's teardowns the same way.
               # SelfRestartWiringTest reads the daemon's self-restart and the unit the same way.
+              # StatusStripWiringTest reads the status strip's writers in MainWindow.cpp
+              # and ConnectPage.cpp the same way.
+              # LocationSelectionTest reads the location rows' pages the same way.
+              # ConnectFunnelWiringTest reads the connect gestures' window and host call
+              # sites the same way.
+              # RowConnectCoalescerTest reads the row clicks' host and window call sites
+              # the same way.
+              # ShellLayoutTest reads the signed-in shell's layout the same way.
+              # StatusStripPresentationTest reads the status strip's fields and their
+              # writer the same way.
+              # ConnectionHealthWiringTest reads the degrade hold's host and page call
+              # sites the same way.
+              # DaemonStatusPollWiringTest reads the health poll's window and host halves
+              # the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

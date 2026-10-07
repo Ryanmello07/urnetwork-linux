@@ -2,15 +2,22 @@
 #include "HomeShell.hpp"
 
 #include "I18n.hpp"
+#include "ShellLayout.hpp"
 #include "UrMotion.hpp"
 
 namespace urnw {
 namespace {
 constexpr int kNavExpandedWidth = 220;  // windows OpenPaneLength
 constexpr int kNavCompactWidth = 48;    // the compact rail
+// accent bar to icon to label, and accent bar to icon in the compact rail
+constexpr int kNavExpandedGap = 10;
+constexpr int kNavCompactGap = 6;
+// the Advanced fields' fade on a mode flip (Windows' 180 in, 120 out)
+constexpr int kAdvancedFadeInMs = 180;
+constexpr int kAdvancedFadeOutMs = 120;
 }  // namespace
 
-HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
+HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   // ---- the left rail --------------------------------------------------------
   navRail_.add_css_class("ur-nav");
   navRail_.set_size_request(kNavExpandedWidth, -1);
@@ -33,7 +40,7 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
   MakeNavItem(navFooter_, "support", NavIcon::Kind::Help, T_("support", "Support"));
   MakeNavItem(navFooter_, "settings", NavIcon::Kind::Gear, T_("settings", "Settings"));
 
-  append(navRail_);
+  body_.append(navRail_);
 
   // ---- the content column ---------------------------------------------------
   // the standing session-mode notice (never closable; persists across
@@ -44,6 +51,11 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
   modeNotice_.set_visible(false);
   contentColumn_.append(modeNotice_);
 
+  // Sized by the page on screen, not by the widest of the seven: a homogeneous
+  // stack carried the Account page's wide-layout minimum (825) under every
+  // destination, so a window opened at its default width could not be
+  // narrowed below 1045, and no page reached a fold below that.
+  stack_.set_hhomogeneous(false);
   stack_.set_transition_type(Gtk::StackTransitionType::CROSSFADE);
   stack_.set_transition_duration(motion::kBaseMs);  // the page-swap default
   stack_.set_vexpand(true);
@@ -52,42 +64,60 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
 
   // ---- the status strip -----------------------------------------------------
   statusStrip_.add_css_class("ur-status-strip");
-  stateField_ = kit::MakeStatusField("", /*withDot=*/true, T_("connect", "Connect"));
+  // the dot and the word name themselves; a screen reader hears the name
+  stateField_ =
+      kit::MakeStatusField("", /*withDot=*/true, T_("urnetwork_status", "URnetwork Status"));
   statusStrip_.append(*stateField_.root);
   statusStrip_.append(*kit::MakeStatusSeparator());
   providerField_ =
       kit::MakeStatusField(T_("selected_provider", "Selected provider"), false);
   statusStrip_.append(*providerField_.root);
-  statusStrip_.append(*kit::MakeStatusSeparator());
-  trafficField_ = kit::MakeStatusField("", false, T_("site_app_no_traffic", "No traffic yet"));
+  trafficSeparator_ = kit::MakeStatusSeparator();
+  statusStrip_.append(*trafficSeparator_);
+  trafficField_ = kit::MakeStatusField(T_("data", "Data"), false);
   statusStrip_.append(*trafficField_.root);
 
-  // the 4 Advanced fields ride the SAME row and drop entirely with the mode
-  advancedFields_.append(*kit::MakeStatusSeparator());
+  // the 5 Advanced fields ride the same row and drop entirely with the mode,
+  // and each one after its own separator, which drops with it on a narrow
+  // window (ApplyStripLayout)
+  const auto appendAdvanced = [this](kit::StatusField& field, Gtk::Widget*& separator) {
+    separator = kit::MakeStatusSeparator();
+    advancedFields_.append(*separator);
+    advancedFields_.append(*field.root);
+  };
   networkField_ = kit::MakeStatusField(T_("network", "Network"), false);
-  advancedFields_.append(*networkField_.root);
+  appendAdvanced(networkField_, networkSeparator_);
+  sessionField_ = kit::MakeStatusField(T_("adv_session_mode", "Session"), false);
+  appendAdvanced(sessionField_, sessionSeparator_);
+  routesField_ = kit::MakeStatusField(T_("adv_routes", "Routes"), false);
+  appendAdvanced(routesField_, routesSeparator_);
+  rpcField_ = kit::MakeStatusField(T_("adv_rpc", "RPC"), false);
+  appendAdvanced(rpcField_, rpcSeparator_);
+  rawField_ = kit::MakeStatusField(T_("adv_raw_status", "Raw status"), false);
+  appendAdvanced(rawField_, rawSeparator_);
+  // ...closed by a standing tag naming the mode, as Windows has it: the mode
+  // changes what half the app's surfaces mean, so the chrome says which
+  // reading it is in. Caption-less (the word is the fact), in the action
+  // blue chrome wears, and it drops with the fields it closes.
   advancedFields_.append(*kit::MakeStatusSeparator());
-  sessionField_ = kit::MakeStatusField("Session", false);
-  advancedFields_.append(*sessionField_.root);
-  advancedFields_.append(*kit::MakeStatusSeparator());
-  routesField_ = kit::MakeStatusField("Routes", false);
-  advancedFields_.append(*routesField_.root);
-  advancedFields_.append(*kit::MakeStatusSeparator());
-  rpcField_ = kit::MakeStatusField("RPC", false);
-  advancedFields_.append(*rpcField_.root);
-  advancedFields_.append(*kit::MakeStatusSeparator());
-  rawField_ = kit::MakeStatusField("Raw", false);
-  advancedFields_.append(*rawField_.root);
+  modeField_ = kit::MakeStatusField({}, false, T_("adv_advanced_mode", "Advanced mode"));
+  kit::SetStatusFieldValue(modeField_, T_("advanced", "Advanced"));
+  modeField_.value->add_css_class("ur-status-mode");
+  advancedFields_.append(*modeField_.root);
   advancedFields_.set_visible(false);
   statusStrip_.append(advancedFields_);
-  contentColumn_.append(statusStrip_);
 
   // snackbar overlays the content bottom-center (windows AccountSnackbar,
   // MaxWidth 480)
   contentOverlay_.set_child(contentColumn_);
   contentOverlay_.add_overlay(snackbar_.root());
   contentOverlay_.set_hexpand(true);
-  append(contentOverlay_);
+  body_.append(contentOverlay_);
+  body_.set_vexpand(true);
+  append(body_);
+  // The strip is the last row and spans the window, under the rail and the
+  // content, as Windows' root grid has it: its room is the window's width.
+  append(statusStrip_);
 
   PaintSelection();
 }
@@ -98,7 +128,8 @@ HomeShell::NavItem* HomeShell::MakeNavItem(Gtk::Box& parent, const std::string& 
   item.tag = tag;
   item.button = Gtk::make_managed<Gtk::Button>();
   item.button->add_css_class("ur-nav-item");
-  auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10);
+  auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, kNavExpandedGap);
+  item.row = row;
   item.accent = Gtk::make_managed<Gtk::Box>();
   item.accent->add_css_class("ur-nav-accent");
   item.accent->set_size_request(3, 16);
@@ -118,6 +149,7 @@ HomeShell::NavItem* HomeShell::MakeNavItem(Gtk::Box& parent, const std::string& 
   kit::SetAccessibleLabel(*item.button, label);
   item.button->signal_clicked().connect([this, tag] { Navigate(tag); });
   parent.append(*item.button);
+  ApplyCompact(item);
   items_.push_back(item);
   return &items_.back();
 }
@@ -152,7 +184,8 @@ void HomeShell::PaintSelection() {
 void HomeShell::SetAdvancedMode(bool on) {
   if (advanced_ == on) return;
   advanced_ = on;
-  advancedFields_.set_visible(on);
+  FadeAdvancedFields(shell::StatusStripLayoutFor(widthDip_, on).advancedRow);
+  ApplyStripLayout();
   if (on && !developerItem_) {
     // INSERTED into the footer collection ahead of settings, not un-hidden
     auto* settingsButton = items_.empty() ? nullptr : items_.back().button;
@@ -177,12 +210,92 @@ void HomeShell::SetAdvancedMode(bool on) {
   }
 }
 
+void HomeShell::FadeAdvancedFields(bool show) {
+  // a later flip cancels this one's frames and its hide
+  const uint64_t generation = ++advancedFade_;
+  advancedFields_.set_opacity(1.0);
+  if (!show && !advancedFields_.get_visible()) return;  // nothing on screen to fade
+  // a hard cut when animations are off, or with the strip not on screen
+  // (the mode read at launch), where no frame would run the fade
+  if (!motion::ShouldAnimate() || !statusStrip_.get_mapped()) {
+    advancedFields_.set_visible(show);
+    return;
+  }
+  if (show) {
+    advancedFields_.set_opacity(0.0);
+    advancedFields_.set_visible(true);
+    motion::AnimateValue(advancedFields_, 0, kAdvancedFadeInMs, motion::kStandardP1,
+                         motion::kStandardP2, [this, generation](double eased) {
+                           if (generation == advancedFade_) advancedFields_.set_opacity(eased);
+                         });
+    return;
+  }
+  motion::AnimateValue(
+      advancedFields_, 0, kAdvancedFadeOutMs, motion::kExitP1, motion::kExitP2,
+      [this, generation](double eased) {
+        if (generation == advancedFade_) advancedFields_.set_opacity(1.0 - eased);
+      },
+      [this, generation] {
+        if (generation != advancedFade_) return;
+        advancedFields_.set_visible(false);
+        advancedFields_.set_opacity(1.0);
+      });
+}
+
+void HomeShell::ApplyBreakpoint(int windowWidthDip) {
+  SetCompactNav(shell::NavRailCompact(windowWidthDip));
+  widthDip_ = windowWidthDip;
+  // a resize applies at once: a fade still running for a flip is cut short
+  ++advancedFade_;
+  advancedFields_.set_opacity(1.0);
+  advancedFields_.set_visible(shell::StatusStripLayoutFor(widthDip_, advanced_).advancedRow);
+  ApplyStripLayout();
+}
+
+void HomeShell::ApplyStripLayout() {
+  const shell::StatusStripLayout layout = shell::StatusStripLayoutFor(widthDip_, advanced_);
+  // the Normal fields' captions; the Advanced fields keep theirs
+  for (kit::StatusField* field : {&providerField_, &trafficField_}) {
+    if (field->caption) field->caption->set_visible(layout.captions);
+  }
+  trafficSeparator_->set_visible(layout.traffic);
+  trafficField_.root->set_visible(layout.traffic);
+  // The Advanced fields the row has room for, each with its separator; the
+  // tag closes whatever shows. Off the mode the row hides whole, fading, so
+  // its fields are left as they were rather than cut from under the fade.
+  if (!advanced_) return;
+  const auto showAdvanced = [](Gtk::Widget* separator, kit::StatusField& field, bool show) {
+    separator->set_visible(show);
+    field.root->set_visible(show);
+  };
+  showAdvanced(networkSeparator_, networkField_, layout.sessionFields);
+  showAdvanced(sessionSeparator_, sessionField_, layout.sessionFields);
+  showAdvanced(routesSeparator_, routesField_, layout.sessionFields);
+  showAdvanced(rpcSeparator_, rpcField_, layout.rpc);
+  showAdvanced(rawSeparator_, rawField_, layout.raw);
+}
+
 void HomeShell::SetCompactNav(bool compact) {
   if (compact_ == compact) return;
   compact_ = compact;
   navRail_.set_size_request(compact ? kNavCompactWidth : kNavExpandedWidth, -1);
-  for (auto& item : items_) {
-    if (item.label) item.label->set_visible(!compact);
+  if (compact) {
+    navRail_.add_css_class("compact");
+  } else {
+    navRail_.remove_css_class("compact");
+  }
+  for (auto& item : items_) ApplyCompact(item);
+}
+
+void HomeShell::ApplyCompact(NavItem& item) {
+  // the icon alone names nothing: the label moves into the tooltip, and the
+  // accessible label (set at build) stays
+  if (item.label) item.label->set_visible(!compact_);
+  if (item.row) item.row->set_spacing(compact_ ? kNavCompactGap : kNavExpandedGap);
+  if (compact_ && item.label) {
+    item.button->set_tooltip_text(item.label->get_text());
+  } else {
+    item.button->set_has_tooltip(false);
   }
 }
 

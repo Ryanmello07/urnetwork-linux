@@ -35,6 +35,7 @@
 #include "LogUpload.hpp"
 #include "Health.hpp"
 #include "ProvideLifecycle.hpp"
+#include "RowConnectCoalescer.hpp"
 #include "RpcSession.hpp"
 #include "SignOut.hpp"
 #include "VerifySendNotice.hpp"
@@ -193,6 +194,17 @@ struct ConnectReading {
   bool tunnelBound = false;
   int64_t providerCount = 0;  // grid.getWindowCurrentSize()
   bool insufficientBalance = false;
+  // The degrade hold's verdict on this session (health::DegradeHold), so the
+  // page, the strip and the tray read one verdict.
+  health::ProofLoss proofLoss = health::ProofLoss::None;
+  // A controller status is in hand: the presentation is open, or this session
+  // latched one before it closed. False for a session started while the
+  // window was hidden, where the tray keeps the session's own claim.
+  bool statusObserved = false;
+  // The SDK's diagnosis of the forming window (WindowStatus.StallReason),
+  // read only while it can matter: a session up, the controller not saying
+  // CONNECTED, the presentation open. "" otherwise.
+  std::string stallReason;
 
   // Value equality, so a consumer can skip a rebuild when nothing moved. It
   // compares EVERY field on purpose: a partial comparison would be one more
@@ -200,7 +212,9 @@ struct ConnectReading {
   bool operator==(const ConnectReading& o) const {
     return sdk == o.sdk && rawStatus == o.rawStatus &&
            destinationSelected == o.destinationSelected && tunnelBound == o.tunnelBound &&
-           providerCount == o.providerCount && insufficientBalance == o.insufficientBalance;
+           providerCount == o.providerCount && insufficientBalance == o.insufficientBalance &&
+           proofLoss == o.proofLoss && statusObserved == o.statusObserved &&
+           stallReason == o.stallReason;
   }
   bool operator!=(const ConnectReading& o) const { return !(*this == o); }
 
@@ -212,6 +226,7 @@ struct ConnectReading {
     s.providerCount = providerCount;
     s.insufficientBalance = insufficientBalance;
     s.disconnectRequested = disconnectRequested;
+    s.proofLoss = proofLoss;
     return s;
   }
 };
@@ -681,9 +696,12 @@ class SdkHost {
   // Daemon session: connect → hello (protocol enforced both ways) →
   // start_tunnel → bind the DeviceRemote to the daemon's device RPC. The
   // tunnel itself (DeviceLocal, tun fd, IoLoop) lives in urnetworkd.
-  TunnelStartResult StartTunnel();
+  // `reason` names the gesture in the journal (a static string, never shown).
+  TunnelStartResult StartTunnel(const char* reason);
   // Human-readable detail for the last non-Started result ("" when none).
   std::string LastTunnelError();
+  // The device rpc's host:port this session dialed, "" with none.
+  std::string RpcHostPort();
   // Both connect calls ask the connect gate first (SetConnectGate) and do
   // nothing when it blocks.
   void ConnectBestAvailable();
@@ -698,6 +716,24 @@ class SdkHost {
   // (the GTK main loop) before mutex_ is taken, so it may touch window state.
   using ConnectGate = std::function<bool(std::function<void()> retry)>;
   void SetConnectGate(ConnectGate gate) { connectGate_ = std::move(gate); }
+  // A location row's click, from the chooser and the Network page (nullopt is
+  // the best-available row). It runs the start path the window installs
+  // (SetRowConnect), which starts a tunnel when there is none, as the Connect
+  // button does: Connect alone drives only a session that is already up, so
+  // after a Disconnect, or a stop by the daemon, a row click started nothing.
+  //
+  // Coalesced, as on Windows (RowConnectCoalescer.hpp): the click runs once it
+  // has been the last one for 1.2 s, and a click on the location the session
+  // is already driving is no connect and drops a newer click still settling.
+  // Main loop only.
+  void ConnectFromRow(const std::optional<urnet::ConnectLocation>& location);
+  // Drops a row click still settling. The immediate gestures supersede it: the
+  // Connect button and the tray (MainWindow), Disconnect and Logout.
+  void CancelRowConnect(const char* why);
+  // The start path a row click runs: MainWindow::StartTunnelUi with the row's
+  // location. Without one a row click only connects.
+  using RowConnect = std::function<void(const std::optional<urnet::ConnectLocation>& location)>;
+  void SetRowConnect(RowConnect run) { rowConnect_ = std::move(run); }
   void Disconnect();
   // Own presentation-only SDK view controllers only while the GTK window is
   // visible. The DeviceLocal, tunnel and packet loop remain alive in the tray.
@@ -725,6 +761,10 @@ class SdkHost {
   // mode that does not provide once nothing is known to run. Main loop.
   void ReconcileProvider(const char* reason, bool userInitiated = false,
                          bool settingsChanged = false);
+  // The health poll's reconcile, decided on the status reply its worker has
+  // just read rather than on a read of its own, so a steady tick waits on
+  // nothing. A device still bound is read afresh (ReconcileProviderLocked).
+  void ReconcileProvider(const char* reason, const ctl::StatusReply& polled);
   // A provider device runs: a tunnel session's (a DeviceRemote is bound) or,
   // with none, the daemon's provider-only device as its status last said. The
   // Earnings page derives a local idle reason only then
@@ -738,9 +778,7 @@ class SdkHost {
   // names from the same spoof list as the daemon's devices. A redacted status
   // (another user's session) or a daemon that predates the field gives "".
   // While the daemon cannot be asked, the last value stays. Main loop: the
-  // window's health poll calls it, with the status it already read when it has
-  // one.
-  void FollowDaemonNetworkCountry();
+  // window's health poll calls it with the status its worker read.
   void FollowDaemonNetworkCountry(const ctl::StatusReply& status);
 
   // "Send feedback with logs" while disconnected (support inbox 2090). The
@@ -758,18 +796,14 @@ class SdkHost {
   logupload::DaemonAnswer UploadDaemonLogs(const std::string& feedbackId);
   // The outcome of the upload UploadDaemonLogs left pending, once the daemon's
   // status names it finished (logupload::CompletionFor): logged, and the wait
-  // ends. The first asks for a status only while an upload is pending. Main
-  // loop (MainWindow::PollDaemonHealth).
-  void FollowDaemonLogUpload();
+  // ends. Main loop (MainWindow::ApplyDaemonHealth, with the poll's status).
   void FollowDaemonLogUpload(const ctl::StatusReply& status);
   // A Reset extenders urnetworkd refused because a bring-up owned its session
   // (OwedExtenderReset), sent again, once, on the reset's worker when the
   // status shows that bring-up settled. It asks for no dialog, so the daemon
   // refuses it rather than prompt (beside another user's live session, or
-  // where authorizing it would need a dialog), and it is then dropped. The
-  // first asks for a status only while a reset is owed. Main loop
-  // (MainWindow::PollDaemonHealth).
-  void FollowDaemonExtenderReset();
+  // where authorizing it would need a dialog), and it is then dropped. Main
+  // loop (MainWindow::ApplyDaemonHealth, with the poll's status).
   void FollowDaemonExtenderReset(const ctl::StatusReply& status);
 
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
@@ -815,7 +849,17 @@ class SdkHost {
   // restored preferences; writes go to the device when present (forwarded
   // over the device rpc; the daemon side persists the blocker/dns/overrides)
   // and to LocalState otherwise so the next device creation restores them.
+  // The location the user chose. The connect view controller's selection,
+  // which it keeps across a Disconnect, and with the presentation closed the
+  // device's connect location, are Windows' reads; the connect location
+  // persisted in the LocalState, and then the persisted default location (the
+  // last choice, which ConnectViewController.Connect saves and a Disconnect
+  // leaves), are Linux's, for a closed presentation and for no device. What
+  // the provider row shows and a Connect press connects to.
   std::optional<urnet::ConnectLocation> SelectedLocation();
+  // The location the device is connected to (with no device, the persisted
+  // connect location): what the DNS recommendation reads its country from.
+  std::optional<urnet::ConnectLocation> ConnectedLocation();
   std::optional<urnet::PerformanceProfile> GetPerformanceProfile();
   // Persists to LocalState and applies to the device: unlike the other device
   // settings, DeviceLocal does not persist the profile itself (macOS parity).
@@ -1172,6 +1216,16 @@ class SdkHost {
   bool RequestReliability(ReliabilityRead scope,
                           std::function<void(ReliabilitySnapshot)> done);
 
+  // One daemon `status` read on a worker, for the window's health poll, and
+  // `done` on the GTK main loop with the reply (nullopt when the daemon did
+  // not answer). The poll used to read on the main loop every 5 s, so a
+  // daemon that accepts the socket but no longer answers held the window for
+  // the control client's 30 s receive timeout on every tick (Windows D4).
+  // Single-flight: false, and no `done`, while a read is in flight, so a slow
+  // daemon costs ticks rather than a queue. `done` may land after its caller
+  // has moved on, so it carries its own staleness guard.
+  bool RequestDaemonStatus(std::function<void(std::optional<ctl::StatusReply>)> done);
+
   // Exposed so the (full-parity) UI/view models can drive the SDK directly.
   urnet::Api& api() { return *api_; }
   // The app-wide client event queue (ClientEvents.hpp): every product event
@@ -1221,7 +1275,7 @@ class SdkHost {
   // ConnectBestAvailable can rebuild a session it has just discovered is dead
   // without re-entering a non-recursive lock. Every outcome logs, and the
   // failing ones leave a renderable sentence in lastTunnelError_.
-  TunnelStartResult StartTunnelLocked();
+  TunnelStartResult StartTunnelLocked(const char* reason);
   // ---- the two doors onto a tunnel that is ALREADY UP ----------------------
   // Door 1. Loads the remembered session (metadata from disk, the mTLS client
   // key and the pinned cert from the Secret Service) and, when it still
@@ -1302,7 +1356,17 @@ class SdkHost {
   // Re-reads EVERY field from the live SDK getters. Takes no lock (same
   // contract as ReadStats): it is called from SDK listener threads, from the
   // GTK loop, and from inside StartTunnelLocked with mutex_ already held.
+  // The reading's facts, then the degrade hold folded over them.
   ConnectReading ReadConnectReading();
+  ConnectReading ReadConnectFacts();
+  // The degrade hold (health::DegradeHold) over every reading, under its own
+  // lock because readings are taken on any thread, and the one-shot timeout
+  // that reads again when a running hold ends, since nothing else may.
+  std::mutex degradeMutex_;
+  health::DegradeHold degradeHold_;
+  int64_t degradeReevalAtMillis_ = 0;  // the hold end the timeout is armed for
+  unsigned int degradeReevalId_ = 0;    // g_timeout source id; 0 = unarmed
+  void NoteNewConnectAttempt();
   void PublishConnectReading();  // ReadConnectReading() -> onReading_
 
   // ---- kill switch internals ------------------------------------------------
@@ -1417,8 +1481,10 @@ class SdkHost {
   std::atomic<bool> provideHasNetworkKey_{false};
   // ---- the provider-only device (ReconcileProvider) -------------------------
   // Requires mutex_. settingsChanged: the provider policy was just edited,
-  // which only a new device picks up.
-  void ReconcileProviderLocked(const char* reason, bool userInitiated, bool settingsChanged);
+  // which only a new device picks up. polled: a status the caller has just
+  // read, used in place of a read here while no device is bound.
+  void ReconcileProviderLocked(const char* reason, bool userInitiated, bool settingsChanged,
+                               const ctl::StatusReply* polled = nullptr);
   // After a saved network space value (DoH servers, VLESS, the private
   // extender, the server): the reconcile with settingsChanged, posted to the
   // main loop. Takes no lock, so callers may hold mutex_.
@@ -1525,6 +1591,10 @@ class SdkHost {
   std::atomic<bool> reliabilityBusy_{false};
   std::mutex reliabilityWorkerMutex_;
   std::thread reliabilityWorker_;
+  // RequestDaemonStatus' worker, guarded the same two ways.
+  std::atomic<bool> daemonStatusBusy_{false};
+  std::mutex daemonStatusWorkerMutex_;
+  std::thread daemonStatusWorker_;
   // ResetExtenders' worker, guarded the same two ways: extenderResetBusy_ is
   // its single-flight gate, cleared by the worker before it marshals `done`,
   // and extenderResetWorkerMutex_ guards only the thread object, which ~SdkHost
@@ -1646,6 +1716,13 @@ class SdkHost {
 
   AuthStateHandler onAuth_;
   ConnectGate connectGate_;
+  RowConnect rowConnect_;
+  // The settling row click and its timer (ConnectFromRow); main loop only.
+  RowConnectCoalescer<std::optional<urnet::ConnectLocation>> rowConnects_;
+  unsigned int rowConnectTimerId_ = 0;  // g_timeout source id; 0 = unarmed
+  void ArmRowConnectTimer(int64_t delayMillis);
+  void OnRowConnectDue();
+  void RunRowConnect(const std::optional<urnet::ConnectLocation>& location);
   AuthInvalidHandler onAuthInvalid_;
   JwtRefreshedHandler onJwtRefreshed_;
   ConnectReadingHandler onReading_;

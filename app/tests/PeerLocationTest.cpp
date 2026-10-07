@@ -117,7 +117,7 @@ UR_TEST(locationsSheetPeerRowConnectsThroughPeerConnectLocation) {
   const std::string body = DefinitionBody(source, "Gtk::Box* LocationsSheet::MakePeerRow(");
   UR_EXPECT_TRUE(!body.empty());
   UR_EXPECT_TRUE(
-      body.find("host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));") !=
+      body.find("host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));") !=
       std::string::npos);
 }
 
@@ -126,8 +126,9 @@ UR_TEST(networkPagePeerRowsConnectThroughPeerConnectLocation) {
   UR_EXPECT_TRUE(!source.empty());
   const std::string body = DefinitionBody(source, "void NetworkPage::Render(");
   UR_EXPECT_TRUE(!body.empty());
-  UR_EXPECT_TRUE(body.find("host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(copy));") !=
-                 std::string::npos);
+  UR_EXPECT_TRUE(
+      body.find("host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(copy));") !=
+      std::string::npos);
 }
 
 // a hand-built client id location is how the rows lost the flag

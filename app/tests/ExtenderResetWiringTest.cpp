@@ -239,12 +239,10 @@ UR_TEST(ExtenderResetWiring_ABusyRefusalIsSentAgainAfterTheBringUp) {
   UR_EXPECT_TRUE(Precedes(marshal, "if (sent) owedExtenderReset_.NoteAnswer(request, taken, code);",
                           "done(outcome);"));
 
-  const std::string poll =
-      ExtenderResetBody(source, "void SdkHost::FollowDaemonExtenderReset() {");
-  UR_EXPECT_TRUE(Precedes(poll, "if (!owedExtenderReset_.Owed()) return;", "control_.Status()"));
-  UR_EXPECT_TRUE(Contains(poll, "FollowDaemonExtenderReset(*status);"));
   const std::string settle = ExtenderResetBody(
       source, "void SdkHost::FollowDaemonExtenderReset(const ctl::StatusReply& status) {");
+  UR_EXPECT_TRUE(Precedes(settle, "if (!owedExtenderReset_.Owed()) return;",
+                          "extenderResetBusy_.compare_exchange_strong(expected, true)"));
   UR_EXPECT_TRUE(Precedes(settle, "extenderResetBusy_.compare_exchange_strong(expected, true)",
                           "owedExtenderReset_.TakeIfSettled(status)"));
   UR_EXPECT_TRUE(Precedes(settle, "extenderResetWorker_.joinable()",
@@ -255,13 +253,14 @@ UR_TEST(ExtenderResetWiring_ABusyRefusalIsSentAgainAfterTheBringUp) {
   UR_EXPECT_TRUE(Contains(resend, "extenderResetBusy_.store(false);"));
   UR_EXPECT_TRUE(!Contains(resend, "owedExtenderReset_"));
 
-  // both branches of the window's health poll follow it, with the status the
-  // connected branch already read
-  const std::string health = ExtenderResetBody(ReadExtenderResetSource("MainWindow.cpp"),
-                                               "bool MainWindow::PollDaemonHealth()");
-  UR_EXPECT_TRUE(
-      Contains(Between(health, "if (!connected_) {", "return true;"), "host_.FollowDaemonExtenderReset();"));
-  UR_EXPECT_TRUE(Precedes(health, "if (!status) return true;",
+  // both branches of the window's health poll follow it, with the status its
+  // worker read
+  const std::string health = ExtenderResetBody(
+      ReadExtenderResetSource("MainWindow.cpp"),
+      "void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status)");
+  UR_EXPECT_TRUE(Contains(Between(health, "if (!connected_) {", "return;"),
+                          "host_.FollowDaemonExtenderReset(*status);"));
+  UR_EXPECT_TRUE(Contains(Between(health, "if (!status) return;", "if (status->tunnel_state"),
                           "host_.FollowDaemonExtenderReset(*status);"));
 }
 

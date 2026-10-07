@@ -137,6 +137,9 @@ class ConnectPage : public Gtk::Box {
   // relay gets the POST-press reading, a different answer to the one the user
   // gave by clicking a labelled button. Prefer this over on_toggle_connect.
   std::function<void(bool disconnect)> on_connect_action;
+  // The Failed state's press (the button reads Retry): MainWindow stops the
+  // session and connects to the same selection again.
+  std::function<void()> on_retry_connect;
   // the legacy void toggle: still used by the tray, which has no button in
   // front of the user and must therefore ask (ConnectActionIsDisconnect).
   // Only consulted when on_connect_action is unwired.
@@ -162,6 +165,14 @@ class ConnectPage : public Gtk::Box {
   std::function<void()> on_open_data_info;
   // the recovery row's Cancel: a refused start is not run by itself any more
   std::function<void()> on_cancel_balance_recovery;
+  // The window's status strip, which shows on every destination what this page
+  // says: the status row's word and dot after each render (the word the hero is
+  // named by, "Disconnecting…" included), and the provider row's text.
+  std::function<void(const Glib::ustring& text, const std::string& dotHex)> on_status_rendered;
+  std::function<void(const Glib::ustring& text)> on_location_rendered;
+  // Raises both with what the page shows now, for a listener wired after the
+  // page's first render.
+  void RepublishStatus();
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off
@@ -303,13 +314,15 @@ class ConnectPage : public Gtk::Box {
            renderedState_ == health::State::Blocked ||
            renderedState_ == health::State::Disconnecting;
   }
-  // A session is up but no provider is proven yet. The provider-count row
+  // A session is up but no provider is proven yet (or no longer is, Degraded,
+  // while the SDK reconnects). The provider-count row
   // reads "Connecting to providers" here and still opens the provider
   // locations sheet, which lists whatever providers are known so far
   // (android/apple parity: the status label is the tap target in both states).
   bool ConnectingNow() const {
     return renderedState_ == health::State::Connecting ||
-           renderedState_ == health::State::Evaluating;
+           renderedState_ == health::State::Evaluating ||
+           renderedState_ == health::State::Degraded;
   }
   void ApplyContractsList();
   void ApplySplitRuleCount();
@@ -366,6 +379,9 @@ class ConnectPage : public Gtk::Box {
   // force = apply everything (build, resync, mode change).
   void RefreshFeeds(bool force);
   void RefreshAllPanes() { RefreshFeeds(true); }
+  // The provider row's selection and the dns pill's connected country, read
+  // together; true when either moved (or `force`).
+  bool ReadLocations(bool force);
   // The clock-driven fallback for the change feed (see PollFeeds' comment):
   // until MainWindow routes DrawerEvent into OnHostEvent, the page's own clock
   // is the only thing that can keep panes B and C alive.
@@ -436,6 +452,7 @@ class ConnectPage : public Gtk::Box {
   // gets from ConnectActionIsDisconnect(). Written by ApplyConnectStatus from
   // the very expression that sets the label — one reading, one answer.
   bool actionIsDisconnect_ = false;
+  bool actionIsRetry_ = false;  // the Failed state's action
   // THE USER'S INTENT, WHICH THE SDK'S CONNECTION TOKEN DOES NOT CARRY.
   // g_get_monotonic_time() microseconds at the moment a Disconnect press was
   // relayed, or 0 for "no disconnect in flight". Until the session actually

@@ -61,6 +61,8 @@ class MainWindow : public Gtk::ApplicationWindow {
   // The no-argument form is for callers with NO button in front of the user —
   // the tray menu — which must therefore ask the page what the press means.
   void ToggleConnect();
+  // the Failed state's press: disconnect, then connect to the same selection
+  void RetryConnect();
   bool connected() const { return connected_; }
   // The out-of-balance notification's Disconnect button ("app." +
   // kBalanceNoticeDisconnectAction, registered in main.cpp). Disconnect only:
@@ -70,7 +72,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // The screenshot hook (main.cpp URNETWORK_SHOOT) renders this window when a
   // URNW_ONBOARDING_PREVIEW review has it open, else null.
   Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
-  std::function<void(bool connected)> on_connected_change;
+  // The tray: the session (its Connect/Disconnect item), whether a provider
+  // is proven (its icon) and the state's words (its tooltip), on change.
+  std::function<void(bool sessionUp, bool proven, const std::string& status)> on_tray_state;
   // The tray's recovery items (failsafe_notice::TrayRecoveryFor), pushed from
   // the health poll when they change.
   std::function<void(failsafe_notice::TrayRecovery)> on_tray_recovery_change;
@@ -89,12 +93,17 @@ class MainWindow : public Gtk::ApplicationWindow {
   // StartTunnel + render the daemon session state. "Daemon unreachable" and
   // "daemon too old" are DISTINCT actionable lines (MIGRATION.md) — the same
   // gray treatment as the app's other unavailable states, never a blank.
-  // connectDestination: after the tunnel is up, also point it at a provider —
-  // the SELECTED one, or best-available when nothing is chosen. Defaults true
-  // because a tunnel with no destination installs routes, DNS and the filter
-  // and then carries NOTHING, while looking identical to a working one. Only
-  // ToggleConnect passes false, because it issues its own connect.
-  TunnelStartResult StartTunnelUi(bool connectDestination = true);
+  // Once the tunnel is up it is pointed at `target`, or at the best available
+  // provider when the target is none or flagged best available: a tunnel with
+  // no destination installs routes, DNS and the filter and then carries
+  // nothing, while looking identical to a working one.
+  // `reason` names the gesture in the journal (a static string).
+  TunnelStartResult StartTunnelUi(const char* reason,
+                                  const std::optional<urnet::ConnectLocation>& target);
+  // The same, to the location selected now (the Connect button, the tray,
+  // connect on launch, a sign-in). Read before the start, because a start that
+  // builds a new device answers SelectedLocation from that device.
+  TunnelStartResult StartTunnelUi(const char* reason);
   void BuildAuthPages();  // create network / verify / password reset
   void OnGetStarted();  // authLogin discovery -> password / create / inline error
   void OnSignIn();
@@ -127,6 +136,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // a green "Connected" while blocked or unprotected. This is the consumer for
   // that state.
   bool PollDaemonHealth();
+  // The poll's reply, on the main loop: the follow-ups, the strip's daemon
+  // facts and the protective-teardown verdict.
+  void ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status);
 
  protected:
   // GTK4 has no size-allocate signal; the window's own vfunc is the only place
@@ -172,6 +184,18 @@ class MainWindow : public Gtk::ApplicationWindow {
   // poll has just proven when it finds urnetworkd no longer carrying.
   ConnectReading DaemonTunnelGoneReading();
   void ApplyStats(const LiveStats& stats);  // the pages' live stats and the status strip
+  // The status strip's Advanced fields that come from the session rather than
+  // the stats: Network, Session, Routes and RPC.
+  void ApplyStatusStripDetails();
+  // The daemon's last status reply (PollDaemonHealth), for the strip's Routes
+  // field; dropped when a session starts or ends on purpose.
+  std::optional<ctl::StatusReply> daemonStatus_;
+  // Bumped with every drop of daemonStatus_, so a poll reply that was in
+  // flight across a start, a Disconnect or a sign-in or -out is dropped.
+  uint64_t daemonStatusEpoch_ = 0;
+  // Drops the last reply and any still in flight, and renders the strip
+  // without it.
+  void ForgetDaemonStatus();
   void OpenProviderLocations();             // the "Connected to N providers" entry point
   // Keep the device-location override pointed at the oldest connected provider
   // that has coordinates. Runs off the SDK change feed rather than from the
@@ -301,7 +325,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // FIRST reading — which for an idle app equals the default-constructed one —
   // would be skipped as "unchanged" and no surface would ever be seeded.
   bool readingApplied_ = false;
-  bool trayConnectedPushed_ = false;
+  bool trayStatePushed_ = false;
+  bool trayProven_ = false;
+  std::string trayStatus_;
   bool connected_ = false;
   // A session this window saw has ended and no status has been read since:
   // the explanation of a failsafe stop is owed to the disconnected poll, since
