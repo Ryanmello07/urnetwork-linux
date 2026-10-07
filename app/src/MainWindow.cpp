@@ -17,6 +17,7 @@
 #include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
 #include "DaemonUnreachableCopy.hpp"
+#include "DisplayText.hpp"
 #include "FailsafeNotice.hpp"
 #include "Formatters.hpp"
 #include "UrTheme.hpp"
@@ -2705,7 +2706,9 @@ void MainWindow::ApplyStatusStripDetails() {
   if (!shell_) return;
   // signed out there is no jwt to read, and the read would say so on stderr
   auto byJwt = host_.IsLoggedIn() ? host_.ParseByJwt() : std::nullopt;
-  const std::string networkName = byJwt ? byJwt->NetworkName : std::string();
+  // the jwt's network name is filtered for display (DisplayText.hpp)
+  const std::string networkName =
+      byJwt ? SanitizeExternalDisplayText(byJwt->NetworkName) : std::string();
   shell_->SetStatusNetwork(balance_.IsGuest() || networkName.empty()
                                ? Glib::ustring(T_("guest", "Guest"))
                                : Glib::ustring(networkName));

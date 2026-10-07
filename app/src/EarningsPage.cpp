@@ -14,6 +14,7 @@
 
 #include "BittensorManualSheet.hpp"
 #include "BittensorWalletFlow.hpp"
+#include "DisplayText.hpp"
 #include "EmojiKeyboard.hpp"
 #include "EmojiTagSheet.hpp"
 #include "ExtenderProvideRowPaint.hpp"
@@ -2937,7 +2938,7 @@ void EarningsPage::RebuildLeaderboard() {
     const bool masked = !isOwn && (!earner.is_public || earner.contains_profanity);
     row.cells[0]->set_text("#" + std::to_string(rank));
     row.cells[1]->set_text(masked ? Glib::ustring(T_("private_network", "Private Network"))
-                                  : Glib::ustring(earner.network_name));
+                                  : Glib::ustring(SanitizeExternalDisplayText(earner.network_name)));
     row.cells[2]->set_text(FormatMiB(earner.net_mib_count));
     if (masked) {
       for (Gtk::Label* cell : row.cells) cell->add_css_class("dim-label");
@@ -4735,7 +4736,7 @@ Gtk::Widget* EarningsPage::MakePointsRow(const PointsRowUi& r, const std::string
                                   : (byStreak ? r.rankStreakText : r.rankPointsText));
   // the emoji tag shows either way; the name only when the network is not anonymous
   const bool anon = r.anonymous || r.displayName.empty();
-  Glib::ustring name = anon ? anonymous : Glib::ustring(r.displayName);
+  Glib::ustring name = anon ? anonymous : Glib::ustring(SanitizeExternalDisplayText(r.displayName));
   row.cells[1]->set_text(name);
   identity.bottom->set_text(r.emojiTag);
   identity.bottom->set_visible(!r.emojiTag.empty());
@@ -4760,10 +4761,14 @@ Gtk::Widget* EarningsPage::MakePointsRow(const PointsRowUi& r, const std::string
 }
 
 // The network's own name for the points board: the me row's, or the jwt's
-// until me lands; empty only when signed out.
+// until me lands, filtered for display; empty only when signed out.
 std::string EarningsPage::OwnPointsName() {
-  if (pointsMe_ && !pointsMe_->displayName.empty()) return pointsMe_->displayName;
-  if (auto jwt = host_.ParseByJwt(); jwt && !jwt->NetworkName.empty()) return jwt->NetworkName;
+  if (pointsMe_ && !pointsMe_->displayName.empty()) {
+    return SanitizeExternalDisplayText(pointsMe_->displayName);
+  }
+  if (auto jwt = host_.ParseByJwt(); jwt && !jwt->NetworkName.empty()) {
+    return SanitizeExternalDisplayText(jwt->NetworkName);
+  }
   return std::string();
 }
 

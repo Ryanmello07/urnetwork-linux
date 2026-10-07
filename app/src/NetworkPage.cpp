@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "DisplayText.hpp"
 #include "I18n.hpp"
 #include "LocationRowName.hpp"
 #include "LocationSelection.hpp"
@@ -386,7 +387,7 @@ void NetworkPage::AppendLocationSection(
                   TN_("provider_count", "{} provider", "{} providers", providerCount),
                   providerCount))
             : Glib::ustring();
-    auto* row = MakeRow(location.name ? Glib::ustring(*location.name) : Glib::ustring(),
+    auto* row = MakeRow(SanitizeExternalDisplayText(location.name.value_or(std::string())),
                         meta, LocationRowColor(location),
                         IsLocationSelected(selected, location), !location.stable,
                         location.strong_privacy, /*providing=*/false);
@@ -417,7 +418,7 @@ void NetworkPage::Render() {
   if (peerCount > 0) {
     AppendGroup(*listHost_, T_("network_peers", "Network peers"), peerCount);
     for (const auto& peer : *peers_) {
-      auto* row = MakeRow(PeerDisplayName(peer), peer.DeviceSpec,
+      auto* row = MakeRow(PeerDisplayName(peer), SanitizeExternalDisplayText(peer.DeviceSpec),
                           ParseHexColor(urnet::getColorHex(peer.ClientId.value_or("")),
                                         kUrTextMuted),
                           IsPeerSelected(selected, peer), false, false, /*providing=*/true);
@@ -527,7 +528,8 @@ void NetworkPage::RenderDetail() {
     // ConnectLocation fields ONLY — the SDK carries no latency and no load
     // anywhere; there are no such rows. Do not invent them.
     const auto& loc = *selected;
-    const Glib::ustring name = loc.name ? Glib::ustring(*loc.name) : Glib::ustring();
+    // the location's own fields came off the network: filtered for display
+    const Glib::ustring name = SanitizeExternalDisplayText(loc.name.value_or(std::string()));
     addKv(T_("name_label", "Name"), name);
     kit::SetTextOrCollapse(*paneB_.meta, name);
     const int providerCount = static_cast<int>(loc.provider_count.value_or(0));
@@ -536,10 +538,10 @@ void NetworkPage::RenderDetail() {
             Format(TN_("provider_count", "{} provider", "{} providers", providerCount),
                    providerCount));
     }
-    addKv(T_("country", "Country"), loc.country.value_or(std::string()));
+    addKv(T_("country", "Country"), SanitizeExternalDisplayText(loc.country.value_or(std::string())));
     // deliberate plural-key reuse: the store has no singular Region/City keys
-    addKv(T_("regions", "Regions"), loc.region.value_or(std::string()));
-    addKv(T_("cities", "Cities"), loc.city.value_or(std::string()));
+    addKv(T_("regions", "Regions"), SanitizeExternalDisplayText(loc.region.value_or(std::string())));
+    addKv(T_("cities", "Cities"), SanitizeExternalDisplayText(loc.city.value_or(std::string())));
     addKv(T_("strong_anonymization", "Strong Anonymization"),
           loc.strong_privacy ? T_("yes", "Yes") : T_("no", "No"));
     addKv(T_("promoted", "Promoted"),

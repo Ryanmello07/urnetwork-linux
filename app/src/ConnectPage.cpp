@@ -12,6 +12,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 
+#include "DisplayText.hpp"
 #include "ExtenderProvideRowPaint.hpp"
 #include "FailsafeNotice.hpp"
 #include "FastDnsCopy.hpp"
@@ -3240,7 +3241,7 @@ void ConnectPage::ApplyLocationRow() {
   const auto& location = selectedLocation_;
   Glib::ustring text = T_("best_available_provider", "Best available provider");
   if (!IsBestAvailableSelected(location)) {
-    std::string displayName = location->name.value_or(std::string());
+    std::string displayName = SanitizeExternalDisplayText(location->name.value_or(std::string()));
     if (peers_) {
       for (const auto& peer : *peers_) {
         if (IsPeerSelected(location, peer)) {
@@ -3302,12 +3303,13 @@ void ConnectPage::ApplyPeersList() {
     const Glib::ustring name = PeerDisplayName(peer);
     row.title->set_text(name);
     // what the device IS — two phones with the same name are still distinct
-    row.meta->set_text(peer.DeviceSpec);
+    const Glib::ustring spec = SanitizeExternalDisplayText(peer.DeviceSpec);
+    row.meta->set_text(spec);
     CapNatural(row.title, 18);
     CapNatural(row.meta, 14);
     kit::MarkDecorative(*row.title);
     kit::MarkDecorative(*row.meta);
-    kit::SetAccessibleLabel(*row.root, name + ", " + Glib::ustring(peer.DeviceSpec));
+    kit::SetAccessibleLabel(*row.root, name + ", " + spec);
     peersHost_->append(*row.root);
   }
 }

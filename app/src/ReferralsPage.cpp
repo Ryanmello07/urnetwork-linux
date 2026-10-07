@@ -7,6 +7,7 @@
 #include <functional>
 #include <utility>
 
+#include "DisplayText.hpp"
 #include "I18n.hpp"
 #include "ReferralCodeField.hpp"
 #include "ReferralPanel.hpp"
@@ -251,8 +252,10 @@ class ReferralNetworkSheet : public Gtk::Window {
 
   void ApplyCurrent(AccountFieldState state, const std::string& name) {
     state_ = state;
-    name_ = name;
-    ApplyFieldState(*current_, state, name);
+    // Another user named the network, so the line and the unlink warning show
+    // it filtered (DisplayText.hpp).
+    name_ = SanitizeExternalDisplayText(name);
+    ApplyFieldState(*current_, state, name_);
     // Unlink is offered ONLY against a loaded, non-empty name.
     unlink_->set_visible(state == AccountFieldState::Loaded && !name.empty());
     Gate();
@@ -432,7 +435,7 @@ class ReferralNetworkSheet : public Gtk::Window {
   Gtk::Button* primary_ = nullptr;
   Gtk::Button* close_ = nullptr;
   AccountFieldState state_ = AccountFieldState::Loading;
-  std::string name_;
+  std::string name_;  // as shown
   bool busy_ = false;
   bool armed_ = false;
 };
@@ -612,7 +615,9 @@ void ReferralsPage::ApplyPoints(AccountFieldState state, double points) {
 
 void ReferralsPage::ApplyReferralNetworkValue(AccountFieldState state,
                                               const std::string& name) {
-  ApplyFieldState(*referralNetworkRow_.value, state, name);
+  // Another user named the network: the row shows it filtered
+  // (DisplayText.hpp), and the raw name decides the row.
+  ApplyFieldState(*referralNetworkRow_.value, state, SanitizeExternalDisplayText(name));
   const bool addCode = ReferralNetworkOffersAddCode(state == AccountFieldState::Empty, name);
   referralNetworkRow_.root->set_visible(!addCode);
   if (addReferralCode_) addReferralCode_->set_visible(addCode);

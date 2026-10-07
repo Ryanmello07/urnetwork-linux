@@ -19,6 +19,7 @@
 #include "BittensorWalletFlow.hpp"
 #include "WalletBridgeRoute.hpp"
 #include "DeleteAccountOutcome.hpp"
+#include "DisplayText.hpp"
 #include "Formatters.hpp"
 #include "GuestConversionSheet.hpp"
 #include "I18n.hpp"
@@ -2325,8 +2326,11 @@ void AccountPage::ApplyAccountState(AccountFieldState state) {
 
 void AccountPage::ApplyNetworkName(const std::string& name) {
   acknowledgedName_ = name;  // the server-acknowledged name; the box is never truth
-  kit::SetTextOrCollapse(*nameRow_.value, name);
-  if (!name.empty()) SetToned(*nameRow_.value, kUrTextMuted, name);
+  // the row shows the name filtered for display; the editor is seeded with it
+  // as the server has it
+  const std::string shown = SanitizeExternalDisplayText(name);
+  kit::SetTextOrCollapse(*nameRow_.value, shown);
+  if (!shown.empty()) SetToned(*nameRow_.value, kUrTextMuted, shown);
 }
 
 void AccountPage::ApplyAuthLine() {

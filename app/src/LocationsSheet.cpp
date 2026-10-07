@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "LocationsSheet.hpp"
 
+#include "DisplayText.hpp"
 #include "I18n.hpp"
 #include "LocationRowName.hpp"
 #include "LocationSelection.hpp"
@@ -172,7 +173,7 @@ Gtk::Button* LocationsSheet::MakeLocationRow(const urnet::ConnectLocation& locat
                                      static_cast<unsigned long>(providerCount)),
                                  providerCount)
                         : std::string();
-  const std::string name = location.name.value_or(std::string());
+  const std::string name = SanitizeExternalDisplayText(location.name.value_or(std::string()));
   auto row = MakeRowShell(MakeColorDot(LocationColor(location)), name, caption);
 
   if (!location.stable) row.content->append(*MakeTrailingIcon("dialog-warning-symbolic", nullptr));
@@ -198,8 +199,9 @@ Gtk::Button* LocationsSheet::MakePeerRow(const urnet::NetworkPeer& peer, bool se
   const Rgba fallback{0.5, 0.5, 0.5, 1.0};
   auto* dot = MakeColorDot(ParseHexColor(urnet::getColorHex(peer.ClientId.value_or("")), fallback));
   // secondary line = the device spec, but only when a distinct name is shown too
-  const std::string caption =
-      (!peer.DeviceName.empty() && !peer.DeviceSpec.empty()) ? peer.DeviceSpec : std::string();
+  const std::string caption = (!peer.DeviceName.empty() && !peer.DeviceSpec.empty())
+                                  ? SanitizeExternalDisplayText(peer.DeviceSpec)
+                                  : std::string();
   const std::string name = PeerDisplayName(peer);
   auto row = MakeRowShell(dot, name, caption);
 

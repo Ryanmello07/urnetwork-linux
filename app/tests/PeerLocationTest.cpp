@@ -106,6 +106,11 @@ UR_TEST(peerDisplayNameIsTheDeviceNameThenSpecThenClientId) {
   Peer anonymous = MakePeer("", "");
   anonymous.ClientId.reset();
   UR_EXPECT_TRUE(urnw::PeerDisplayName(anonymous).empty());
+  // a name made only of characters the display filter drops would show as
+  // nothing, so it falls through to the next
+  const std::string zeroWidth = "\xE2\x80\x8B";  // U+200B
+  UR_EXPECT_TRUE(urnw::PeerDisplayName(MakePeer(zeroWidth, "Ubuntu 24.04")) == "Ubuntu 24.04");
+  UR_EXPECT_TRUE(urnw::PeerDisplayName(MakePeer(zeroWidth, zeroWidth)) == kPeerClientId);
   // the location takes the same name the row shows
   UR_EXPECT_TRUE(urnw::PeerConnectLocation<Location>(MakePeer("", "Ubuntu 24.04")).name ==
                  std::optional<std::string>("Ubuntu 24.04"));
