@@ -658,6 +658,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/LaunchAtStartupTest.cpp',
     'tests/LaunchAtStartupWiringTest.cpp',
     'tests/StatusStripWiringTest.cpp',
+    'tests/LocationSelectionTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -708,6 +709,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # sites, meson.build and ../../packaging/lib/common.sh the same way.
               # StatusStripWiringTest reads the status strip's writers in MainWindow.cpp
               # and ConnectPage.cpp the same way.
+              # LocationSelectionTest reads the location rows' pages the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

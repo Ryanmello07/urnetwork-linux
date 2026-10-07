@@ -2,6 +2,7 @@
 #include "LocationsSheet.hpp"
 
 #include "I18n.hpp"
+#include "LocationSelection.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -35,30 +36,6 @@ Rgba LocationColor(const urnet::ConnectLocation& loc) {
   }
   if (code.empty()) return fallback;
   return ParseHexColor(urnet::getColorHex(code), fallback);
-}
-
-bool SameId(const std::optional<std::string>& a, const std::optional<std::string>& b) {
-  return a && b && !a->empty() && *a == *b;
-}
-
-bool IsBestAvailableSelected(const std::optional<urnet::ConnectLocation>& selected) {
-  return !selected || (selected->connect_location_id &&
-                       selected->connect_location_id->best_available.value_or(false));
-}
-
-bool IsPeerSelected(const std::optional<urnet::ConnectLocation>& selected,
-                    const urnet::NetworkPeer& peer) {
-  if (!selected || !selected->connect_location_id) return false;
-  return SameId(selected->connect_location_id->client_id, peer.ClientId);
-}
-
-bool IsLocationSelected(const std::optional<urnet::ConnectLocation>& selected,
-                        const urnet::ConnectLocation& loc) {
-  if (!selected || !selected->connect_location_id || !loc.connect_location_id) return false;
-  const auto& a = *selected->connect_location_id;
-  const auto& b = *loc.connect_location_id;
-  return SameId(a.location_id, b.location_id) || SameId(a.client_id, b.client_id) ||
-         SameId(a.location_group_id, b.location_group_id);
 }
 
 // A trailing symbolic icon (glyphs on the right of a row).

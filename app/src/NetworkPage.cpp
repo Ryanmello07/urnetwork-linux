@@ -7,41 +7,12 @@
 #include <vector>
 
 #include "I18n.hpp"
+#include "LocationSelection.hpp"
 #include "PeerLocation.hpp"  // PeerDisplayName, PeerConnectLocation — shared with the chooser
 #include "UrTheme.hpp"
 
 namespace urnw {
 namespace {
-
-// ---- selection predicates ---------------------------------------------------
-// One identity question, one implementation: these duplicate the file-local
-// predicates in LocationsSheet.cpp byte for byte (the windows client exports
-// them from SdkHost.h so page, sheet and coalescer cannot disagree — hoist
-// these into a shared header when the host grows the coalescer).
-
-bool SameId(const std::optional<std::string>& a, const std::optional<std::string>& b) {
-  return a && b && !a->empty() && *a == *b;
-}
-
-bool IsBestAvailableSelected(const std::optional<urnet::ConnectLocation>& selected) {
-  return !selected || (selected->connect_location_id &&
-                       selected->connect_location_id->best_available.value_or(false));
-}
-
-bool IsPeerSelected(const std::optional<urnet::ConnectLocation>& selected,
-                    const urnet::NetworkPeer& peer) {
-  if (!selected || !selected->connect_location_id) return false;
-  return SameId(selected->connect_location_id->client_id, peer.ClientId);
-}
-
-bool IsLocationSelected(const std::optional<urnet::ConnectLocation>& selected,
-                        const urnet::ConnectLocation& loc) {
-  if (!selected || !selected->connect_location_id || !loc.connect_location_id) return false;
-  const auto& a = *selected->connect_location_id;
-  const auto& b = *loc.connect_location_id;
-  return SameId(a.location_id, b.location_id) || SameId(a.client_id, b.client_id) ||
-         SameId(a.location_group_id, b.location_group_id);
-}
 
 // ---- row color (§9) ---------------------------------------------------------
 // Countries key on the country code; everything else on the first non-empty of

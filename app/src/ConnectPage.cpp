@@ -15,6 +15,7 @@
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "KillSwitchCopy.hpp"
+#include "LocationSelection.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
 #include "ProvideLine.hpp"
 #include "Ui.hpp"
@@ -2356,19 +2357,13 @@ void ConnectPage::ApplyLocationRow() {
   // device call + a JSON parse
   const auto& location = selectedLocation_;
   Glib::ustring text = T_("best_available_provider", "Best available provider");
-  const bool bestAvailable =
-      !location || (location->connect_location_id &&
-                    location->connect_location_id->best_available.value_or(false));
-  if (!bestAvailable) {
+  if (!IsBestAvailableSelected(location)) {
     std::string displayName = location->name.value_or(std::string());
-    if (location->connect_location_id && location->connect_location_id->client_id &&
-        !location->connect_location_id->client_id->empty()) {
-      if (peers_) {
-        for (const auto& peer : *peers_) {
-          if (peer.ClientId && *peer.ClientId == *location->connect_location_id->client_id) {
-            displayName = PeerDisplayName(peer);
-            break;
-          }
+    if (peers_) {
+      for (const auto& peer : *peers_) {
+        if (IsPeerSelected(location, peer)) {
+          displayName = PeerDisplayName(peer);
+          break;
         }
       }
     }
