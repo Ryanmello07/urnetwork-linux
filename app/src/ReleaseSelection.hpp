@@ -1,12 +1,17 @@
 // Which published release the in-app updater offers, decided pure.
 //
-// THE UPDATE SOURCE IS ONE REPOSITORY: urnetwork/linux (kUpdateRepo). Every
+// The update source is one repository: urnetwork/linux (kUpdateRepo). Every
 // stable Linux release is published by hand to that repo's GitHub releases,
 // carrying the same asset names build/all/run.sh mints for the nightly
 // urnetwork/build release (require_linux_artifacts), so this file speaks the
-// build names and polls the stable repo. The nightly repo, personal forks and
-// every other host are refused by AssetUrlIsOfficial -- an API answer that
-// points anywhere else is treated as hostile, never followed.
+// build names and polls the stable repo. The release list is asked for by the
+// repository's numeric id (kUpdateRepoId), so a rename, or someone
+// registering the owner's old name, cannot move it; the owner and repo stay
+// only for the URLs GitHub spells by name. A release's download URL must be
+// exactly the one its tag and asset name have on that repo (IsFeedAssetUrl):
+// the nightly repo, personal forks, every other host and any other path are
+// refused -- an API answer that points anywhere else is treated as hostile,
+// never followed.
 //
 // The checker (UpdateChecker.cpp) turns the releases/latest JSON into the
 // plain structs below and asks SelectRelease; the decision itself -- the tag
@@ -36,14 +41,21 @@ namespace urnw::update {
 // assets to a release here when it is declared stable.
 inline constexpr const char* kUpdateRepo = "urnetwork/linux";
 
-// The release LIST, not /releases/latest: the stable repo has no release at
+// The id GitHub assigned urnetwork/linux, the path of the release list. An
+// owner/name path follows a rename with a redirect and goes to whoever
+// registers the old name next; an id names this repository for good. The
+// checker refuses redirects on that request, so nothing can move the feed.
+inline constexpr std::uint64_t kUpdateRepoId = 1297137671;
+
+// The release list, not /releases/latest: the stable repo has no release at
 // all until the first one is published (a 404 there), and the newest release
 // is not always the one this build can verify (SelectRelease falls back to an
 // older one that is). 15 is the windows checker's page size: enough history
 // to find a verifiable release behind a broken newest one, small enough to
 // stay well under the body cap.
 inline std::string ReleasesApiUrl() {
-  return std::string("https://api.github.com/repos/") + kUpdateRepo + "/releases?per_page=15";
+  return "https://api.github.com/repositories/" + std::to_string(kUpdateRepoId) +
+         "/releases?per_page=15";
 }
 
 // The human page for a tag (the "Release page" button and the notice for the
@@ -57,13 +69,25 @@ inline std::string ReleasePageUrl(std::string_view tag) {
   return url;
 }
 
-// A release asset may only be downloaded from the official repo's own
-// download path. Scheme, host and the repo path are all checked: a redirect
-// elsewhere is libsoup's business and happens AFTER this gate, over https.
-inline bool AssetUrlIsOfficial(std::string_view url) {
-  const std::string prefix =
-      std::string("https://github.com/") + kUpdateRepo + "/releases/download/";
-  return url.size() > prefix.size() && url.compare(0, prefix.size(), prefix) == 0;
+// The download URL the official repo gives `asset` of the release `tag`:
+// https://github.com/urnetwork/linux/releases/download/<tag>/<asset>. The tag
+// and the asset name come from the grammar, which has nothing to
+// percent-encode.
+inline std::string FeedAssetUrl(std::string_view tag, std::string_view asset) {
+  std::string url = std::string("https://github.com/") + kUpdateRepo + "/releases/download/";
+  url.append(tag);
+  url.push_back('/');
+  url.append(asset);
+  return url;
+}
+
+// Whether a release names exactly that URL for its asset. Matched whole: a
+// URL that only starts with the repo's download path can name another tag's
+// file, another file, or a path a server resolves elsewhere. The storage
+// host's redirect is libsoup's business and happens after this gate, over
+// https.
+inline bool IsFeedAssetUrl(std::string_view tag, std::string_view asset, std::string_view url) {
+  return !tag.empty() && !asset.empty() && url == FeedAssetUrl(tag, asset);
 }
 
 // ---- the tag grammar: v<YYYY.M.D>-<code>[-beta] -----------------------------
@@ -131,6 +155,21 @@ inline constexpr std::uint64_t ParseReleaseCode(std::string_view tag) noexcept {
 inline std::string VersionFromTag(std::string_view tag) {
   if (!tag.empty() && tag.front() == 'v') tag.remove_prefix(1);
   return std::string(tag);
+}
+
+// The instant every release code counts from, 2023-05-23T00:00:00Z, in Unix
+// seconds. A code is tenths of a second after it.
+inline constexpr std::int64_t kCodeEpochUnixSeconds = 1684800000;
+
+// How far after the release list's Date header a release code may point. A
+// code is minted from the clock of the machine that built the release, and
+// two days covers any honest skew between that clock and GitHub's.
+inline constexpr std::int64_t kFutureCodeLimitSeconds = 48 * 60 * 60;
+
+// The Unix second a release code names. Codes are at most 18 digits (the
+// grammar above), so this cannot overflow.
+inline constexpr std::int64_t CodeUnixSeconds(std::uint64_t code) {
+  return kCodeEpochUnixSeconds + static_cast<std::int64_t>(code / 10);
 }
 
 // ---- the digest ------------------------------------------------------------
@@ -346,8 +385,8 @@ inline std::vector<Release> ParseReleases(const nlohmann::json& body) {
 }
 
 struct Selection {
-  // The newest non-draft, non-prerelease tag that parses, offerable or not --
-  // the developer line names it either way.
+  // The newest non-draft, non-prerelease tag that parses and names no future
+  // code, offerable or not -- the developer line names it either way.
   std::uint64_t newestCode = 0;
   std::string newestVersion;  // v-less
 
@@ -378,8 +417,11 @@ struct Selection {
   std::vector<Skip> skipped;  // releases that parsed but could not be offered, for the log
 };
 
+// The release to offer from `releases` (the API's order), judged against
+// `serverUnixSeconds`, the release list's Date header.
 inline Selection SelectRelease(const std::vector<Release>& releases, std::uint64_t ownCode,
-                               InstallKind kind, std::string_view arch) {
+                               InstallKind kind, std::string_view arch,
+                               std::int64_t serverUnixSeconds) {
   Selection s;
   for (const auto& rel : releases) {
     // Drafts and prereleases are skipped outright rather than merely failing
@@ -388,6 +430,12 @@ inline Selection SelectRelease(const std::vector<Release>& releases, std::uint64
     if (rel.draft || rel.prerelease) continue;
     const std::uint64_t code = ParseReleaseCode(rel.tag);
     if (code == 0) continue;
+    // Before the release can count as the newest: one mistyped or hostile
+    // far-future code would otherwise outrank every real release for good.
+    if (CodeUnixSeconds(code) > serverUnixSeconds + kFutureCodeLimitSeconds) {
+      s.skipped.push_back({rel.tag, "has a future code (more than 48 h after the server's date)"});
+      continue;
+    }
     const std::string ver = VersionFromTag(rel.tag);
     if (code > s.newestCode) {
       s.newestCode = code;
@@ -409,7 +457,7 @@ inline Selection SelectRelease(const std::vector<Release>& releases, std::uint64
       s.skipped.push_back({rel.tag, "lacks " + name});
       continue;
     }
-    if (!AssetUrlIsOfficial(match->url)) {
+    if (!IsFeedAssetUrl(rel.tag, name, match->url)) {
       // Named right, hosted wrong: refused, and the next older release is
       // considered instead.
       s.skipped.push_back({rel.tag, name + " is not hosted by " + kUpdateRepo});

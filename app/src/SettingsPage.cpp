@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <string>
@@ -22,9 +23,11 @@
 #include "LicensesSheet.hpp"
 #include "PaneKit.hpp"
 #include "PostQuantumIdentity.hpp"  // ProviderIdentitiesSheet (reused as-is)
+#include "SettingsFold.hpp"
 #include "SplitRulesSheet.hpp"      // reused as-is (the split-rule editor)
 #include "SupportContact.hpp"
 #include "Ui.hpp"
+#include "UpdateStatePresentation.hpp"
 #include "UrTheme.hpp"
 #include "VlessSheet.hpp"
 
@@ -727,13 +730,23 @@ SettingsPage::SettingsPage(SdkHost& host)
   kit::SetAccessibleLabel(*paneA_.root, T_("general", "General"));
   BuildGeneralSection(*paneA_.content);
   BuildConnectionsSection(*paneA_.content);
-  // The Licenses twin for a folded About pane (see ApplyBreakpoint). Its own
-  // "About" group, so it never reads as a Connections row.
-  licensesFoldedHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
-  licensesFoldedHost_->append(*kit::MakePaneGroupHeader(T_("about", "About")).root);
-  AddLicensesRow(*licensesFoldedHost_);
-  licensesFoldedHost_->set_visible(false);  // all three panes show until folded
-  paneA_.content->append(*licensesFoldedHost_);
+  // The second doors at the foot of pane A (SettingsFold.hpp, see
+  // ApplyBreakpoint), each in its own group so it never reads as a
+  // Connections row: the About pane while About is folded (the version rows,
+  // Licenses and Stay in touch, whose DePIN Hub and protocol links have no
+  // other door), then the Advanced mode toggle while Device is. All three
+  // panes show until the first fold.
+  aboutFoldHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  aboutFoldHost_->append(*kit::MakePaneGroupHeader(T_("about", "About")).root);
+  BuildVersionSection(*aboutFoldHost_);
+  AddLicensesRow(*aboutFoldHost_);
+  BuildStayInTouchSection(*aboutFoldHost_);
+  aboutFoldHost_->set_visible(false);
+  paneA_.content->append(*aboutFoldHost_);
+  deviceFoldHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  BuildAdvancedFoldSection(*deviceFoldHost_);
+  deviceFoldHost_->set_visible(false);
+  paneA_.content->append(*deviceFoldHost_);
   paneSizes_->add_widget(*paneA_.root);
   append(*paneA_.root);
 
@@ -752,7 +765,6 @@ SettingsPage::SettingsPage(SdkHost& host)
   ruleC_ = kit::MakePaneVRule();
   append(*ruleC_);
 
-  // key `about` does not exist in the store — the English renders until it does
   paneC_ = kit::MakePane(T_("about", "About"));
   paneC_.root->set_hexpand(true);
   kit::SetAccessibleLabel(*paneC_.root, T_("about", "About"));
@@ -773,6 +785,7 @@ SettingsPage::~SettingsPage() {
   // orphan every in-flight completion: each checks the epoch before touching
   // the page or its sheets
   ++*epoch_;
+  holdEnd_.disconnect();
 }
 
 // ---- load pipeline (§9) -----------------------------------------------------
@@ -830,11 +843,10 @@ void SettingsPage::ApplyLocalDeviceState() {
     });
   }
 
-  // Advanced mode: the standing value, replayed. The toggle only WRITES;
-  // this is the read side (and MainWindow's handler calls SetAdvancedMode).
-  applyingAdvancedMode_ = true;
-  advancedMode_->set_active(host_.CurrentAdvancedMode());
-  applyingAdvancedMode_ = false;
+  // Advanced mode: the standing value, replayed into both toggles. They only
+  // write; this is the read side (and MainWindow's handler calls
+  // SetAdvancedMode).
+  SetAdvancedMode(host_.CurrentAdvancedMode());
 }
 
 void SettingsPage::LoadPreferences() {
@@ -935,28 +947,30 @@ void SettingsPage::LoadDeviceInfo() {
 
 void SettingsPage::SetAdvancedMode(bool on) {
   // The APPLY path: MainWindow's handler replays the standing value here — the
-  // same path a disk-restored value takes. No-op when nothing changes, and the
-  // write is guarded so it cannot echo back out through SdkHost as a user edit
-  // (assigning `active` raises the property-changed signal).
-  if (!advancedMode_ || advancedMode_->get_active() == on) return;
+  // same path a disk-restored value takes. It writes both toggles, pane B's
+  // and its fold copy on pane A, so the two can never read differently, and
+  // under the one guard so neither write echoes back out through SdkHost as a
+  // user edit (assigning `active` raises the property-changed signal).
+  if (!advancedMode_ || !advancedModeFold_) return;
   applyingAdvancedMode_ = true;
-  advancedMode_->set_active(on);
+  if (advancedMode_->get_active() != on) advancedMode_->set_active(on);
+  if (advancedModeFold_->get_active() != on) advancedModeFold_->set_active(on);
   applyingAdvancedMode_ = false;
 }
 
-void SettingsPage::OnAdvancedModeToggled() {
+void SettingsPage::OnAdvancedModeToggled(Gtk::Switch& source) {
   if (applyingAdvancedMode_) return;  // re-entrancy / echo guard
-  // THE ONE WRITER, AND IT ONLY WRITES. SetAdvancedMode persists FIRST and
-  // publishes SECOND; the publish comes back through the host's handler into
-  // SetAdvancedMode(bool) above, so toggle-now and on-at-launch cannot render
-  // differently.
-  host_.SetAdvancedMode(advancedMode_->get_active());
+  // The one writer, and it only writes, from either door. SetAdvancedMode
+  // persists first and publishes second; the publish comes back through the
+  // host's handler into SetAdvancedMode(bool) above, so toggle-now and
+  // on-at-launch cannot render differently.
+  host_.SetAdvancedMode(source.get_active());
 }
 
 // ---- breakpoint (§1.1) ------------------------------------------------------
 
 void SettingsPage::ApplyBreakpoint(int widthDip) {
-  const int panes = widthDip >= 1400 ? 3 : (widthDip >= 900 ? 2 : 1);
+  const int panes = settings_fold::PaneCount(widthDip);
   if (lastFold_ == panes) return;  // no-op unless the fold actually changes
   lastFold_ = panes;
   // A folded pane hides WITH its rule — a rule with nothing on its far side
@@ -965,8 +979,9 @@ void SettingsPage::ApplyBreakpoint(int widthDip) {
   ruleC_->set_visible(panes >= 3);
   paneB_.root->set_visible(panes >= 2);
   ruleB_->set_visible(panes >= 2);
-  // Licenses follows About: while pane C is folded its twin closes pane A.
-  licensesFoldedHost_->set_visible(panes < 3);
+  // The second doors follow their panes: exactly one copy of each shows.
+  aboutFoldHost_->set_visible(settings_fold::AboutDoorsShown(panes));
+  deviceFoldHost_->set_visible(settings_fold::DeviceDoorsShown(panes));
 }
 
 // ---- Pane A: General (§3.1) -------------------------------------------------
@@ -1023,6 +1038,26 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
   launchAtStartup_->property_active().signal_changed().connect(
       [this] { OnLaunchAtStartupToggled(); });
 
+  // Row 2c -- a check now, and the last check's outcome on the state line
+  // under it, as the Windows Settings version section has them: whether this
+  // build is current had no answer in Settings until a newer release came
+  // along, and the only manual check was on the Advanced-only developer page.
+  // CheckNow coalesces with a queued or running check. The line is written by
+  // ApplyUpdateState (UpdateStatePresentation.hpp).
+  checkNow_ = AddButtonRow(host, T_("dev_check_updates", "Check for updates"), {},
+                           T_("upd_check_now", "Check now"));
+  checkNow_->set_sensitive(false);  // until the window binds the checker
+  checkNow_->signal_clicked().connect([this] {
+    if (updates_) updates_->CheckNow();
+  });
+  {
+    auto state = MakeProseRow({}, kStatePadY);
+    updateState_ = state.line;
+    updateStateRow_ = state.root;
+    updateStateRow_->set_visible(false);
+    host.append(*updateStateRow_);
+  }
+
   // Row 3 -- the update notice. Hidden until a newer stable release is known
   // (UpdateChecker -> ApplyUpdate). The verb on the right follows the phase:
   // Install (the AppImage downloads, verifies and swaps itself), Relaunch,
@@ -1051,7 +1086,10 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
   }
 }
 
-void SettingsPage::SetUpdateChecker(UpdateChecker* checker) { updates_ = checker; }
+void SettingsPage::SetUpdateChecker(UpdateChecker* checker) {
+  updates_ = checker;
+  if (checkNow_) checkNow_->set_sensitive(updates_ != nullptr);
+}
 
 // The entry as the filesystem has it, written under the echo guard.
 void SettingsPage::ApplyLaunchAtStartup() {
@@ -1079,6 +1117,8 @@ void SettingsPage::OnLaunchAtStartupToggled() {
 void SettingsPage::ApplyUpdate(const UpdateChecker::Snapshot& snap) {
   if (!updateRow_) return;
   updateSnapshot_ = snap;
+  // The check's outcome first: it is true whether or not anything is offered.
+  ApplyUpdateState(snap);
   using Phase = UpdateChecker::Phase;
   if (snap.phase == Phase::None) {
     updateRow_->set_visible(false);
@@ -1169,6 +1209,64 @@ void SettingsPage::ApplyUpdate(const UpdateChecker::Snapshot& snap) {
   kit::SetTextOrCollapse(*updateCommand_, command);
   updateCommandRow_->set_visible(!command.empty());
   updateRow_->set_visible(true);
+}
+
+void SettingsPage::ApplyUpdateState(const UpdateChecker::Snapshot& snap) {
+  update::UpdateStateInputs in;
+  in.outcome = snap.lastCheck;
+  in.newestKnown = !snap.newestVersion.empty();
+  in.newestOutranksOwn = snap.newestCode > update::ParseReleaseCode(UR_APP_VERSION);
+  in.stale = snap.checkStale;
+  // Whether GitHub's hold lasts is read off the steady clock, as the checker
+  // reads it, so a system clock set back cannot stretch it; holdUntilUnix is
+  // only the time the line names.
+  const std::chrono::steady_clock::duration holdLeft =
+      snap.holdUntil - std::chrono::steady_clock::now();
+  in.held = holdLeft > std::chrono::steady_clock::duration::zero();
+  const update::UpdateStateLine line = update::UpdateStateLineFor(in);
+  // The hold ends without a snapshot to say so: read the line again then, so
+  // Check now does not wait for the next check.
+  holdEnd_.disconnect();
+  if (in.held) {
+    holdEnd_ = Glib::signal_timeout().connect_seconds(
+        [this] {
+          ApplyUpdateState(updateSnapshot_);
+          return false;
+        },
+        static_cast<unsigned int>(std::chrono::ceil<std::chrono::seconds>(holdLeft).count()));
+  }
+  // The store's sentence with its {} filled in: a version is data (release
+  // grammar), a date or time is this machine's locale's.
+  const auto fill = [&snap](const char* pattern, update::StateArgument argument) {
+    switch (argument) {
+      case update::StateArgument::None:
+        return std::string(pattern);
+      case update::StateArgument::NewestVersion:
+        return Format(pattern, snap.newestVersion);
+      case update::StateArgument::LastSuccessDate:
+        return Format(pattern, UpdateChecker::LocalDate(snap.lastSuccessUnix));
+      case update::StateArgument::HoldEndTime:
+        return Format(pattern, UpdateChecker::LocalDateTime(snap.holdUntilUnix));
+    }
+    return std::string(pattern);
+  };
+  const std::string text =
+      line.textKey[0] != '\0' ? fill(T_(line.textKey, line.textEnglish), line.argument) : "";
+  const std::string detail =
+      line.detailKey[0] != '\0'
+          ? fill(T_(line.detailKey, line.detailEnglish), line.detailArgument)
+          : "";
+  kit::SetTextOrCollapse(*updateState_, detail.empty() ? text : text + "\n" + detail);
+  if (!text.empty() && line.tone != update::StateTone::Muted) {
+    // the first sentence in its tone, the second in the line's own
+    const Rgba& tone = line.tone == update::StateTone::Danger ? kUrDanger : kUrAmber;
+    Glib::ustring markup = "<span foreground='" + HexForMarkup(tone) + "'>" +
+                           Glib::Markup::escape_text(text) + "</span>";
+    if (!detail.empty()) markup += "\n" + Glib::Markup::escape_text(detail);
+    updateState_->set_markup(markup);
+  }
+  updateStateRow_->set_visible(!text.empty());
+  checkNow_->set_sensitive(updates_ != nullptr && line.canCheck);
 }
 
 void SettingsPage::OnUpdateButton() {
@@ -1413,18 +1511,10 @@ void SettingsPage::BuildIdentitySection(Gtk::Box& host) {
 // ---- Pane B: Advanced (§4.3) ------------------------------------------------
 
 void SettingsPage::BuildAdvancedSection(Gtk::Box& host) {
-  // key `advanced` is not in the store — the English renders until it is
   host.append(*kit::MakePaneGroupHeader(T_("advanced", "Advanced")).root);
 
   // FIRST in the group: the D5 drop point.
-  advancedMode_ = AddToggleRow(
-      host, T_("adv_advanced_mode", "Advanced mode"),
-      T_("adv_advanced_mode_note",
-         "Show raw values, identifiers, the connection inspector and the reliability "
-         "tuning surface across the app."));
-  advancedMode_->set_active(host_.CurrentAdvancedMode());
-  advancedMode_->property_active().signal_changed().connect(
-      [this] { OnAdvancedModeToggled(); });
+  advancedMode_ = AddAdvancedModeToggle(host);
 
   auto* save = AddButtonRow(host, T_("save_logs", "Save logs"),
                             T_("export_logs", "Export Logs"), T_("save", "Save"));
@@ -1435,10 +1525,33 @@ void SettingsPage::BuildAdvancedSection(Gtk::Box& host) {
   // feedback id — a client-minted id correlates with nothing.
 }
 
+// The Advanced mode toggle, seeded from the standing value and wired to the
+// one writer. Built twice: in pane B, and in pane A's fold copy.
+Gtk::Switch* SettingsPage::AddAdvancedModeToggle(Gtk::Box& host) {
+  Gtk::Switch* toggle = AddToggleRow(
+      host, T_("adv_advanced_mode", "Advanced mode"),
+      T_("adv_advanced_mode_note",
+         "Show raw values, identifiers, the connection inspector and the reliability "
+         "tuning surface across the app."));
+  toggle->set_active(host_.CurrentAdvancedMode());
+  toggle->property_active().signal_changed().connect(
+      [this, toggle] { OnAdvancedModeToggled(*toggle); });
+  return toggle;
+}
+
+// Pane A's door to Advanced mode while Device is folded: with Advanced off
+// at a narrow window there was no way to turn it on. Save logs stays in pane
+// B, as on Windows: a fold hides a convenience there, not a capability.
+void SettingsPage::BuildAdvancedFoldSection(Gtk::Box& host) {
+  host.append(*kit::MakePaneGroupHeader(T_("advanced", "Advanced")).root);
+  advancedModeFold_ = AddAdvancedModeToggle(host);
+}
+
 // ---- Pane C: Version (§5.1) -------------------------------------------------
 
 void SettingsPage::BuildVersionSection(Gtk::Box& host) {
-  // No header: the pane title already says "About".
+  // No header: the pane title already says "About", and pane A's fold copy
+  // opens with its own About group. Built for both, so it keeps no state.
   auto* sdkValue = AddValueRow(host, T_("version_info", "Version and build info"));
   std::string sdkVersion;
   try {
@@ -1455,9 +1568,8 @@ void SettingsPage::BuildVersionSection(Gtk::Box& host) {
   }
   ApplyFieldState(*sdkValue, SettingsFieldState::Loaded, sdkVersion);
 
-  // key `app_version` is not in the store. The value is a compile-time
-  // constant — no round trip, and "0.0.0" outside a release build is the
-  // correct answer, not a bug.
+  // The value is a compile-time constant — no round trip, and "0.0.0"
+  // outside a release build is the correct answer, not a bug.
   auto* appValue = AddValueRow(host, T_("app_version", "App version"));
   ApplyFieldState(*appValue, SettingsFieldState::Loaded, UR_APP_VERSION);
 }
@@ -1474,6 +1586,7 @@ void SettingsPage::AddLicensesRow(Gtk::Box& host) {
 // ---- Pane C: Stay in touch (§5.2) -------------------------------------------
 
 void SettingsPage::BuildStayInTouchSection(Gtk::Box& host) {
+  // Built for pane C and for pane A's About copy, so it keeps no state.
   host.append(*kit::MakePaneGroupHeader(T_("stay_in_touch", "Stay in touch")).root);
 
   // The store's own markdown sentence, rendered with the link INLINE and

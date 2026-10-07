@@ -532,7 +532,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # and connect-sheet rules, the wallet bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
-# install-kind probe, the launch throttle) and its wiring, the split-rules
+# install-kind probe, the launch throttle), when it asks GitHub again after
+# a refusal, what Settings says the last check came to, and its wiring, the
+# split-rules
 # activity row's reading of the block action reason (the safety-rule chip and
 # the route-locally offer), the VLESS editor's form, visibility rules,
 # settings mapping and messages and the stored network space values every
@@ -545,7 +547,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # lines and their filters, which device carries a feedback's log upload, for
 # how long, and the upload in flight off the daemon's main loop, how a launch
 # reaches the running instance and how it answers, the user's autostart entry
-# behind the startup toggle, and the daemon
+# behind the startup toggle, the Settings panes' fold and pane A's second
+# doors, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -609,6 +612,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/GuestConversionTest.cpp',
     'tests/GuestPurchaseRefusalWiringTest.cpp',
     'tests/ReleaseSelectionTest.cpp',
+    'tests/UpdateScheduleTest.cpp',
+    'tests/UpdateStatePresentationTest.cpp',
     'tests/UpdateWiringTest.cpp',
     'tests/CatalogLookupTest.cpp',
     'tests/ReferralCodeStateTest.cpp',
@@ -672,6 +677,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/TeardownOrderWiringTest.cpp',
     'tests/SelfRestartTest.cpp',
     'tests/SelfRestartWiringTest.cpp',
+    'tests/SettingsFoldTest.cpp',
+    'tests/SettingsFoldDoorsWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',

@@ -67,14 +67,22 @@ std::vector<std::string> AllAssets(const std::string& v) {
 
 constexpr std::uint64_t kOwn = 895075980;  // 2026.3.23-895075980, a shipped release
 
+// The release list's Date for every case that is not about it: 2027-01-15,
+// after every code the fixtures name.
+constexpr std::int64_t kServerNow = 1'800'000'000;
+
 }  // namespace
 
 // ---- the one repository -----------------------------------------------------
 
 UR_TEST(theUpdateSourceIsTheOfficialStableLinuxRepo) {
   UR_EXPECT_TRUE(std::string(kUpdateRepo) == "urnetwork/linux");
+  // the id GitHub assigned urnetwork/linux (repos/urnetwork/linux .id); the
+  // list is asked for by it, never by a name a rename could redirect
+  UR_EXPECT_EQ(std::uint64_t{1297137671}, kUpdateRepoId);
   UR_EXPECT_TRUE(ReleasesApiUrl() ==
-                 "https://api.github.com/repos/urnetwork/linux/releases?per_page=15");
+                 "https://api.github.com/repositories/1297137671/releases?per_page=15");
+  UR_EXPECT_TRUE(ReleasesApiUrl().find("/repos/") == std::string::npos);
   UR_EXPECT_TRUE(ReleasePageUrl("v2026.3.23-895075980") ==
                  "https://github.com/urnetwork/linux/releases/tag/v2026.3.23-895075980");
   UR_EXPECT_TRUE(ReleasePageUrl({}) == "https://github.com/urnetwork/linux/releases");
@@ -83,25 +91,44 @@ UR_TEST(theUpdateSourceIsTheOfficialStableLinuxRepo) {
   UR_EXPECT_TRUE(ReleasePageUrl({}).find("urnetwork/build") == std::string::npos);
 }
 
-UR_TEST(onlyTheOfficialRepoMayServeAnAsset) {
-  UR_EXPECT_TRUE(AssetUrlIsOfficial(
-      "https://github.com/urnetwork/linux/releases/download/v2026.3.23-895075980/"
-      "URnetwork-2026.3.23-895075980-amd64.AppImage"));
-  // the nightly repo
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "https://github.com/urnetwork/build/releases/download/v2026.3.23-895075980/"
-      "URnetwork-2026.3.23-895075980-amd64.AppImage"));
-  // a personal fork of the same name
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "https://github.com/someone/linux/releases/download/v2026.3.23-895075980/"
-      "URnetwork-2026.3.23-895075980-amd64.AppImage"));
-  // a lookalike host, a scheme downgrade, the repo page itself, nothing
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "https://github.com.example/urnetwork/linux/releases/download/v1/x.AppImage"));
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "http://github.com/urnetwork/linux/releases/download/v1/x.AppImage"));
-  UR_EXPECT_FALSE(AssetUrlIsOfficial("https://github.com/urnetwork/linux/releases/download/"));
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(""));
+UR_TEST(onlyTheReleasesOwnDownloadPathMayServeAnAsset) {
+  const std::string tag = "v2026.3.23-895075980";
+  const std::string asset = "URnetwork-2026.3.23-895075980-amd64.AppImage";
+  const std::string exact =
+      "https://github.com/urnetwork/linux/releases/download/" + tag + "/" + asset;
+  UR_EXPECT_TRUE(FeedAssetUrl(tag, asset) == exact);
+  UR_EXPECT_TRUE(IsFeedAssetUrl(tag, asset, exact));
+  // the nightly repo, a personal fork of the same name
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset, "https://github.com/urnetwork/build/releases/download/" + tag + "/" + asset));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset, "https://github.com/someone/linux/releases/download/" + tag + "/" + asset));
+  // a lookalike host, a scheme downgrade, the download path alone, nothing
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com.example/urnetwork/linux/releases/download/" + tag + "/" + asset));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset, "http://github.com/urnetwork/linux/releases/download/" + tag + "/" + asset));
+  UR_EXPECT_FALSE(
+      IsFeedAssetUrl(tag, asset, "https://github.com/urnetwork/linux/releases/download/"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, asset, ""));
+  // on the official repo's download path, but not this release's file:
+  // another tag, another asset, a query or fragment, a path that climbs out
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com/urnetwork/linux/releases/download/v2026.3.1-800000000/" + asset));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com/urnetwork/linux/releases/download/" + tag +
+          "/URnetwork-2026.3.23-895075980-arm64.AppImage"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, asset, exact + "?x"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, asset, exact + "#x"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com/urnetwork/linux/releases/download/" + tag + "/../../../build/" + asset));
+  // no tag or no asset names no URL
+  UR_EXPECT_FALSE(IsFeedAssetUrl("", asset, FeedAssetUrl("", asset)));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, "", FeedAssetUrl(tag, "")));
 }
 
 // ---- the tag grammar --------------------------------------------------------
@@ -192,7 +219,7 @@ UR_TEST(aNewerReleaseWithTheOwnArchAppImageAndADigestIsOffered) {
   const auto releases = ParseReleases(nlohmann::json::array({
       ReleaseJson(v, false, false, AllAssets(v), kDigest),
   }));
-  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64");
+  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
   UR_EXPECT_EQ(std::uint64_t{900000000}, s.newestCode);
   UR_EXPECT_TRUE(s.newestVersion == v);
   UR_EXPECT_EQ(std::uint64_t{900000000}, s.code);
@@ -208,7 +235,7 @@ UR_TEST(aNewerReleaseWithTheOwnArchAppImageAndADigestIsOffered) {
   UR_EXPECT_TRUE(s.skipped.empty());
 
   // the arm64 build takes the arm64 image
-  const Selection arm = SelectRelease(releases, kOwn, InstallKind::AppImage, "arm64");
+  const Selection arm = SelectRelease(releases, kOwn, InstallKind::AppImage, "arm64", kServerNow);
   UR_EXPECT_TRUE(arm.assetName == "URnetwork-" + v + "-arm64.AppImage");
   UR_EXPECT_TRUE(arm.installable);
 }
@@ -220,7 +247,7 @@ UR_TEST(anOlderOrEqualReleaseIsNotAnUpdate) {
       ReleaseJson(older, false, false, AllAssets(older), kDigest),
       ReleaseJson(same, false, false, AllAssets(same), kDigest),
   }));
-  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64");
+  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
   UR_EXPECT_EQ(kOwn, s.newestCode);
   UR_EXPECT_EQ(kOwn, s.code);  // verifiable, named -- just not newer
   UR_EXPECT_FALSE(s.updateAvailable);
@@ -236,7 +263,7 @@ UR_TEST(draftsAndPrereleasesAreSkippedEvenWhenTheyOutrank) {
       ReleaseJson(draft, true, false, AllAssets(draft), kDigest),
       ReleaseJson(v, false, false, AllAssets(v), kDigest),
   }));
-  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64");
+  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
   // the developer line must not name the prerelease as "the newest release"
   UR_EXPECT_TRUE(s.newestVersion == v);
   UR_EXPECT_TRUE(s.version == v);
@@ -249,9 +276,78 @@ UR_TEST(draftsAndPrereleasesAreSkippedEvenWhenTheyOutrank) {
       ReleaseJson(pre, false, true, AllAssets(pre), kDigest),
       ReleaseJson(draft, true, false, AllAssets(draft), kDigest),
   }));
-  const Selection none = SelectRelease(only, kOwn, InstallKind::AppImage, "amd64");
+  const Selection none = SelectRelease(only, kOwn, InstallKind::AppImage, "amd64", kServerNow);
   UR_EXPECT_EQ(std::uint64_t{0}, none.newestCode);
   UR_EXPECT_FALSE(none.updateAvailable);
+}
+
+UR_TEST(aCodeIsTenthsOfASecondAfterTheFounding) {
+  UR_EXPECT_EQ(std::int64_t{1684800000}, kCodeEpochUnixSeconds);  // 2023-05-23T00:00:00Z
+  UR_EXPECT_EQ(std::int64_t{48 * 60 * 60}, kFutureCodeLimitSeconds);
+  // v2026.3.23-895075980 was minted at 2026-03-23T23:13:18Z
+  UR_EXPECT_EQ(std::int64_t{1774307598}, CodeUnixSeconds(kOwn));
+  UR_EXPECT_EQ(kCodeEpochUnixSeconds, CodeUnixSeconds(9));
+  UR_EXPECT_EQ(kCodeEpochUnixSeconds + 1, CodeUnixSeconds(10));
+  // the largest code the grammar takes does not overflow
+  UR_EXPECT_TRUE(CodeUnixSeconds(999'999'999'999'999'999ull) > kCodeEpochUnixSeconds);
+}
+
+UR_TEST(aCodeMoreThanTwoDaysAfterTheServersDateIsSkipped) {
+  const std::string v = "2026.4.1-900000000";
+  const auto releases = ParseReleases(nlohmann::json::array({
+      ReleaseJson(v, false, false, AllAssets(v), kDigest),
+  }));
+  // exactly 48 h after the server's date: accepted
+  const std::int64_t edge = CodeUnixSeconds(900000000) - kFutureCodeLimitSeconds;
+  const Selection at = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", edge);
+  UR_EXPECT_TRUE(at.version == v);
+  UR_EXPECT_TRUE(at.updateAvailable);
+  UR_EXPECT_TRUE(at.skipped.empty());
+  // one second more: skipped, logged, and not named as the newest release
+  const Selection past =
+      SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", edge - 1);
+  UR_EXPECT_EQ(std::uint64_t{0}, past.code);
+  UR_EXPECT_FALSE(past.updateAvailable);
+  UR_EXPECT_EQ(std::uint64_t{0}, past.newestCode);
+  UR_EXPECT_TRUE(past.newestVersion.empty());
+  UR_EXPECT_EQ(size_t{1}, past.skipped.size());
+  UR_EXPECT_TRUE(!past.skipped.empty() && past.skipped[0].tag == "v" + v &&
+                 past.skipped[0].reason ==
+                     "has a future code (more than 48 h after the server's date)");
+  // the same second, ten codes on, is the same instant to the second
+  const std::string sameSecond = "2026.4.1-900000009";
+  const auto same = ParseReleases(nlohmann::json::array({
+      ReleaseJson(sameSecond, false, false, AllAssets(sameSecond), kDigest),
+  }));
+  UR_EXPECT_TRUE(SelectRelease(same, kOwn, InstallKind::AppImage, "amd64", edge).version ==
+                 sameSecond);
+  const std::string nextSecond = "2026.4.1-900000010";
+  const auto next = ParseReleases(nlohmann::json::array({
+      ReleaseJson(nextSecond, false, false, AllAssets(nextSecond), kDigest),
+  }));
+  UR_EXPECT_EQ(std::uint64_t{0},
+               SelectRelease(next, kOwn, InstallKind::AppImage, "amd64", edge).code);
+}
+
+UR_TEST(aFarFutureCodeNeitherOutranksNorHidesTheRealReleases) {
+  // a mistyped tag: a code years ahead of every real release
+  const std::string typo = "2026.4.2-9000000020";
+  const std::string real = "2026.4.1-900000000";
+  const auto releases = ParseReleases(nlohmann::json::array({
+      ReleaseJson(typo, false, false, AllAssets(typo), kDigest),
+      ReleaseJson(real, false, false, AllAssets(real), kDigest),
+  }));
+  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
+  UR_EXPECT_TRUE(s.newestVersion == real);
+  UR_EXPECT_TRUE(s.version == real);
+  UR_EXPECT_TRUE(s.updateAvailable);
+  UR_EXPECT_TRUE(s.installable);
+  UR_EXPECT_EQ(size_t{1}, s.skipped.size());
+  UR_EXPECT_TRUE(!s.skipped.empty() && s.skipped[0].tag == "v" + typo);
+  // a dev build is not told about it either
+  const Selection dev =
+      SelectRelease(releases, /*ownCode=*/0, InstallKind::AppImage, "amd64", kServerNow);
+  UR_EXPECT_TRUE(dev.newestVersion == real);
 }
 
 UR_TEST(aReleaseMissingTheOwnArchAssetIsNotOfferedAndFallsBackToAnOlderOne) {
@@ -262,7 +358,7 @@ UR_TEST(aReleaseMissingTheOwnArchAssetIsNotOfferedAndFallsBackToAnOlderOne) {
       ReleaseJson(newer, false, false, {"URnetwork-" + newer + "-arm64.AppImage"}, kDigest),
       ReleaseJson(older, false, false, AllAssets(older), kDigest),
   }));
-  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64");
+  const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
   UR_EXPECT_TRUE(s.newestVersion == newer);  // the honest "something newer exists"
   UR_EXPECT_TRUE(s.version == older);        // ...and the one this build can verify
   UR_EXPECT_TRUE(s.updateAvailable);
@@ -275,7 +371,7 @@ UR_TEST(aReleaseMissingTheOwnArchAssetIsNotOfferedAndFallsBackToAnOlderOne) {
   const auto alone = ParseReleases(nlohmann::json::array({
       ReleaseJson(newer, false, false, {"URnetwork-" + newer + "-arm64.AppImage"}, kDigest),
   }));
-  const Selection n = SelectRelease(alone, kOwn, InstallKind::AppImage, "amd64");
+  const Selection n = SelectRelease(alone, kOwn, InstallKind::AppImage, "amd64", kServerNow);
   UR_EXPECT_TRUE(n.newestVersion == newer);
   UR_EXPECT_EQ(std::uint64_t{0}, n.code);
   UR_EXPECT_FALSE(n.updateAvailable);
@@ -291,7 +387,7 @@ UR_TEST(anAssetWithoutAUsableDigestIsNeverOffered) {
     const auto releases = ParseReleases(nlohmann::json::array({
         ReleaseJson(v, false, false, AllAssets(v), bad),
     }));
-    const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64");
+    const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
     UR_EXPECT_TRUE_MSG("digest '" + bad + "' was offered", !s.updateAvailable);
     UR_EXPECT_FALSE(s.installable);
     UR_EXPECT_TRUE(s.assetUrl.empty());
@@ -310,7 +406,7 @@ UR_TEST(anAssetHostedOutsideTheOfficialRepoIsRefused) {
     const auto releases = ParseReleases(nlohmann::json::array({
         ReleaseJson(v, false, false, AllAssets(v), kDigest, host),
     }));
-    const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64");
+    const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
     UR_EXPECT_TRUE_MSG(std::string("an asset on ") + host + " was offered",
                        !s.updateAvailable);
     UR_EXPECT_TRUE(s.assetUrl.empty());
@@ -320,12 +416,44 @@ UR_TEST(anAssetHostedOutsideTheOfficialRepoIsRefused) {
   }
 }
 
+UR_TEST(anAssetOnTheOfficialPathButNotItsOwnIsRefusedAndAnOlderOneOffered) {
+  const std::string newer = "2026.4.2-900000002";
+  const std::string older = "2026.4.1-900000001";
+  const std::string name = "URnetwork-" + newer + "-amd64.AppImage";
+  const std::string own = std::string(kOfficialDownload) + "v" + newer + "/" + name;
+  for (const std::string& url :
+       {std::string(kOfficialDownload) + "v" + older + "/" + name,  // another tag's path
+        std::string(kOfficialDownload) + "v" + newer + "/URnetwork-" + newer +
+            "-arm64.AppImage",  // another asset
+        own + "?x", own + "/../x.AppImage"}) {
+    nlohmann::json rel = ReleaseJson(newer, false, false, AllAssets(newer), kDigest);
+    for (auto& asset : rel["assets"]) {
+      if (asset["name"] == name) asset["browser_download_url"] = url;
+    }
+    const auto releases = ParseReleases(nlohmann::json::array({
+        rel,
+        ReleaseJson(older, false, false, AllAssets(older), kDigest),
+    }));
+    const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64", kServerNow);
+    UR_EXPECT_TRUE_MSG(url + " was offered", s.version == older);
+    UR_EXPECT_TRUE(s.newestVersion == newer);
+    UR_EXPECT_TRUE(s.assetUrl ==
+                   std::string(kOfficialDownload) + "v" + older + "/URnetwork-" + older +
+                       "-amd64.AppImage");
+    UR_EXPECT_TRUE(s.updateAvailable);
+    UR_EXPECT_EQ(size_t{1}, s.skipped.size());
+    UR_EXPECT_TRUE(!s.skipped.empty() && s.skipped[0].tag == "v" + newer &&
+                   s.skipped[0].reason == name + " is not hosted by urnetwork/linux");
+  }
+}
+
 UR_TEST(aDevBuildIsToldAboutTheNewestReleaseButNeverOfferedIt) {
   const std::string v = "2026.4.1-900000000";
   const auto releases = ParseReleases(nlohmann::json::array({
       ReleaseJson(v, false, false, AllAssets(v), kDigest),
   }));
-  const Selection s = SelectRelease(releases, /*ownCode=*/0, InstallKind::AppImage, "amd64");
+  const Selection s =
+      SelectRelease(releases, /*ownCode=*/0, InstallKind::AppImage, "amd64", kServerNow);
   UR_EXPECT_TRUE(s.newestVersion == v);
   UR_EXPECT_TRUE(s.version == v);  // verifiable...
   UR_EXPECT_FALSE(s.updateAvailable);  // ...but never an update for a dev build
@@ -349,7 +477,7 @@ UR_TEST(packagedInstallsAreToldTheFileAndNeverInstalled) {
       {InstallKind::Flatpak, "arm64", "URnetwork-" + v + "-arm64.flatpak"},
   };
   for (const auto& row : rows) {
-    const Selection s = SelectRelease(releases, kOwn, row.kind, row.arch);
+    const Selection s = SelectRelease(releases, kOwn, row.kind, row.arch, kServerNow);
     UR_EXPECT_TRUE_MSG(std::string(InstallKindName(row.kind)) + " saw no update",
                        s.updateAvailable);
     UR_EXPECT_FALSE(s.installable);
@@ -357,11 +485,12 @@ UR_TEST(packagedInstallsAreToldTheFileAndNeverInstalled) {
     UR_EXPECT_TRUE(s.releasePage == "https://github.com/urnetwork/linux/releases/tag/v" + v);
   }
   // the amd64 flatpak is not published today: no asset, no update offered
-  const Selection fp = SelectRelease(releases, kOwn, InstallKind::Flatpak, "amd64");
+  const Selection fp = SelectRelease(releases, kOwn, InstallKind::Flatpak, "amd64", kServerNow);
   UR_EXPECT_FALSE(fp.updateAvailable);
   UR_EXPECT_TRUE(fp.newestVersion == v);
   // an install of unknown kind is told nothing it could act on
-  const Selection unknown = SelectRelease(releases, kOwn, InstallKind::Unknown, "amd64");
+  const Selection unknown =
+      SelectRelease(releases, kOwn, InstallKind::Unknown, "amd64", kServerNow);
   UR_EXPECT_FALSE(unknown.updateAvailable);
   UR_EXPECT_TRUE(unknown.newestVersion == v);
 }
@@ -387,7 +516,7 @@ UR_TEST(theReleaseListSurvivesShapeDrift) {
   UR_EXPECT_TRUE(parsed[0].tag.empty());
   UR_EXPECT_FALSE(parsed[0].draft);
   UR_EXPECT_TRUE(parsed[0].assets.empty());
-  const Selection s = SelectRelease(parsed, kOwn, InstallKind::AppImage, "amd64");
+  const Selection s = SelectRelease(parsed, kOwn, InstallKind::AppImage, "amd64", kServerNow);
   UR_EXPECT_EQ(std::uint64_t{0}, s.newestCode);
   UR_EXPECT_FALSE(s.updateAvailable);
 }

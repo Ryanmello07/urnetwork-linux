@@ -5,17 +5,23 @@
 // so the whole destination is one row species per list.
 //
 //   Pane A "General" — what the app DOES: the General group (product updates,
-//     automatic update checks) then the Connections group (kill switch + its
+//     automatic update checks, a check now with the last check's outcome) then
+//     the Connections group (kill switch + its
 //     two honesty disclosures, blocked locations, VLESS, app split rules, the
 //     VPN service row).
 //   Pane B "Device" — what this machine IS: the Device group (name, spec),
 //     Post Quantum Identity, then Advanced (the advanced-mode toggle and
 //     Save logs).
 //   Pane C "About" — what the app IS: the version rows, Licenses, and Stay
-//     in touch. Licenses is also reachable when About is folded away: a twin
-//     "About > Licenses" group at the foot of pane A shows exactly while pane
-//     C is hidden (the attributions some licenses require must never depend
-//     on the window being wide).
+//     in touch.
+//
+// A foldable pane owns no content without a second door (SettingsFold.hpp):
+// while About is folded an "About" group at the foot of pane A carries the
+// version rows, Licenses and Stay in touch (the default window is narrower
+// than About's gate, the attributions some licenses require must never
+// depend on the window being wide, and the DePIN Hub and protocol links have
+// no other door), and while Device is folded an "Advanced" group after it
+// carries the advanced-mode toggle. Exactly one copy of each shows.
 //
 // Neither the account-subject sections (security / referrals / plan / danger)
 // nor Sign out live here: R4 moved them to the ACCOUNT destination's hosts.
@@ -23,13 +29,14 @@
 //
 // THREE INVARIANTS THIS PAGE IS BUILT AROUND:
 //
-//  1. The advanced-mode toggle is THE ONE WRITER and it ONLY WRITES. It calls
-//     SdkHost::SetAdvancedMode (persist FIRST, publish SECOND) and never
+//  1. The advanced-mode toggle is the one writer and it only writes (both of
+//     its doors, pane B's and pane A's fold copy). It calls
+//     SdkHost::SetAdvancedMode (persist first, publish second) and never
 //     applies anything itself; the standing value comes back through the
 //     host's handler into SetAdvancedMode(bool) below — the SAME path a
 //     disk-restored value takes, so toggle-now and on-at-launch cannot render
-//     differently. An echo guard keeps that apply from re-entering the
-//     handler as a user edit.
+//     differently. One echo guard keeps that apply, which writes both, from
+//     re-entering the handler as a user edit.
 //  2. Every async field terminates in exactly one of six states (FieldState):
 //     NoSession / NoDevice / Loading / Loaded / Empty / Failed. NoDevice
 //     exists because "signed in but the service is not up" must not say
@@ -97,13 +104,14 @@ class SettingsPage : public Gtk::Box {
 
   // The D5 apply path: MainWindow's advanced-mode handler calls this with the
   // standing value (bind-then-replay, so a disk-restored true is never lost).
-  // No-op when the switch already reads `on`; otherwise written under the echo
-  // guard so the apply cannot echo back out through SdkHost as a user edit.
+  // Writes both toggles under the echo guard so the apply cannot echo back
+  // out through SdkHost as a user edit.
   void SetAdvancedMode(bool on);
 
   // The window's updater (UpdateChecker.hpp). The auto-check toggle writes
-  // its preference through it, and every snapshot it publishes is replayed
-  // into the "Update available" row under the toggle: Install / Relaunch for
+  // its preference through it, Check now asks it for a check, and every
+  // snapshot it publishes is replayed into the line under Check now (the last
+  // check's outcome) and the "Update available" row: Install / Relaunch for
   // the AppImage, the release page plus the package-manager command for every
   // other install. Bind-then-replay, like the advanced-mode handler.
   void SetUpdateChecker(UpdateChecker* checker);
@@ -139,9 +147,12 @@ class SettingsPage : public Gtk::Box {
   void BuildDeviceSection(Gtk::Box& host);
   void BuildIdentitySection(Gtk::Box& host);
   void BuildAdvancedSection(Gtk::Box& host);
+  void BuildAdvancedFoldSection(Gtk::Box& host);
+  Gtk::Switch* AddAdvancedModeToggle(Gtk::Box& host);
+  // The version rows and Stay in touch, each built twice like Licenses.
   void BuildVersionSection(Gtk::Box& host);
   void BuildStayInTouchSection(Gtk::Box& host);
-  // The "Licenses" row (built twice: in About, and in pane A's folded twin).
+  // The "Licenses" row (built twice: in About, and in pane A's fold copy).
   void AddLicensesRow(Gtk::Box& host);
 
   // ---- loads ---------------------------------------------------------------
@@ -157,7 +168,7 @@ class SettingsPage : public Gtk::Box {
   // The one writer for the "what is actually in force" line under the switch.
   // Deliberately never touches the switch: the switch is the request.
   void ApplyKillSwitchState();
-  void OnAdvancedModeToggled();
+  void OnAdvancedModeToggled(Gtk::Switch& source);
   void SaveLogsToFile();
   void ConfirmUninstallService();
 
@@ -188,8 +199,10 @@ class SettingsPage : public Gtk::Box {
   // request, hexpand then splits the remainder evenly between them
   Glib::RefPtr<Gtk::SizeGroup> paneSizes_;
   int lastFold_ = -1;  // 3 / 2 / 1 panes; -1 = never applied
-  // pane A's "About > Licenses" twin: visible exactly while pane C is folded
-  Gtk::Box* licensesFoldedHost_ = nullptr;
+  // pane A's second doors: the About group (version rows, Licenses) while
+  // pane C is folded, the Advanced group (the toggle) while pane B is
+  Gtk::Box* aboutFoldHost_ = nullptr;
+  Gtk::Box* deviceFoldHost_ = nullptr;
 
   // ---- Pane A: General -----------------------------------------------------
   Gtk::Switch* productUpdates_ = nullptr;
@@ -206,6 +219,13 @@ class SettingsPage : public Gtk::Box {
   bool applyingLaunchAtStartup_ = false;  // echo guard
   void ApplyLaunchAtStartup();
   void OnLaunchAtStartupToggled();
+  // Check now, and the state line under it that says what the last check came
+  // to (hidden while there is nothing to say); one writer, ApplyUpdateState.
+  Gtk::Button* checkNow_ = nullptr;
+  Gtk::Label* updateState_ = nullptr;
+  Gtk::Widget* updateStateRow_ = nullptr;
+  sigc::connection holdEnd_;  // re-reads the line when GitHub's hold ends
+  void ApplyUpdateState(const UpdateChecker::Snapshot& snap);
   // The update notice (hidden until a newer release is known): a two-line row
   // whose action verb follows the checker's phase, plus a selectable prose
   // row carrying the command or the saved file's path.
@@ -242,7 +262,8 @@ class SettingsPage : public Gtk::Box {
 
   // ---- Pane B: Advanced ----------------------------------------------------
   Gtk::Switch* advancedMode_ = nullptr;
-  bool applyingAdvancedMode_ = false;  // re-entrancy guard on the apply path
+  Gtk::Switch* advancedModeFold_ = nullptr;  // pane A's copy (deviceFoldHost_)
+  bool applyingAdvancedMode_ = false;  // re-entrancy guard on the apply path, both toggles
 
   // ---- sheets --------------------------------------------------------------
   std::unique_ptr<SettingsDeviceNameSheet> deviceNameSheet_;

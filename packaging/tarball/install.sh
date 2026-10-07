@@ -68,9 +68,13 @@ GEOCLUE_FLOOR='2.7.0'   # static-source location override needs >= 2.7.0
 # to urnetwork/linux under the same asset names the build pipeline mints
 # (build/all/run.sh require_linux_artifacts). Never urnetwork/build (the
 # nightlies) and never a fork -- the same rule as the app's updater
-# (app/src/ReleaseSelection.hpp kUpdateRepo).
+# (app/src/ReleaseSelection.hpp kUpdateRepo). The API is asked by the
+# repository's numeric id (kUpdateRepoId), and without following a redirect,
+# so a rename or someone registering the owner's old name cannot move it; the
+# name stays for the download URLs and the release page.
 UPDATE_REPO='urnetwork/linux'
-UPDATE_API_URL="https://api.github.com/repos/${UPDATE_REPO}/releases/latest"
+UPDATE_REPO_ID='1297137671'
+UPDATE_API_URL="https://api.github.com/repositories/${UPDATE_REPO_ID}/releases/latest"
 UPDATE_DOWNLOAD_PREFIX="https://github.com/${UPDATE_REPO}/releases/download/"
 UPDATE_RELEASES_PAGE="https://github.com/${UPDATE_REPO}/releases"
 
@@ -606,7 +610,8 @@ if [ "${DO_UPDATE}" = 1 ]; then
     else
         log "asking ${UPDATE_API_URL} for the latest stable release ..."
         UPDATE_JSON="${UPDATE_TMP}/release.json"
-        UPDATE_HTTP="$(curl -sSL "${CURL_SAFE[@]}" \
+        # No -L: a redirect answers its own status and is refused below.
+        UPDATE_HTTP="$(curl -sS "${CURL_SAFE[@]}" \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
             -A 'urnetwork-daemon-install.sh' \
@@ -633,13 +638,11 @@ if [ "${DO_UPDATE}" = 1 ]; then
         [ -n "${UPDATE_INDEX}" ] || \
             die "the latest stable release ${UPDATE_TAG} of ${UPDATE_REPO} does not include ${UPDATE_ASSET} -- no install tarball to update from; see ${UPDATE_RELEASES_PAGE}/tag/${UPDATE_TAG}"
         UPDATE_URL="$(json_field "${UPDATE_FLAT}" ".assets[${UPDATE_INDEX}].browser_download_url")"
-        case "${UPDATE_URL}" in
-            "${UPDATE_DOWNLOAD_PREFIX}"*) ;;
-            *) die "${UPDATE_ASSET} in ${UPDATE_TAG} is not hosted by ${UPDATE_REPO} (${UPDATE_URL:-no URL}) -- refusing it" ;;
-        esac
-        case "${UPDATE_URL}" in
-            *[[:space:]]*|*..*) die "${UPDATE_ASSET} has a malformed download URL -- refusing it" ;;
-        esac
+        # Exactly this release's file on urnetwork/linux, as the app's
+        # IsFeedAssetUrl: a URL that only starts with the download path can
+        # name another tag's file, another file or a path that climbs out.
+        [ "${UPDATE_URL}" = "${UPDATE_DOWNLOAD_PREFIX}${UPDATE_TAG}/${UPDATE_ASSET}" ] || \
+            die "${UPDATE_ASSET} in ${UPDATE_TAG} is not hosted by ${UPDATE_REPO} at its own download path (${UPDATE_URL:-no URL}) -- refusing it"
         UPDATE_DIGEST="$(json_field "${UPDATE_FLAT}" ".assets[${UPDATE_INDEX}].digest" | tr 'A-F' 'a-f')"
         printf '%s' "${UPDATE_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$' || \
             die "${UPDATE_ASSET} in ${UPDATE_TAG} has no usable sha256 digest in the GitHub API -- refusing to install it unverified"

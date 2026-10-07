@@ -9,6 +9,7 @@
 #include <glib.h>
 #include <libsoup/soup.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -23,6 +24,7 @@
 
 #include "AppPrefs.hpp"
 #include "Ui.hpp"
+#include "UpdateSchedule.hpp"
 
 // The build stamp: meson passes -DUR_APP_VERSION into the GUI (see
 // meson.build); the fallback keeps this TU self-contained, the same idiom
@@ -52,14 +54,37 @@ constexpr std::uint64_t kMaxImageBytes = 1ull * 1024 * 1024 * 1024;
 
 constexpr const char* kAutoCheckPrefKey = "check_updates_automatically";
 constexpr const char* kLastCheckPrefKey = "update_last_check_at";  // unix seconds
+// Unix seconds of the last check that reached GitHub; the six-hour throttle
+// above counts every completed check, failed ones too, so it cannot say this.
+constexpr const char* kLastSuccessPrefKey = "update_last_check_success";
 
 const std::uint64_t kOwnCode = update::ParseReleaseCode(UR_APP_VERSION);
 
 std::int64_t NowUnix() { return g_get_real_time() / G_USEC_PER_SEC; }
 
+// Whole seconds from now until `deadline` on the steady clock, rounded up; 0
+// once it has come.
+std::int64_t SecondsUntil(Clock::time_point deadline) {
+  const Clock::duration left = deadline - Clock::now();
+  if (left <= Clock::duration::zero()) return 0;
+  return std::chrono::ceil<std::chrono::seconds>(left).count();
+}
+
 std::string EnvOr(const char* name) {
   const char* v = g_getenv(name);
   return v ? std::string(v) : std::string();
+}
+
+// A Unix second in this machine's zone, in a g_date_time_format pattern; ""
+// when it cannot be represented.
+std::string FormatLocal(std::int64_t unixSeconds, const char* pattern) {
+  GDateTime* moment = g_date_time_new_from_unix_local(unixSeconds);
+  if (!moment) return {};
+  gchar* text = g_date_time_format(moment, pattern);
+  g_date_time_unref(moment);
+  std::string out = text ? text : "";
+  g_free(text);
+  return out;
 }
 
 // ---- the fetch ---------------------------------------------------------------
@@ -76,15 +101,39 @@ void OnRestarted(SoupMessage* msg, gpointer data) {
   }
 }
 
+// What a GET said beside its body.
+struct FetchHeaders {
+  // The Date header in Unix seconds, 0 when it had none.
+  std::int64_t serverUnixSeconds = 0;
+  // What a refused request said about asking again (UpdateSchedule.hpp).
+  std::int64_t retryAfterSeconds = 0;
+  std::int64_t rateLimitResetUnixSeconds = 0;
+  bool rateLimitExhausted = false;
+};
+
+// The response's Date header in Unix seconds, or 0 when it has none or it
+// does not parse.
+std::int64_t ResponseDateUnixSeconds(SoupMessage* msg) {
+  const char* date = soup_message_headers_get_one(soup_message_get_response_headers(msg), "Date");
+  if (!date) return 0;
+  GDateTime* parsed = soup_date_time_new_from_http_string(date);
+  if (!parsed) return 0;
+  const std::int64_t seconds = g_date_time_to_unix(parsed);
+  g_date_time_unref(parsed);
+  return seconds;
+}
+
 // One GET, streamed into `sink` chunk by chunk. GitHub requires a User-Agent
-// on every request. `status` receives the HTTP status when the request got
-// that far (0 otherwise), so a 404 from an empty release list can be told
-// apart from a failure.
+// on every request. Any status but 200 fails the fetch, and `error` names it.
+// With `followRedirects` false a redirect comes back as its own status and
+// fails the fetch: the release list's URL names the repository by its id, and
+// nothing may move it. The AppImage download, a browser_download_url that
+// 302s to a storage host, follows them over https. `headers`, when given,
+// receives what the response said beside its body.
 bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes,
-              GCancellable* cancellable,
-              const std::function<bool(const char*, gsize)>& sink, unsigned* status,
+              bool followRedirects, GCancellable* cancellable,
+              const std::function<bool(const char*, gsize)>& sink, FetchHeaders* headers,
               std::string& error) {
-  *status = 0;
   {
     GError* err = nullptr;
     GUri* uri = g_uri_parse(url.c_str(), G_URI_FLAGS_NONE, &err);
@@ -110,6 +159,7 @@ bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes
     error = "could not build the request";
     return false;
   }
+  if (!followRedirects) soup_message_add_flags(msg, SOUP_MESSAGE_NO_REDIRECT);
   if (accept) soup_message_headers_append(soup_message_get_request_headers(msg), "Accept", accept);
   soup_message_headers_append(soup_message_get_request_headers(msg), "X-GitHub-Api-Version",
                               "2022-11-28");
@@ -122,9 +172,22 @@ bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes
     error = std::string("request failed: ") + (err ? err->message : "?");
     if (err) g_error_free(err);
   } else {
-    *status = soup_message_get_status(msg);
-    if (*status != 200) {
-      error = "http status " + std::to_string(*status);
+    const unsigned status = soup_message_get_status(msg);
+    if (headers) headers->serverUnixSeconds = ResponseDateUnixSeconds(msg);
+    if (status != 200) {
+      if (headers) {
+        // GitHub says when to ask again: Retry-After for a secondary limit,
+        // the reset time once the hour's requests are spent.
+        SoupMessageHeaders* response = soup_message_get_response_headers(msg);
+        headers->retryAfterSeconds = update::ParseDecimalHeader(
+            soup_message_headers_get_one(response, "Retry-After"), 0);
+        headers->rateLimitResetUnixSeconds = update::ParseDecimalHeader(
+            soup_message_headers_get_one(response, "X-RateLimit-Reset"), 0);
+        headers->rateLimitExhausted =
+            update::ParseDecimalHeader(
+                soup_message_headers_get_one(response, "X-RateLimit-Remaining"), -1) == 0;
+      }
+      error = "http status " + std::to_string(status);
     } else {
       std::vector<char> chunk(64 * 1024);
       std::uint64_t total = 0;
@@ -261,8 +324,24 @@ update::InstallKind UpdateChecker::DetectInstallKind() {
   return update::DetectInstallKind(probe);
 }
 
+std::string UpdateChecker::LocalDate(std::int64_t unixSeconds) {
+  return FormatLocal(unixSeconds, "%x");
+}
+
+std::string UpdateChecker::LocalDateTime(std::int64_t unixSeconds) {
+  return FormatLocal(unixSeconds, "%x, %R");
+}
+
 void UpdateChecker::Start() {
   autoCheck_ = AutoCheckEnabled();
+  // When a check last reached GitHub; before any has, this first launch is
+  // when checks began, so 72 hours of failures from now are reported too.
+  // Before the worker exists, so no lock is needed.
+  snapshot_.lastSuccessUnix = prefs::Get<std::int64_t>(kLastSuccessPrefKey, 0);
+  if (snapshot_.lastSuccessUnix <= 0) {
+    snapshot_.lastSuccessUnix = NowUnix();
+    prefs::Set(kLastSuccessPrefKey, snapshot_.lastSuccessUnix);
+  }
   if (kOwnCode == 0) {
     g_message("update: dev build (%s) -- automatic checking disabled; the developer "
               "screen's manual check still runs and reports", UR_APP_VERSION);
@@ -315,9 +394,15 @@ void UpdateChecker::SetAutoCheckEnabled(bool on) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     autoCheck_ = on;
-    // The user just asked for updates; answer now, not in six hours.
-    if (on) nextAutoUnix_ = NowUnix();
+    // The user just asked for updates; answer now, not in six hours, but
+    // never before GitHub said it may be asked again.
+    if (on) nextAutoUnix_ = NowUnix() + SecondsUntil(holdUntil_);
   }
+  // "The app keeps trying" is said only while it does.
+  const std::int64_t now = NowUnix();
+  Mutate([now, on](Snapshot& s) {
+    s.checkStale = update::CheckIsStale(now, s.lastSuccessUnix, on && kOwnCode != 0);
+  });
   cv_.notify_all();
   g_message("update: automatic checking %s", on ? "enabled" : "disabled");
 }
@@ -330,6 +415,14 @@ void UpdateChecker::Mutate(const std::function<void(Snapshot&)>& fn) {
     copy = snapshot_;
   }
   Publish(copy);
+}
+
+void UpdateChecker::CheckFailed() {
+  const std::int64_t now = NowUnix();
+  Mutate([this, now](Snapshot& s) {
+    s.lastCheck = CheckOutcome::Failed;
+    s.checkStale = update::CheckIsStale(now, s.lastSuccessUnix, autoCheck_ && kOwnCode != 0);
+  });
 }
 
 void UpdateChecker::Publish(const Snapshot& copy) {
@@ -393,15 +486,16 @@ void UpdateChecker::WorkerLoop() {
         RunCheck();
       } catch (const std::exception& e) {
         g_warning("update: check threw: %s", e.what());
-        Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+        CheckFailed();
       }
       // Any completed check -- manual or automatic -- restarts the cadence
       // and the persisted throttle; two checks 30 seconds apart cannot say
-      // different things.
+      // different things. Never before GitHub's own Retry-After or rate-limit
+      // reset.
       const std::int64_t now = NowUnix();
       prefs::Set(kLastCheckPrefKey, now);
       lock.lock();
-      nextAutoUnix_ = now + update::kCheckIntervalSeconds;
+      nextAutoUnix_ = now + std::max(update::kCheckIntervalSeconds, SecondsUntil(holdUntil_));
       continue;
     }
     if (timed) {
@@ -427,39 +521,73 @@ void UpdateChecker::CleanupStaleFiles() {
 // ---- the check ---------------------------------------------------------------
 
 void UpdateChecker::RunCheck() {
+  bool held = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    held = Clock::now() < holdUntil_;
+  }
+  if (held) {
+    // GitHub asked for no request before then; a manual check waits too.
+    g_warning("update: GitHub asked for no request yet; the check is not sent");
+    CheckFailed();
+    return;
+  }
   Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });
 
   std::string body;
   std::string error;
-  unsigned status = 0;
+  FetchHeaders headers;
   const bool fetched = FetchUrl(
-      update::ReleasesApiUrl(), "application/vnd.github+json", kMaxJsonBytes, cancellable_,
+      update::ReleasesApiUrl(), "application/vnd.github+json", kMaxJsonBytes,
+      /*followRedirects=*/false, cancellable_,
       [&body](const char* data, gsize n) {
         body.append(data, n);
         return true;
       },
-      &status, error);
-  std::vector<update::Release> parsed;
-  if (fetched) {
-    // parse(..., false): a malformed body comes back as `discarded`, not a throw.
-    const nlohmann::json releases = nlohmann::json::parse(body, nullptr, false);
-    if (!releases.is_array()) {
-      g_warning("update: release list was not a JSON array");
-      Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
-      return;
+      &headers, error);
+  {
+    // A list that came back ends a hold; a refusal that says when to ask
+    // again starts one, on the steady clock.
+    const update::RateLimit limit{headers.retryAfterSeconds, headers.rateLimitResetUnixSeconds,
+                                  headers.rateLimitExhausted, headers.serverUnixSeconds};
+    const std::int64_t wait = fetched ? 0 : update::NextCheckDelaySeconds(0, limit);
+    if (wait > 0) {
+      g_warning("update: GitHub asked for no request for %lld s", static_cast<long long>(wait));
     }
-    parsed = update::ParseReleases(releases);
-  } else if (status == 404) {
-    // The stable repo has published nothing yet: not an error, "no update".
-    g_message("update: %s has no releases yet", update::kUpdateRepo);
-  } else {
+    std::lock_guard<std::mutex> lock(mutex_);
+    holdUntil_ = wait > 0 ? Clock::now() + std::chrono::seconds(wait) : Clock::time_point{};
+    snapshot_.holdUntil = holdUntil_;
+    snapshot_.holdUntilUnix = wait > 0 ? NowUnix() + wait : 0;
+  }
+  if (!fetched) {
+    // A repository with no release yet answers an empty list, which is "no
+    // update"; a 404 means the id no longer names a repository this app can
+    // read, and fails like any other status.
     g_warning("update: release check failed: %s", error.c_str());
-    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    CheckFailed();
     return;
   }
+  // parse(..., false): a malformed body comes back as `discarded`, not a throw.
+  const nlohmann::json releases = nlohmann::json::parse(body, nullptr, false);
+  if (!releases.is_array()) {
+    g_warning("update: release list was not a JSON array");
+    CheckFailed();
+    return;
+  }
+  const std::vector<update::Release> parsed = update::ParseReleases(releases);
+  // GitHub was reached: the list came back.
+  const std::int64_t succeeded = NowUnix();
+  prefs::Set(kLastSuccessPrefKey, succeeded);
 
-  const update::Selection sel =
-      update::SelectRelease(parsed, kOwnCode, snapshot_.kind, update::OwnArch());
+  // Codes are judged against GitHub's clock, not this machine's. A list
+  // without a Date header is judged against this machine's.
+  std::int64_t serverUnixSeconds = headers.serverUnixSeconds;
+  if (serverUnixSeconds == 0) {
+    g_warning("update: the release list had no Date header; judging by this clock");
+    serverUnixSeconds = NowUnix();
+  }
+  const update::Selection sel = update::SelectRelease(parsed, kOwnCode, snapshot_.kind,
+                                                      update::OwnArch(), serverUnixSeconds);
   for (const auto& skip : sel.skipped) {
     g_warning("update: release %s %s -- skipped", skip.tag.c_str(), skip.reason.c_str());
   }
@@ -472,6 +600,7 @@ void UpdateChecker::RunCheck() {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     snapshot_.newestVersion = sel.newestVersion;
+    snapshot_.newestCode = sel.newestCode;
     if (kOwnCode == 0) {
       snapshot_.lastCheck = sel.newestCode ? CheckOutcome::DevBuild : CheckOutcome::NoUpdate;
     } else if (sel.updateAvailable) {
@@ -499,9 +628,12 @@ void UpdateChecker::RunCheck() {
         snapshot_.kind = kind;
         snapshot_.lastCheck = CheckOutcome::NoUpdate;
         snapshot_.newestVersion = sel.newestVersion;
+        snapshot_.newestCode = sel.newestCode;
         offer_ = Offer{};
       }
     }
+    snapshot_.lastSuccessUnix = succeeded;
+    snapshot_.checkStale = false;
     copy = snapshot_;
   }
   Publish(copy);
@@ -558,14 +690,13 @@ void UpdateChecker::RunApply() {
       return;
     }
     std::string error;
-    unsigned status = 0;
     const bool ok = FetchUrl(
-        offer.assetUrl, nullptr, kMaxImageBytes, cancellable_,
+        offer.assetUrl, nullptr, kMaxImageBytes, /*followRedirects=*/true, cancellable_,
         [&out](const char* data, gsize n) {
           out.write(data, static_cast<std::streamsize>(n));
           return out.good();
         },
-        &status, error);
+        nullptr, error);
     out.close();
     if (!ok || !out.good()) {
       g_warning("update: download failed: %s", ok ? "file write failed" : error.c_str());

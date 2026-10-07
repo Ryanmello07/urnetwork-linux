@@ -2068,7 +2068,7 @@ msgctxt "dev_busy_probes_value"
 msgid "{0} sent / {1} acquitted"
 msgstr "已发送 {0} / 判为无罪 {1}"
 
-#. Developer page: button that checks for a new release now.
+#. Developer page: button that checks for a new release now. Linux Settings > General: the title of the row whose button does the same.
 msgctxt "dev_check_updates"
 msgid "Check for updates"
 msgstr "检查更新"
@@ -3344,17 +3344,17 @@ msgctxt "dev_unstalled_exit"
 msgid "Cleared stall on exit"
 msgstr "已解除停滞的出口"
 
-#. Developer page: report line when the update check failed.
+#. Developer page, and the line under Linux Settings > Check for updates: report line when the update check failed.
 msgctxt "dev_update_check_failed"
 msgid "The update check failed — see the app log."
 msgstr "检查更新失败——请查看应用日志。"
 
-#. Developer page: update check status while checking.
+#. Developer page, and the line under Linux Settings > Check for updates: update check status while checking.
 msgctxt "dev_update_checking"
 msgid "Checking for updates…"
 msgstr "正在检查更新…"
 
-#. Developer page: update check result on a development build. {version} is the newest release version.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result on a development build. {version} is the newest release version.
 msgctxt "dev_update_dev_build"
 msgid "Development build: the newest release is v{}, and a development build is never updated automatically."
 msgstr "开发版本：最新版本为 v{}，开发版本永远不会自动更新。"
@@ -3384,7 +3384,7 @@ msgctxt "dev_update_newest_seen"
 msgid "newest release seen:"
 msgstr "所见最新版本："
 
-#. Developer page: update check result when there is no stable release.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result when there is no stable release.
 msgctxt "dev_update_no_releases"
 msgid "No stable release has been published yet."
 msgstr "尚未发布任何稳定版本。"
@@ -3394,7 +3394,7 @@ msgctxt "dev_update_none"
 msgid "No update: this build is current"
 msgstr "没有更新：此版本已是最新"
 
-#. Developer page: update check result on the newest release. {version} is the release version.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result on the newest release. {version} is the release version.
 msgctxt "dev_update_up_to_date"
 msgid "Up to date. Newest release: v{}"
 msgstr "已是最新。最新版本：v{}"
@@ -9964,6 +9964,26 @@ msgstr "从版本页面下载 {}，然后运行下面的命令。"
 msgctxt "upd_available_title_version"
 msgid "Update available: v{}"
 msgstr "有可用更新：v{}"
+
+#. Linux Settings > General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.
+msgctxt "upd_check_held_message"
+msgid "GitHub asked this network to wait until {} before it is asked again, and the app waits until then."
+msgstr "GitHub 要求此网络在 {} 之前不要再次请求，应用会等到那时。"
+
+#. Linux Settings > General: the button on the "Check for updates" row that checks for a new release now. The last check's outcome shows on the line under the row.
+msgctxt "upd_check_now"
+msgid "Check now"
+msgstr "立即检查"
+
+#. Linux Settings > General: the sentence under upd_check_stale_title ("Couldn't check for updates since {date}"). The app checks again every six hours while automatic checks are on; "the button" is the row's Check now button.
+msgctxt "upd_check_stale_message"
+msgid "A newer release may be out. The app keeps trying every six hours, and the button tries now."
+msgstr "可能已有更新的版本。应用会每六小时继续尝试，按钮可立即尝试。"
+
+#. Linux Settings > General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).
+msgctxt "upd_check_stale_title"
+msgid "Couldn't check for updates since {}"
+msgstr "自 {} 起无法检查更新"
 
 #. Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.
 msgctxt "upd_downloaded_message"
