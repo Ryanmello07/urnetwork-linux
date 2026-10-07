@@ -153,6 +153,11 @@ msgctxt "adv_always_tunnel"
 msgid "Always tunnel"
 msgstr "Altijd door de tunnel"
 
+#. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
+msgctxt "adv_best_available_note"
+msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
+msgstr "URnetwork kiest voor je de snelste goed werkende aanbieders, zonder locatiebeperking, en kiest opnieuw als het netwerk verandert."
+
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
 msgctxt "adv_block_host"
 msgid "Block this host"
@@ -419,6 +424,11 @@ msgstr "Override"
 msgctxt "adv_packets_total"
 msgid "Packets (total)"
 msgstr "Pakketten (totaal)"
+
+#. Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.
+msgctxt "adv_pick_location_note"
+msgid "Pick a country, region, city or device in the list to connect there instead."
+msgstr "Kies een land, regio, stad of apparaat in de lijst om daar verbinding mee te maken."
 
 #. Connection inspector: label of the probe age row.
 msgctxt "adv_probe_age"

@@ -153,6 +153,11 @@ msgctxt "adv_always_tunnel"
 msgid "Always tunnel"
 msgstr "항상 터널 사용"
 
+#. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
+msgctxt "adv_best_available_note"
+msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
+msgstr "URnetwork가 위치 제한 없이 정상 작동하는 가장 빠른 제공자를 골라 주며, 네트워크가 바뀌면 다시 고릅니다."
+
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
 msgctxt "adv_block_host"
 msgid "Block this host"
@@ -418,6 +423,11 @@ msgstr "재정의"
 msgctxt "adv_packets_total"
 msgid "Packets (total)"
 msgstr "패킷(합계)"
+
+#. Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.
+msgctxt "adv_pick_location_note"
+msgid "Pick a country, region, city or device in the list to connect there instead."
+msgstr "대신 특정 위치에 연결하려면 목록에서 국가, 지역, 도시 또는 기기를 선택하세요."
 
 #. Connection inspector: label of the probe age row.
 msgctxt "adv_probe_age"

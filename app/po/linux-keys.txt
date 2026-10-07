@@ -18,6 +18,7 @@ adv_advanced_mode
 adv_advanced_mode_note
 adv_allow_host
 adv_always_tunnel
+adv_best_available_note
 adv_block_host
 adv_bypass_tunnel
 adv_bytes_total
@@ -70,6 +71,7 @@ adv_none
 adv_open_split_rules
 adv_override_id
 adv_packets_total
+adv_pick_location_note
 adv_probe_age
 adv_protected
 adv_providers_load_failed

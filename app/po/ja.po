@@ -153,6 +153,11 @@ msgctxt "adv_always_tunnel"
 msgid "Always tunnel"
 msgstr "常にトンネル経由"
 
+#. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
+msgctxt "adv_best_available_note"
+msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
+msgstr "URnetwork は場所を限定せずに、正常に動作している最も高速なプロバイダーを選び、ネットワークの変化に合わせて選び直します。"
+
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
 msgctxt "adv_block_host"
 msgid "Block this host"
@@ -418,6 +423,11 @@ msgstr "オーバーライド"
 msgctxt "adv_packets_total"
 msgid "Packets (total)"
 msgstr "パケット数（合計）"
+
+#. Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.
+msgctxt "adv_pick_location_note"
+msgid "Pick a country, region, city or device in the list to connect there instead."
+msgstr "代わりに特定の場所に接続するには、リストから国、地域、都市、またはデバイスを選択してください。"
 
 #. Connection inspector: label of the probe age row.
 msgctxt "adv_probe_age"
