@@ -34,6 +34,7 @@ Each pane Grid gets `AutomationProperties.Name` = the same string.
 - **900 ≤ width < 1400** → two panes (About folds: PaneC + its rule collapse, star→0)
 - width **< 900** → one pane (PaneB + rule also collapse)
 Rationale comment: at the 2062dip reference window each pane is ~660dip — the "constrained settings column" measure. Column fold = set star width to 0 AND Visibility Collapsed on pane + its rule.
+- Second doors (Windows 8ccab5b / 73eea23): a foldable pane owns no content without another way in, so the foot of pane A carries fold-gated copies, exactly one of each on screen. While About is folded (< 1400): an "About" group with the version rows (`version_info`, `app_version`), Licenses and Stay in touch; the default 1120dip window shows no version otherwise. While Device is folded (< 900): an "Advanced" group with the advanced-mode toggle, written with pane B's toggle by the one apply path under the one echo guard (Save logs stays in pane B). Windows does not copy Stay in touch (its Discord and support address are on the Support destination); Linux does, because its DePIN Hub and protocol links have no other door. Linux: `SettingsFold.hpp` holds the table (`PaneCount`, `AboutDoorsShown`, `DeviceDoorsShown`).
 
 ### 1.2 Content grouping (what lives in which pane — CODE, not the doc)
 - **Pane A (col 0, "what the app DOES")**: General group (no header), then Connections group (`site_app_connections` = "Connections" — the "VPN & privacy" group).

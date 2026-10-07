@@ -545,7 +545,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # lines and their filters, which device carries a feedback's log upload, for
 # how long, and the upload in flight off the daemon's main loop, how a launch
 # reaches the running instance and how it answers, the user's autostart entry
-# behind the startup toggle, and the daemon
+# behind the startup toggle, the Settings panes' fold and pane A's second
+# doors, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -661,6 +662,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/InstanceHandoverWiringTest.cpp',
     'tests/LaunchAtStartupTest.cpp',
     'tests/LaunchAtStartupWiringTest.cpp',
+    'tests/SettingsFoldTest.cpp',
+    'tests/SettingsFoldDoorsWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
