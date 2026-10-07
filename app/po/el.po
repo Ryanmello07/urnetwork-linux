@@ -208,6 +208,21 @@ msgctxt "adv_exits"
 msgid "Exits"
 msgstr "Έξοδοι"
 
+#. Connect page, Activity pane: the first choice of the verdict filter above the list of connections (routing decisions). Shows every connection, whatever its verdict. Short: it shares one row with Blocked, Tunnelled and Bypassed.
+msgctxt "adv_filter_all"
+msgid "All"
+msgstr "Όλες"
+
+#. Connect page, Activity pane: the verdict filter choice that shows only the connections that bypassed the tunnel (allowed, but sent directly from this device outside the VPN, for example by a split rule, so not protected). Short: it shares one row with All, Blocked and Tunnelled.
+msgctxt "adv_filter_bypassed"
+msgid "Bypassed"
+msgstr "Εκτός σήραγγας"
+
+#. Connect page, Activity pane: the verdict filter choice that shows only the connections sent through the URnetwork tunnel (allowed and protected). Short: it shares one row with All, Blocked and Bypassed.
+msgctxt "adv_filter_tunnelled"
+msgid "Tunnelled"
+msgstr "Μέσω σήραγγας"
+
 #. Connection inspector: label of the host row.
 msgctxt "adv_host"
 msgid "Host"
@@ -402,6 +417,11 @@ msgstr "ενεργές, χωρίς προστασία από διαρροές"
 msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
+
+#. Connect page, Activity pane: placeholder and accessible name of the search field above the list of connections. Typing filters the list to the connections whose host name or IP address contains the text.
+msgctxt "adv_search_connections"
+msgid "Search hosts or IPs"
+msgstr "Αναζήτηση hosts ή IP"
 
 #. Connection inspector: hint to select a row in the Activity list.
 msgctxt "adv_select_a_row"

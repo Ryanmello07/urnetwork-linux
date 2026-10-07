@@ -29,6 +29,9 @@ adv_exit_tier
 adv_exit_warning
 adv_exit_warning_cause
 adv_exits
+adv_filter_all
+adv_filter_bypassed
+adv_filter_tunnelled
 adv_host
 adv_inspector
 adv_kill_switch_applying
@@ -61,6 +64,7 @@ adv_reason_block
 adv_reason_default
 adv_reason_override
 adv_reason_route
+adv_search_connections
 adv_select_a_row
 adv_selected
 adv_selection_gone
