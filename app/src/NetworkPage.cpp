@@ -386,12 +386,8 @@ void NetworkPage::AppendLocationSection(
     const urnet::ConnectLocation copy = location;
     row->signal_clicked().connect([this, copy] {
       // The click IS select-and-connect, and starts a tunnel when there is
-      // none. TODO(sdk-wiring): the windows row-click coalescer (1200ms
-      // settle; re-click of the active target is a no-op that cancels a newer
-      // pending intent; immediate connect/disconnect supersedes). Rationale:
-      // every real connect tears the provider window down and the dial
-      // staircase charges 100ms–1s of shared budget per cold dial with no
-      // refund — a click burst without the settle runs it minutes ahead.
+      // none. Coalesced (SdkHost::ConnectFromRow): a scroll-and-click hunt
+      // through the list connects once, to the last row clicked.
       host_.ConnectFromRow(copy);
       // The SDK persists selection when the (settled) intent fires — the
       // check glyph may move only once status pushes arrive. Deliberately no

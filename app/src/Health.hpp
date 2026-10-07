@@ -133,6 +133,15 @@ struct Signals {
 // be answers to three different questions.
 inline bool SessionUp(const Signals& s) { return s.destinationSelected && s.tunnelBound; }
 
+// The session is driving its selection: it is up and its provider window has
+// not settled on failure, so a row click on that selection is no new connect.
+// A failed window is driven nowhere, and a click on its row connects again, as
+// Windows' RowClickIsCurrent counts only CONNECTED, CONNECTING and
+// DESTINATION_SET.
+inline bool DrivesSelection(const Signals& s) {
+  return SessionUp(s) && s.sdk != SdkStatus::Failed;
+}
+
 inline State Aggregate(const Signals& s) {
   // The user's intent outranks the controller's token, and it has to: the SDK
   // goes on reporting a selected destination right through a teardown, so a

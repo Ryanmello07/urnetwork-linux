@@ -308,6 +308,11 @@ SdkHost::~SdkHost() {
     g_source_remove(providerStatsPollId_);
     providerStatsPollId_ = 0;
   }
+  // ...and so does a settling row click's.
+  if (rowConnectTimerId_ != 0) {
+    g_source_remove(rowConnectTimerId_);
+    rowConnectTimerId_ = 0;
+  }
   // Last, and unconditionally: the reservation is the only member that is a
   // kernel resource rather than an SDK handle, and leaking it would keep the
   // address held by a zombie fd for the rest of the process.
@@ -4415,6 +4420,56 @@ void SdkHost::Connect(const std::optional<urnet::ConnectLocation>& location) {
 }
 
 void SdkHost::ConnectFromRow(const std::optional<urnet::ConnectLocation>& location) {
+  // Driving: a session is up, its window has not settled on failure, and the
+  // SDK's selection is this row. A selection left over from before a
+  // Disconnect is no session, and a failed one is driven nowhere, so either
+  // row connects.
+  const bool driving = health::DrivesSelection(CurrentConnectReading().ToSignals(false)) &&
+                       IsTargetSelected(SelectedLocation(), location);
+  if (rowConnectTimerId_ != 0) {
+    g_source_remove(rowConnectTimerId_);
+    rowConnectTimerId_ = 0;
+  }
+  if (!rowConnects_.Offer(location, driving, g_get_monotonic_time() / 1000)) {
+    g_message("connect: row click on the location already connected; nothing to do");
+    return;
+  }
+  ArmRowConnectTimer(rowConnects_.kSettleMillis);
+}
+
+void SdkHost::CancelRowConnect(const char* why) {
+  if (rowConnects_.Cancel()) g_message("connect: a row click still settling is dropped (%s)", why);
+  if (rowConnectTimerId_ != 0) {
+    g_source_remove(rowConnectTimerId_);
+    rowConnectTimerId_ = 0;
+  }
+}
+
+void SdkHost::ArmRowConnectTimer(int64_t delayMillis) {
+  rowConnectTimerId_ = g_timeout_add(
+      static_cast<guint>(std::max<int64_t>(1, delayMillis)),
+      [](gpointer data) -> gboolean {
+        auto* self = static_cast<SdkHost*>(data);
+        self->rowConnectTimerId_ = 0;
+        self->OnRowConnectDue();
+        return G_SOURCE_REMOVE;
+      },
+      this);
+}
+
+void SdkHost::OnRowConnectDue() {
+  const int64_t nowMillis = g_get_monotonic_time() / 1000;
+  std::optional<std::optional<urnet::ConnectLocation>> due = rowConnects_.TakeDue(nowMillis);
+  if (!due) {
+    // a timer that fires a little early waits out the rest
+    if (rowConnects_.Pending()) ArmRowConnectTimer(rowConnects_.DueAtMillis() - nowMillis);
+    return;
+  }
+  g_message("connect: a row click settled; connecting");
+  RunRowConnect(*due);
+}
+
+void SdkHost::RunRowConnect(const std::optional<urnet::ConnectLocation>& location) {
   if (rowConnect_) {
     rowConnect_(location);
   } else if (IsBestAvailableSelected(location)) {
@@ -4425,6 +4480,7 @@ void SdkHost::ConnectFromRow(const std::optional<urnet::ConnectLocation>& locati
 }
 
 void SdkHost::Disconnect() {
+  CancelRowConnect("disconnect");
   std::scoped_lock lock(mutex_);
   // Bring the daemon's tunnel down. Ending the provider session does not
   // touch the tun device or the 31 capture routes — those are the daemon's,
@@ -4906,6 +4962,8 @@ void SdkHost::Logout() {
   // Answered "superseded by ..." (bridge::IsSuperseded), so its sheet settles
   // quietly, and outside mutex_, which it takes.
   CancelPendingAddSignIn("superseded by signing out");
+  // and so is a row click still settling
+  CancelRowConnect("sign-out");
   std::scoped_lock lock(mutex_);
   // Signed out from here: a posted reconcile, the health poll or a Connect that
   // runs after this starts nothing for the account that is leaving.

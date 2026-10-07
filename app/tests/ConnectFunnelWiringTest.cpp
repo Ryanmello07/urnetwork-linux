@@ -132,8 +132,8 @@ UR_TEST(ConnectFunnelWiring_EveryRowConnectsFromTheRow) {
 // retires a disconnect the user is no longer waiting on, as the tray does.
 UR_TEST(ConnectFunnelWiring_ARowClickStartsThroughTheWindow) {
   const std::string host = ReadFunnelSource("SdkHost.cpp");
-  const std::string fromRow = FunnelBody(host, "void SdkHost::ConnectFromRow(");
-  UR_EXPECT_TRUE(FunnelHas(fromRow, "rowConnect_("));
+  const std::string run = FunnelBody(host, "void SdkHost::RunRowConnect(");
+  UR_EXPECT_TRUE(FunnelHas(run, "rowConnect_(location);"));
   const std::string window = ReadFunnelSource("MainWindow.cpp");
   UR_EXPECT_TRUE(FunnelInOrder(window, {"host_.SetRowConnect([this](const std::optional<"
                                         "urnet::ConnectLocation>& location) {",

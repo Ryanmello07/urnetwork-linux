@@ -1,8 +1,10 @@
 // Which connect location is selected, asked one way everywhere: the location
 // chooser's rows (LocationsSheet.cpp), the Network page's rows and selected
-// location (NetworkPage.cpp) and the Connect page's provider row
-// (ConnectPage.cpp). Windows exports the same predicates from SdkHost.h so the
-// page, the sheet and the row-click coalescer cannot disagree.
+// location (NetworkPage.cpp), the Connect page's provider row
+// (ConnectPage.cpp), the Connect button's target (MainWindow::StartTunnelUi)
+// and the row-click coalescer's re-click (SdkHost::ConnectFromRow). Windows
+// exports the same predicates from SdkHost.h so the page, the sheet and the
+// coalescer cannot disagree.
 //
 // A selection is the SDK's ConnectLocation: no selection and a best-available
 // one are both "best available", and two locations are the same when any of
@@ -49,6 +51,15 @@ bool IsLocationSelected(const std::optional<Location>& selected, const Location&
   return SameLocationId(a.location_id, b.location_id) ||
          SameLocationId(a.client_id, b.client_id) ||
          SameLocationId(a.location_group_id, b.location_group_id);
+}
+
+// The selection is this connect target (a row's location, or none for the
+// best-available row): both best available, or the same location.
+template <class Location>
+bool IsTargetSelected(const std::optional<Location>& selected,
+                      const std::optional<Location>& target) {
+  if (IsBestAvailableSelected(target)) return IsBestAvailableSelected(selected);
+  return IsLocationSelected(selected, *target);
 }
 
 }  // namespace urnw

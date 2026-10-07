@@ -2233,6 +2233,8 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // The press goes where the provider row says: the selected location, or the
   // best available with none. Out of balance, nothing starts
   // (ConnectBlockedByBalance) and this press opens the upgrade path instead.
+  // It is immediate, and supersedes a location row click still settling.
+  host_.CancelRowConnect("connect press");
   StartTunnelUi();
   // the connect-reading feed reflects the real state as it changes
 }

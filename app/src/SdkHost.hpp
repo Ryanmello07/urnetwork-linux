@@ -35,6 +35,7 @@
 #include "LogUpload.hpp"
 #include "Health.hpp"
 #include "ProvideLifecycle.hpp"
+#include "RowConnectCoalescer.hpp"
 #include "RpcSession.hpp"
 #include "SignOut.hpp"
 #include "VerifySendNotice.hpp"
@@ -703,7 +704,15 @@ class SdkHost {
   // (SetRowConnect), which starts a tunnel when there is none, as the Connect
   // button does: Connect alone drives only a session that is already up, so
   // after a Disconnect, or a stop by the daemon, a row click started nothing.
+  //
+  // Coalesced, as on Windows (RowConnectCoalescer.hpp): the click runs once it
+  // has been the last one for 1.2 s, and a click on the location the session
+  // is already driving is no connect and drops a newer click still settling.
+  // Main loop only.
   void ConnectFromRow(const std::optional<urnet::ConnectLocation>& location);
+  // Drops a row click still settling. The immediate gestures supersede it: the
+  // Connect button and the tray (MainWindow), Disconnect and Logout.
+  void CancelRowConnect(const char* why);
   // The start path a row click runs: MainWindow::StartTunnelUi with the row's
   // location. Without one a row click only connects.
   using RowConnect = std::function<void(const std::optional<urnet::ConnectLocation>& location)>;
@@ -1645,6 +1654,12 @@ class SdkHost {
   AuthStateHandler onAuth_;
   ConnectGate connectGate_;
   RowConnect rowConnect_;
+  // The settling row click and its timer (ConnectFromRow); main loop only.
+  RowConnectCoalescer<std::optional<urnet::ConnectLocation>> rowConnects_;
+  unsigned int rowConnectTimerId_ = 0;  // g_timeout source id; 0 = unarmed
+  void ArmRowConnectTimer(int64_t delayMillis);
+  void OnRowConnectDue();
+  void RunRowConnect(const std::optional<urnet::ConnectLocation>& location);
   AuthInvalidHandler onAuthInvalid_;
   JwtRefreshedHandler onJwtRefreshed_;
   ConnectReadingHandler onReading_;
