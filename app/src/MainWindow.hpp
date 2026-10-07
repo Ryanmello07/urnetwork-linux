@@ -15,6 +15,7 @@
 
 #include "AuthViews.hpp"
 #include "BittensorManualSheet.hpp"
+#include "BrowserSignInGate.hpp"
 #include "ConnectPage.hpp"
 #include "DataInfoSheet.hpp"
 #include "FailsafeNotice.hpp"
@@ -155,6 +156,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   void TrackAppFocus();
   void ScheduleAppFocusSync();
   void UntrackAppFocus();
+  // The app came back to the user after `awayMillis`: a browser sign-in they
+  // abandoned gets its affordances back (BrowserSignInGate.hpp).
+  void OnAppReturned(int64_t awayMillis);
   static void OnToplevelActiveChanged(GObject* window, GParamSpec* pspec, gpointer self);
   // one label, two voices: a coral inline error vs a muted progress notice
   void SetLoginError(const Glib::ustring& text);
@@ -243,6 +247,8 @@ class MainWindow : public Gtk::ApplicationWindow {
   motion::MotionBin* walletBin_ = nullptr;     // the three full-width pills
   motion::MotionBin* secondaryBin_ = nullptr;  // the icon tiles (four per row)
   std::vector<Gtk::Widget*> loginAffordances_;  // everything SetLoginBusy toggles
+  // armed while a browser sign-in waits on its deep link
+  signin::BrowserFlowGate browserSignIn_;
 
   // ---- seedphrase + instant steps (windows parity) -------------------------
   Gtk::TextView* seedphraseView_ = nullptr;
@@ -388,6 +394,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;
   sigc::connection appFocusSync_;      // the pending coalesced focus reading
+  signin::AppFocusAway appFocusAway_;  // how long the coalesced reading was away
   sigc::connection toplevelsChanged_;  // the toplevel list's items-changed hook
   LiveStats lastStats_;  // resynced into the widgets when the window is shown
 

@@ -695,6 +695,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/StatusStripPresentationTest.cpp',
     'tests/ConnectionHealthWiringTest.cpp',
     'tests/DaemonStatusPollWiringTest.cpp',
+    'tests/BrowserSignInGateTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -772,6 +773,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # sites the same way.
               # DaemonStatusPollWiringTest reads the health poll's window and host halves
               # the same way.
+              # BrowserSignInGateTest reads the browser sign-ins' window call sites the
+              # same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

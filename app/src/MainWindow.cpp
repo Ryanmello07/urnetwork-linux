@@ -1194,8 +1194,23 @@ void MainWindow::ScheduleAppFocusSync() {
       g_object_unref(window);
     }
     balance_.SetAppFocused(focused);
+    if (const auto away = appFocusAway_.Read(focused, g_get_monotonic_time() / 1000)) {
+      OnAppReturned(*away);
+    }
     return false;
   });
+}
+
+// The browser sign-ins answer only through their deep link, and a browser the
+// user closed sends nothing: coming back enables the affordances again. The
+// attempt stays armed, so a late return still lands in OnWalletAuth and a new
+// click supersedes it (BrowserSignInGate.hpp).
+void MainWindow::OnAppReturned(int64_t awayMillis) {
+  const bool manualSheetOpen = bittensorManualSheet_ && bittensorManualSheet_->get_visible();
+  if (!browserSignIn_.TakeOnReturn(awayMillis, manualSheetOpen)) return;
+  SetLoginBusy(false);
+  // the "Opening your wallet" progress notice is stale now; an error stays
+  if (loginError_.has_css_class("dim-label")) loginError_.set_text("");
 }
 
 void MainWindow::UpdateCarouselRunning() {
@@ -2049,6 +2064,7 @@ void MainWindow::OnSolanaChooser() {
 void MainWindow::OnSolana(WalletConnect::Provider provider) {
   SetLoginNotice(T_("opening_wallet_in_browser", "Opening your wallet in the browser…"));
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithSolana(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -2062,6 +2078,7 @@ void MainWindow::OnApple() { OnSso(sso::kProviderApple); }
 void MainWindow::OnSso(const std::string& provider) {
   loginError_.set_text("");
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithSso(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -2097,6 +2114,7 @@ void MainWindow::OnBittensorWallet(const std::string& walletId) {
                        : std::string(localized));
   }
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithBittensor(walletId, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -2112,6 +2130,7 @@ void MainWindow::ShowBittensorManualSheet(const SdkHost::BittensorManualRequest&
 // Shared tail of both wallet sign-ins (the SDK callback thread lands here).
 void MainWindow::OnWalletAuth(const AuthResult& result) {
   PostToMain([this, result] {
+    browserSignIn_.Settle();
     SetLoginBusy(false);
     if (!result.ok && bittensor::IsCancelled(result.error)) {
       // the user closed the Bittensor manual sheet: nothing failed
