@@ -1155,7 +1155,10 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // error/error_code published above survive it.
       const std::string keptError = Status().error;
       const std::string keptCode = Status().error_code;
-      StopInternalLocked(std::string());
+      // The machine now, the device after the landing below, as
+      // StopUnsafeSessionLocked orders them: a device that stopped answering
+      // must not hold the landing up.
+      RevertSessionMachineLocked();
 
       // AND THE FIREWALL, which this path used to walk straight past.
       // StopInternalLocked(<empty reason>) deliberately does not touch the
@@ -1194,6 +1197,7 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
                        filterError.c_str());
         }
       }
+      StopInternalLocked(std::string());
       {
         std::scoped_lock lock(statusMutex_);
         status_.tunnel_state = ctl::TunnelState::Error;
@@ -1248,20 +1252,8 @@ void TunnelHost::ReapRetiredLoopsLocked() {
   }
 }
 
-void TunnelHost::StopInternalLocked(const std::string& reason) {
-  // Before anything is torn down: the sampler is cancelled while the device it
-  // reads is still whole, and no verdict outlives its session.
-  StopDeadTunnelWatchLocked();
-  // First, and in every teardown: the provider-only device never shares a
-  // moment with a tunnel session's device. RunStart opens with this function,
-  // so a Connect retires the provider before the egress marker, the capture
-  // routes or the session's own DeviceLocal (the same identity) exist. A
-  // no-op when there is none, which is every teardown of a tunnel session.
-  RetireProviderDeviceLocked();
-  // The standalone device a log upload ran on, for the same reason. Its upload
-  // goes on: the POST runs on the network space's API, not on the device.
-  RetireUploadDeviceLocked();
-
+void TunnelHost::RevertSessionMachineLocked() {
+  // From here on a poll reads the session as going, never as up.
   const bool hadSession = device_.has_value() || tunnel_ || ioLoop_.has_value();
   if (hadSession) {
     std::scoped_lock lock(statusMutex_);
@@ -1270,8 +1262,11 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
       status_.tunnel_state = ctl::TunnelState::Stopping;
     }
   }
+  // The verdict goes with its session.
+  StopDeadTunnelWatchLocked();
   // The generation bump makes any IoLoop done callback still in flight a
-  // no-op, so our own teardown can never be mistaken for a dead tunnel.
+  // no-op, so our own teardown can never be mistaken for a dead tunnel. Ahead
+  // of the IoLoop's close, which is what makes that callback fire.
   sessionGeneration_.fetch_add(1);
   ioLoopDied_.store(false);
 
@@ -1295,9 +1290,8 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
   // exactly as it was for the paths that never reach this function.
   if (tunnel_) tunnel_->RevertDns();
 
-  // Reverse dependency order. close() actually stops the SDK goroutines and
-  // the IoLoop; releasing the handle alone would leak them.
-  if (device_) device_->setTunnelStarted(false);
+  // Reverse dependency order. The IoLoop's close only cancels it (the SDK's
+  // IoLoop.Close), so it cannot wait on the device either.
   if (ioLoop_) {
     ioLoop_->close();  // ASYNCHRONOUS: asks the Go loop to stop, returns now
     // RETIRE, do not destroy. Destroying here frees the done callback that Go
@@ -1308,7 +1302,41 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
   ioLoopFinished_.reset();
   ReapRetiredLoopsLocked();
   tunnel_.reset();  // closes the fd: the tun, its routes and the policy rules go
+}
+
+void TunnelHost::StopInternalLocked(const std::string& reason) {
+  // First, and in every teardown: the provider-only device never shares a
+  // moment with a tunnel session's device. RunStart opens with this function,
+  // so a Connect retires the provider before the egress marker, the capture
+  // routes or the session's own DeviceLocal (the same identity) exist. A
+  // no-op when there is none, which is every teardown of a tunnel session.
+  RetireProviderDeviceLocked();
+  // The standalone device a log upload ran on, for the same reason. Its upload
+  // goes on: the POST runs on the network space's API, not on the device.
+  RetireUploadDeviceLocked();
+
+  // The machine first: its DNS, routes and policy rules (a no-op when the
+  // caller has already reverted it to land the floor itself)...
+  RevertSessionMachineLocked();
+  if (!reason.empty()) {
+    // An explicit stop ALWAYS lifts the policy (windows semantics: only an
+    // unexpected drop keeps or installs Armed) — FloorForTransition answers
+    // `false` for every transition into Off, so this needs no argument and
+    // cannot be given the wrong one. A failure here is remembered in
+    // filterRemovalPending_ and retried by the reaper.
+    //
+    // Before the device's calls below, which take its state lock: a device
+    // that never answers again must not keep this machine filtered.
+    std::string ignored;
+    ApplyFilterLocked(FilterState::Off, &ignored);
+  }
+
+  // ...and the SDK last. Every call on the device takes its state lock, and a
+  // wedged one (the dead-tunnel failsafe's SdkUnresponsive) stops the teardown
+  // here, with the machine already given back. close() itself only cancels:
+  // the SDK hands its joins to its own lifecycle workers.
   if (device_) {
+    device_->setTunnelStarted(false);
     device_->close();
     ReleaseDeviceLocked(device_);
   }
@@ -1321,15 +1349,6 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
   socketMarkerProven_ = false;
   egressWitnessTicks_ = 0;
   egressWitnessFailures_ = 0;
-  if (!reason.empty()) {
-    // An explicit stop ALWAYS lifts the policy (windows semantics: only an
-    // unexpected drop keeps or installs Armed) — FloorForTransition answers
-    // `false` for every transition into Off, so this needs no argument and
-    // cannot be given the wrong one. A failure here is remembered in
-    // filterRemovalPending_ and retried by the reaper.
-    std::string ignored;
-    ApplyFilterLocked(FilterState::Off, &ignored);
-  }
   // spaceManager_/networkSpace_ persist across sessions (Windows parity).
   {
     std::scoped_lock lock(statusMutex_);
@@ -1401,11 +1420,10 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
 void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
                                          const std::string& message,
                                          const std::string& code, const char* why) {
-  // 1) TEAR DOWN, firewall untouched. The empty reason is load-bearing twice
-  //    over: it keeps ApplyFilterLocked(Off) — the floor lift — out of this
-  //    path, and it keeps the tail of StopInternalLocked from clearing the
-  //    error we are about to publish.
-  StopInternalLocked(std::string());
+  // 1) The machine, firewall untouched: DNS, routes and policy rules, and no
+  //    call that waits on the device, so the landing below cannot be held up
+  //    by an SDK that stopped answering.
+  RevertSessionMachineLocked();
 
   // 2) LAND THE FLOOR DELIBERATELY, before anything is published, so what we
   //    publish describes the machine as it actually is now.
@@ -1470,7 +1488,13 @@ void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
     }
   }
 
-  // 3) PUBLISH LAST, AND ON PURPOSE.
+  // 3) The device, last of the teardown. The empty reason is load-bearing
+  //    twice over: it keeps ApplyFilterLocked(Off) — the floor lift — out of
+  //    this path, and it keeps the tail of StopInternalLocked from clearing the
+  //    error we are about to publish.
+  StopInternalLocked(std::string());
+
+  // 4) PUBLISH LAST, AND ON PURPOSE.
   //
   //    B2. This is the SECOND time in this project that a published error has
   //    been erased by the very next line: PublishError(...) followed by
@@ -2738,7 +2762,9 @@ void TunnelHost::Reap() {
     // The tunnel went away under us. Before this, the done callback only
     // fprintf'd and the published state stayed Up forever.
     std::fprintf(stderr, "[tunnel] the io loop ended unexpectedly; tearing the session down\n");
-    StopInternalLocked(std::string());
+    // The machine, its landing, then the device, as StopUnsafeSessionLocked
+    // orders them.
+    RevertSessionMachineLocked();
     // An UNEXPECTED drop is the one case that arms the kill switch.
     if (killSwitchRequested_.load()) {
       std::string error;
@@ -2751,6 +2777,7 @@ void TunnelHost::Reap() {
       std::string ignored;
       ApplyFilterLocked(FilterState::Off, &ignored);
     }
+    StopInternalLocked(std::string());
     // PUBLISH LAST, by the same rule StopUnsafeSessionLocked spells out: the
     // teardown and the filter apply both mutate status_, so the reason goes
     // after them, never before. It used to sit above the apply and survive only

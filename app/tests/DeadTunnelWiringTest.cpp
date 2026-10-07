@@ -78,8 +78,10 @@ UR_TEST(DeadTunnelWiring_WatchedFromTheUpEdgeToTheTeardown) {
   UR_EXPECT_TRUE(InOrder(start, {"status_.tunnel_state = ctl::TunnelState::Up;",
                                  "StartDeadTunnelWatchLocked();", "} catch ("}));
   const std::string stop = DeadTunnelBody(host, "void TunnelHost::StopInternalLocked(");
-  UR_EXPECT_TRUE(InOrder(stop, {"StopDeadTunnelWatchLocked();", "RetireProviderDeviceLocked();",
-                                "device_->close();", "status_.failsafe_armed = false;"}));
+  UR_EXPECT_TRUE(InOrder(stop, {"RevertSessionMachineLocked();", "device_->close();",
+                                "status_.failsafe_armed = false;"}));
+  const std::string revert = DeadTunnelBody(host, "void TunnelHost::RevertSessionMachineLocked(");
+  UR_EXPECT_TRUE(InOrder(revert, {"StopDeadTunnelWatchLocked();", "tunnel_.reset();"}));
   const std::string unwatch = DeadTunnelBody(host, "void TunnelHost::StopDeadTunnelWatchLocked(");
   UR_EXPECT_TRUE(DeadTunnelHas(unwatch, "exitSampler_.Stop();"));
   // A new bring-up starts with no countdown.

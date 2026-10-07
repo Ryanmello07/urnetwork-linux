@@ -339,6 +339,17 @@ class TunnelHost {
   // owns what happens next": the firewall is left exactly as it is and the
   // published error is left exactly as it is, for the caller to set.
   void StopInternalLocked(const std::string& reason);
+  // The machine half of every teardown, and its first half: the session
+  // published as stopping, the failsafe's watch ended, the DNS undo while the
+  // tun still exists, the IoLoop cancelled and retired, and the tun closed with
+  // its policy rules and capture routes.
+  // No call here waits on the device (each one that does takes its state
+  // lock), so an SDK that stopped answering cannot keep the machine pointed at
+  // its tunnel. StopInternalLocked starts with it and goes on to the device; a
+  // caller that lands the floor itself calls it first, lands, and then calls
+  // StopInternalLocked(""), so the landing does not wait on the device either.
+  // Idempotent. Requires opMutex_.
+  void RevertSessionMachineLocked();
 
   // THE PROTECTIVE TEARDOWN. The session is being destroyed because it has been
   // PROVEN unsafe — the daemon's own traffic is no longer outside its own
