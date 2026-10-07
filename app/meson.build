@@ -532,10 +532,10 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # official repo, the tag grammar, the own-arch asset and its digest, the
 # install-kind probe, the launch throttle) and its wiring, the split-rules
 # activity row's reading of the block action reason (the safety-rule chip and
-# the route-locally offer), the VLESS editor's form, visibility rules,
-# settings mapping and messages and the stored network space values every
-# space write starts from, the per-app exclusion's slice, rules and call
-# sites, what a network peer row connects to, the provider card's idle
+# the route-locally offer) and its search and chips, the VLESS editor's form,
+# visibility rules, settings mapping and messages and the stored network space
+# values every space write starts from, the per-app exclusion's slice, rules
+# and call sites, what a network peer row connects to, the provider card's idle
 # reason, status line, demand histogram and ranking rows, the connect page's
 # provide line, fold table and activity rows' keyed reconcile and filter, the
 # connect inspector's quick actions, the exclusion
@@ -647,6 +647,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ConnectionFilterTest.cpp',
     'tests/QuickActionTest.cpp',
     'tests/QuickActionWiringTest.cpp',
+    'tests/SplitRulesSheetWiringTest.cpp',
     'tests/SignOutTest.cpp',
     'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
@@ -703,6 +704,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # and extender panel, and their host feed, the same way.
               # QuickActionWiringTest reads the quick actions' host writers, press,
               # row menu and toast the same way.
+              # SplitRulesSheetWiringTest reads the split rules sheet's search and chips
+              # the same way.
               # SignOutWiringTest reads SdkHost and the health poll the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and

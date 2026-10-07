@@ -6,8 +6,10 @@
 
 #include <glib.h>
 
+#include "ConnectionFilter.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "PaneKit.hpp"
 #include "SafetyRulePresentation.hpp"
 #include "Ui.hpp"
 
@@ -60,6 +62,16 @@ SplitRulesSheet::SplitRulesSheet(Gtk::Window& parent, SdkHost& host) : host_(hos
   content->set_margin(16);
   scroller->set_child(*content);
 
+  // what a split rule does, in one sentence, before how it works
+  auto* note = Gtk::make_managed<Gtk::Label>(
+      T_("adv_split_rules_note",
+         "Split rules let the sites you choose connect directly, outside the VPN, and the "
+         "activity below shows how each connection was routed."));
+  note->add_css_class("dim-label");
+  note->set_wrap(true);
+  note->set_xalign(0);
+  content->append(*note);
+
   // info banner: how exclusions work
   auto* banner = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
   banner->add_css_class("ur-banner");
@@ -85,11 +97,20 @@ SplitRulesSheet::SplitRulesSheet(Gtk::Window& parent, SdkHost& host) : host_(hos
   activityHeader->append(countsLabel_);
   activityHeader->set_margin_top(8);
   content->append(*activityHeader);
+  // search-as-you-type over the activity (the window of routing decisions
+  // runs long); the rules above stay unfiltered, and a push keeps the filter
+  activitySearch_.set_placeholder_text(T_("adv_search_activity_placeholder", "Search activity"));
+  // a placeholder is not an accessible name
+  kit::SetAccessibleLabel(activitySearch_,
+                          T_("adv_search_activity_placeholder", "Search activity"));
+  activitySearch_.signal_search_changed().connect([this] { RebuildActivity(); });
+  content->append(activitySearch_);
   content->append(activityBox_);
 }
 
 void SplitRulesSheet::Open() {
   built_ = false;  // relative times go stale while hidden; always rebuild
+  activitySearch_.set_text("");  // a new visit reads the whole feed
   Refresh();
   present();
 }
@@ -190,7 +211,9 @@ void SplitRulesSheet::RebuildRules() {
     }
     row->append(*flow);
 
-    row->append(*MakeChip(T_("local", "Local"), "green", true));
+    // Local = bypassed the tunnel: amber, as the Activity feed's verdict dots
+    // paint it (green there means tunnelled and protected)
+    row->append(*MakeChip(T_("local", "Local"), "amber", true));
 
     auto* remove = Gtk::make_managed<Gtk::Button>();
     remove->set_icon_name("user-trash-symbolic");
@@ -224,8 +247,18 @@ void SplitRulesSheet::RebuildActivity() {
     activityBox_.append(*empty);
     return;
   }
+  // the search's substring, over every host and address the row can show
+  const std::string query = connection_filter::NormalizeQuery(activitySearch_.get_text());
   const int64_t nowMs = NowMs();
+  int shown = 0;
   for (const auto& action : actions_) {
+    connection_filter::Decision decision;
+    decision.hosts = &action.hosts;
+    decision.ips = &action.ips;
+    decision.matchedHosts = &action.matchedHosts;
+    decision.matchedIps = &action.matchedIps;
+    if (!connection_filter::QueryPasses(query, decision)) continue;
+    ++shown;
     auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
     row->set_margin_top(2);
     row->set_margin_bottom(2);
@@ -291,8 +324,9 @@ void SplitRulesSheet::RebuildActivity() {
     // the decision chips light solid when an override decided this action
     row->append(*MakeChip(action.block ? T_("blocked", "Blocked") : T_("allowed", "Allowed"),
                           action.block ? "coral" : "muted", action.hasBlockOverride));
+    // amber for the same reason as the rule rows' Local chip
     row->append(*MakeChip(action.local ? T_("local", "Local") : T_("remote", "Remote"),
-                          action.local ? "green" : "muted", action.hasRouteOverride));
+                          action.local ? "amber" : "muted", action.hasRouteOverride));
 
     auto gesture = Gtk::GestureClick::create();
     gesture->signal_released().connect(
@@ -300,6 +334,16 @@ void SplitRulesSheet::RebuildActivity() {
     row->add_controller(gesture);
 
     activityBox_.append(*row);
+  }
+  if (shown == 0) {
+    // a search that matches nothing says so, in the hint's voice, rather than
+    // leaving the list blank
+    auto* none = Gtk::make_managed<Gtk::Label>(
+        T_("adv_no_activity_matches", "No activity matches this search."));
+    none->add_css_class("dim-label");
+    none->set_wrap(true);
+    none->set_xalign(0);
+    activityBox_.append(*none);
   }
 }
 

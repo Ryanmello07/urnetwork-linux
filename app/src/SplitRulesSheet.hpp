@@ -1,7 +1,9 @@
 // "Split rules" sheet (port of the apple SplitRulesView): the pinned split
 // rules (block action overrides whose route override forces local) above the
 // live block-action activity feed, with an editor sheet to create/update a
-// rule from a host-value checklist. SPDX-License-Identifier: MPL-2.0
+// rule from a host-value checklist. The activity searches by host or address
+// (ConnectionFilter.hpp's match, as the connect page's list), and its Local
+// chips are amber like the connect page's bypass dots. SPDX-License-Identifier: MPL-2.0
 #pragma once
 
 #include <cstdint>
@@ -69,6 +71,7 @@ class SplitRulesSheet : public Gtk::Window {
   SdkHost& host_;
   Gtk::Label countsLabel_;      // "A allowed · B blocked"
   Gtk::Box rulesBox_{Gtk::Orientation::VERTICAL, 4};
+  Gtk::SearchEntry activitySearch_;  // filters the activity, never the rules
   Gtk::Box activityBox_{Gtk::Orientation::VERTICAL, 4};
 
   bool built_ = false;

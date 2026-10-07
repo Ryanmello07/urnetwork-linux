@@ -72,7 +72,7 @@ void EnsureDrawerCss();
 
 // A rounded-12 tinted card (vertical box, .ur-card padding).
 Gtk::Box* MakeCard(int spacing = 0);
-// A capsule state chip. colorClass: "green" | "coral" | "muted".
+// A capsule state chip. colorClass: "green" | "gold" | "coral" | "amber" | "muted".
 // Highlighted renders solid (inverse text), idle renders tinted.
 Gtk::Label* MakeChip(const std::string& text, const std::string& colorClass, bool highlighted);
 // Muted caption label, left aligned.
