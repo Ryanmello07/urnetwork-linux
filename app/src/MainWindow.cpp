@@ -176,6 +176,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // overlays; see Ui.hpp ShowToast).
   GtkWidget* toastOverlay = adw_toast_overlay_new();
   adw_toast_overlay_set_child(ADW_TOAST_OVERLAY(toastOverlay), GTK_WIDGET(stack_.gobj()));
+  // Home's first entrance runs on the page crossfade's duration (ApplyAuthState);
+  // every other swap of this stack passes no transition.
+  stack_.set_transition_duration(motion::kBaseMs);
   // The Pro celebration wraps everything: the page stack (with its toasts)
   // sits in the mosaic container, and the confetti overlay floats above it.
   // Both are inert until a flight starts (ProCelebration.hpp).
@@ -2252,7 +2255,18 @@ void MainWindow::OpenOnboardingIfPending() {
 }
 
 void MainWindow::ApplyAuthState(bool loggedIn) {
-  stack_.set_visible_child(loggedIn ? "home" : "login");
+  // Home's first entrance (windows homeRevealed_): the first time Home shows
+  // in this window, a sign-in made in it crossfades the login flow into Home,
+  // as the shell crossfades its destinations. Every other swap is instant: a
+  // launch already signed in, a hidden window, animations off, a later
+  // sign-in, and a sign-out (exits stay quiet).
+  const bool firstEntrance = loggedIn && !homeRevealed_ && windowVisible_ &&
+                             motion::ShouldAnimate() &&
+                             stack_.get_visible_child_name() != "home";
+  if (loggedIn) homeRevealed_ = true;
+  stack_.set_visible_child(loggedIn ? "home" : "login",
+                           firstEntrance ? Gtk::StackTransitionType::CROSSFADE
+                                         : Gtk::StackTransitionType::NONE);
   // a known out-of-balance state belongs to the session that observed it
   outOfBalance_.Reset();
   ForgetDaemonStatus();

@@ -388,6 +388,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // tray app: skip window-widget updates while hidden (resynced on show) so a
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;
+  bool homeRevealed_ = false;  // Home has shown once in this window (its entrance)
   sigc::connection appFocusSync_;      // the pending coalesced focus reading
   sigc::connection toplevelsChanged_;  // the toplevel list's items-changed hook
   LiveStats lastStats_;  // resynced into the widgets when the window is shown

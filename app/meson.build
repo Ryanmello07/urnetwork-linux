@@ -704,6 +704,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/EarningsRankingWiringTest.cpp',
     'tests/DeveloperActionsWiringTest.cpp',
     'tests/RevealBreadcrumbsWiringTest.cpp',
+    'tests/HomeEntranceWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -793,6 +794,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # DeveloperActionsWiringTest reads the Developer page's action buttons the
               # same way.
               # RevealBreadcrumbsWiringTest reads the window reveal's log lines the same way.
+              # HomeEntranceWiringTest reads the root stack's sign-in swap the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
