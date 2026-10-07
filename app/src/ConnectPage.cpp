@@ -39,6 +39,12 @@ constexpr int kListRowHeight = 36;       // connections / contracts / split rule
 constexpr int kKeyValueRowHeight = 34;   // session figures, inspector, dns
 constexpr int kPeerRowHeight = 34;       // the peers list (§1: peers rows are 34)
 constexpr size_t kMaxConnectionRows = 200;  // a cap, not a scroll budget
+// The least height the activity list keeps: three rows. Pane B's fixed blocks
+// above it (the chart, the transport bar, the two status rows, the header and
+// the filter rows) fill a short window by themselves, and the list, the
+// pane's reason to exist, was squeezed to nothing at the 480dip minimum
+// height. With this floor the pane's own scroller takes over instead.
+constexpr int kConnectionsListFloor = 3 * kListRowHeight;
 // The shell chrome between the toplevel and this page: HomeShell's nav rail is
 // pinned at 220dip (HomeShell.cpp kNavExpandedWidth). Only used before the
 // page has an allocation of its own — the fold table is defined on the width
@@ -1193,7 +1199,9 @@ void ConnectPage::BuildPaneB() {
   // live chart and the host count off the top the moment the feed is long
   // enough to need scrolling. A ScrolledWindow does not propagate its child's
   // natural height, so nesting it inside the pane scroller is stable: the
-  // outer never scrolls, the inner takes the leftover height.
+  // outer never scrolls while the window is tall enough, the inner takes the
+  // leftover height. Below that the list keeps kConnectionsListFloor and the
+  // outer scroller engages, so the list is never squeezed out of sight.
   connectionsArea_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   connectionsArea_->set_vexpand(true);
   connectionsHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
@@ -1212,6 +1220,7 @@ void ConnectPage::BuildPaneB() {
   connectionsScroll_->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
   connectionsScroll_->set_child(*connectionsArea_);
   connectionsScroll_->set_vexpand(true);
+  connectionsScroll_->set_min_content_height(kConnectionsListFloor);
   paneB_.content->append(*connectionsScroll_);
 
   append(*paneB_.root);

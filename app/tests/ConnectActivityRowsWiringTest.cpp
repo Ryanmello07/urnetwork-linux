@@ -279,3 +279,14 @@ UR_TEST(ConnectActivity_TheRatioBarRidesTheFeedPushes) {
                             {"case DrawerEvent::BlockStats:", "ApplyVerdictRatioBar();", "break;"}));
   UR_EXPECT_TRUE(!Mentions(ActivityBody(page, "void ConnectPage::Tick()"), "ApplyVerdictRatioBar"));
 }
+
+// The list keeps three rows at the minimum window height: below that the
+// pane's own scroller takes over rather than squeezing the list out.
+UR_TEST(ConnectActivity_TheListKeepsAFloor) {
+  const std::string page = ReadActivitySource("ConnectPage.cpp");
+  UR_EXPECT_TRUE(Mentions(page, "constexpr int kConnectionsListFloor = 3 * kListRowHeight;"));
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::BuildPaneB()"),
+                            {"connectionsScroll_->set_vexpand(true);",
+                             "connectionsScroll_->set_min_content_height(kConnectionsListFloor);",
+                             "paneB_.content->append(*connectionsScroll_);"}));
+}
