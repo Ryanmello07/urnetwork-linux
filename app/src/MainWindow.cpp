@@ -1135,6 +1135,9 @@ void MainWindow::ForceTunnelOff() {
   if (!host_.Control().StopTunnel(&error)) {
     g_warning("tray: stop_tunnel failed: %s", error.empty() ? "no detail" : error.c_str());
   }
+  // A status read that started before the stop describes the tunnel it
+  // stopped, and would offer this item again for a tick: drop its reply.
+  ++daemonStatusEpoch_;
   PollDaemonHealth();
 }
 

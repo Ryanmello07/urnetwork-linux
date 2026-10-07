@@ -146,7 +146,8 @@ UR_TEST(FailsafeNoticeWiring_TheTrayOffersWhatThePollDecides) {
                                 "*status)"}));
   const std::string force = NoticeBody(window, "void MainWindow::ForceTunnelOff() {");
   UR_EXPECT_TRUE(InOrder(force, {"if (connected_ || !trayRecovery_.forceTunnelOff) return;",
-                                 "host_.Control().StopTunnel(&error)", "PollDaemonHealth();"}));
+                                 "host_.Control().StopTunnel(&error)", "++daemonStatusEpoch_;",
+                                 "PollDaemonHealth();"}));
   const std::string lift = NoticeBody(window, "void MainWindow::LiftKillSwitch() {");
   UR_EXPECT_TRUE(InOrder(lift, {"if (connected_ || !trayRecovery_.liftKillSwitch) return;",
                                 "host_.SetKillSwitch(false);"}));
