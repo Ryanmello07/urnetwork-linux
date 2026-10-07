@@ -565,6 +565,13 @@ sudo nft delete table inet urnetwork
 ```
 
 Stop the service **first** — while it runs, the reaper re-installs the ruleset within
-~5 s of anything deleting it. With the daemon alive, disconnecting in the app always
-works: the control channel is AF_UNIX, which no rule this daemon can emit is able to
-block.
+~5 s of anything deleting it, and `--revert` refuses: the sweep cannot tell a live tunnel
+from a dead one's, so under a running daemon it would delete the live session's routes,
+firewall and DNS while the app still says Connected. `--revert --force` sweeps anyway. A
+second `urnetworkd` refuses to start beside a running one for the same reason, and the
+unit's `--revert-unless-armed` leaves another running daemon's state alone. A unit start
+refused that way is retried every 2 s (`Restart=on-failure`), one refusal in the journal
+per attempt, until the other daemon is gone, and then the unit serves again by itself;
+stop the unit before running a daemon by hand. With the daemon alive, disconnecting in
+the app always works: the control channel is AF_UNIX, which no rule this daemon can emit
+is able to block.

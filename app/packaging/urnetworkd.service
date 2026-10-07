@@ -166,6 +166,13 @@ ProtectHome=yes
 PrivateTmp=yes
 LimitNOFILE=65536
 
+# This also restarts a start that was refused because another urnetworkd is
+# running (one started by hand, which exits the refused one with 1): every 2 s
+# for as long as that daemon runs, one refusal in the journal and one
+# ExecStopPost probe per attempt. That is deliberate, the same "always come
+# back" as the missing start limit above: once the other daemon is gone, this
+# unit serves again without anyone starting it. Stop the unit before running a
+# daemon by hand.
 Restart=on-failure
 RestartSec=2
 # A wedged SIGTERM teardown must not hold the machine hostage for the 90s
@@ -197,6 +204,10 @@ TimeoutStopSec=45s
 # a window. A clean stop clears that marker before exiting, so a clean stop
 # always ends with the machine open. To lift an armed floor by hand, see the
 # recovery block at the top of this file.
+#
+# It leaves the machine alone while another urnetworkd runs (one started by
+# hand, say, which made this unit's daemon refuse to start): that daemon owns
+# the state, and the sweep cannot tell its live tunnel from a dead one's.
 ExecStopPost=-/usr/lib/urnetwork/urnetworkd --revert-unless-armed
 
 [Install]
