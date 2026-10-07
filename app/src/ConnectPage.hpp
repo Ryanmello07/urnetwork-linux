@@ -11,8 +11,9 @@
 //                       (and the connection inspector in Advanced Mode).
 //
 // Panes are floor-to-ceiling and separated by 1px rules, never gaps. The fold
-// table lives in ApplyBreakpoint: Advanced >=1000 three panes, >=640 two,
-// <640 one; Simple is ALWAYS one pane capped at 480dip and centred.
+// table is ConnectFold.hpp's, taken in ApplyFold on the panes' own width:
+// Advanced >=1042 three panes (activity keeps 330dip beside the rails), >=640
+// two, <640 one; Simple is always one pane capped at 480dip and centred.
 //
 // One writer per surface (windows discipline): ApplyConnectStatus renders the
 // aggregate health to the status row, the hero state, the button label AND

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ConnectPage.hpp"
+#include "ConnectFold.hpp"
 #include "DataInfo.hpp"
 
 #include <algorithm>
@@ -22,11 +23,9 @@
 namespace urnw {
 namespace {
 
-// the fold thresholds (docs/parity/connect-page.md §0)
-constexpr int kThreePaneDip = 1000;
-constexpr int kTwoPaneDip = 640;
-constexpr int kPaneAWidth = 330;
-constexpr int kPaneCWidth = 380;
+// the fold thresholds (docs/parity/connect-page.md §0) are ConnectFold.hpp's
+using connect_fold::kPaneAWidth;
+using connect_fold::kPaneCWidth;
 constexpr int kSimpleCap = 480;
 constexpr int kHeroAdvanced = 190;
 constexpr int kHeroSimple = 320;
@@ -2855,9 +2854,11 @@ void ConnectPage::ApplyFold(bool force) {
   foldWidth_ = paneWidth;
   if (!changed && !force) return;
 
-  // Simple is ALWAYS one pane, capped and centred; Advanced folds on width.
-  const bool three = advanced_ && paneWidth >= kThreePaneDip;
-  const bool two = advanced_ && paneWidth >= kTwoPaneDip;
+  // Simple is always one pane, capped and centred; Advanced folds on width,
+  // and the third pane waits until activity keeps 330dip beside the rails.
+  const int panes = connect_fold::PaneCount(advanced_, paneWidth);
+  const bool three = panes == 3;
+  const bool two = panes >= 2;
   paneB_.root->set_visible(two);
   paneBRule_->set_visible(two);
   paneC_.root->set_visible(three);
