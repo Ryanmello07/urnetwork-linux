@@ -4426,6 +4426,18 @@ void SdkHost::ConnectFromRow(const std::optional<urnet::ConnectLocation>& locati
 
 void SdkHost::Disconnect() {
   std::scoped_lock lock(mutex_);
+  // Bring the daemon's tunnel down. Ending the provider session does not
+  // touch the tun device or the 31 capture routes — those are the daemon's,
+  // and they are removed only by an explicit stop_tunnel. Without this the
+  // user presses Disconnect and every packet keeps being routed into a tunnel
+  // with nothing on the other end: the machine loses its internet and the UI
+  // says "Disconnected". Best effort, exactly as Logout/Shutdown do it.
+  //
+  // First, as Windows does it: the routes, DNS and the filter come back before
+  // the SDK is asked anything, so a slow device rpc cannot hold the machine's
+  // network. The disconnect below then finds the daemon's device gone, and the
+  // DeviceRemote applies it locally (selection and connect state).
+  control_.StopTunnel();
   if (connectVc_) {
     connectVc_->disconnect();
   } else if (device_) {
@@ -4433,13 +4445,6 @@ void SdkHost::Disconnect() {
     controller.disconnect();
     device_->closeConnectViewController(controller);
   }
-  // AND BRING THE DAEMON'S TUNNEL DOWN. Ending the provider session does not
-  // touch the tun device or the 31 capture routes — those are the daemon's,
-  // and they are removed only by an explicit stop_tunnel. Without this the
-  // user presses Disconnect and every packet keeps being routed into a tunnel
-  // with nothing on the other end: the machine loses its internet and the UI
-  // says "Disconnected". Best effort, exactly as Logout/Shutdown do it.
-  control_.StopTunnel();
   // Say so NOW rather than waiting for the connect-location listener: on a
   // teardown the SDK can simply stop publishing, and a reading nobody
   // refreshes is exactly how the row used to latch on its last word.
@@ -4874,11 +4879,13 @@ void SdkHost::TeardownDeviceLocked() {
 
 void SdkHost::Shutdown() {
   std::scoped_lock lock(mutex_);
-  TeardownDeviceLocked();
   // quit brings the daemon's tunnel down like Logout does, but leaves the
   // stored auth untouched: next launch signs straight back in. see the
-  // header comment — quit-as-logout destroyed guest accounts.
+  // header comment — quit-as-logout destroyed guest accounts. Before the
+  // device's teardown, as Disconnect does: its view controller closes are rpcs
+  // to the daemon's device, and the machine's network does not wait on them.
   control_.StopTunnel();
+  TeardownDeviceLocked();
   // The daemon's DeviceLocal (and its pinned listener with it) is gone, so the
   // remembered session can no longer be attached to by anything.
   ForgetRpcSession();

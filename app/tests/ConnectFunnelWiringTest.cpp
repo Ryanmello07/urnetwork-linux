@@ -5,8 +5,10 @@
 // Before, the press ran ConnectBestAvailable whatever was selected. A location
 // row's click takes the same start path to its own location, so it starts a
 // tunnel when there is none; before, it only drove a session that was already
-// up. MainWindow, SdkHost and the rows need gtkmm and the SDK, so this reads
-// their sources with the comments blanked.
+// up. Disconnect, and quit, stop the daemon's tunnel before they unwind the
+// SDK, so the machine's network comes back without waiting on a device rpc.
+// MainWindow, SdkHost and the rows need gtkmm and the SDK, so this reads their
+// sources with the comments blanked.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -140,4 +142,16 @@ UR_TEST(ConnectFunnelWiring_ARowClickStartsThroughTheWindow) {
   // the hook reads the window, so it goes with it
   const std::string destructor = FunnelBody(window, "MainWindow::~MainWindow() {");
   UR_EXPECT_TRUE(FunnelHas(destructor, "host_.SetRowConnect(nullptr);"));
+}
+
+// The machine back first: stop_tunnel before the connect controller's
+// disconnect, and on quit before the device's view controllers close.
+UR_TEST(ConnectFunnelWiring_DisconnectStopsTheTunnelFirst) {
+  const std::string host = ReadFunnelSource("SdkHost.cpp");
+  const std::string disconnect = FunnelBody(host, "void SdkHost::Disconnect() {");
+  UR_EXPECT_TRUE(FunnelInOrder(disconnect, {"control_.StopTunnel();", "connectVc_->disconnect();",
+                                            "controller.disconnect();",
+                                            "PublishConnectReading();"}));
+  const std::string shutdown = FunnelBody(host, "void SdkHost::Shutdown() {");
+  UR_EXPECT_TRUE(FunnelInOrder(shutdown, {"control_.StopTunnel();", "TeardownDeviceLocked();"}));
 }
