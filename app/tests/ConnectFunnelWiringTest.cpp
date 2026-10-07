@@ -7,6 +7,7 @@
 // tunnel when there is none; before, it only drove a session that was already
 // up. Disconnect, and quit, stop the daemon's tunnel before they unwind the
 // SDK, so the machine's network comes back without waiting on a device rpc.
+// Every start_tunnel names the gesture that asked for it in the journal.
 // MainWindow, SdkHost and the rows need gtkmm and the SDK, so this reads their
 // sources with the comments blanked.
 //
@@ -76,7 +77,8 @@ bool FunnelInOrder(const std::string& text, const std::vector<std::string>& need
 }
 
 const char* const kStartToTarget =
-    "TunnelStartResult MainWindow::StartTunnelUi(const std::optional<urnet::ConnectLocation>& "
+    "TunnelStartResult MainWindow::StartTunnelUi(const char* reason,\n"
+    "                                            const std::optional<urnet::ConnectLocation>& "
     "target) {";
 
 }  // namespace
@@ -85,15 +87,17 @@ const char* const kStartToTarget =
 // selection, and issue no connect of their own.
 UR_TEST(ConnectFunnelWiring_TheButtonConnectsToTheSelection) {
   const std::string window = ReadFunnelSource("MainWindow.cpp");
-  const std::string toggle = FunnelBody(window, "void MainWindow::ToggleConnect(bool disconnect) {");
+  const std::string toggle =
+      FunnelBody(window, "void MainWindow::ToggleConnect(bool disconnect) {");
   UR_EXPECT_TRUE(!toggle.empty());
   const std::string connectHalf = toggle.substr(toggle.find("ClearDisconnectIntent()"));
-  UR_EXPECT_TRUE(FunnelHas(connectHalf, "StartTunnelUi();"));
+  UR_EXPECT_TRUE(FunnelHas(connectHalf, "StartTunnelUi(\"connect press\");"));
   UR_EXPECT_FALSE(FunnelHas(connectHalf, "ConnectBestAvailable"));
   UR_EXPECT_FALSE(FunnelHas(connectHalf, "host_.Connect("));
   // the selection is read before the start, and handed to it
-  const std::string selected = FunnelBody(window, "TunnelStartResult MainWindow::StartTunnelUi() {");
-  UR_EXPECT_TRUE(FunnelHas(selected, "return StartTunnelUi(host_.SelectedLocation());"));
+  const std::string selected =
+      FunnelBody(window, "TunnelStartResult MainWindow::StartTunnelUi(const char* reason) {");
+  UR_EXPECT_TRUE(FunnelHas(selected, "return StartTunnelUi(reason, host_.SelectedLocation());"));
 }
 
 // After the start, the target or the best available, and no second read of
@@ -102,7 +106,8 @@ UR_TEST(ConnectFunnelWiring_TheStartConnectsItsTarget) {
   const std::string window = ReadFunnelSource("MainWindow.cpp");
   const std::string start = FunnelBody(window, kStartToTarget);
   UR_EXPECT_TRUE(!start.empty());
-  UR_EXPECT_TRUE(FunnelInOrder(start, {"host_.StartTunnel(", "if (result == TunnelStartResult::Started) {",
+  UR_EXPECT_TRUE(FunnelInOrder(start, {"host_.StartTunnel(",
+                                       "if (result == TunnelStartResult::Started) {",
                                        "if (IsBestAvailableSelected(target)) {",
                                        "host_.ConnectBestAvailable();", "} else {",
                                        "host_.Connect(target);"}));
@@ -138,7 +143,7 @@ UR_TEST(ConnectFunnelWiring_ARowClickStartsThroughTheWindow) {
   UR_EXPECT_TRUE(FunnelInOrder(window, {"host_.SetRowConnect([this](const std::optional<"
                                         "urnet::ConnectLocation>& location) {",
                                         "connectPage_->ClearDisconnectIntent();",
-                                        "StartTunnelUi(location);"}));
+                                        "StartTunnelUi(\"location row\", location);"}));
   // the hook reads the window, so it goes with it
   const std::string destructor = FunnelBody(window, "MainWindow::~MainWindow() {");
   UR_EXPECT_TRUE(FunnelHas(destructor, "host_.SetRowConnect(nullptr);"));
@@ -154,4 +159,38 @@ UR_TEST(ConnectFunnelWiring_DisconnectStopsTheTunnelFirst) {
                                             "PublishConnectReading();"}));
   const std::string shutdown = FunnelBody(host, "void SdkHost::Shutdown() {");
   UR_EXPECT_TRUE(FunnelInOrder(shutdown, {"control_.StopTunnel();", "TeardownDeviceLocked();"}));
+}
+
+// Each call names its gesture with a literal, and the start logs it: the
+// window's starts, and the host's own rebuild after a stale device.
+UR_TEST(ConnectFunnelWiring_EveryStartNamesItsReason) {
+  struct Site {
+    const char* file;
+    const char* call;
+  };
+  for (const Site& site :
+       {Site{"MainWindow.cpp", "StartTunnelUi("}, Site{"SdkHost.cpp", "StartTunnelLocked("}}) {
+    const std::string source = ReadFunnelSource(site.file);
+    int calls = 0;
+    for (size_t at = source.find(site.call); at != std::string::npos;
+         at = source.find(site.call, at + 1)) {
+      const std::string rest = source.substr(at + std::string(site.call).size(), 32);
+      // a definition or a delegation passes its own `reason` on
+      if (rest.rfind("const char* reason", 0) == 0 || rest.rfind("reason", 0) == 0) continue;
+      ++calls;
+      if (rest.empty() || rest[0] != '"') {
+        UR_FAIL(std::string(site.file) + ": " + site.call + rest.substr(0, 20) +
+                " names no reason");
+      }
+    }
+    if (calls == 0) UR_FAIL(std::string(site.file) + ": no " + site.call + " call");
+  }
+  // the window's one start passes its gesture's reason on
+  const std::string window = ReadFunnelSource("MainWindow.cpp");
+  UR_EXPECT_TRUE(FunnelHas(FunnelBody(window, kStartToTarget), "host_.StartTunnel(reason);"));
+  UR_EXPECT_EQ(window.find("host_.StartTunnel("), window.rfind("host_.StartTunnel("));
+  const std::string start =
+      FunnelBody(ReadFunnelSource("SdkHost.cpp"),
+                 "TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {");
+  UR_EXPECT_TRUE(FunnelHas(start, "g_message(\"connect: start_tunnel requested (%s)\", reason);"));
 }

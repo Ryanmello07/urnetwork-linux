@@ -219,7 +219,9 @@ UR_TEST(RowConnectCoalescer_TheHostCoalescesEveryRowClick) {
                                   {"if (rowConnectTimerId_ != 0) {",
                                    "g_source_remove(rowConnectTimerId_);"}));
   const std::string window = ReadCoalescerSource("MainWindow.cpp");
-  const std::string toggle = CoalescerBody(window, "void MainWindow::ToggleConnect(bool disconnect) {");
+  const std::string toggle =
+      CoalescerBody(window, "void MainWindow::ToggleConnect(bool disconnect) {");
   UR_EXPECT_TRUE(
-      CoalescerInOrder(toggle, {"host_.CancelRowConnect(\"connect press\");", "StartTunnelUi();"}));
+      CoalescerInOrder(toggle, {"host_.CancelRowConnect(\"connect press\");",
+                                "StartTunnelUi(\"connect press\");"}));
 }

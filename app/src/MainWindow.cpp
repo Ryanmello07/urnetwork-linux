@@ -395,7 +395,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // path as the Connect button (its notices, its gate), to the row's location.
   host_.SetRowConnect([this](const std::optional<urnet::ConnectLocation>& location) {
     if (connectPage_) connectPage_->ClearDisconnectIntent();
-    StartTunnelUi(location);
+    StartTunnelUi("location row", location);
   });
 
   if (host_.IsLoggedIn()) {
@@ -409,7 +409,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     // Nothing about StartTunnelUi changes, and no other path to it moves. The
     // post-login handlers still connect on a fresh sign-in — that is a user
     // action with an obvious intent, not a launch.
-    if (prefs::Get<bool>(prefs::kConnectOnLaunchKey, false)) StartTunnelUi();
+    if (prefs::Get<bool>(prefs::kConnectOnLaunchKey, false)) StartTunnelUi("connect on launch");
     ApplyAuthState(true);
   } else {
     ApplyAuthState(false);
@@ -495,16 +495,17 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
 // through TunnelStartResult::Failed with an authorization verdict on the
 // control client (DaemonAuthOutcome). It is rendered from its own copy table
 // below and never through the DaemonUnreachable arm.
-TunnelStartResult MainWindow::StartTunnelUi() {
-  return StartTunnelUi(host_.SelectedLocation());
+TunnelStartResult MainWindow::StartTunnelUi(const char* reason) {
+  return StartTunnelUi(reason, host_.SelectedLocation());
 }
 
-TunnelStartResult MainWindow::StartTunnelUi(const std::optional<urnet::ConnectLocation>& target) {
+TunnelStartResult MainWindow::StartTunnelUi(const char* reason,
+                                            const std::optional<urnet::ConnectLocation>& target) {
   // Out of balance, a new connection is not started at all: no tunnel, no
   // routes, the upgrade path instead. Every caller (the Connect press, connect
   // on launch, the post-sign-in connect) passes through here, and a stale
   // balance read repeats the whole start, connect included, once it lands.
-  if (ConnectBlockedByBalance([this, target] { StartTunnelUi(target); })) {
+  if (ConnectBlockedByBalance([this, reason, target] { StartTunnelUi(reason, target); })) {
     return TunnelStartResult::Failed;
   }
   // Snapshot the reply counter BEFORE the attempt. LastAuthOutcome() describes
@@ -514,7 +515,7 @@ TunnelStartResult MainWindow::StartTunnelUi(const std::optional<urnet::ConnectLo
   // rendered under an unrelated failure — a confidently wrong sentence, which
   // is worse than the generic one. Only a verdict this attempt produced counts.
   const uint64_t replySerialBefore = host_.Control().ReplySerial();
-  const TunnelStartResult result = host_.StartTunnel();
+  const TunnelStartResult result = host_.StartTunnel(reason);
   const DaemonAuthOutcome authOutcome = host_.Control().ReplySerial() != replySerialBefore
                                             ? host_.Control().LastAuthOutcome()
                                             : DaemonAuthOutcome::None;
@@ -1359,7 +1360,7 @@ void MainWindow::OnSeedphraseSubmit() {
                             : r.error.c_str());
         return;
       }
-      StartTunnelUi();  // auth handler flips the view
+      StartTunnelUi("seedphrase sign-in");  // auth handler flips the view
     });
   });
 }
@@ -1481,7 +1482,7 @@ void MainWindow::OnInstantSubmit() {
               return;
             }
             prefs::Set(kOnboardingPendingKey, true);  // an instant account is a new network
-            StartTunnelUi();  // auth handler flips the view
+            StartTunnelUi("instant account");  // auth handler flips the view
           });
         });
       };
@@ -1707,7 +1708,7 @@ void MainWindow::BuildAuthPages() {
   createPage_->on_success = [this] {
     // a network was just created: the onboarding flow follows the sign-in
     prefs::Set(kOnboardingPendingKey, true);
-    StartTunnelUi();  // auth handler flips the view
+    StartTunnelUi("network created");  // auth handler flips the view
   };
   createPage_->on_verify = [this](std::string userAuth, VerifySendNotice notice) {
     NavigateVerify(userAuth);
@@ -1722,7 +1723,7 @@ void MainWindow::BuildAuthPages() {
   verifyPage_ = Gtk::make_managed<VerifyPage>(host_);
   verifyPage_->on_success = [this] {
     prefs::Set(kOnboardingPendingKey, true);  // a verified sign-up is a new network
-    StartTunnelUi();  // auth handler flips the view
+    StartTunnelUi("sign-up verified");  // auth handler flips the view
   };
   verifyPage_->on_back = [this] { stack_.set_visible_child("login"); };
   stack_.add(*wrapInScroller(*verifyPage_), "verify");
@@ -1763,7 +1764,7 @@ void MainWindow::OnGetStarted() {
       SetLoginBusy(false);
       switch (routing.route) {
         case LoginRoute::Login:
-          StartTunnelUi();  // auth handler flips the view
+          StartTunnelUi("sign-in");  // auth handler flips the view
           break;
         case LoginRoute::Password:
           loginUserAuth_ = routing.userAuth;
@@ -1819,7 +1820,7 @@ void MainWindow::OnSignIn() {
         passwordError_.set_text(r.error.empty() ? T_("sign_in_failed", "Sign in failed")
                                                 : r.error);
       } else {
-        StartTunnelUi();  // auth handler flips the view
+        StartTunnelUi("password sign-in");  // auth handler flips the view
       }
     });
   });
@@ -1900,7 +1901,7 @@ void MainWindow::OnUseCode() {
                   r.error.empty() ? T_("code_sign_in_failed", "Code sign in failed")
                                   : r.error.c_str());
             } else {
-              self->StartTunnelUi();
+              self->StartTunnelUi("code sign-in");
             }
           });
         });
@@ -2036,7 +2037,7 @@ void MainWindow::OnWalletAuth(const AuthResult& result) {
       }
     } else {
       loginError_.set_text("");
-      StartTunnelUi();  // auth handler flips the view
+      StartTunnelUi("wallet or sso sign-in");  // auth handler flips the view
     }
   });
 }
@@ -2235,7 +2236,7 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // (ConnectBlockedByBalance) and this press opens the upgrade path instead.
   // It is immediate, and supersedes a location row click still settling.
   host_.CancelRowConnect("connect press");
-  StartTunnelUi();
+  StartTunnelUi("connect press");
   // the connect-reading feed reflects the real state as it changes
 }
 

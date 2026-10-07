@@ -682,7 +682,8 @@ class SdkHost {
   // Daemon session: connect → hello (protocol enforced both ways) →
   // start_tunnel → bind the DeviceRemote to the daemon's device RPC. The
   // tunnel itself (DeviceLocal, tun fd, IoLoop) lives in urnetworkd.
-  TunnelStartResult StartTunnel();
+  // `reason` names the gesture in the journal (a static string, never shown).
+  TunnelStartResult StartTunnel(const char* reason);
   // Human-readable detail for the last non-Started result ("" when none).
   std::string LastTunnelError();
   // Both connect calls ask the connect gate first (SetConnectGate) and do
@@ -1231,7 +1232,7 @@ class SdkHost {
   // ConnectBestAvailable can rebuild a session it has just discovered is dead
   // without re-entering a non-recursive lock. Every outcome logs, and the
   // failing ones leave a renderable sentence in lastTunnelError_.
-  TunnelStartResult StartTunnelLocked();
+  TunnelStartResult StartTunnelLocked(const char* reason);
   // ---- the two doors onto a tunnel that is ALREADY UP ----------------------
   // Door 1. Loads the remembered session (metadata from disk, the mTLS client
   // key and the pinned cert from the Secret Service) and, when it still

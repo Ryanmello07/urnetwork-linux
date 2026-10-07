@@ -85,11 +85,13 @@ class MainWindow : public Gtk::ApplicationWindow {
   // provider when the target is none or flagged best available: a tunnel with
   // no destination installs routes, DNS and the filter and then carries
   // nothing, while looking identical to a working one.
-  TunnelStartResult StartTunnelUi(const std::optional<urnet::ConnectLocation>& target);
+  // `reason` names the gesture in the journal (a static string).
+  TunnelStartResult StartTunnelUi(const char* reason,
+                                  const std::optional<urnet::ConnectLocation>& target);
   // The same, to the location selected now (the Connect button, the tray,
   // connect on launch, a sign-in). Read before the start, because a start that
   // builds a new device answers SelectedLocation from that device.
-  TunnelStartResult StartTunnelUi();
+  TunnelStartResult StartTunnelUi(const char* reason);
   void BuildAuthPages();  // create network / verify / password reset
   void OnGetStarted();  // authLogin discovery -> password / create / inline error
   void OnSignIn();

@@ -2166,12 +2166,12 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void
 // controllers below are on the shared Device interface and run against the
 // remote unchanged.
 
-TunnelStartResult SdkHost::StartTunnel() {
+TunnelStartResult SdkHost::StartTunnel(const char* reason) {
   std::scoped_lock lock(mutex_);
-  return StartTunnelLocked();
+  return StartTunnelLocked(reason);
 }
 
-TunnelStartResult SdkHost::StartTunnelLocked() {
+TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {
   lastTunnelError_.clear();
   // A new start makes any previous "the daemon stopped it" verdict obsolete.
   // This is the ONLY thing that clears the latch.
@@ -2180,7 +2180,7 @@ TunnelStartResult SdkHost::StartTunnelLocked() {
   // them, so a Connect that failed here left NOTHING to read: not in the app,
   // not in the journal, not in the daemon (which is never reached on most of
   // these paths). "Pressing Connect does nothing" was unanswerable as a result.
-  g_message("connect: start_tunnel requested");
+  g_message("connect: start_tunnel requested (%s)", reason);
   // An owed sign-out first, at once: a Connect is a person asking (SignOut.hpp).
   SettleSignOutLocked("connect", /*userInitiated=*/true);
   // Signed out reads as no jwt: the stored one outlives a sign-out until its
@@ -4370,7 +4370,7 @@ void SdkHost::ConnectBestAvailable() {
       // session generation still looked current) — we are the first code to
       // learn otherwise, and returning here would spend the user's press on
       // discovering it. One press, one connection attempt.
-      const TunnelStartResult restarted = StartTunnelLocked();
+      const TunnelStartResult restarted = StartTunnelLocked("connect after a stale device");
       if (restarted != TunnelStartResult::Started) {
         // StartTunnelLocked has already named the reason in lastTunnelError_
         // and in the journal; only fill in when it somehow did not.

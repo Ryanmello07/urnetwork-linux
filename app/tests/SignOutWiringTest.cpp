@@ -222,8 +222,9 @@ UR_TEST(SignOutWiring_TheReconcileDeliversFirstAndStartsNothingWhileOwed) {
 // A connect delivers it first, is refused for a signed-out app whatever the
 // stored jwt says, and attaches or starts nothing while a sign-out is owed.
 UR_TEST(SignOutWiring_AConnectDeliversFirstAndStartsNothingWhileOwed) {
-  const std::string start = SignOutBody(ReadSignOutSource("SdkHost.cpp"),
-                                        "TunnelStartResult SdkHost::StartTunnelLocked() {");
+  const std::string start =
+      SignOutBody(ReadSignOutSource("SdkHost.cpp"),
+                  "TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {");
   UR_EXPECT_TRUE(InOrder(
       start, {"SettleSignOutLocked(\"connect\", /*userInitiated=*/true);",
               "signedOut_.load() ? std::string() : localState_->getByClientJwt();",
