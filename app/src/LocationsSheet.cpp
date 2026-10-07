@@ -155,7 +155,7 @@ Gtk::Box* LocationsSheet::MakeLocationRow(const urnet::ConnectLocation& location
   auto gesture = Gtk::GestureClick::create();
   const urnet::ConnectLocation locationCopy = location;
   gesture->signal_released().connect([this, locationCopy](int, double, double) {
-    host_.Connect(locationCopy);
+    host_.ConnectFromRow(locationCopy);
     set_visible(false);  // dismiss on connect (iOS/Android parity)
   });
   row->add_controller(gesture);
@@ -178,7 +178,7 @@ Gtk::Box* LocationsSheet::MakePeerRow(const urnet::NetworkPeer& peer, bool selec
   const urnet::NetworkPeer peerCopy = peer;
   gesture->signal_released().connect([this, peerCopy](int, double, double) {
     // one of the user's own devices, reached as a network peer (PeerLocation.hpp)
-    host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));
+    host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));
     set_visible(false);
   });
   row->add_controller(gesture);
@@ -192,7 +192,7 @@ Gtk::Box* LocationsSheet::MakeBestAvailableRow(bool selected) {
 
   auto gesture = Gtk::GestureClick::create();
   gesture->signal_released().connect([this](int, double, double) {
-    host_.ConnectBestAvailable();
+    host_.ConnectFromRow(std::nullopt);
     set_visible(false);
   });
   row->add_controller(gesture);

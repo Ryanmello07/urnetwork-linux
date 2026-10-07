@@ -391,6 +391,12 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // host directly; the host asks the same gate.
   host_.SetConnectGate(
       [this](std::function<void()> retry) { return ConnectBlockedByBalance(std::move(retry)); });
+  // ...and a pick starts the tunnel when there is none, through the same start
+  // path as the Connect button (its notices, its gate), to the row's location.
+  host_.SetRowConnect([this](const std::optional<urnet::ConnectLocation>& location) {
+    if (connectPage_) connectPage_->ClearDisconnectIntent();
+    StartTunnelUi(location);
+  });
 
   if (host_.IsLoggedIn()) {
     // AUTO-CONNECT IS OPT IN, DEFAULT OFF. Being signed in is not a request to
@@ -1023,6 +1029,7 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 MainWindow::~MainWindow() {
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
+  host_.SetRowConnect(nullptr);   // and so does the row's start path
 }
 
 void MainWindow::TrackAppFocus() {

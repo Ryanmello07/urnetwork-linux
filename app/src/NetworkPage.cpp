@@ -385,16 +385,14 @@ void NetworkPage::AppendLocationSection(
                         location.strong_privacy, /*providing=*/false);
     const urnet::ConnectLocation copy = location;
     row->signal_clicked().connect([this, copy] {
-      // The click IS select-and-connect. TODO(sdk-wiring):
-      // SdkHost::ConnectFromRow — the windows row-click coalescer (1200ms
-      // settle in the session worker; re-click of the active target is a
-      // no-op that cancels a newer pending intent; immediate
-      // connect/disconnect supersedes). Rationale: every real connect tears
-      // the provider window down and the dial staircase charges 100ms–1s of
-      // shared budget per cold dial with no refund — a click burst without
-      // the settle runs it minutes ahead. Immediate Connect() until the host
-      // grows the coalescer.
-      host_.Connect(copy);
+      // The click IS select-and-connect, and starts a tunnel when there is
+      // none. TODO(sdk-wiring): the windows row-click coalescer (1200ms
+      // settle; re-click of the active target is a no-op that cancels a newer
+      // pending intent; immediate connect/disconnect supersedes). Rationale:
+      // every real connect tears the provider window down and the dial
+      // staircase charges 100ms–1s of shared budget per cold dial with no
+      // refund — a click burst without the settle runs it minutes ahead.
+      host_.ConnectFromRow(copy);
       // The SDK persists selection when the (settled) intent fires — the
       // check glyph may move only once status pushes arrive. Deliberately no
       // optimistic local highlight.
@@ -423,8 +421,7 @@ void NetworkPage::Render() {
       const urnet::NetworkPeer copy = peer;
       row->signal_clicked().connect([this, copy] {
         // one of the user's own devices, reached as a network peer (PeerLocation.hpp)
-        // TODO(sdk-wiring): SdkHost::ConnectFromRow (coalesced row click)
-        host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(copy));
+        host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(copy));
         Render();
       });
       listHost_->append(*row);
@@ -441,8 +438,7 @@ void NetworkPage::Render() {
                         kUrCoral /* hardcoded, mobile parity — no SDK call */,
                         IsBestAvailableSelected(selected), false, false, false);
     row->signal_clicked().connect([this] {
-      // TODO(sdk-wiring): SdkHost::ConnectBestAvailableFromRow (coalesced)
-      host_.ConnectBestAvailable();
+      host_.ConnectFromRow(std::nullopt);
       Render();
     });
     listHost_->append(*row);
@@ -568,8 +564,7 @@ void NetworkPage::RenderDetail() {
     auto* row = MakeRow(T_("best_available_provider", "Best available provider"), {},
                         kUrCoral, false, false, false, false);
     row->signal_clicked().connect([this] {
-      // TODO(sdk-wiring): SdkHost::ConnectBestAvailableFromRow (coalesced)
-      host_.ConnectBestAvailable();
+      host_.ConnectFromRow(std::nullopt);
       Render();
     });
     detailHost_->append(*row);

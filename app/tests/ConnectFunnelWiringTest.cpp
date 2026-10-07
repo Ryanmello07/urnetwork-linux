@@ -2,8 +2,11 @@
 // Connect button and the tray go where the provider row says (the selected
 // location, or the best available with none), read before the start, because
 // a start that builds a new device answers SelectedLocation from that device.
-// Before, the press ran ConnectBestAvailable whatever was selected. MainWindow
-// needs gtkmm and the SDK, so this reads its source with the comments blanked.
+// Before, the press ran ConnectBestAvailable whatever was selected. A location
+// row's click takes the same start path to its own location, so it starts a
+// tunnel when there is none; before, it only drove a session that was already
+// up. MainWindow, SdkHost and the rows need gtkmm and the SDK, so this reads
+// their sources with the comments blanked.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -11,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifndef UR_SRC_DIR
@@ -102,4 +106,38 @@ UR_TEST(ConnectFunnelWiring_TheStartConnectsItsTarget) {
                                        "host_.Connect(target);"}));
   UR_EXPECT_FALSE(FunnelHas(start, "SelectedLocation("));
   UR_EXPECT_FALSE(FunnelHas(start, "connectDestination"));
+}
+
+// Every location row clicks through SdkHost::ConnectFromRow, never straight
+// into the connect controller.
+UR_TEST(ConnectFunnelWiring_EveryRowConnectsFromTheRow) {
+  const std::pair<const char*, int> rows[] = {{"NetworkPage.cpp", 4}, {"LocationsSheet.cpp", 3}};
+  for (const auto& [file, count] : rows) {
+    const std::string source = ReadFunnelSource(file);
+    UR_EXPECT_TRUE(!source.empty());
+    UR_EXPECT_FALSE(FunnelHas(source, "host_.Connect("));
+    UR_EXPECT_FALSE(FunnelHas(source, "host_.ConnectBestAvailable("));
+    int found = 0;
+    for (size_t at = source.find("host_.ConnectFromRow("); at != std::string::npos;
+         at = source.find("host_.ConnectFromRow(", at + 1)) {
+      ++found;
+    }
+    if (found != count) UR_FAIL(std::string(file) + ": " + std::to_string(found) + " row connects");
+  }
+}
+
+// A row click runs the window's start path to the row's location, which
+// retires a disconnect the user is no longer waiting on, as the tray does.
+UR_TEST(ConnectFunnelWiring_ARowClickStartsThroughTheWindow) {
+  const std::string host = ReadFunnelSource("SdkHost.cpp");
+  const std::string fromRow = FunnelBody(host, "void SdkHost::ConnectFromRow(");
+  UR_EXPECT_TRUE(FunnelHas(fromRow, "rowConnect_("));
+  const std::string window = ReadFunnelSource("MainWindow.cpp");
+  UR_EXPECT_TRUE(FunnelInOrder(window, {"host_.SetRowConnect([this](const std::optional<"
+                                        "urnet::ConnectLocation>& location) {",
+                                        "connectPage_->ClearDisconnectIntent();",
+                                        "StartTunnelUi(location);"}));
+  // the hook reads the window, so it goes with it
+  const std::string destructor = FunnelBody(window, "MainWindow::~MainWindow() {");
+  UR_EXPECT_TRUE(FunnelHas(destructor, "host_.SetRowConnect(nullptr);"));
 }

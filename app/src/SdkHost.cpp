@@ -25,6 +25,7 @@
 
 #include "AppPrefs.hpp"
 #include "Config.hpp"
+#include "LocationSelection.hpp"
 #include "NetworkSpaceConfig.hpp"
 // The Secret Service backend for the remembered rpc session. GUI-ONLY: this is
 // the one translation unit that links libsecret, and urnetworkd (which builds
@@ -4410,6 +4411,16 @@ void SdkHost::Connect(const std::optional<urnet::ConnectLocation>& location) {
     auto controller = device_->openConnectViewController();
     controller.connect(location);
     device_->closeConnectViewController(controller);
+  }
+}
+
+void SdkHost::ConnectFromRow(const std::optional<urnet::ConnectLocation>& location) {
+  if (rowConnect_) {
+    rowConnect_(location);
+  } else if (IsBestAvailableSelected(location)) {
+    ConnectBestAvailable();
+  } else {
+    Connect(location);
   }
 }
 

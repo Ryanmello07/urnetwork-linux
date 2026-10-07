@@ -698,6 +698,16 @@ class SdkHost {
   // (the GTK main loop) before mutex_ is taken, so it may touch window state.
   using ConnectGate = std::function<bool(std::function<void()> retry)>;
   void SetConnectGate(ConnectGate gate) { connectGate_ = std::move(gate); }
+  // A location row's click, from the chooser and the Network page (nullopt is
+  // the best-available row). It runs the start path the window installs
+  // (SetRowConnect), which starts a tunnel when there is none, as the Connect
+  // button does: Connect alone drives only a session that is already up, so
+  // after a Disconnect, or a stop by the daemon, a row click started nothing.
+  void ConnectFromRow(const std::optional<urnet::ConnectLocation>& location);
+  // The start path a row click runs: MainWindow::StartTunnelUi with the row's
+  // location. Without one a row click only connects.
+  using RowConnect = std::function<void(const std::optional<urnet::ConnectLocation>& location)>;
+  void SetRowConnect(RowConnect run) { rowConnect_ = std::move(run); }
   void Disconnect();
   // Own presentation-only SDK view controllers only while the GTK window is
   // visible. The DeviceLocal, tunnel and packet loop remain alive in the tray.
@@ -1634,6 +1644,7 @@ class SdkHost {
 
   AuthStateHandler onAuth_;
   ConnectGate connectGate_;
+  RowConnect rowConnect_;
   AuthInvalidHandler onAuthInvalid_;
   JwtRefreshedHandler onJwtRefreshed_;
   ConnectReadingHandler onReading_;
