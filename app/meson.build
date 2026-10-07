@@ -699,6 +699,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/TrayPolicyTest.cpp',
     'tests/AccountPlanRowsTest.cpp',
     'tests/AppPrefsTest.cpp',
+    'tests/WindowGeometryTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -783,6 +784,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # reachability the same way.
               # AccountPlanRowsTest reads the Account page's Plan pane the same way.
               # AppPrefsTest reads AppPrefs.hpp's calls into PrefsFile.hpp the same way.
+              # WindowGeometryTest reads the window's restore and save and their
+              # callers the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

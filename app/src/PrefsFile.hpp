@@ -96,4 +96,15 @@ inline int SetAt(const std::string& path, const char* key, const T& value) {
   return ReplaceFile(path, all.dump(2) + "\n");
 }
 
+// Sets every key of the object `values` in one write, and writes nothing when
+// each already holds its value. 0, or the errno of the write that failed.
+inline int MergeAt(const std::string& path, const nlohmann::json& values) {
+  std::scoped_lock lock(WriteLock());
+  nlohmann::json all = ReadAllAt(path);
+  const nlohmann::json before = all;
+  all.update(values);
+  if (all == before) return 0;
+  return ReplaceFile(path, all.dump(2) + "\n");
+}
+
 }  // namespace urnw::prefs

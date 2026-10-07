@@ -25,6 +25,7 @@
 #include "StatusStripPresentation.hpp"
 #include "TrayPolicy.hpp"
 #include "Ui.hpp"
+#include "WindowGeometry.hpp"
 
 namespace urnw {
 
@@ -124,10 +125,33 @@ Glib::ustring DaemonAuthRefusalCopy(DaemonAuthOutcome outcome, const std::string
 
 MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   set_title("URnetwork");
-  // The desktop default (windows shell parity): 1120x820dip opens wide of the
-  // 1000dip breakpoint so the brand art shows on first launch; min 400x480.
-  set_default_size(1120, 820);
-  set_size_request(400, 480);
+  // The size the last run left, or the desktop default (windows shell parity:
+  // 1120x820dip, min 400x480). The preview harness always opens at the default.
+  window_geometry::Size size;
+  const bool restore = g_getenv("URNETWORK_PREVIEW_UI") == nullptr;
+  if (restore) {
+    size = window_geometry::SizeToOpenAt(prefs::Get<int64_t>(window_geometry::kWidthKey, 0),
+                                         prefs::Get<int64_t>(window_geometry::kHeightKey, 0));
+  }
+  set_default_size(size.width, size.height);
+  set_size_request(window_geometry::kMinWidth, window_geometry::kMinHeight);
+  if (restore && prefs::Get<bool>(window_geometry::kMaximizedKey, false)) maximize();
+  // Saved again shortly after every resize and maximize as well, not only at
+  // close and Quit: a logout or a SIGTERM ends the app with neither.
+  if (restore) {
+    const auto saveSoon = [this] {
+      geometrySave_.disconnect();
+      geometrySave_ = Glib::signal_timeout().connect(
+          [this] {
+            SaveGeometry();
+            return false;
+          },
+          window_geometry::kSaveDebounceMillis);
+    };
+    property_default_width().signal_changed().connect(saveSoon);
+    property_default_height().signal_changed().connect(saveSoon);
+    property_maximized().signal_changed().connect(saveSoon);
+  }
 
   BuildChrome();
   BuildLogin();
@@ -1135,6 +1159,7 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 // screen — a tray app spends most of its life hidden, and a slideshow nobody
 // can see is pure wakeups.
 MainWindow::~MainWindow() {
+  geometrySave_.disconnect();
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
   host_.SetRowConnect(nullptr);   // and so does the row's start path
@@ -2462,6 +2487,24 @@ Glib::RefPtr<Gio::Application> NotifyingApp() { return Gio::Application::get_def
 }  // namespace
 
 constexpr const char* kHideNoticeId = "hidden-to-tray";
+
+// The default size follows the window's size while it is not maximized, so a
+// maximized window keeps the size it returns to.
+void MainWindow::SaveGeometry() {
+  if (g_getenv("URNETWORK_PREVIEW_UI")) return;  // a review's size is not the user's
+  // never shown this run (an autostart quit from the tray): nothing was sized,
+  // and a maximize asked for at startup is not yet the window's state
+  if (!get_realized()) return;
+  int width = 0;
+  int height = 0;
+  get_default_size(width, height);
+  nlohmann::json values = {{window_geometry::kMaximizedKey, is_maximized()}};
+  if (window_geometry::Plausible(width, height)) {
+    values[window_geometry::kWidthKey] = width;
+    values[window_geometry::kHeightKey] = height;
+  }
+  prefs::SetAll(values);
+}
 
 // With no default action, a click on the notice activates the app, which
 // shows the window.

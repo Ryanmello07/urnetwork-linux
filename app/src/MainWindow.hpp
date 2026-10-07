@@ -73,6 +73,10 @@ class MainWindow : public Gtk::ApplicationWindow {
   // Closing just hid the window to the tray: the first time ever, a
   // notification says the app is still running there (TrayPolicy.hpp).
   void NoteHiddenToTray();
+  // The window's size and maximized state, for the next run to open at
+  // (WindowGeometry.hpp): when the window closes, when the app quits, and
+  // shortly after a resize.
+  void SaveGeometry();
   // The screenshot hook (main.cpp URNETWORK_SHOOT) renders this window when a
   // URNW_ONBOARDING_PREVIEW review has it open, else null.
   Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
@@ -397,6 +401,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;
   sigc::connection appFocusSync_;      // the pending coalesced focus reading
+  sigc::connection geometrySave_;      // the pending save after a resize
   signin::AppFocusAway appFocusAway_;  // how long the coalesced reading was away
   sigc::connection toplevelsChanged_;  // the toplevel list's items-changed hook
   LiveStats lastStats_;  // resynced into the widgets when the window is shown

@@ -216,6 +216,7 @@ int main(int argc, char** argv) {
       // instance about to end. A launch that meets it waits for it to end,
       // then starts.
       urnw::instance::BeginExiting();
+      window->SaveGeometry();  // a quit with the window up never closed it
       // teardown WITHOUT Logout(): Logout wipes the stored jwt, and for a
       // guest network that jwt is the only credential — quitting from the
       // tray was permanently destroying guest accounts (and any balance or
@@ -241,6 +242,7 @@ int main(int argc, char** argv) {
     // exits.
     window->signal_close_request().connect(
         [&]() -> bool {
+          window->SaveGeometry();
           switch (urnw::tray_policy::OnClose(tray && tray->Available())) {
             case urnw::tray_policy::CloseAction::Hide:
               window->set_visible(false);

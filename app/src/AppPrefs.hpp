@@ -10,6 +10,9 @@
 //                                    post-sign-up onboarding once (MainWindow)
 //   "onb_tray_balloon_seen"   bool   the first hide to the tray was announced
 //                                    (TrayPolicy.hpp)
+//   "window_width", "window_height", "window_maximized"
+//                             int, int, bool   the window's size across runs
+//                                    (WindowGeometry.hpp)
 // Header-only; nlohmann + glib only.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -54,6 +57,15 @@ inline void Set(const char* key, const T& value) {
   const std::string path = PrefsPath();
   if (const int failure = SetAt(path, key, value)) {
     g_warning("prefs: could not save %s to %s: %s", key, path.c_str(), g_strerror(failure));
+  }
+}
+
+// Several keys in one write (MergeAt), and none when nothing changed.
+inline void SetAll(const nlohmann::json& values) {
+  const std::string path = PrefsPath();
+  if (const int failure = MergeAt(path, values)) {
+    g_warning("prefs: could not save %s to %s: %s", values.dump().c_str(), path.c_str(),
+              g_strerror(failure));
   }
 }
 
