@@ -390,6 +390,11 @@ msgctxt "adv_na"
 msgid "—"
 msgstr "—"
 
+#. Split rules sheet: the line in the Activity list when the search matches none of the connections it holds.
+msgctxt "adv_no_activity_matches"
+msgid "No activity matches this search."
+msgstr "Nenhuma atividade corresponde a esta pesquisa."
+
 #. Connection inspector: shown when no connection is selected.
 msgctxt "adv_no_selection"
 msgid "No connection selected"
@@ -495,6 +500,11 @@ msgctxt "adv_rule_removed"
 msgid "Rule removed"
 msgstr "Regra removida"
 
+#. Split rules sheet: placeholder and accessible name of the search field above the Activity list. Typing filters the list to the connections whose host name or IP address contains the text; the rules above are not filtered.
+msgctxt "adv_search_activity_placeholder"
+msgid "Search activity"
+msgstr "Pesquisar atividade"
+
 #. Connect page, Activity pane: placeholder and accessible name of the search field above the list of connections. Typing filters the list to the connections whose host name or IP address contains the text.
 msgctxt "adv_search_connections"
 msgid "Search hosts or IPs"
@@ -524,6 +534,11 @@ msgstr "País de saída da sessão"
 msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "Sessão"
+
+#. Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.
+msgctxt "adv_split_rules_note"
+msgid "Split rules let the sites you choose connect directly, outside the VPN, and the activity below shows how each connection was routed."
+msgstr "As regras de divisão permitem que os sites que escolher se liguem diretamente, fora da VPN, e a atividade abaixo mostra como cada ligação foi encaminhada."
 
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.
 msgctxt "adv_undo"

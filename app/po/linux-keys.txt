@@ -63,6 +63,7 @@ adv_kill_switch_still_installed_fix
 adv_last_decision
 adv_matched
 adv_na
+adv_no_activity_matches
 adv_no_selection
 adv_none
 adv_open_split_rules
@@ -79,11 +80,13 @@ adv_reason_override
 adv_reason_route
 adv_rule_active
 adv_rule_removed
+adv_search_activity_placeholder
 adv_search_connections
 adv_select_a_row
 adv_selected
 adv_selection_gone
 adv_session_exit_country
+adv_split_rules_note
 adv_undo
 adv_unknown_exit
 adv_verdict
