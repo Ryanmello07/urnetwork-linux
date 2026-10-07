@@ -10,6 +10,7 @@
 #include "I18n.hpp"
 #include "LocationRowName.hpp"
 #include "LocationSelection.hpp"
+#include "NetworkQuickPick.hpp"
 #include "PeerLocation.hpp"  // PeerDisplayName, PeerConnectLocation — shared with the chooser
 #include "UrTheme.hpp"
 
@@ -59,6 +60,22 @@ std::string TrimSpace(const std::string& text) {
 // MakePaneRow returns a bordered host; content goes in its inset first child.
 Gtk::Box* RowInner(Gtk::Box* host) {
   return dynamic_cast<Gtk::Box*>(host->get_first_child());
+}
+
+// Prose on the pane's rhythm: the row inset and hairline, 8px above and
+// below, a 12px muted line that wraps (the detail pane's standing notes).
+Gtk::Box* MakeDetailNote(const Glib::ustring& text) {
+  auto* host = kit::MakePaneRow(0);
+  auto* line = Gtk::make_managed<Gtk::Label>(text);
+  line->add_css_class("ur-caption");
+  line->set_xalign(0);
+  line->set_hexpand(true);
+  line->set_wrap(true);
+  line->set_wrap_mode(Pango::WrapMode::WORD_CHAR);
+  line->set_margin_top(8);
+  line->set_margin_bottom(8);
+  if (auto* inner = RowInner(host)) inner->append(*line);
+  return host;
 }
 
 // ---- preview sample (§10) ---------------------------------------------------
@@ -374,35 +391,39 @@ Gtk::Button* NetworkPage::MakeRow(const Glib::ustring& title, const Glib::ustrin
   return row.root;
 }
 
+Gtk::Button* NetworkPage::MakeLocationRow(const urnet::ConnectLocation& location,
+                                          bool selected) {
+  const int providerCount = static_cast<int>(location.provider_count.value_or(0));
+  const Glib::ustring meta =
+      providerCount > 0
+          ? Glib::ustring(Format(
+                TN_("provider_count", "{} provider", "{} providers", providerCount),
+                providerCount))
+          : Glib::ustring();
+  auto* row = MakeRow(SanitizeExternalDisplayText(location.name.value_or(std::string())), meta,
+                      LocationRowColor(location), selected, !location.stable,
+                      location.strong_privacy, /*providing=*/false);
+  const urnet::ConnectLocation copy = location;
+  row->signal_clicked().connect([this, copy] {
+    // The click IS select-and-connect, and starts a tunnel when there is
+    // none. Coalesced (SdkHost::ConnectFromRow): a scroll-and-click hunt
+    // through the list connects once, to the last row clicked.
+    host_.ConnectFromRow(copy);
+    // The SDK persists selection when the (settled) intent fires — the
+    // check glyph may move only once status pushes arrive. Deliberately no
+    // optimistic local highlight.
+    Render();
+  });
+  return row;
+}
+
 void NetworkPage::AppendLocationSection(
     const Glib::ustring& title, const std::optional<urnet::ConnectLocationList>& items,
     const std::optional<urnet::ConnectLocation>& selected, int& total) {
   if (!items || items->empty()) return;  // self-hides on empty
   AppendGroup(*listHost_, title, static_cast<int>(items->size()));
   for (const auto& location : *items) {
-    const int providerCount = static_cast<int>(location.provider_count.value_or(0));
-    const Glib::ustring meta =
-        providerCount > 0
-            ? Glib::ustring(Format(
-                  TN_("provider_count", "{} provider", "{} providers", providerCount),
-                  providerCount))
-            : Glib::ustring();
-    auto* row = MakeRow(SanitizeExternalDisplayText(location.name.value_or(std::string())),
-                        meta, LocationRowColor(location),
-                        IsLocationSelected(selected, location), !location.stable,
-                        location.strong_privacy, /*providing=*/false);
-    const urnet::ConnectLocation copy = location;
-    row->signal_clicked().connect([this, copy] {
-      // The click IS select-and-connect, and starts a tunnel when there is
-      // none. Coalesced (SdkHost::ConnectFromRow): a scroll-and-click hunt
-      // through the list connects once, to the last row clicked.
-      host_.ConnectFromRow(copy);
-      // The SDK persists selection when the (settled) intent fires — the
-      // check glyph may move only once status pushes arrive. Deliberately no
-      // optimistic local highlight.
-      Render();
-    });
-    listHost_->append(*row);
+    listHost_->append(*MakeLocationRow(location, IsLocationSelected(selected, location)));
   }
   total += static_cast<int>(items->size());
 }
@@ -524,6 +545,28 @@ void NetworkPage::RenderDetail() {
     addKv(T_("name_label", "Name"), T_("best_available_provider", "Best available provider"));
     kit::SetTextOrCollapse(*paneB_.meta,
                            T_("best_available_provider", "Best available provider"));
+    // What best available means, and how to leave it. Deliberately no
+    // "connected to" line: the SDK does not expose the location it resolved,
+    // so one would be made up.
+    detailHost_->append(*MakeDetailNote(T_(
+        "adv_best_available_note",
+        "URnetwork picks the fastest healthy providers for you, with no location constraint, "
+        "and re-picks as the network changes.")));
+    detailHost_->append(*MakeDetailNote(
+        T_("adv_pick_location_note",
+           "Pick a country, region, city or device in the list to connect there instead.")));
+    // The quick-pick: the first countries as the list's own rows, so a click
+    // here is a click on the list's row (NetworkQuickPick.hpp). Its header
+    // carries no count, unlike Windows': the Countries row under Available
+    // providers below counts them all, and two counts would disagree.
+    const size_t shown =
+        locations_ && locations_->Countries ? QuickPickCount(locations_->Countries->size()) : 0;
+    if (shown > 0) {
+      detailHost_->append(*kit::MakePaneGroupHeader(T_("countries", "Countries")).root);
+      for (size_t i = 0; i < shown; ++i) {
+        detailHost_->append(*MakeLocationRow((*locations_->Countries)[i], /*selected=*/false));
+      }
+    }
   } else {
     // ConnectLocation fields ONLY — the SDK carries no latency and no load
     // anywhere; there are no such rows. Do not invent them.
