@@ -737,8 +737,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # and extender panel, and their host feed, the same way.
               # QuickActionWiringTest reads the quick actions' host writers, press,
               # row menu and toast the same way.
-              # SplitRulesSheetWiringTest reads the split rules sheet's search and chips
-              # the same way.
+              # SplitRulesSheetWiringTest reads the split rules sheet's search, chips and
+              # row buttons the same way.
               # ConnectFoldDoorsWiringTest reads the connect page's second doors the same
               # way.
               # SignOutWiringTest reads SdkHost and the health poll the same way.

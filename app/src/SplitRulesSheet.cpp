@@ -16,7 +16,9 @@
 namespace urnw {
 namespace {
 
-// a horizontal, wrapping flow of host/ip chips (item 1's chip row)
+// a horizontal, wrapping flow of host/ip chips (item 1's chip row). It sits
+// in a row's button, so it takes neither focus nor clicks: Tab goes from row
+// to row, and a click on a chip is the row's.
 Gtk::FlowBox* MakeChipFlow() {
   auto* flow = Gtk::make_managed<Gtk::FlowBox>();
   flow->set_orientation(Gtk::Orientation::HORIZONTAL);
@@ -25,7 +27,48 @@ Gtk::FlowBox* MakeChipFlow() {
   flow->set_row_spacing(6);
   flow->set_column_spacing(6);
   flow->set_hexpand(true);
+  flow->set_can_focus(false);
+  flow->set_can_target(false);
   return flow;
+}
+
+// A row that opens the editor: a button around the row's content, so the row
+// is in the tab order, Enter or Space opens it and a screen reader hears a
+// button. Its content is a box, which GTK names from nothing, so the caller
+// names the button from what the row shows, and the content is hidden so
+// nothing is read twice. Another action on the row (Remove, Route locally)
+// sits beside the button in `row`, never inside it.
+struct EditorRow {
+  Gtk::Box* row = nullptr;
+  Gtk::Button* button = nullptr;
+  Gtk::Box* content = nullptr;
+};
+
+EditorRow MakeEditorRow() {
+  EditorRow out;
+  out.row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  out.row->set_margin_top(2);
+  out.row->set_margin_bottom(2);
+  out.button = Gtk::make_managed<Gtk::Button>();
+  out.button->add_css_class("ur-card-tappable");
+  out.button->set_hexpand(true);
+  SetPointerCursor(*out.button);
+  out.content = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  kit::MarkDecorative(*out.content);
+  out.button->set_child(*out.content);
+  out.row->append(*out.button);
+  return out;
+}
+
+// A row's name: what it shows, in order, joined with ", ".
+std::string JoinRowName(const std::vector<std::string>& parts) {
+  std::string name;
+  for (const auto& part : parts) {
+    if (part.empty()) continue;
+    if (!name.empty()) name += ", ";
+    name += part;
+  }
+  return name;
 }
 
 // a + b deduped, preserving first-seen order
@@ -191,10 +234,8 @@ void SplitRulesSheet::RebuildRules() {
     return;
   }
   for (const auto& rule : rules_) {
-    auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-    row->set_margin_top(2);
-    row->set_margin_bottom(2);
-    SetPointerCursor(*row);
+    auto row = MakeEditorRow();
+    std::vector<std::string> nameParts;
 
     // green chips: the rule's host base names and exact ips (the whole rule is active)
     std::vector<std::string> hostNames;
@@ -205,34 +246,36 @@ void SplitRulesSheet::RebuildRules() {
     auto* flow = MakeChipFlow();
     for (const auto& name : urnet::collapseHostNames(hostNames)) {
       flow->append(*MakeChip(name, "green", true));
+      nameParts.push_back(name);
     }
     for (const auto& ip : ips) {
       flow->append(*MakeChip(ip, "green", true));
+      nameParts.push_back(ip);
     }
-    row->append(*flow);
+    row.content->append(*flow);
 
     // Local = bypassed the tunnel: amber, as the Activity feed's verdict dots
     // paint it (green there means tunnelled and protected)
-    row->append(*MakeChip(T_("local", "Local"), "amber", true));
+    row.content->append(*MakeChip(T_("local", "Local"), "amber", true));
+    nameParts.push_back(T_("local", "Local"));
+    kit::SetAccessibleLabel(*row.button, JoinRowName(nameParts));
+    const RuleItem ruleCopy = rule;
+    row.button->signal_clicked().connect([this, ruleCopy] { OpenEditorForRule(ruleCopy); });
 
     auto* remove = Gtk::make_managed<Gtk::Button>();
     remove->set_icon_name("user-trash-symbolic");
     remove->add_css_class("flat");
     remove->set_valign(Gtk::Align::CENTER);
+    remove->set_tooltip_text(T_("remove", "Remove"));
+    kit::SetAccessibleLabel(*remove, T_("remove", "Remove"));
     const std::string ruleId = rule.id;
     remove->signal_clicked().connect([this, ruleId] {
       host_.RemoveBlockActionOverride(ruleId);
       Refresh();  // no override-change event fires on the local-state fallback path
     });
-    row->append(*remove);
+    row.row->append(*remove);
 
-    auto gesture = Gtk::GestureClick::create();
-    const RuleItem ruleCopy = rule;
-    gesture->signal_released().connect(
-        [this, ruleCopy](int, double, double) { OpenEditorForRule(ruleCopy); });
-    row->add_controller(gesture);
-
-    rulesBox_.append(*row);
+    rulesBox_.append(*row.row);
   }
 }
 
@@ -259,10 +302,8 @@ void SplitRulesSheet::RebuildActivity() {
     decision.matchedIps = &action.matchedIps;
     if (!connection_filter::QueryPasses(query, decision)) continue;
     ++shown;
-    auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-    row->set_margin_top(2);
-    row->set_margin_bottom(2);
-    SetPointerCursor(*row);
+    auto row = MakeEditorRow();
+    std::vector<std::string> nameParts;
 
     auto* textColumn = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     textColumn->set_hexpand(true);
@@ -271,17 +312,21 @@ void SplitRulesSheet::RebuildActivity() {
     auto* flow = MakeChipFlow();
     for (const auto& name : action.matchedHosts) {
       flow->append(*MakeChip(name, "green", true));
+      nameParts.push_back(name);
     }
     for (const auto& ip : action.matchedIps) {
       flow->append(*MakeChip(ip, "green", true));
+      nameParts.push_back(ip);
     }
     for (const auto& name : urnet::collapseHostNames(action.hosts)) {
       flow->append(*MakeChip(name, "muted", false));
+      nameParts.push_back(name);
     }
     if (!action.ips.empty()) {
-      flow->append(*MakeChip(
-          Format(TN_("ip_count", "{} IP", "{} IPs", action.ips.size()), action.ips.size()),
-          "muted", false));
+      const std::string ipCount =
+          Format(TN_("ip_count", "{} IP", "{} IPs", action.ips.size()), action.ips.size());
+      flow->append(*MakeChip(ipCount, "muted", false));
+      nameParts.push_back(ipCount);
     }
     textColumn->append(*flow);
     std::string caption = RelativeTime((nowMs - action.timeMs) / 1000);
@@ -291,7 +336,7 @@ void SplitRulesSheet::RebuildActivity() {
     captionLabel->add_css_class("ur-caption-11");
     captionLabel->set_xalign(0);
     textColumn->append(*captionLabel);
-    row->append(*textColumn);
+    row.content->append(*textColumn);
 
     // the URnetwork safety rules decided this action: say so, with the detail on
     // hover, and when a local rule can make it work outside the tunnel, offer
@@ -306,11 +351,28 @@ void SplitRulesSheet::RebuildActivity() {
                              "URnetwork safety rules keep this traffic off the network, for "
                              "example an encrypted protocol it cannot recognize. A local split "
                              "rule sends it outside the VPN from your own IP.");
-      auto* safetyChip = MakeChip(T_("safety_rule", "Safety rule"), "coral", false);
-      safetyChip->set_tooltip_text(detail);
-      flow->insert(*safetyChip, 0);
-      row->set_tooltip_text(detail);
+      flow->insert(*MakeChip(T_("safety_rule", "Safety rule"), "coral", false), 0);
+      nameParts.insert(nameParts.begin(), T_("safety_rule", "Safety rule"));
+      // the chips take no pointer, so the detail rides the row's button
+      row.button->set_tooltip_text(detail);
     }
+
+    // the decision chips light solid when an override decided this action
+    const std::string blockWord = action.block ? T_("blocked", "Blocked") : T_("allowed", "Allowed");
+    row.content->append(*MakeChip(blockWord, action.block ? "coral" : "muted",
+                                  action.hasBlockOverride));
+    // amber for the same reason as the rule rows' Local chip
+    const std::string localWord = action.local ? T_("local", "Local") : T_("remote", "Remote");
+    row.content->append(*MakeChip(localWord, action.local ? "amber" : "muted",
+                                  action.hasRouteOverride));
+    nameParts.push_back(caption);
+    nameParts.push_back(blockWord);
+    nameParts.push_back(localWord);
+    kit::SetAccessibleLabel(*row.button, JoinRowName(nameParts));
+    row.button->signal_clicked().connect([this, actionCopy] { OpenEditorForAction(actionCopy); });
+
+    // the offer opens the row's own editor, as a labelled second door beside
+    // the row
     if (safety.offerRouteLocal) {
       auto* routeLocal =
           Gtk::make_managed<Gtk::Button>(T_("add_local_split_rule", "Route locally"));
@@ -318,22 +380,10 @@ void SplitRulesSheet::RebuildActivity() {
       routeLocal->set_valign(Gtk::Align::CENTER);
       routeLocal->signal_clicked().connect(
           [this, actionCopy] { OpenEditorForAction(actionCopy); });
-      row->append(*routeLocal);
+      row.row->append(*routeLocal);
     }
 
-    // the decision chips light solid when an override decided this action
-    row->append(*MakeChip(action.block ? T_("blocked", "Blocked") : T_("allowed", "Allowed"),
-                          action.block ? "coral" : "muted", action.hasBlockOverride));
-    // amber for the same reason as the rule rows' Local chip
-    row->append(*MakeChip(action.local ? T_("local", "Local") : T_("remote", "Remote"),
-                          action.local ? "amber" : "muted", action.hasRouteOverride));
-
-    auto gesture = Gtk::GestureClick::create();
-    gesture->signal_released().connect(
-        [this, actionCopy](int, double, double) { OpenEditorForAction(actionCopy); });
-    row->add_controller(gesture);
-
-    activityBox_.append(*row);
+    activityBox_.append(*row.row);
   }
   if (shown == 0) {
     // a search that matches nothing says so, in the hint's voice, rather than
