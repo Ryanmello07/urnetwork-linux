@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iterator>
 #include <sstream>
@@ -78,6 +79,20 @@ constexpr int kDnsRepairAttempts = 3;
 int64_t UnixMillis() { return g_get_real_time() / 1000; }
 int64_t MonotonicSeconds() { return g_get_monotonic_time() / G_USEC_PER_SEC; }
 int64_t MonotonicMillis() { return g_get_monotonic_time() / 1000; }
+
+// The dead-tunnel failsafe's one clock (TunnelWatchdog.hpp). CLOCK_BOOTTIME,
+// not the monotonic clock: it runs through a suspend, so a resume reaches the
+// watch as the tick gap it is and rebases it, where the monotonic clock would
+// hide the sleep and judge a session against evidence from before it.
+int64_t WatchdogMillis() {
+  timespec now{};
+#if defined(CLOCK_BOOTTIME)
+  ::clock_gettime(CLOCK_BOOTTIME, &now);
+#else  // macOS dev build
+  ::clock_gettime(CLOCK_MONOTONIC, &now);
+#endif
+  return static_cast<int64_t>(now.tv_sec) * 1000 + now.tv_nsec / 1000000;
+}
 
 // How long the daemon's teardown waits for a log upload's thread to come out
 // of the sdk's call (the zip): past it the process exits around it.
@@ -558,6 +573,7 @@ ctl::StatusReply TunnelHost::Start(const ctl::StartTunnelRequest& config) {
     status_.error.clear();
     status_.error_code.clear();
     status_.stop_reason.clear();
+    status_.failsafe_armed = false;
     status_.routes_installed = false;
     status_.ipv6_captured = false;
     status_.egress_protected = false;
@@ -1109,6 +1125,9 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
           // status must never throw across the wire
         }
       }
+      // Watched from the up edge on, and by nothing before it: a bring-up has
+      // its own witnesses.
+      StartDeadTunnelWatchLocked();
       std::fprintf(stderr,
                    "[tunnel] up (client=%s rpc=127.0.0.1:%d routes=%d ipv6=%d egress=%d dns=%d)\n",
                    Status().client_id.c_str(), rpcPort,
@@ -1230,6 +1249,9 @@ void TunnelHost::ReapRetiredLoopsLocked() {
 }
 
 void TunnelHost::StopInternalLocked(const std::string& reason) {
+  // Before anything is torn down: the sampler is cancelled while the device it
+  // reads is still whole, and no verdict outlives its session.
+  StopDeadTunnelWatchLocked();
   // First, and in every teardown: the provider-only device never shares a
   // moment with a tunnel session's device. RunStart opens with this function,
   // so a Connect retires the provider before the egress marker, the capture
@@ -1322,6 +1344,7 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
     instanceId_.clear();
     rpcSessionId_.clear();
     activeConfig_ = ctl::StartTunnelRequest();
+    status_.failsafe_armed = false;
     status_.routes_installed = false;
     status_.ipv6_captured = false;
     status_.egress_protected = false;
@@ -1377,7 +1400,7 @@ void TunnelHost::StopInternalLocked(const std::string& reason) {
 // blocked and what lifts it.
 void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
                                          const std::string& message,
-                                         const std::string& code) {
+                                         const std::string& code, const char* why) {
   // 1) TEAR DOWN, firewall untouched. The empty reason is load-bearing twice
   //    over: it keeps ApplyFilterLocked(Off) — the floor lift — out of this
   //    path, and it keeps the tail of StopInternalLocked from clearing the
@@ -1398,9 +1421,9 @@ void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
           " This machine is now blocked, because the kill switch is on and there is no tunnel "
           "to carry traffic. Turn the kill switch off, or disconnect, in the app to lift it.";
       DaemonLogf(
-          "[tunnel] the session was stopped as UNSAFE (%s) and this machine stays blocked "
+          "[tunnel] the session was stopped %s (%s) and this machine stays blocked "
           "because the kill switch is armed. Turn it off in the app to lift it, or run: %s\n",
-          reason.c_str(), NetFilter::RecoveryCommand());
+          why, reason.c_str(), NetFilter::RecoveryCommand());
     } else {
       // Say the smaller, scarier truth rather than the reassuring one: the
       // block we intended is not in force, and whatever is left behind is
@@ -1413,9 +1436,9 @@ void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
                 "lift the leftover rules with: " +
                 NetFilter::RecoveryCommand() + ".";
       DaemonLogf(
-          "[tunnel] ERROR: the session was stopped as UNSAFE (%s) and the kill switch could "
+          "[tunnel] ERROR: the session was stopped %s (%s) and the kill switch could "
           "NOT be armed: %s\n",
-          reason.c_str(), filterError.c_str());
+          why, reason.c_str(), filterError.c_str());
     }
   } else {
     // No floor was asked for, so none is invented. The table goes; a failure
@@ -1431,19 +1454,19 @@ void TunnelHost::StopUnsafeSessionLocked(const std::string& reason,
       detail +=
           " The kill switch is off, so this machine is not blocked and traffic is going out "
           "unprotected until you connect again.";
-      DaemonLogf("[tunnel] the session was stopped as UNSAFE (%s); the kill switch is off, so "
+      DaemonLogf("[tunnel] the session was stopped %s (%s); the kill switch is off, so "
                  "this machine is not blocked\n",
-                 reason.c_str());
+                 why, reason.c_str());
     } else {
       detail += " The leftover firewall rules could NOT be removed (" + filterError +
                 "), so this machine may still be blocked even though the kill switch is off. "
                 "Lift them with: " +
                 NetFilter::RecoveryCommand() + ".";
       DaemonLogf(
-          "[tunnel] ERROR: the session was stopped as UNSAFE (%s), the kill switch is off, and "
+          "[tunnel] ERROR: the session was stopped %s (%s), the kill switch is off, and "
           "the leftover rules could NOT be removed: %s -- the machine may be blocked. "
           "Recover with: %s\n",
-          reason.c_str(), filterError.c_str(), NetFilter::RecoveryCommand());
+          why, reason.c_str(), filterError.c_str(), NetFilter::RecoveryCommand());
     }
   }
 
@@ -2466,6 +2489,146 @@ bool TunnelHost::CheckEgressWitnessLocked() {
   return true;
 }
 
+// ---- the dead-tunnel failsafe ----------------------------------------------
+
+namespace {
+
+// The sentence a failsafe teardown leads its `error` with. StopUnsafeSessionLocked
+// adds whether this machine is now blocked.
+const char* DeadTunnelMessage(watchdog::DeadTunnelReason reason) {
+  switch (reason) {
+    case watchdog::DeadTunnelReason::NoInbound:
+      return "The connection was stopped because it carried nothing: this computer kept "
+             "sending into the tunnel and nothing came back for 20 seconds.";
+    case watchdog::DeadTunnelReason::NoExit:
+      return "The connection was stopped because it carried nothing: no provider could carry "
+             "its traffic for 90 seconds.";
+    case watchdog::DeadTunnelReason::SdkUnresponsive:
+      return "The connection was stopped because it carried nothing: the URnetwork engine "
+             "stopped answering for 30 seconds.";
+    case watchdog::DeadTunnelReason::None:
+      break;
+  }
+  return "The connection was stopped because it carried nothing.";
+}
+
+}  // namespace
+
+void TunnelHost::StartDeadTunnelWatchLocked() {
+  if (!device_ || !tunnel_) return;
+  // The window's level at the up edge comes from the sampler's first sample,
+  // taken at once on its own thread, so the first destination the app picks
+  // reads as the new generation it is. Nothing here waits on the device.
+  if (!exitSampler_.Start(device_->handle(), &WatchdogMillis)) return;
+  watchdog::WatchInputs inputs;
+  inputs.nowMillis = WatchdogMillis();
+  const std::string iface = tunnel_->name();
+  inputs.outboundPackets = ReadIfaceCounter(iface, "tx_packets");
+  inputs.inboundPackets = ReadIfaceCounter(iface, "rx_packets");
+  inputs.windowSampled = false;
+  deadTunnelWatch_.Start(inputs);
+  deadTunnelWatching_ = true;
+  DaemonLogf("[tunnel] failsafe: watching this tunnel. It is stopped if it carries nothing: no "
+             "proven exit for %llds, %llds of sending with nothing coming back, or %llds of "
+             "sdk silence. Nothing reconnects afterwards.\n",
+             static_cast<long long>(watchdog::kDeadSlowMillis / 1000),
+             static_cast<long long>(watchdog::kDeadFastMillis / 1000),
+             static_cast<long long>(watchdog::kSdkUnresponsiveMillis / 1000));
+}
+
+void TunnelHost::StopDeadTunnelWatchLocked() {
+  exitSampler_.Stop();
+  deadTunnelWatching_ = false;
+}
+
+bool TunnelHost::CheckDeadTunnelLocked() {
+  // Not while the io loop's death waits for the reaper below: that teardown
+  // owns the explanation.
+  if (!deadTunnelWatching_ || !tunnel_ || !device_ || ioLoopDied_.load()) return false;
+
+  watchdog::WatchInputs inputs;
+  inputs.nowMillis = WatchdogMillis();
+  {
+    std::scoped_lock lock(statusMutex_);
+    inputs.tunnelUp = status_.tunnel_state == ctl::TunnelState::Up;
+    inputs.routesInstalled = status_.routes_installed;
+  }
+  const std::string iface = tunnel_->name();
+  // On a tun, transmit is what the host sends into the tunnel (the SDK reads
+  // it) and receive is what the SDK writes back out to the host.
+  inputs.outboundPackets = ReadIfaceCounter(iface, "tx_packets");
+  inputs.inboundPackets = ReadIfaceCounter(iface, "rx_packets");
+  const ExitSampler::Reading sample = exitSampler_.Read();
+  inputs.provenCount = sample.provenCount;
+  inputs.lastProvenMillis = sample.lastProvenMillis;
+  inputs.lastSampleMillis = sample.lastSampleMillis;
+  inputs.connectionGeneration = sample.connectionGeneration;
+  inputs.providerWindowMinSatisfied = sample.providerWindowMinSatisfied;
+  inputs.windowSampled = sample.sampled;
+
+  const watchdog::WatchTick tick = deadTunnelWatch_.Tick(inputs);
+  if (tick.froze) {
+    DaemonLogf("[tunnel] failsafe: nothing watched this tunnel for %lldms (a suspend, or a "
+               "stalled daemon), so every window starts again from now\n",
+               static_cast<long long>(tick.tickGapMillis));
+  } else if (tick.verdictClockReset) {
+    DaemonLogf("[tunnel] failsafe: destination generation %lld replaced the provider window; "
+               "every window starts again, the no-inbound one once the window forms\n",
+               static_cast<long long>(sample.connectionGeneration));
+  } else if (tick.trafficClockReset) {
+    DaemonLogf("[tunnel] failsafe: destination generation %lld formed its window; the %llds "
+               "no-inbound window starts now\n",
+               static_cast<long long>(sample.connectionGeneration),
+               static_cast<long long>(watchdog::kDeadFastMillis / 1000));
+  }
+  bool armedChanged = false;
+  {
+    std::scoped_lock lock(statusMutex_);
+    if (status_.failsafe_armed != tick.verdict.armed) {
+      status_.failsafe_armed = tick.verdict.armed;
+      armedChanged = true;
+    }
+  }
+  // A countdown that was showing ends with a verdict (logged below), a rebase,
+  // a new destination's clocks, or something getting through, and the log says
+  // which.
+  if (armedChanged && tick.verdict.armed) {
+    DaemonLogf("[tunnel] failsafe: this tunnel is stopped in %llds unless something gets "
+               "through\n",
+               static_cast<long long>(tick.verdict.millisToFailsafe / 1000));
+  } else if (armedChanged && tick.froze) {
+    DaemonLogf("[tunnel] failsafe: the rebase reset the countdown\n");
+  } else if (armedChanged && (tick.verdictClockReset || tick.trafficClockReset)) {
+    DaemonLogf("[tunnel] failsafe: the new destination's clocks reset the countdown\n");
+  } else if (armedChanged && tick.verdict.reason == watchdog::DeadTunnelReason::None) {
+    DaemonLogf("[tunnel] failsafe: the countdown ended; the tunnel is carrying again\n");
+  }
+  if (tick.verdict.reason == watchdog::DeadTunnelReason::None) return false;
+
+  const watchdog::DeadTunnelSignals& s = tick.signals;
+  const int64_t now = inputs.nowMillis;
+  DaemonLogf(
+      "[tunnel] STOPPING: this tunnel is up but carries nothing (%s). Watched for %llds; the "
+      "sdk last answered %lldms ago with %lld proven exit(s), the last proven one %lldms ago; "
+      "the last packet back out of the tunnel %lldms ago, %llu packet(s) in since. Nothing is "
+      "reconnected automatically: the next attempt is the user's.\n",
+      watchdog::StopReasonOf(tick.verdict.reason),
+      static_cast<long long>((now - s.upSinceMillis) / 1000),
+      static_cast<long long>(watchdog::detail::AgeSince(s.lastSampleMillis, s.upSinceMillis, now)),
+      static_cast<long long>(s.provenCount),
+      static_cast<long long>(watchdog::detail::AgeSince(s.lastProvenMillis, s.upSinceMillis, now)),
+      static_cast<long long>(
+          watchdog::detail::AgeSince(s.lastInboundMillis, s.trafficStartMillis, now)),
+      static_cast<unsigned long long>(s.outboundSinceInbound));
+  // The landing every involuntary teardown takes: the armed floor when the
+  // kill switch was asked for, no table otherwise, the outcome checked and
+  // said, and everything published last.
+  StopUnsafeSessionLocked(watchdog::StopReasonOf(tick.verdict.reason),
+                          DeadTunnelMessage(tick.verdict.reason), ctl::kCodeTunnelDead,
+                          "because it carried nothing");
+  return true;
+}
+
 void TunnelHost::Reap() {
   // Try-locked, as every main-loop callback here is. A bring-up holds opMutex_
   // for the whole of its run, and waiting for it here froze the control loop,
@@ -2484,6 +2647,9 @@ void TunnelHost::Reap() {
   // on the cheap byte-counter read rather than spending an nft fork first.
   if (CheckEgressWitnessLocked()) return;
   if (busy_.load()) return;  // a bring-up owns the session AND the filter
+  // After the guards above, which end a session for something worse than
+  // carrying nothing; whichever ends it owns the explanation.
+  if (CheckDeadTunnelLocked()) return;
 
   // The log upload's standalone device once its upload has reported, and a
   // request that waited for a bring-up which is now over.
@@ -2497,17 +2663,29 @@ void TunnelHost::Reap() {
     const std::string tunnelInterface = tunnel_ ? tunnel_->name() : std::string();
     const LinuxNetworkChange networkChange =
         networkQualityTracker_.Observe(ReadNetworkQuality(tunnelInterface));
-    try {
-      if (networkChange == LinuxNetworkChange::Path) {
-        DaemonLogf("[tunnel] physical network path changed; refreshing transports\n");
-        support::LogConnectivity("path-change");
-        liveDevice->networkChanged();
-      } else if (networkChange == LinuxNetworkChange::Quality) {
-        DaemonLogf("[tunnel] physical network quality changed; remeasuring transfer pacing\n");
-        liveDevice->networkQualityChanged();
+    if (networkChange == LinuxNetworkChange::Path) {
+      DaemonLogf("[tunnel] physical network path changed; refreshing transports\n");
+      support::LogConnectivity("path-change");
+    } else if (networkChange == LinuxNetworkChange::Quality) {
+      DaemonLogf("[tunnel] physical network quality changed; remeasuring transfer pacing\n");
+    }
+    const bool path = networkChange == LinuxNetworkChange::Path;
+    if (networkChange != LinuxNetworkChange::None && device_ && deadTunnelWatching_) {
+      // The watched session's device is told by the failsafe's sampler, off
+      // this loop: the call takes the device's state lock, and a link drop, the
+      // usual path change, is when a wedged device would hold this loop and
+      // the verdict that ends its session with it.
+      exitSampler_.NoteNetworkChange(path);
+    } else if (networkChange != LinuxNetworkChange::None) {
+      try {
+        if (path) {
+          liveDevice->networkChanged();
+        } else {
+          liveDevice->networkQualityChanged();
+        }
+      } catch (const std::exception& e) {
+        DaemonLogf("[tunnel] network change notification failed: %s\n", e.what());
       }
-    } catch (const std::exception& e) {
-      DaemonLogf("[tunnel] network change notification failed: %s\n", e.what());
     }
   }
   // The provider-only device's tier, keys and peers are the sdk's to change,

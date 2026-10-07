@@ -65,6 +65,8 @@
 #include "LogUpload.hpp"
 #include "NetworkQuality.hpp"
 #include "Tunnel.hpp"
+#include "TunnelWatchdog.hpp"
+#include "daemon/ExitSampler.hpp"
 
 namespace urnw {
 
@@ -354,8 +356,12 @@ class TunnelHost {
   // the floor at the exact instant we had four datagrams of proof that traffic
   // was leaving unprotected, and erased the explanation on the same line.
   // Requires opMutex_.
+  //
+  // The dead-tunnel failsafe lands the same way, for a session proven to carry
+  // nothing rather than proven unsafe; `why` names which in the log ("as
+  // UNSAFE", "because it carried nothing").
   void StopUnsafeSessionLocked(const std::string& reason, const std::string& message,
-                               const std::string& code);
+                               const std::string& code, const char* why = "as UNSAFE");
 
   // Re-checks the DNS override mid-session and repairs it, escalating to
   // StopUnsafeSessionLocked when it cannot be restored. This is the only caller
@@ -403,6 +409,24 @@ class TunnelHost {
   bool CheckEgressWitnessLocked();
   int egressWitnessTicks_ = 0;
   int egressWitnessFailures_ = 0;
+
+  // The dead-tunnel failsafe (TunnelWatchdog.hpp; docs/linux_agent_help.md
+  // 6.4). From the up edge to the teardown an ExitSampler asks the session's
+  // device for its proven exits and tells it of the reaper's network changes,
+  // so the reaper makes no call on that device; the reaper reads the tun's
+  // packet counters and those readings once a second and hands them to
+  // deadTunnelWatch_. On a dead verdict the session ends through
+  // StopUnsafeSessionLocked: the armed floor when the kill switch was asked
+  // for, no table otherwise, a stop_reason of ctl::kStopReasonFailsafe* and the
+  // sentence saying which. Nothing reconnects. While a countdown is close,
+  // status says failsafe_armed. All three require opMutex_.
+  void StartDeadTunnelWatchLocked();
+  void StopDeadTunnelWatchLocked();
+  // True when it ended the session.
+  bool CheckDeadTunnelLocked();
+  ExitSampler exitSampler_;
+  watchdog::DeadTunnelWatch deadTunnelWatch_;
+  bool deadTunnelWatching_ = false;
 
   // R4's primary mechanism: marks every socket this process creates with
   // kEgressMark at socket() time, from a cgroup-bpf sock_create program, so

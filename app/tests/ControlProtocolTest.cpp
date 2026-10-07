@@ -685,6 +685,42 @@ UR_TEST(controlStatusCarriesTheNetworkCountry) {
   UR_EXPECT_TRUE(ctl::RedactStatusForForeignUid(status).network_country_code.empty());
 }
 
+// The dead-tunnel failsafe's countdown and its stop reasons reach the GUI; a
+// daemon without the failsafe reports no countdown, and another user's view
+// carries none.
+UR_TEST(controlStatusCarriesTheFailsafe) {
+  ctl::StatusReply status;
+  status.tunnel_state = ctl::TunnelState::Up;
+  status.failsafe_armed = true;
+  const nlohmann::json wire = nlohmann::json(status);
+  UR_EXPECT_TRUE(wire.contains("failsafe_armed"));
+  auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(10, true, wire)))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(back.failsafe_armed);
+
+  nlohmann::json older = wire;
+  older.erase("failsafe_armed");
+  const auto fromOlder = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(11, true, older)))->get<ctl::StatusReply>();
+  UR_EXPECT_FALSE(fromOlder.failsafe_armed);
+  UR_EXPECT_FALSE(ctl::RedactStatusForForeignUid(status).failsafe_armed);
+
+  ctl::StatusReply stopped;
+  stopped.tunnel_state = ctl::TunnelState::Error;
+  stopped.stop_reason = ctl::kStopReasonFailsafeNoInbound;
+  stopped.error_code = ctl::kCodeTunnelDead;
+  back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(12, true, nlohmann::json(stopped))))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(ctl::IsFailsafeStop(back.stop_reason));
+  UR_EXPECT_TRUE(back.error_code == "tunnel_dead");
+  for (const char* reason : {ctl::kStopReasonFailsafeNoExit, ctl::kStopReasonFailsafeNoInbound,
+                             ctl::kStopReasonFailsafeSdkUnresponsive}) {
+    UR_EXPECT_TRUE(ctl::IsFailsafeStop(reason));
+  }
+  UR_EXPECT_FALSE(ctl::IsFailsafeStop("io_loop"));
+  UR_EXPECT_FALSE(ctl::IsFailsafeStop(""));
+}
+
 // A stopped or failed tunnel is no session; starting, up and stopping are.
 UR_TEST(controlProviderFactsReadOneStatus) {
   ctl::StatusReply status;

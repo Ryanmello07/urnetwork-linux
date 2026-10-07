@@ -307,6 +307,7 @@ executable('urnetworkd',
     'src/daemon/ControlServer.cpp',
     'src/daemon/TunnelHost.cpp',
     'src/daemon/DaemonLog.cpp',
+    'src/daemon/ExitSampler.cpp',
     'src/daemon/HostMemory.cpp',
     'src/daemon/NetworkCountryWatcher.cpp',
     'src/daemon/SupportDiagnostics.cpp',
@@ -664,6 +665,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/DaemonCrashOutputTest.cpp',
     'tests/TunnelHostLockWiringTest.cpp',
     'tests/GlogFlushWiringTest.cpp',
+    'tests/TunnelWatchdogTest.cpp',
+    'tests/DeadTunnelWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -717,6 +720,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
               # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
               # GlogFlushWiringTest reads the daemon's glog flushes the same way.
+              # DeadTunnelWiringTest reads the dead-tunnel failsafe's daemon call sites the
+              # same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
