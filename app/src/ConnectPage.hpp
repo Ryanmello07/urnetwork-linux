@@ -7,9 +7,11 @@
 //                       distribution bar under it (opens the transport
 //                       settings editor) + the routing-decision list,
 //                       filtered by verdict and search and foldable by host
-//                       (selectable in Advanced Mode).
+//                       (selectable in Advanced Mode, each row with a menu of
+//                       the inspector's quick actions).
 //   Pane C  STATISTICS  380dip: session figures, contracts, split rules, DNS
-//                       (and the connection inspector in Advanced Mode).
+//                       (and the connection inspector, with its quick
+//                       actions, in Advanced Mode).
 //
 // Panes are floor-to-ceiling and separated by 1px rules, never gaps. The fold
 // table is ConnectFold.hpp's, taken in ApplyFold on the panes' own width:
@@ -43,12 +45,14 @@
 #include "InsufficientBalanceNotice.hpp"
 #include "IpFamilyStatusRow.hpp"
 #include "PaneKit.hpp"
+#include "QuickAction.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
 #include "TapSequenceGate.hpp"
 #include "TransferChart.hpp"
 #include "TransportBar.hpp"
 #include "TransportSheet.hpp"
+#include "Ui.hpp"
 
 namespace urnw {
 
@@ -90,7 +94,8 @@ class ConnectPage : public Gtk::Box {
   // window re-show). Idempotent.
   void Resync();
   // A sign-out: the activity view's filters and selection back to their
-  // defaults, so the next account's session starts fresh (SignOut.hpp).
+  // defaults, its row menu and a pending Undo gone, so the next account's
+  // session starts fresh (SignOut.hpp).
   void ResetForSignOut();
 
   void SetAdvancedMode(bool on);   // structural: Simple <-> Advanced
@@ -257,6 +262,15 @@ class ConnectPage : public Gtk::Box {
   void OnConnectionsClearFilters();
   // a group row's click: search for the host, fold off
   void DrillIntoConnectionGroup(const std::string& host);
+  // A row's menu target, owned: the decision (or a group's aggregate as one)
+  // for Copy details, and what the quick actions rule on.
+  struct RowTarget {
+    urnet::BlockAction action;
+    quick_action::Facts facts;
+  };
+  std::optional<RowTarget> ResolveRowTarget(const std::string& key) const;
+  // the row's menu (Advanced Mode): the quick actions and Copy details
+  void OpenConnectionRowMenu(const std::string& key, Gtk::Widget& anchor, double x, double y);
   // the meta lines' age on the 1s clock, from each row's own counters
   void RefreshConnectionRowTimes();
   // the verdict ratio bar under the Connections header (VerdictRatio), on the
@@ -297,7 +311,23 @@ class ConnectPage : public Gtk::Box {
   void ApplyDnsCard();
   void ApplyDnsRecommendationPill();
   void ApplyInspector();
+  // Reason in place: its plain value, or the link for a rule-decided one
+  void ApplyInspectorReason(const Glib::ustring& reason, bool link);
   void ApplyInspectorVisibility();
+  // the selection in the current feed, or nullptr (none, or aged out)
+  const urnet::BlockAction* SelectedConnectionAction() const;
+  // ---- the per-connection quick actions (QuickAction.hpp) ----
+  // label, sensitivity and on state of one inspector button
+  void ApplyQuickActionButton(Gtk::Button& button, const quick_action::State& state,
+                              quick_action::Kind kind, const quick_action::Facts& facts);
+  // one press, from the inspector or a row's menu, confirmed by a toast with
+  // Undo when it created a rule
+  void RunQuickAction(quick_action::Kind kind, const quick_action::State& state,
+                      const quick_action::Facts& facts);
+  void CopyConnectionDetails(const urnet::BlockAction& action);
+  // the overrides read once into the split rules and the host rules;
+  // force re-applies both
+  void ApplyOverrides(std::optional<urnet::BlockActionOverrideList> overrides, bool force);
   // The exit a destination ip routed through, and that exit's health, joined
   // out of the reliability snapshot (DestinationExit.DestinationIp ->
   // ClientId -> Exit). nullopt = "no recorded address of this action is in the
@@ -559,6 +589,8 @@ class ConnectPage : public Gtk::Box {
   Gtk::Entry* connectionsSearch_ = nullptr;
   Gtk::Button* connectionsClear_ = nullptr;
   Gtk::Switch* connectionsGroupToggle_ = nullptr;
+  // the rows' one menu, parented to connectionsArea_ and refilled per open
+  Gtk::Popover* rowMenu_ = nullptr;
   connection_filter::Verdict verdictFilter_ = connection_filter::Verdict::All;
   std::string connectionsQuery_;
   bool connectionsGrouped_ = false;
@@ -569,7 +601,29 @@ class ConnectPage : public Gtk::Box {
   Gtk::Label* inspectorTitle_ = nullptr;
   Gtk::Label* inspectorDot_ = nullptr;
   Gtk::Label* inspectorVerdict_ = nullptr;
-  Gtk::Box* inspectorRows_ = nullptr;
+  // the quick actions' row and buttons, and the state each was last drawn
+  // in: a press acts on exactly what its button showed
+  Gtk::Widget* inspectorActions_ = nullptr;
+  Gtk::Button* inspectorBlockButton_ = nullptr;
+  Gtk::Button* inspectorRouteButton_ = nullptr;
+  Gtk::Button* inspectorCopyButton_ = nullptr;
+  quick_action::State blockQuick_;
+  quick_action::State routeQuick_;
+  // the live host rules the quick actions read (ApplyOverrides)
+  std::vector<quick_action::HostRule> hostRules_;
+  uint64_t hostRulesSig_ = ~0ull;
+  // the quick actions' confirmations, one at a time
+  ToastSlot quickToast_;
+  // the fields over Reason and under it, rebuilt on every render
+  Gtk::Box* inspectorRowsAbove_ = nullptr;
+  Gtk::Box* inspectorRowsBelow_ = nullptr;
+  // Reason, built once: its plain value or its link to the split rules
+  // sheet, and the reason they were last written with
+  Gtk::Widget* inspectorReasonRow_ = nullptr;
+  Gtk::Label* inspectorReasonValue_ = nullptr;
+  Gtk::Button* inspectorReasonLink_ = nullptr;
+  Gtk::Label* inspectorReasonLinkText_ = nullptr;
+  Glib::ustring inspectorReasonText_;
   TransferChart* blockedChart_ = nullptr;
   TransferChart* localChart_ = nullptr;
   Gtk::Box* liveStatsGroup_ = nullptr;

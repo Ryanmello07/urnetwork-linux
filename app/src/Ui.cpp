@@ -224,6 +224,53 @@ void ShowToast(Gtk::Widget& context, const std::string& message) {
   }
 }
 
+ToastSlot::~ToastSlot() { Forget(); }
+
+void ToastSlot::Forget() {
+  if (!toast_) return;
+  g_object_remove_weak_pointer(G_OBJECT(toast_), &toast_);
+  toast_ = nullptr;
+}
+
+void ToastSlot::Dismiss() {
+  if (!toast_) return;
+  AdwToast* toast = ADW_TOAST(toast_);
+  Forget();
+  adw_toast_dismiss(toast);
+}
+
+void ToastSlot::Show(Gtk::Widget& context, const std::string& message,
+                     const std::string& buttonLabel, std::function<void()> onButton) {
+  AdwToastOverlay* overlay = nullptr;
+  for (GtkWidget* widget = GTK_WIDGET(context.gobj()); widget;
+       widget = gtk_widget_get_parent(widget)) {
+    if (ADW_IS_TOAST_OVERLAY(widget)) {
+      overlay = ADW_TOAST_OVERLAY(widget);
+      break;
+    }
+  }
+  if (!overlay) return;
+  Dismiss();
+  AdwToast* toast = adw_toast_new(message.c_str());
+  if (!buttonLabel.empty() && onButton) {
+    adw_toast_set_button_label(toast, buttonLabel.c_str());
+    // the closure owns the callback; "button-clicked" fires once, as the
+    // button also dismisses the toast
+    auto* callback = new std::function<void()>(std::move(onButton));
+    g_signal_connect_data(
+        toast, "button-clicked",
+        G_CALLBACK(+[](AdwToast*, gpointer data) {
+          (*static_cast<std::function<void()>*>(data))();
+        }),
+        callback,
+        +[](gpointer data, GClosure*) { delete static_cast<std::function<void()>*>(data); },
+        GConnectFlags(0));
+  }
+  toast_ = toast;
+  g_object_add_weak_pointer(G_OBJECT(toast), &toast_);
+  adw_toast_overlay_add_toast(overlay, toast);  // takes the toast
+}
+
 void AddEscapeToClose(Gtk::Window& window) {
   auto key = Gtk::EventControllerKey::create();
   key->signal_key_pressed().connect(

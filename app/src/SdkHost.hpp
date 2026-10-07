@@ -916,6 +916,15 @@ class SdkHost {
   std::optional<urnet::BlockStats> BlockStatsSnapshot();
   std::optional<urnet::BlockActionOverrideList> BlockActionOverrides();
   void AddBlockActionOverride(const urnet::BlockActionOverride& override_);
+  // The connect inspector's host rules (QuickAction.hpp), written like any
+  // override and returning the new override's id for the press's Undo, or ""
+  // when nothing was written (no hosts, or no device and no local state).
+  // AddHostBlockRule: BlockOverride{block}, true blocks the hosts and false
+  // countermands a block. AddHostRouteRule: RouteOverride{local} with Pin
+  // off, true bypasses the tunnel and false keeps the hosts in it (a pin is
+  // exit placement inside the tunnel, never tunnel membership).
+  std::string AddHostBlockRule(const urnet::StringList& hosts, bool block);
+  std::string AddHostRouteRule(const urnet::StringList& hosts, bool local);
   // Replaces the hosts of the override with the given id (full-list rebuild).
   void SetBlockActionOverrideHosts(const std::string& overrideId, const urnet::StringList& hosts);
   void RemoveBlockActionOverride(const std::string& overrideId);
@@ -1243,6 +1252,9 @@ class SdkHost {
   // Tear down the device/tunnel/view-controllers without touching the stored
   // auth (Logout clears auth too; the guest upgrade only swaps the device).
   void TeardownDeviceLocked();
+  // the device persists the override, else local state does; false when
+  // there is neither
+  bool AddBlockActionOverrideLocked(const urnet::BlockActionOverride& override_);
   void SetupWalletCallbacks();
   // Answers a ConnectSolanaWallet that is still waiting with `reason` (another
   // wallet flow is taking the bridge). Takes mutex_: never call it holding it.

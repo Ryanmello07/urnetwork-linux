@@ -3773,16 +3773,47 @@ std::optional<urnet::BlockActionOverrideList> SdkHost::BlockActionOverrides() {
 
 void SdkHost::AddBlockActionOverride(const urnet::BlockActionOverride& override_) {
   std::scoped_lock lock(mutex_);
+  AddBlockActionOverrideLocked(override_);
+}
+
+bool SdkHost::AddBlockActionOverrideLocked(const urnet::BlockActionOverride& override_) {
   if (device_) {
     device_->addBlockActionOverride(override_);  // the device persists
-    return;
+    return true;
   }
   if (localState_) {
     urnet::BlockActionOverrideList overrides;
     if (auto current = localState_->getBlockActionOverrides()) overrides = std::move(*current);
     overrides.push_back(override_);
     localState_->setBlockActionOverrides(overrides);
+    return true;
   }
+  return false;
+}
+
+std::string SdkHost::AddHostBlockRule(const urnet::StringList& hosts, bool block) {
+  if (hosts.empty()) return {};
+  urnet::BlockActionOverride override_;
+  override_.OverrideId = urnet::newId();
+  override_.Hosts = hosts;
+  urnet::BlockOverride blockOverride;
+  blockOverride.Block = block;
+  override_.BlockOverride = blockOverride;
+  std::scoped_lock lock(mutex_);
+  return AddBlockActionOverrideLocked(override_) ? *override_.OverrideId : std::string();
+}
+
+std::string SdkHost::AddHostRouteRule(const urnet::StringList& hosts, bool local) {
+  if (hosts.empty()) return {};
+  urnet::BlockActionOverride override_;
+  override_.OverrideId = urnet::newId();
+  override_.Hosts = hosts;
+  urnet::RouteOverride route;
+  route.Local = local;
+  route.Pin = false;
+  override_.RouteOverride = route;
+  std::scoped_lock lock(mutex_);
+  return AddBlockActionOverrideLocked(override_) ? *override_.OverrideId : std::string();
 }
 
 void SdkHost::SetBlockActionOverrideHosts(const std::string& overrideId,
