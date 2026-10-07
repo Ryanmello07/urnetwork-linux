@@ -15,6 +15,7 @@
 #include "FastDnsCopy.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "KeyedReconcile.hpp"
 #include "KillSwitchCopy.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
 #include "ProvideLine.hpp"
@@ -255,6 +256,27 @@ std::string ShortId(const std::string& id) {
 }
 
 int64_t NowMillis() { return g_get_real_time() / 1000; }
+
+// The reconcile key of one routing decision: its id, or for a decision the
+// feed sent without one, its time and title, which hold still from push to
+// push. The prefixes keep the two kinds of key apart.
+std::string ConnectionRowKey(const urnet::BlockAction& action) {
+  if (action.BlockActionId && !action.BlockActionId->empty()) {
+    return "a:" + *action.BlockActionId;
+  }
+  return "t:" + std::to_string(action.Time) + ":" + BlockActionTitle(action);
+}
+
+// An activity row's meta line: how long ago the decision was made, then the
+// totals the line has always carried ("12s ago   3.4 MiB   120 pkt"). A
+// decision without a time (0) has no age rather than a 56-year one.
+std::string ConnectionRowMeta(int64_t timeMs, int64_t byteCount, int64_t packetCount,
+                              int64_t nowMs) {
+  std::string meta;
+  if (0 < timeMs) meta = RelativeTime((nowMs - timeMs) / 1000) + "   ";
+  return meta + FormatByteCountCompact(byteCount) + "   " + FormatCountCompact(packetCount) +
+         " pkt";
+}
 
 // The one-row empty sentence a pane group renders instead of a HOLE: the
 // key/value row species carrying only its key.
@@ -1559,69 +1581,156 @@ void ConnectPage::ApplyLiveStatsGroup() {
 
 // ---- pane B: the routing-decision list ----------------------------------------
 
+// The activity row, built once per reconcile key. Normal: a static row, no
+// tab stop (200 of them on the way to Connect would be hostile). Advanced: the
+// same row as a real button, clickable, in tab order, Enter/Space; a row whose
+// id the feed omitted cannot be inspected, so it renders inert rather than
+// looking like its neighbours and swallowing the click.
+ConnectPage::ConnectionRow ConnectPage::BuildConnectionRow(const std::string& key,
+                                                           const urnet::BlockAction& action) {
+  ConnectionRow row;
+  row.key = key;
+  row.actionId = action.BlockActionId.value_or(std::string());
+  row.selectable = advanced_;
+  if (advanced_) {
+    row.button = kit::MakePaneListRowButton(kListRowHeight);
+    row.button.root->add_css_class("ur-pane-row-36");  // the CSS floor is 40
+    row.root = row.button.root;
+    row.dot = row.button.dot;
+    row.title = row.button.title;
+    row.meta = row.button.meta;
+    row.button.root->set_sensitive(!row.actionId.empty());
+    const std::string id = row.actionId;
+    row.button.root->signal_clicked().connect(
+        [this, id] { SelectConnection(id); });  // by id, captured by value
+  } else {
+    auto plain = kit::MakePaneListRow(kListRowHeight);
+    row.root = plain.root;
+    row.dot = plain.dot;
+    row.title = plain.title;
+    row.meta = plain.meta;
+  }
+  // the row's own name is the whole announcement: its parts must not be read
+  // out again after it
+  kit::MarkDecorative(*row.title);
+  kit::MarkDecorative(*row.meta);
+  UpdateConnectionRow(row, action);
+  return row;
+}
+
+// Everything a push can change about a row already on screen, written in
+// place: the counters and the meta line, the title, the verdict's dot and
+// word. The widget, its focus and its hover are untouched.
+void ConnectPage::UpdateConnectionRow(ConnectionRow& row, const urnet::BlockAction& action) {
+  row.timeMs = action.Time;
+  row.byteCount = action.ByteCount;
+  row.packetCount = action.PacketCount;
+  std::string title = BlockActionTitle(action);
+  if (title.empty()) title = T_("unknown", "unknown");
+  row.title->set_text(title);
+  const char* dot = VerdictDot(action);
+  if (row.dotColor != dot) {
+    row.dotColor = dot;
+    row.dot->set_markup(DotMarkup(7, dot));
+  }
+  WriteConnectionRowMeta(row, NowMillis());
+  // the dot is decorative: the NAME is the only place the color's meaning
+  // exists for a screen reader
+  row.name = Glib::ustring(title) + ", " + VerdictWord(action);
+  AnnounceConnectionRow(row);
+}
+
+void ConnectPage::WriteConnectionRowMeta(ConnectionRow& row, int64_t nowMs) {
+  std::string meta = ConnectionRowMeta(row.timeMs, row.byteCount, row.packetCount, nowMs);
+  if (meta == row.metaText) return;  // a quiet second costs no layout
+  row.metaText = std::move(meta);
+  row.meta->set_text(row.metaText);
+}
+
+void ConnectPage::AnnounceConnectionRow(ConnectionRow& row) {
+  const bool selected =
+      row.selectable && !selectedConnectionId_.empty() && row.actionId == selectedConnectionId_;
+  // selection rides THREE channels: the fill step and the 2px accent bar
+  // (ApplyConnectionSelectionVisuals), and the announced name gaining the
+  // suffix
+  Glib::ustring announced =
+      selected ? row.name + ", " + T_("adv_selected", "selected") : row.name;
+  if (announced == row.announced) return;
+  row.announced = std::move(announced);
+  kit::SetAccessibleLabel(*row.root, row.announced);
+}
+
+// Incremental. The feed pushes about once a second during live traffic (the
+// counters are in its fingerprint), and a rebuild on every push threw away the
+// keyboard focus and hover of an Advanced row and re-announced the list to a
+// screen reader. Rows are keyed by block action id (ConnectionRowKey) and
+// reconciled against the visible slice (KeyedReconcile.hpp): a new decision
+// is inserted, a living row is rewritten in place, a row past the cap or out
+// of the feed is removed.
 void ConnectPage::ApplyConnectionsList() {
   if (!connectionsHost_) return;
-  // drop the row handles BEFORE the widgets they point at go away
-  connectionRows_.clear();
-  connectionIds_.clear();
-  connectionNames_.clear();
-  RemoveAllChildren(*connectionsHost_);
+  // The Advanced Mode flip changes the row type (static <-> selectable),
+  // which an in-place update cannot morph: the one path that still clears,
+  // and a user gesture, never a push. The handles go before the widgets.
+  if (connectionRowsSelectable_ != advanced_) {
+    connectionRows_.clear();
+    RemoveAllChildren(*connectionsHost_);
+    connectionRowsSelectable_ = advanced_;
+  }
 
   const size_t total = blockActions_ ? blockActions_->size() : 0;
+  // NEWEST FIRST. The Linux feed is delivered oldest-first
+  // (BlockActionViewController::getBlockActions is the window in arrival
+  // order), so the list is walked from the back — the already-shipped
+  // consumer does the same (SplitRulesSheet: "live activity, newest first").
+  // Read forward, the 200-row cap would keep the 200 OLDEST decisions and no
+  // newly contacted host would ever appear again on a busy session.
+  std::vector<const urnet::BlockAction*> visible;
+  std::vector<std::string> keys;
   if (blockActions_) {
-    size_t shown = 0;
-    // NEWEST FIRST. The Linux feed is delivered oldest-first
-    // (BlockActionViewController::getBlockActions is the window in arrival
-    // order), so the list is walked from the back — the already-shipped
-    // consumer does the same (SplitRulesSheet: "live activity, newest first").
-    // Read forward, the 200-row cap would keep the 200 OLDEST decisions and no
-    // newly contacted host would ever appear again on a busy session.
     for (auto it = blockActions_->rbegin(); it != blockActions_->rend(); ++it) {
-      if (shown >= kMaxConnectionRows) break;  // a cap, not a scroll budget
-      const urnet::BlockAction& action = *it;
-      std::string title = BlockActionTitle(action);
-      if (title.empty()) title = T_("unknown", "unknown");
-      const std::string meta = FormatByteCountCompact(action.ByteCount) + "   " +
-                               FormatCountCompact(action.PacketCount) + " pkt";
-      const char* dot = VerdictDot(action);
-      const std::string id = action.BlockActionId.value_or(std::string());
-      // the dot is decorative: the NAME is the only place the color's meaning
-      // exists for a screen reader
-      const Glib::ustring name = Glib::ustring(title) + ", " + VerdictWord(action);
-      if (advanced_) {
-        // Advanced: EVERY row is a real button — clickable, in tab order,
-        // Enter/Space. A row whose id the feed omitted cannot be inspected, so
-        // it renders inert (disabled) rather than looking identical to its
-        // neighbours and swallowing the click.
-        auto row = kit::MakePaneListRowButton(kListRowHeight);
-        row.root->add_css_class("ur-pane-row-36");  // the CSS floor is 40
-        row.title->set_text(title);
-        row.meta->set_text(meta);
-        row.dot->set_markup(DotMarkup(7, dot));
-        // the row's own name is the whole announcement: its parts must not be
-        // read out again after it
-        kit::MarkDecorative(*row.title);
-        kit::MarkDecorative(*row.meta);
-        kit::SetAccessibleLabel(*row.root, name);
-        row.root->set_sensitive(!id.empty());
-        row.root->signal_clicked().connect(
-            [this, id] { SelectConnection(id); });  // by id, captured by value
-        connectionsHost_->append(*row.root);
-        connectionRows_.push_back(row);
-        connectionIds_.push_back(id);
-        connectionNames_.push_back(name);
-      } else {
-        // Normal: static rows — 200 tab stops on the way to Connect is hostile
-        auto row = kit::MakePaneListRow(kListRowHeight);
-        row.title->set_text(title);
-        row.meta->set_text(meta);
-        row.dot->set_markup(DotMarkup(7, dot));
-        kit::MarkDecorative(*row.title);
-        kit::MarkDecorative(*row.meta);
-        kit::SetAccessibleLabel(*row.root, name);
-        connectionsHost_->append(*row.root);
+      if (visible.size() >= kMaxConnectionRows) break;  // a cap, not a scroll budget
+      visible.push_back(&*it);
+      keys.push_back(ConnectionRowKey(*it));
+    }
+  }
+
+  std::vector<std::string> onScreen;
+  onScreen.reserve(connectionRows_.size());
+  for (const auto& row : connectionRows_) onScreen.push_back(row.key);
+  for (const reconcile::Step& step : reconcile::Plan(onScreen, keys)) {
+    const auto at = connectionRows_.begin() + static_cast<std::ptrdiff_t>(step.index);
+    switch (step.kind) {
+      case reconcile::StepKind::Remove:
+        connectionsHost_->remove(*at->root);
+        connectionRows_.erase(at);
+        break;
+      case reconcile::StepKind::Update:
+        UpdateConnectionRow(*at, *visible[step.wantedIndex]);
+        break;
+      case reconcile::StepKind::Move: {
+        ConnectionRow row = std::move(connectionRows_[step.from]);
+        connectionRows_.erase(connectionRows_.begin() + static_cast<std::ptrdiff_t>(step.from));
+        UpdateConnectionRow(row, *visible[step.wantedIndex]);
+        if (step.index == 0) {
+          connectionsHost_->reorder_child_at_start(*row.root);
+        } else {
+          connectionsHost_->reorder_child_after(*row.root, *connectionRows_[step.index - 1].root);
+        }
+        connectionRows_.insert(connectionRows_.begin() + static_cast<std::ptrdiff_t>(step.index),
+                               std::move(row));
+        break;
       }
-      ++shown;
+      case reconcile::StepKind::Insert: {
+        ConnectionRow row = BuildConnectionRow(keys[step.wantedIndex], *visible[step.wantedIndex]);
+        if (step.index == 0) {
+          connectionsHost_->insert_child_at_start(*row.root);
+        } else {
+          connectionsHost_->insert_child_after(*row.root, *connectionRows_[step.index - 1].root);
+        }
+        connectionRows_.insert(at, std::move(row));
+        break;
+      }
     }
   }
 
@@ -1639,6 +1748,16 @@ void ConnectPage::ApplyConnectionsList() {
   ApplyInspector();  // a selection that aged out of the feed must SAY so
 }
 
+// The 1s reading of the meta lines' age: one string per row from the counters
+// it keeps, with no feed read and no rebuild.
+void ConnectPage::RefreshConnectionRowTimes() {
+  if (connectionRows_.empty()) return;
+  const int64_t nowMs = NowMillis();
+  for (auto& row : connectionRows_) {
+    if (0 < row.timeMs) WriteConnectionRowMeta(row, nowMs);
+  }
+}
+
 void ConnectPage::SelectConnection(const std::string& id) {
   // clicking the selected row clears it (a toggle)
   selectedConnectionId_ = (selectedConnectionId_ == id) ? std::string() : id;
@@ -1648,19 +1767,11 @@ void ConnectPage::SelectConnection(const std::string& id) {
 
 void ConnectPage::ApplyConnectionSelectionVisuals() {
   // repaint WITHOUT rebuilding: a rebuild would destroy keyboard focus
-  const size_t rows = std::min(connectionRows_.size(),
-                               std::min(connectionIds_.size(), connectionNames_.size()));
-  for (size_t i = 0; i < rows; ++i) {
-    const bool selected =
-        !selectedConnectionId_.empty() && connectionIds_[i] == selectedConnectionId_;
-    kit::SetPaneListRowSelected(connectionRows_[i], selected);
-    if (!connectionRows_[i].root) continue;
-    // selection rides THREE channels: the fill step and the 2px accent bar
-    // (both above), and the announced name gaining the suffix
-    kit::SetAccessibleLabel(
-        *connectionRows_[i].root,
-        selected ? connectionNames_[i] + ", " + T_("adv_selected", "selected")
-                 : connectionNames_[i]);
+  for (auto& row : connectionRows_) {
+    if (!row.selectable) continue;
+    kit::SetPaneListRowSelected(
+        row.button, !selectedConnectionId_.empty() && row.actionId == selectedConnectionId_);
+    AnnounceConnectionRow(row);
   }
 }
 
@@ -2959,7 +3070,8 @@ void ConnectPage::Tick() {
   // live and the read stays off the per-frame path
   if (tickCount_ % 5 == 0) PullThroughput();
   // every 10th tick (~1 s): re-read the feeds the page has no event path for
-  // (see PollFeeds) and re-run the open split-rules sheet.
+  // (see PollFeeds), re-run the open split-rules sheet and age the activity
+  // rows' meta lines.
   if (tickCount_ % 10 == 0) {
     // With events reaching OnHostEvent this is already the 5 s safety net for
     // the pushes dropped while the window was hidden. A changed feed cascades
@@ -2972,6 +3084,8 @@ void ConnectPage::Tick() {
     // those captions keep the age they had when the sheet was opened (only
     // Open() forces a rebuild). Fixing it needs that entry point on the sheet.
     if (!eventsWired_ || tickCount_ % 50 == 0) PollFeeds();
+    // the activity rows' age, on screen only (the rows outlive a fold)
+    if (paneB_.root && paneB_.root->get_visible()) RefreshConnectionRowTimes();
     // and every 5th of those (5 s), Advanced only: the exit-routing cache
     if (tickCount_ % 50 == 0 && advanced_) RefreshExitRouting();
   }

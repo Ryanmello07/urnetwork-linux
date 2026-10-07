@@ -5,7 +5,9 @@
 // session the row reads three "disconnected" columns and the panel the
 // disconnected network. The rules themselves are IpFamilyStatusTest.cpp's and
 // ExtenderStatusPresentationTest.cpp's; the page, the panel and the host need
-// GTK and the SDK, so this reads their sources.
+// GTK and the SDK, so this reads their sources. So do the routing-decision
+// rows under them, which are reconciled in place (KeyedReconcileTest.cpp has
+// the plan) and aged by the clock.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
@@ -113,4 +115,43 @@ UR_TEST(ConnectActivity_ThePanelNeverHides) {
   UR_EXPECT_TRUE(Mentions(render, "panel_.countFaint() ? \"ur-label-faint\" : \"dim-label\""));
   // the dot uses the connect status line's colors
   UR_EXPECT_TRUE(Mentions(panel, "case extender::StatusDot::Yellow: return kUrYellow;"));
+}
+
+// The decision rows are reconciled in place by key: only the Advanced Mode
+// flip, which changes the row type, still clears the list. A push rewrites
+// the rows it keeps, so an Advanced row keeps its focus and hover.
+UR_TEST(ConnectActivity_TheRowsReconcileInPlace) {
+  const std::string page = ReadActivitySource("ConnectPage.cpp");
+  const std::string list = ActivityBody(page, "void ConnectPage::ApplyConnectionsList(");
+  UR_EXPECT_TRUE(InSequence(list, {"if (connectionRowsSelectable_ != advanced_) {",
+                                   "RemoveAllChildren(*connectionsHost_);",
+                                   "connectionRowsSelectable_ = advanced_;", "}",
+                                   "reconcile::Plan(onScreen, keys)"}));
+  const size_t clear = list.find("RemoveAllChildren(");
+  UR_EXPECT_TRUE(clear != std::string::npos);
+  UR_EXPECT_TRUE(list.find("RemoveAllChildren(", clear + 1) == std::string::npos);
+  UR_EXPECT_TRUE(Mentions(list, "case reconcile::StepKind::Update:"));
+  UR_EXPECT_TRUE(Mentions(list, "UpdateConnectionRow(*at, *visible[step.wantedIndex]);"));
+  UR_EXPECT_TRUE(Mentions(list, "connectionsHost_->remove(*at->root);"));
+  UR_EXPECT_TRUE(Mentions(list, "connectionsHost_->reorder_child_after("));
+  UR_EXPECT_TRUE(Mentions(list, "connectionsHost_->insert_child_after("));
+  // the key: the decision's id, or its time and title when it has none
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "std::string ConnectionRowKey("),
+                            {"return \"a:\" + *action.BlockActionId;",
+                             "return \"t:\" + std::to_string(action.Time)"}));
+}
+
+// The meta line leads with the decision's age, which the 1s clock re-renders
+// from the row's own counters without a feed push.
+UR_TEST(ConnectActivity_TheClockAgesTheRows) {
+  const std::string page = ReadActivitySource("ConnectPage.cpp");
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "std::string ConnectionRowMeta("),
+                            {"if (0 < timeMs) meta = RelativeTime((nowMs - timeMs) / 1000)",
+                             "FormatByteCountCompact(byteCount)",
+                             "FormatCountCompact(packetCount)"}));
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::Tick()"),
+                            {"if (tickCount_ % 10 == 0) {", "RefreshConnectionRowTimes();"}));
+  const std::string ages = ActivityBody(page, "void ConnectPage::RefreshConnectionRowTimes()");
+  UR_EXPECT_TRUE(Mentions(ages, "WriteConnectionRowMeta(row, nowMs);"));
+  UR_EXPECT_TRUE(!Mentions(ages, "host_."));
 }

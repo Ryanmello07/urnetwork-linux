@@ -537,7 +537,7 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # space write starts from, the per-app exclusion's slice, rules and call
 # sites, what a network peer row connects to, the provider card's idle
 # reason, status line, demand histogram and ranking rows, the connect page's
-# provide line and fold table, the exclusion
+# provide line, fold table and activity rows' keyed reconcile, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
 # lines and their filters, which device carries a feedback's log upload, for
@@ -642,6 +642,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/LegacyHomeRemovedTest.cpp',
     'tests/ConnectActivityRowsWiringTest.cpp',
     'tests/ConnectFoldTest.cpp',
+    'tests/KeyedReconcileTest.cpp',
     'tests/SignOutTest.cpp',
     'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',

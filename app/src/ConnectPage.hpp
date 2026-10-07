@@ -201,7 +201,43 @@ class ConnectPage : public Gtk::Box {
   void OnConnectionModeChanged();
 
   // ---- pane B / C writers (one per surface) --------------------------------
+  // One activity row as it stands on screen, in display order and parallel to
+  // connectionsHost_'s children: the parts both row forms share, the whole
+  // selectable row in Advanced Mode, and the counters its meta line was
+  // written from, so the clock can age the line without a feed push.
+  struct ConnectionRow {
+    std::string key;       // the reconcile key (ConnectionRowKey)
+    std::string actionId;  // the selection's id; empty when the feed sent none
+    bool selectable = false;  // root is a button (Advanced Mode)
+    Gtk::Widget* root = nullptr;
+    Gtk::Label* dot = nullptr;
+    Gtk::Label* title = nullptr;
+    Gtk::Label* meta = nullptr;
+    kit::PaneListRowButton button;  // valid only when selectable
+    // what the dot and the meta line show, so a push that changes neither
+    // writes neither
+    const char* dotColor = nullptr;
+    std::string metaText;
+    // the announcement without the selection suffix, and as last written
+    Glib::ustring name;
+    Glib::ustring announced;
+    int64_t timeMs = 0;
+    int64_t byteCount = 0;
+    int64_t packetCount = 0;
+  };
+  // a new row for a key, in the form the mode asks for (static or a button)
+  ConnectionRow BuildConnectionRow(const std::string& key, const urnet::BlockAction& action);
+  // a push's changes to a row already on screen, written in place
+  void UpdateConnectionRow(ConnectionRow& row, const urnet::BlockAction& action);
+  // the meta line at nowMs, written only when its text changed
+  void WriteConnectionRowMeta(ConnectionRow& row, int64_t nowMs);
+  // the row's accessible name, with ", selected" while it is the selection
+  void AnnounceConnectionRow(ConnectionRow& row);
+  // Reconciles the rows in place (KeyedReconcile.hpp); only the Advanced Mode
+  // flip, which changes the row type, still clears the list.
   void ApplyConnectionsList();
+  // the meta lines' age on the 1s clock, from each row's own counters
+  void RefreshConnectionRowTimes();
   void ApplyConnectionSelectionVisuals();
   void SelectConnection(const std::string& id);
   void ApplySessionCardsVisibility();
@@ -480,13 +516,11 @@ class ConnectPage : public Gtk::Box {
   Gtk::Box* connectionsArea_ = nullptr;
   Gtk::Box* connectionsHost_ = nullptr;
   Gtk::Widget* connectionsEmpty_ = nullptr;
-  // rows and ids in PARALLEL vectors: the selection is held by block-action
-  // id, never by index (the feed rebuilds and rows move).
-  std::vector<std::string> connectionIds_;
-  std::vector<kit::PaneListRowButton> connectionRows_;
-  // the row's announcement without the selection suffix, kept so selection can
-  // repaint the name without re-deriving it from the feed
-  std::vector<Glib::ustring> connectionNames_;
+  // The rows on screen. The selection is held by block-action id, never by
+  // index: rows move as the feed moves.
+  std::vector<ConnectionRow> connectionRows_;
+  // the mode the rows on screen were built for (static or selectable)
+  bool connectionRowsSelectable_ = false;
 
   // ---- pane C: statistics / inspector ----------------------------------------
   Gtk::Box* inspectorGroup_ = nullptr;
