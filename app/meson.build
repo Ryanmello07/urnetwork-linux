@@ -697,6 +697,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/DaemonStatusPollWiringTest.cpp',
     'tests/BrowserSignInGateTest.cpp',
     'tests/TrayPolicyTest.cpp',
+    'tests/AccountPlanRowsTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -778,6 +779,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # same way.
               # TrayPolicyTest reads the tray's watcher and the window's close and
               # reachability the same way.
+              # AccountPlanRowsTest reads the Account page's Plan pane the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
