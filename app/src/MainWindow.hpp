@@ -60,6 +60,8 @@ class MainWindow : public Gtk::ApplicationWindow {
   // The no-argument form is for callers with NO button in front of the user —
   // the tray menu — which must therefore ask the page what the press means.
   void ToggleConnect();
+  // the Failed state's press: disconnect, then connect to the same selection
+  void RetryConnect();
   bool connected() const { return connected_; }
   // The out-of-balance notification's Disconnect button ("app." +
   // kBalanceNoticeDisconnectAction, registered in main.cpp). Disconnect only:

@@ -91,8 +91,9 @@ enum class Hero { Disconnected, Connecting, Connected, Error, Processing };
 // The status dot. A token, not a hex: the page owns the palette (§8.1).
 enum class Dot { Idle, Connecting, Green, Coral, Amber };
 
-// The one action the hero and the button share.
-enum class Action { Connect, Disconnect };
+// The one action the hero and the button share. Retry is the Failed state's:
+// it disconnects and connects to the same selection again (Windows 70d682a).
+enum class Action { Connect, Disconnect, Retry };
 
 // Proof this session had and no longer has (DegradeHold, below): Held while
 // the hold runs, Lost after it.
@@ -251,7 +252,47 @@ inline Reading Render(const Signals& s) {
   // session to stop, plus while a teardown the user already asked for is still
   // running (so a second press cannot start a tunnel out of a disconnect).
   r.action = (SessionUp(s) || s.disconnectRequested) ? Action::Disconnect : Action::Connect;
+  // A failure whose one control is Disconnect leaves the user a step from the
+  // retry that usually works, so the failed state offers that instead. It is
+  // still a session to stop: a Retry press stops it first.
+  if (r.state == State::Failed) r.action = Action::Retry;
   return r;
+}
+
+// The line under the status that says why a connect is not there yet, from
+// the SDK's diagnosis of the forming window (WindowStatus.StallReason:
+// evaluating, platform-unreachable, providers-unresponsive, rate-limited,
+// auth-failing). Only while the attempt is building, held, degraded or
+// failed; "evaluating", an unknown reason and the empty one of an SDK that
+// predates the field say nothing the headline does not. A failure with no
+// reason says what Retry does. A null key is no line.
+struct ReasonLine {
+  const char* key = nullptr;
+  const char* english = nullptr;
+};
+
+inline ReasonLine ReasonLineFor(State state, const std::string& stallReason) {
+  const bool stalled = state == State::Connecting || state == State::Evaluating ||
+                       state == State::Degraded || state == State::Failed;
+  if (stalled) {
+    if (stallReason == "platform-unreachable") {
+      return {"conn_reason_platform", "Contacting the platform…"};
+    }
+    if (stallReason == "providers-unresponsive") {
+      return {"conn_reason_providers", "Providers not responding — retrying…"};
+    }
+    if (stallReason == "rate-limited") {
+      return {"conn_reason_rate_limited", "Rate limited — waiting…"};
+    }
+    if (stallReason == "auth-failing") {
+      return {"conn_reason_auth", "Signing in to the platform is failing…"};
+    }
+  }
+  if (state == State::Failed) {
+    return {"conn_failed_detail",
+            "No providers could be reached. Retry rebuilds the connection from scratch."};
+  }
+  return {};
 }
 
 // A provider is proven to carry the session: the tray's connected icon, as

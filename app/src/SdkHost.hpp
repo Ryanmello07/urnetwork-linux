@@ -201,6 +201,10 @@ struct ConnectReading {
   // latched one before it closed. False for a session started while the
   // window was hidden, where the tray keeps the session's own claim.
   bool statusObserved = false;
+  // The SDK's diagnosis of the forming window (WindowStatus.StallReason),
+  // read only while it can matter: a session up, the controller not saying
+  // CONNECTED, the presentation open. "" otherwise.
+  std::string stallReason;
 
   // Value equality, so a consumer can skip a rebuild when nothing moved. It
   // compares EVERY field on purpose: a partial comparison would be one more
@@ -209,7 +213,8 @@ struct ConnectReading {
     return sdk == o.sdk && rawStatus == o.rawStatus &&
            destinationSelected == o.destinationSelected && tunnelBound == o.tunnelBound &&
            providerCount == o.providerCount && insufficientBalance == o.insufficientBalance &&
-           proofLoss == o.proofLoss && statusObserved == o.statusObserved;
+           proofLoss == o.proofLoss && statusObserved == o.statusObserved &&
+           stallReason == o.stallReason;
   }
   bool operator!=(const ConnectReading& o) const { return !(*this == o); }
 

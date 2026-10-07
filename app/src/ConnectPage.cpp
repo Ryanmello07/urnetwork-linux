@@ -1312,6 +1312,13 @@ void ConnectPage::ClearDisconnectIntent() {
 // the relay stays because the page re-renders BEFORE relaying, and a question
 // asked after the relay would get the POST-press answer.
 void ConnectPage::RelayConnectPress() {
+  // Retry stops the failed session and connects again; it is no disconnect
+  // for the user to wait on
+  if (actionIsRetry_) {
+    disconnectRequestedAtUs_ = 0;
+    if (on_retry_connect) on_retry_connect();
+    return;
+  }
   const bool disconnect = actionIsDisconnect_;
   disconnectRequestedAtUs_ = disconnect ? g_get_monotonic_time() : 0;
   // NOTHING IS CLEARED HERE ANY MORE. The previous fix had to drop the pushed
@@ -1384,6 +1391,11 @@ void ConnectPage::ApplyConnectStatus() {
     held = T_(line.key, line.english);
   }
   kit::SetTextOrCollapse(*trafficHeldText_, held);
+  // why it is not connected yet, or what Retry does (the SDK's window diagnosis)
+  const health::ReasonLine reason = health::ReasonLineFor(view.state, reading_.stallReason);
+  const Glib::ustring reasonText =
+      reason.key ? Glib::ustring(T_(reason.key, reason.english)) : Glib::ustring();
+  kit::SetTextOrCollapse(*statusReasonText_, reasonText);
   kit::SetTextOrCollapse(*daemonNoticeText_, daemonNotice_);
 
   canvas_->SetState(heroState);
@@ -1403,8 +1415,10 @@ void ConnectPage::ApplyConnectStatus() {
   // button labelled Disconnect run the connect path.
   const bool isDisconnect = view.action == health::Action::Disconnect;
   actionIsDisconnect_ = isDisconnect;
-  connectBtn_->set_label(isDisconnect ? T_("disconnect", "Disconnect")
-                                      : T_("connect", "Connect"));
+  actionIsRetry_ = view.action == health::Action::Retry;
+  connectBtn_->set_label(actionIsRetry_ ? T_("retry", "Retry")
+                         : isDisconnect ? T_("disconnect", "Disconnect")
+                                        : T_("connect", "Connect"));
   connectBtn_->remove_css_class(isDisconnect ? "ur-pane-primary" : "ur-pane-secondary");
   connectBtn_->add_css_class(isDisconnect ? "ur-pane-secondary" : "ur-pane-primary");
   // A teardown the user asked for is IN FLIGHT, not offered again. Leaving the

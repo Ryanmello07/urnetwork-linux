@@ -121,6 +121,9 @@ class ConnectPage : public Gtk::Box {
   // relay gets the POST-press reading, a different answer to the one the user
   // gave by clicking a labelled button. Prefer this over on_toggle_connect.
   std::function<void(bool disconnect)> on_connect_action;
+  // The Failed state's press (the button reads Retry): MainWindow stops the
+  // session and connects to the same selection again.
+  std::function<void()> on_retry_connect;
   // the legacy void toggle: still used by the tray, which has no button in
   // front of the user and must therefore ask (ConnectActionIsDisconnect).
   // Only consulted when on_connect_action is unwired.
@@ -348,6 +351,7 @@ class ConnectPage : public Gtk::Box {
   // gets from ConnectActionIsDisconnect(). Written by ApplyConnectStatus from
   // the very expression that sets the label — one reading, one answer.
   bool actionIsDisconnect_ = false;
+  bool actionIsRetry_ = false;  // the Failed state's action
   // THE USER'S INTENT, WHICH THE SDK'S CONNECTION TOKEN DOES NOT CARRY.
   // g_get_monotonic_time() microseconds at the moment a Disconnect press was
   // relayed, or 0 for "no disconnect in flight". Until the session actually

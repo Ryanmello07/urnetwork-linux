@@ -3,8 +3,9 @@
 // Connect page, the status strip and the tray read one verdict; it reads
 // again when a running hold ends, because nothing else may; and every
 // deliberate connect or disconnect starts it over. The Connect page shows the
-// held line under the status, and the tray's connected icon means proven
-// while its item follows the session and its tooltip names the state.
+// held line under the status and the SDK's reason for a stall, and offers
+// Retry when the attempt failed; the tray's connected icon means proven while
+// its item follows the session and its tooltip names the state.
 // SdkHost, ConnectPage, MainWindow and the tray need glib, gtkmm and the SDK,
 // so this reads their sources with the comments blanked.
 //
@@ -133,7 +134,7 @@ UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
   UR_EXPECT_TRUE(HealthWiringInOrder(
       reading,
       {"const health::Reading view = health::Render(signals);",
-       "connected_ = view.action == health::Action::Disconnect;",
+       "connected_ = view.action != health::Action::Connect;",
        "health::TrayReading(view, signals, reading.statusObserved);",
        "const bool proven = health::Proven(tray);",
        "const std::string status = T_(tray.textKey, tray.textEnglish);",
@@ -158,4 +159,36 @@ UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
       HealthWiringBody(tray, "void Tray::SetState(bool sessionUp, bool proven, "
                              "const std::string& status) {"),
       {"\"NewIcon\"", "\"NewToolTip\"", "\"LayoutUpdated\""}));
+}
+
+// The window's diagnosis is read only while it can matter, the page renders it
+// under the status from the same reading, and a Retry press stops the failed
+// session and connects to the selection it had, read before the stop.
+UR_TEST(ConnectionHealthWiring_TheStallReasonAndRetry) {
+  const std::string host = ReadHealthWiringSource("SdkHost.cpp");
+  const std::string facts = HealthWiringBody(host, "ConnectReading SdkHost::ReadConnectFacts() {");
+  UR_EXPECT_TRUE(HealthWiringInOrder(
+      facts, {"if (!sessionUp) {", "return r;",
+              "if (connectVc_ && r.sdk != health::SdkStatus::Connected) {",
+              "device_->getWindowStatus()", "r.stallReason = windowStatus->StallReason;"}));
+  UR_EXPECT_TRUE(HealthWiringHas(ReadHealthWiringSource("SdkHost.hpp"),
+                                 "stallReason == o.stallReason;"));
+  const std::string page = ReadHealthWiringSource("ConnectPage.cpp");
+  const std::string status = HealthWiringBody(page, "void ConnectPage::ApplyConnectStatus() {");
+  UR_EXPECT_TRUE(HealthWiringInOrder(
+      status, {"health::ReasonLineFor(view.state, reading_.stallReason);",
+               "kit::SetTextOrCollapse(*statusReasonText_,",
+               "actionIsRetry_ = view.action == health::Action::Retry;",
+               "connectBtn_->set_label(actionIsRetry_ ? T_(\"retry\", \"Retry\")"}));
+  const std::string relay = HealthWiringBody(page, "void ConnectPage::RelayConnectPress() {");
+  UR_EXPECT_TRUE(HealthWiringInOrder(
+      relay, {"if (actionIsRetry_) {", "disconnectRequestedAtUs_ = 0;", "on_retry_connect();",
+              "return;", "const bool disconnect = actionIsDisconnect_;"}));
+  const std::string window = ReadHealthWiringSource("MainWindow.cpp");
+  UR_EXPECT_TRUE(
+      HealthWiringHas(window, "connectPage_->on_retry_connect = [this] { RetryConnect(); };"));
+  UR_EXPECT_TRUE(HealthWiringInOrder(
+      HealthWiringBody(window, "void MainWindow::RetryConnect() {"),
+      {"const auto target = host_.SelectedLocation();", "host_.Disconnect();",
+       "StartTunnelUi(\"retry\", target);"}));
 }

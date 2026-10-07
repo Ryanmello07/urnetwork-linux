@@ -1519,6 +1519,7 @@ void MainWindow::BuildHome() {
   // what left the window re-deriving the action from a stricter reading, and a
   // button reading "Disconnect" starting a tunnel.
   connectPage_->on_connect_action = [this](bool disconnect) { ToggleConnect(disconnect); };
+  connectPage_->on_retry_connect = [this] { RetryConnect(); };
   connectPage_->on_open_locations = [this] { OpenLocationChooser(); };
   // "Connected to N providers" -> the provider sheet. MainWindow owns it
   // because the GeoClue location override must keep following the window
@@ -2255,6 +2256,18 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // the connect-reading feed reflects the real state as it changes
 }
 
+// Retry, the Failed state's one action, as Windows has it: stop the failed
+// session and connect to the same selection again, the manual sequence that
+// recovers a window the SDK has given up on. The selection is read before the
+// disconnect, which clears the device's.
+void MainWindow::RetryConnect() {
+  const auto target = host_.SelectedLocation();
+  g_message("connect: retry pressed");
+  host_.Disconnect();
+  daemonStatus_.reset();
+  StartTunnelUi("retry", target);
+}
+
 // THE DAEMON'S OWN VERDICT, WRITTEN INTO THE READING. The status poll has just
 // learned that urnetworkd is not running our tunnel any more; `tunnelBound` is
 // precisely that fact, so it is set here rather than answered with a separate
@@ -2293,7 +2306,7 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // used to be asked for, now asked once: the tray's label, the tray's action
   // and this window's press logging all read this one bit, so the menu can no
   // longer say "Connect" over a press that disconnects.
-  connected_ = view.action == health::Action::Disconnect;
+  connected_ = view.action != health::Action::Connect;
   if (view.state == health::State::Connected) NoteConnected();
   // The page renders the status strip's state field with its own status row
   // (on_status_rendered).

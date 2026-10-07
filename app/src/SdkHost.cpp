@@ -3010,6 +3010,12 @@ ConnectReading SdkHost::ReadConnectFacts() {
   // With the presentation closed since before the session's first status
   // there is no evidence at all, and the tray keeps the session's claim.
   r.statusObserved = connectVc_.has_value() || r.sdk != health::SdkStatus::Unknown;
+  // Why the window is not there yet, for the line under the status. A device
+  // rpc, so only while the attempt is still building or has failed, and with
+  // the presentation open, as the grid's size is.
+  if (connectVc_ && r.sdk != health::SdkStatus::Connected) {
+    if (auto windowStatus = device_->getWindowStatus()) r.stallReason = windowStatus->StallReason;
+  }
   return r;
 }
 

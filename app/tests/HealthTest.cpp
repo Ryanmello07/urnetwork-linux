@@ -87,8 +87,9 @@ UR_TEST(stateTableConnectingAndEvaluating) {
 }
 
 UR_TEST(stateTableFailedAndDisconnected) {
+  // the failed state's one action is Retry: stop, then connect again
   ExpectRow("window failed", Session(SdkStatus::Failed, 0), State::Failed, "Couldn't connect",
-            Dot::Coral, Hero::Error, Action::Disconnect);
+            Dot::Coral, Hero::Error, Action::Retry);
   ExpectRow("idle", Signals{}, State::Disconnected, "Disconnected", Dot::Idle, Hero::Disconnected,
             Action::Connect);
   UR_EXPECT_TRUE(Render(Signals{}).showNotProtected);
@@ -194,8 +195,12 @@ UR_TEST(theButtonAndTheHeadlineComeFromTheSameReading) {
               s.insufficientBalance = balance != 0;
               s.disconnectRequested = intent != 0;
               const Reading r = Render(s);
-              const bool offersDisconnect = r.action == Action::Disconnect;
+              // Retry stops the failed session before it connects again
+              const bool offersDisconnect = r.action != Action::Connect;
               const bool somethingToStop = SessionUp(s) || s.disconnectRequested;
+              if ((r.action == Action::Retry) != (r.state == State::Failed)) {
+                UR_FAIL("Retry is offered outside the failed state, or not in it");
+              }
               if (offersDisconnect != somethingToStop) {
                 UR_FAIL("button action disagrees with the session reading");
               }
@@ -355,4 +360,38 @@ UR_TEST(theTrayKeepsTheSessionsClaimWithNoStatusObserved) {
   // an observed proof stays proven
   const Signals carrying = Session(SdkStatus::Connected, 4);
   UR_EXPECT_TRUE(Proven(TrayReading(Render(carrying), carrying, /*statusObserved=*/true)));
+}
+
+// ---- the reason line (the SDK's window diagnosis) --------------------------
+
+UR_TEST(theReasonLineNamesTheStallWhileTheAttemptIsNotThere) {
+  struct Row {
+    const char* reason;
+    const char* key;
+  };
+  const Row rows[] = {{"platform-unreachable", "conn_reason_platform"},
+                      {"providers-unresponsive", "conn_reason_providers"},
+                      {"rate-limited", "conn_reason_rate_limited"},
+                      {"auth-failing", "conn_reason_auth"}};
+  for (const State state :
+       {State::Connecting, State::Evaluating, State::Degraded, State::Failed}) {
+    for (const Row& row : rows) {
+      const ReasonLine line = ReasonLineFor(state, row.reason);
+      if (!line.key || std::string(line.key) != row.key) UR_FAIL(std::string(row.reason));
+    }
+    // evaluating, an unknown token and an SDK without the field say nothing
+    // the headline does not
+    for (const char* quiet : {"evaluating", "", "something-new"}) {
+      const ReasonLine line = ReasonLineFor(state, quiet);
+      const bool expectDetail = state == State::Failed;
+      if ((line.key != nullptr) != expectDetail) UR_FAIL(std::string("quiet: ") + quiet);
+    }
+  }
+  // a failure with no reason says what Retry does
+  UR_EXPECT_TRUE(std::string(ReasonLineFor(State::Failed, "").key) == "conn_failed_detail");
+  // and nothing is said over a connection, an idle page, a teardown or a block
+  for (const State state :
+       {State::Connected, State::Disconnected, State::Disconnecting, State::Blocked}) {
+    UR_EXPECT_TRUE(ReasonLineFor(state, "providers-unresponsive").key == nullptr);
+  }
 }
