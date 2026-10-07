@@ -386,9 +386,17 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     // builds the bundled space, then binds the space the user last chose in
     // the network sheet -- the manager persisted it as active -- so a custom
     // server survives a relaunch, its jwt with it (NetworkSpaceBootstrap.hpp).
+    // URNETWORK_NETWORK_HOST binds a test network instead, for this process.
     // Nothing below may take a NetworkSpace from the manager before this.
-    networkSpace_ = LaunchUrNetworkSpace(*spaceManager_);
-    if (const std::string hostName = networkSpace_->getHostName(); hostName != kUrHostName) {
+    const LaunchOverride launchOverride = LaunchOverrideFromEnvironment();
+    if (launchOverride.Active()) {
+      g_warning("sdkhost: NETWORK OVERRIDE host=%s env=%s. This client is NOT talking to "
+                "production.",
+                launchOverride.host.c_str(), launchOverride.env.c_str());
+    }
+    networkSpace_ = LaunchUrNetworkSpace(*spaceManager_, launchOverride);
+    if (const std::string hostName = networkSpace_->getHostName();
+        !launchOverride.Active() && hostName != kUrHostName) {
       g_message("sdkhost: restored the network space this client was last pointed at: '%s'",
                 hostName.c_str());
     }
@@ -678,13 +686,10 @@ SdkHost::NetworkServer SdkHost::CurrentNetworkServer() {
   std::scoped_lock lock(mutex_);
   NetworkServer out;
   out.managerAvailable = spaceManager_.has_value();
-  // the same resolution the space build uses, so "Use default network" means
-  // the network this process was started against — never silently production
-  if (const char* env = std::getenv("URNETWORK_NETWORK_HOST"); env && *env) {
-    out.defaultHostName = env;
-  } else {
-    out.defaultHostName = kUrHostName;
-  }
+  // the same resolution the launch uses, so "Use default network" means the
+  // network this process was started against — never silently production
+  const LaunchOverride launchOverride = LaunchOverrideFromEnvironment();
+  out.defaultHostName = launchOverride.Active() ? launchOverride.host : std::string(kUrHostName);
   if (!networkSpace_) return out;
   try {
     out.hostName = networkSpace_->getHostName();
@@ -715,12 +720,16 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
     pendingInstantJwt_.reset();
 
     try {
-      const bool official = (hostName == std::string(kUrHostName));
+      // the override's own host is keyed under the override's env, as the
+      // launch built it (NetworkSpaceBootstrap.hpp)
+      const LaunchOverride launchOverride = LaunchOverrideFromEnvironment();
+      const std::string envName = EnvNameFor(launchOverride, hostName);
+      const bool official = hostName == kUrHostName && envName == kUrEnvName;
       const bool explicitUrls = !apiUrl.empty() || !connectUrl.empty();
 
       urnet::NetworkSpaceKey key;
       key.host_name = hostName;
-      key.env_name = std::string(kUrEnvName);
+      key.env_name = envName;
 
       // The same host values BuildUrNetworkSpace writes, with the
       // host-dependent parts varied (iOS DeviceManager.applyNetworkSpace
@@ -740,7 +749,11 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       values.platform_url = connectUrl;
 
       networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
-      spaceManager_->setActiveNetworkSpace(*networkSpace_);
+      // the user's choice persists, but the override's space stays bound for
+      // this process only
+      if (!IsLaunchOverrideSpace(launchOverride, hostName, envName)) {
+        spaceManager_->setActiveNetworkSpace(*networkSpace_);
+      }
 
       // everything derived from the space re-derives: the Api talks to the
       // new host, the LocalState holds the new host's jwt
@@ -4259,7 +4272,13 @@ bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secre
     }
 
     networkSpace_ = spaceManager_->updateNetworkSpaceValues(stored->key, values);
-    spaceManager_->setActiveNetworkSpace(*networkSpace_);
+    // the space stays the active one, unless it is the override's, which is
+    // bound for this process only
+    if (!IsLaunchOverrideSpace(LaunchOverrideFromEnvironment(),
+                               stored->key.host_name.value_or(std::string()),
+                               stored->key.env_name.value_or(std::string()))) {
+      spaceManager_->setActiveNetworkSpace(*networkSpace_);
+    }
     // ...and re-derive what hangs off the space, exactly as ApplyNetworkServer
     // does: the handle is new, and a freshly derived Api carries no token.
     api_ = networkSpace_->getApi();

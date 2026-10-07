@@ -460,7 +460,10 @@ class SdkHost {
   //
   // Writes the host's values OVER what the space already stores under that
   // key, so re-applying the same server (or returning to one used before)
-  // keeps the VLESS server and the private extender saved in it.
+  // keeps the VLESS server and the private extender saved in it. The space is
+  // made active, so the next launch binds it, except the space of the launch's
+  // URNETWORK_NETWORK_HOST override, which its host is keyed to with the
+  // override's env and which stays bound for this process only.
   bool ApplyNetworkServer(const std::string& hostName, const std::string& apiUrl,
                           const std::string& connectUrl);
   // The active space serialized for the daemon's start_tunnel: the daemon

@@ -142,4 +142,70 @@ inline auto LaunchUrNetworkSpace(Manager& manager) {
   return bundled;
 }
 
+// URNETWORK_NETWORK_HOST (and URNETWORK_NETWORK_ENV, "main" when unset): a
+// launch pointed at another backend, a test network a throwaway account can
+// run the success paths against. Each value is trimmed of spaces, tabs and
+// line ends (a script's value often ends in its newline), and a host that is
+// empty once trimmed is no override, as an env that is empty is "main".
+struct LaunchOverride {
+  std::string host;
+  std::string env;
+  bool Active() const { return !host.empty(); }
+};
+
+inline std::string TrimmedLaunchValue(const char* value) {
+  if (value == nullptr) return std::string();
+  constexpr const char* kBlank = " \t\r\n";
+  const std::string text(value);
+  const size_t first = text.find_first_not_of(kBlank);
+  if (first == std::string::npos) return std::string();
+  return text.substr(first, text.find_last_not_of(kBlank) - first + 1);
+}
+
+inline LaunchOverride ResolveLaunchOverride(const char* host, const char* env) {
+  LaunchOverride out;
+  out.host = TrimmedLaunchValue(host);
+  if (!out.Active()) return out;
+  out.env = TrimmedLaunchValue(env);
+  if (out.env.empty()) out.env = kUrEnvName;
+  return out;
+}
+
+// The env a space for `host` is keyed under: the override's for the
+// override's own host, so "Use default network" is the network the process
+// started on, env and all; "main" for every other host.
+inline std::string EnvNameFor(const LaunchOverride& launchOverride, const std::string& host) {
+  return launchOverride.Active() && host == launchOverride.host ? launchOverride.env
+                                                                : std::string(kUrEnvName);
+}
+
+// Whether {host, env} is the override's space, which is bound for this
+// process only: a write to it must not make it the active space, or a launch
+// without the override would stay on the test network.
+inline bool IsLaunchOverrideSpace(const LaunchOverride& launchOverride, const std::string& host,
+                                  const std::string& env) {
+  return launchOverride.Active() && host == launchOverride.host && env == launchOverride.env;
+}
+
+// The launch with an override in force: the official space's bootstrap runs
+// as ever, then the override's space is built under {host, env}, its urls
+// derived from them (no explicit urls, no migration host) over what it
+// stores, and bound for this process only. It is not made active, so a launch
+// without the override binds the user's own choice again. Without an
+// override, LaunchUrNetworkSpace above.
+template <class Key, class Values, class Manager>
+inline auto LaunchUrNetworkSpace(Manager& manager, const LaunchOverride& launchOverride) {
+  if (!launchOverride.Active()) return LaunchUrNetworkSpace<Key, Values>(manager);
+  BootstrapUrNetworkSpace<Key, Values>(manager);
+  Key key;
+  key.host_name = launchOverride.host;
+  key.env_name = launchOverride.env;
+  const bool official = launchOverride.host == kUrHostName && launchOverride.env == kUrEnvName;
+  Values values = UrNetworkSpaceValuesOver(StoredNetworkSpaceValues<Key, Values>(manager, key),
+                                           official, launchOverride.host);
+  values.api_url.reset();
+  values.platform_url.reset();
+  return manager.updateNetworkSpaceValues(key, values);
+}
+
 }  // namespace urnw
