@@ -1434,6 +1434,11 @@ void MainWindow::BuildSeedphraseStep() {
   seedphraseView_ = Gtk::make_managed<Gtk::TextView>();
   seedphraseView_->add_css_class("ur-input-multi");
   seedphraseView_->set_wrap_mode(Gtk::WrapMode::WORD);
+  // The phrase is the account's credential: an input method's spellcheck
+  // would rewrite BIP-39 words, and one that learns what is typed would keep
+  // it. The words stay visible, so the purpose stays free form.
+  seedphraseView_->set_input_hints(Gtk::InputHints::NO_SPELLCHECK | Gtk::InputHints::PRIVATE |
+                                   Gtk::InputHints::NO_EMOJI);
   seedphraseView_->set_size_request(-1, 120);
   seedphraseView_->get_buffer()->signal_changed().connect(
       sigc::mem_fun(*this, &MainWindow::OnSeedphraseChanged));

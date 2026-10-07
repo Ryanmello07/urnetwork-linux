@@ -700,6 +700,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/AccountPlanRowsTest.cpp',
     'tests/AppPrefsTest.cpp',
     'tests/WindowGeometryTest.cpp',
+    'tests/SeedphraseInputWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -786,6 +787,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # AppPrefsTest reads AppPrefs.hpp's calls into PrefsFile.hpp the same way.
               # WindowGeometryTest reads the window's restore and save and their
               # callers the same way.
+              # SeedphraseInputWiringTest reads the seedphrase step the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
