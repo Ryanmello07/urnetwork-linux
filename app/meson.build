@@ -705,6 +705,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/DeveloperActionsWiringTest.cpp',
     'tests/RevealBreadcrumbsWiringTest.cpp',
     'tests/HomeEntranceWiringTest.cpp',
+    'tests/ConnectCanvasRimWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -795,6 +796,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # same way.
               # RevealBreadcrumbsWiringTest reads the window reveal's log lines the same way.
               # HomeEntranceWiringTest reads the root stack's sign-in swap the same way.
+              # ConnectCanvasRimWiringTest reads the hero canvas's rim and orbits the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
