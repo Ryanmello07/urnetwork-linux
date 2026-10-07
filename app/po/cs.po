@@ -2076,7 +2076,7 @@ msgctxt "dev_busy_probes_value"
 msgid "{0} sent / {1} acquitted"
 msgstr "Odesláno {0} / zproštěno {1}"
 
-#. Developer page: button that checks for a new release now.
+#. Developer page: button that checks for a new release now. Linux Settings > General: the title of the row whose button does the same.
 msgctxt "dev_check_updates"
 msgid "Check for updates"
 msgstr "Vyhledat aktualizace"
@@ -3354,17 +3354,17 @@ msgctxt "dev_unstalled_exit"
 msgid "Cleared stall on exit"
 msgstr "Uvolněn výstup"
 
-#. Developer page: report line when the update check failed.
+#. Developer page, and the line under Linux Settings > Check for updates: report line when the update check failed.
 msgctxt "dev_update_check_failed"
 msgid "The update check failed — see the app log."
 msgstr "Vyhledání aktualizací selhalo — podrobnosti najdete v protokolu aplikace."
 
-#. Developer page: update check status while checking.
+#. Developer page, and the line under Linux Settings > Check for updates: update check status while checking.
 msgctxt "dev_update_checking"
 msgid "Checking for updates…"
 msgstr "Vyhledávání aktualizací…"
 
-#. Developer page: update check result on a development build. {version} is the newest release version.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result on a development build. {version} is the newest release version.
 msgctxt "dev_update_dev_build"
 msgid "Development build: the newest release is v{}, and a development build is never updated automatically."
 msgstr "Vývojové sestavení: nejnovější vydání je v{} a vývojové sestavení se nikdy neaktualizuje automaticky."
@@ -3394,7 +3394,7 @@ msgctxt "dev_update_newest_seen"
 msgid "newest release seen:"
 msgstr "nejnovější zjištěné vydání:"
 
-#. Developer page: update check result when there is no stable release.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result when there is no stable release.
 msgctxt "dev_update_no_releases"
 msgid "No stable release has been published yet."
 msgstr "Zatím nebylo zveřejněno žádné stabilní vydání."
@@ -3404,7 +3404,7 @@ msgctxt "dev_update_none"
 msgid "No update: this build is current"
 msgstr "Žádná aktualizace: toto sestavení je aktuální"
 
-#. Developer page: update check result on the newest release. {version} is the release version.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result on the newest release. {version} is the release version.
 msgctxt "dev_update_up_to_date"
 msgid "Up to date. Newest release: v{}"
 msgstr "Aktuální. Nejnovější vydání: v{}"
@@ -8841,6 +8841,11 @@ msgstr "Stáhněte {} ze stránky vydání a potom spusťte příkaz níže."
 msgctxt "upd_available_title_version"
 msgid "Update available: v{}"
 msgstr "Je k dispozici aktualizace: v{}"
+
+#. Linux Settings > General: the button on the "Check for updates" row that checks for a new release now. The last check's outcome shows on the line under the row.
+msgctxt "upd_check_now"
+msgid "Check now"
+msgstr "Zkontrolovat teď"
 
 #. Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.
 msgctxt "upd_downloaded_message"
