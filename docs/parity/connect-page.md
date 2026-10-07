@@ -23,6 +23,7 @@ Panes are floor-to-ceiling, edge-to-edge, separated by 1px rules, **never** gaps
 
 **Breakpoints** (`MainWindow::ApplyBreakpoint`, the single responsive switch; widths in dip, measured on the root element’s `ActualWidth`):
 - Advanced Mode, width ≥ 1000 (`kWideBreakpointDip = 1000.0`): **three panes** — connect 330 | activity `*` | statistics 380.
+  Linux, as Windows now does (6b190d0), opens the third pane at **1042** of the panes' own width instead (`ConnectFold.hpp`: 330 + 1 + 330 + 1 + 380, so activity keeps a rail's 330dip), and takes every gate on that width, not the window's.
 - Advanced Mode, width ≥ 640: **two panes** — connect 330 | activity `*` (Pane C column width → 0, rule + pane Collapsed).
 - Advanced Mode, width < 640: **one pane** — connect takes `*`, Pane B column → 0 and Collapsed; connect content full width (MaxWidth ∞, Stretch).
 - **Simple Mode, any width: one pane always.** `ConnectPaneAContent` gets `MaxWidth 480.0` and `HorizontalAlignment Center` (“one pane, 480dip cap, centred”). Panes B and C never exist on screen in Simple.

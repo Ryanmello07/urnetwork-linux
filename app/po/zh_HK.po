@@ -143,6 +143,26 @@ msgctxt "adv_advanced_mode_note"
 msgid "Show raw values, identifiers, the connection inspector and the reliability tuning surface across the app."
 msgstr "在整個應用程式中顯示原始值、識別碼、連線檢查器和可靠性調校項目。"
 
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that allows the connection's host. It adds an allowing rule for a host that was blocked, or removes the rule blocking it while one is in force, so the label always names what the press leaves behind.
+msgctxt "adv_allow_host"
+msgid "Allow this host"
+msgstr "允許此主機"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that keeps the connection's host inside the VPN tunnel. It adds a rule for a host that bypassed the tunnel, or removes the bypass rule while one is in force.
+msgctxt "adv_always_tunnel"
+msgid "Always tunnel"
+msgstr "始終經隧道"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
+msgctxt "adv_block_host"
+msgid "Block this host"
+msgstr "攔截此主機"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that sends the connection's host directly from this device, outside the VPN. It adds a split rule, or removes the rule keeping the host in the tunnel while one is in force.
+msgctxt "adv_bypass_tunnel"
+msgid "Bypass the tunnel"
+msgstr "繞過隧道"
+
 #. Connection inspector: label of the total bytes row.
 msgctxt "adv_bytes_total"
 msgid "Bytes (total)"
@@ -152,6 +172,22 @@ msgstr "位元組（總計）"
 msgctxt "adv_clear_selection"
 msgid "Clear selection"
 msgstr "清除選取"
+
+#. Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.
+msgctxt "adv_connection_count"
+msgid "{} connection"
+msgid_plural "{} connections"
+msgstr[0] "{} 個連線"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that copies the connection's details (host, addresses, verdict, reason, totals) to the clipboard.
+msgctxt "adv_copy_details"
+msgid "Copy details"
+msgstr "複製詳情"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after Copy details put the connection's details on the clipboard.
+msgctxt "adv_details_copied"
+msgid "Connection details copied"
+msgstr "已複製連線詳情"
 
 #. Connection inspector: label of the exit dial failures row.
 msgctxt "adv_exit_dial_failures"
@@ -208,10 +244,50 @@ msgctxt "adv_exits"
 msgid "Exits"
 msgstr "出口"
 
+#. Connect page, Activity pane: the first choice of the verdict filter above the list of connections (routing decisions). Shows every connection, whatever its verdict. Short: it shares one row with Blocked, Tunnelled and Bypassed.
+msgctxt "adv_filter_all"
+msgid "All"
+msgstr "全部"
+
+#. Connect page, Activity pane: the verdict filter choice that shows only the connections that bypassed the tunnel (allowed, but sent directly from this device outside the VPN, for example by a split rule, so not protected). Short: it shares one row with All, Blocked and Tunnelled.
+msgctxt "adv_filter_bypassed"
+msgid "Bypassed"
+msgstr "繞過隧道"
+
+#. Connect page, Activity pane: the verdict filter choice that shows only the connections sent through the URnetwork tunnel (allowed and protected). Short: it shares one row with All, Blocked and Bypassed.
+msgctxt "adv_filter_tunnelled"
+msgid "Tunnelled"
+msgstr "經隧道"
+
+#. Connect page, Activity pane: label of the switch beside the search field that folds the list of connections into one row per host (with the count, the summed traffic and the latest decision). Clicking a host's row turns the switch off and searches for that host.
+msgctxt "adv_group_by_host"
+msgid "Group by host"
+msgstr "按主機分組"
+
 #. Connection inspector: label of the host row.
 msgctxt "adv_host"
 msgid "Host"
 msgstr "主機"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule allowing the connection's host from now on.
+msgctxt "adv_host_allowed"
+msgid "This host will be allowed"
+msgstr "此主機將被允許"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule blocking the connection's host from now on.
+msgctxt "adv_host_blocked"
+msgid "This host will be blocked"
+msgstr "此主機將被攔截"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a split rule sending the connection's host outside the VPN tunnel from now on.
+msgctxt "adv_host_bypassed"
+msgid "This host will bypass the tunnel"
+msgstr "此主機將繞過隧道"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule keeping the connection's host inside the VPN tunnel from now on.
+msgctxt "adv_host_tunnelled"
+msgid "This host will use the tunnel"
+msgstr "此主機將使用隧道"
 
 #. Connection inspector: heading of the inspector pane.
 msgctxt "adv_inspector"
@@ -313,6 +389,11 @@ msgctxt "adv_na"
 msgid "—"
 msgstr "—"
 
+#. Split rules sheet: the line in the Activity list when the search matches none of the connections it holds.
+msgctxt "adv_no_activity_matches"
+msgid "No activity matches this search."
+msgstr "沒有與此搜尋相符的活動。"
+
 #. Connection inspector: shown when no connection is selected.
 msgctxt "adv_no_selection"
 msgid "No connection selected"
@@ -322,6 +403,11 @@ msgstr "未選取連線"
 msgctxt "adv_none"
 msgid "none"
 msgstr "無"
+
+#. Connect page, Advanced Mode, the connection inspector: the end of the Reason value's name for screen readers when a rule decided the connection, because pressing the value opens the Split rules sheet. Lowercase: it follows a comma.
+msgctxt "adv_open_split_rules"
+msgid "open split rules"
+msgstr "開啟分流規則"
 
 #. Connection inspector: label of the override id row.
 msgctxt "adv_override_id"
@@ -403,6 +489,26 @@ msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
 
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: added to a rule button's name for screen readers, after its label, while the button's rule is in force: pressing it removes the rule. Lowercase: it follows a comma.
+msgctxt "adv_rule_active"
+msgid "rule active, click to remove"
+msgstr "規則生效中，點擊以移除"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press removed the rule that was in force for the connection's host.
+msgctxt "adv_rule_removed"
+msgid "Rule removed"
+msgstr "已移除規則"
+
+#. Split rules sheet: placeholder and accessible name of the search field above the Activity list. Typing filters the list to the connections whose host name or IP address contains the text; the rules above are not filtered.
+msgctxt "adv_search_activity_placeholder"
+msgid "Search activity"
+msgstr "搜尋活動"
+
+#. Connect page, Activity pane: placeholder and accessible name of the search field above the list of connections. Typing filters the list to the connections whose host name or IP address contains the text.
+msgctxt "adv_search_connections"
+msgid "Search hosts or IPs"
+msgstr "搜尋主機或 IP"
+
 #. Connection inspector: hint to select a row in the Activity list.
 msgctxt "adv_select_a_row"
 msgid "Select a row in Activity to inspect it"
@@ -428,10 +534,25 @@ msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "工作階段"
 
+#. Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.
+msgctxt "adv_split_rules_note"
+msgid "Split rules let the sites you choose connect directly, outside the VPN, and the activity below shows how each connection was routed."
+msgstr "分流規則可讓你選擇的網站繞過 VPN 直接連線，下方的活動顯示每個連線是如何路由的。"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.
+msgctxt "adv_undo"
+msgid "Undo"
+msgstr "復原"
+
 #. Connection inspector: exit value when the destination is not in the routing table.
 msgctxt "adv_unknown_exit"
 msgid "Not in the routing table"
 msgstr "不在路由表中"
+
+#. Connect page, Advanced Mode: the label of the verdict line (blocked, tunnelled, or bypassed the tunnel) in the connection details Copy details puts on the clipboard.
+msgctxt "adv_verdict"
+msgid "Verdict"
+msgstr "判定"
 
 #. Connection inspector: verdict, the connection was blocked and no packets were sent.
 msgctxt "adv_verdict_blocked"
@@ -585,7 +706,7 @@ msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "已添加 Apple 登入方式"
 
-#. transfer stats and split rules
+#. transfer stats and split rules; Linux: the header over the apps not yet excluded in Settings > Exclude apps from the VPN.
 msgctxt "apps"
 msgid "Apps"
 msgstr "應用程式"
@@ -4173,7 +4294,7 @@ msgctxt "exclude_apps_launcher_note"
 msgid "Each app you turn on gets a second launcher in your app menu, with (outside VPN) after its name. An app opened from that launcher bypasses the VPN and the kill switch. An app that is already running stays in the VPN until you quit it, and Flatpak and Snap apps are not listed."
 msgstr "你開啟的每個應用程式都會在應用程式選單中多一個啟動器，名稱後附有（VPN 外）。從該啟動器開啟的應用程式會繞過 VPN 和斷線開關。已在執行的應用程式在你結束之前仍會留在 VPN 內，Flatpak 和 Snap 應用程式不會列出。"
 
-#. transfer stats and split rules
+#. transfer stats and split rules; Linux: the header over the apps already excluded in Settings > Exclude apps from the VPN.
 msgctxt "excluded"
 msgid "Excluded"
 msgstr "已排除"

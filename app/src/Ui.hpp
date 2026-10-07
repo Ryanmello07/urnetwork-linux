@@ -72,7 +72,7 @@ void EnsureDrawerCss();
 
 // A rounded-12 tinted card (vertical box, .ur-card padding).
 Gtk::Box* MakeCard(int spacing = 0);
-// A capsule state chip. colorClass: "green" | "coral" | "muted".
+// A capsule state chip. colorClass: "green" | "gold" | "coral" | "amber" | "muted".
 // Highlighted renders solid (inverse text), idle renders tinted.
 Gtk::Label* MakeChip(const std::string& text, const std::string& colorClass, bool highlighted);
 // Muted caption label, left aligned.
@@ -83,6 +83,28 @@ void SetPointerCursor(Gtk::Widget& widget);
 // Pop a toast on the nearest enclosing AdwToastOverlay (MainWindow wraps its
 // page stack in one; the detail sheets carry their own). No-op without one.
 void ShowToast(Gtk::Widget& context, const std::string& message);
+
+// One surface's toasts, one at a time: Show dismisses the toast this slot
+// showed last before popping the next on the nearest AdwToastOverlay, so a
+// run of presses reads its latest confirmation rather than a queue of stale
+// ones. With a button label the toast carries that button (an Undo), and
+// onButton runs at most once, on the GTK thread, when it is pressed. The
+// toast belongs to the overlay; the slot only remembers it weakly.
+class ToastSlot {
+ public:
+  ToastSlot() = default;
+  ~ToastSlot();
+  ToastSlot(const ToastSlot&) = delete;
+  ToastSlot& operator=(const ToastSlot&) = delete;
+
+  void Show(Gtk::Widget& context, const std::string& message,
+            const std::string& buttonLabel = {}, std::function<void()> onButton = {});
+  void Dismiss();
+
+ private:
+  void Forget();
+  void* toast_ = nullptr;  // the AdwToast shown last, cleared when it is finalized
+};
 // Close (hide) the window on Escape, matching sheet behavior elsewhere.
 void AddEscapeToClose(Gtk::Window& window);
 

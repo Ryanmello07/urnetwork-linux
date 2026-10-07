@@ -536,12 +536,13 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # a refusal, what Settings says the last check came to, and its wiring, the
 # split-rules
 # activity row's reading of the block action reason (the safety-rule chip and
-# the route-locally offer), the VLESS editor's form, visibility rules,
-# settings mapping and messages and the stored network space values every
-# space write starts from, the per-app exclusion's slice, rules and call
-# sites, what a network peer row connects to, the provider card's idle
+# the route-locally offer) and its search and chips, the VLESS editor's form,
+# visibility rules, settings mapping and messages and the stored network space
+# values every space write starts from, the per-app exclusion's slice, rules
+# and call sites, what a network peer row connects to, the provider card's idle
 # reason, status line, demand histogram and ranking rows, the connect page's
-# provide line, the exclusion
+# provide line, fold table and second doors, the activity rows' keyed
+# reconcile and filter, the connect inspector's quick actions, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
 # lines and their filters, which device carries a feedback's log upload, for
@@ -648,6 +649,13 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProvideLineTest.cpp',
     'tests/LegacyHomeRemovedTest.cpp',
     'tests/ConnectActivityRowsWiringTest.cpp',
+    'tests/ConnectFoldTest.cpp',
+    'tests/ConnectFoldDoorsWiringTest.cpp',
+    'tests/KeyedReconcileTest.cpp',
+    'tests/ConnectionFilterTest.cpp',
+    'tests/QuickActionTest.cpp',
+    'tests/QuickActionWiringTest.cpp',
+    'tests/SplitRulesSheetWiringTest.cpp',
     'tests/SignOutTest.cpp',
     'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
@@ -717,6 +725,12 @@ urnetwork_tests = executable('urnetwork-tests',
               # the same way: the legacy home stays gone and every page is reachable.
               # ConnectActivityRowsWiringTest reads the connect page's ip family row
               # and extender panel, and their host feed, the same way.
+              # QuickActionWiringTest reads the quick actions' host writers, press,
+              # row menu and toast the same way.
+              # SplitRulesSheetWiringTest reads the split rules sheet's search and chips
+              # the same way.
+              # ConnectFoldDoorsWiringTest reads the connect page's second doors the same
+              # way.
               # SignOutWiringTest reads SdkHost and the health poll the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and

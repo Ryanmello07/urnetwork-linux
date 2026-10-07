@@ -44,6 +44,8 @@ class ExcludeAppsSheet : public Gtk::Window {
 
   void Scan();
   void Render();
+  // one app's row, its switch bound to apps_[index]
+  void RenderRow(size_t index);
   // Writes or removes the copy; false (and the error line) when the file could
   // not be written or removed.
   bool SetExcluded(App& app, bool excluded);

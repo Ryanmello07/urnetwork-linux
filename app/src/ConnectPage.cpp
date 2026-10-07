@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ConnectPage.hpp"
+#include "ConnectFold.hpp"
 #include "DataInfo.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <utility>
 
 #include <adwaita.h>
 #include <glib.h>
@@ -15,6 +17,7 @@
 #include "FastDnsCopy.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
+#include "KeyedReconcile.hpp"
 #include "KillSwitchCopy.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
 #include "ProvideLine.hpp"
@@ -23,11 +26,9 @@
 namespace urnw {
 namespace {
 
-// the fold thresholds (docs/parity/connect-page.md §0)
-constexpr int kThreePaneDip = 1000;
-constexpr int kTwoPaneDip = 640;
-constexpr int kPaneAWidth = 330;
-constexpr int kPaneCWidth = 380;
+// the fold thresholds (docs/parity/connect-page.md §0) are ConnectFold.hpp's
+using connect_fold::kPaneAWidth;
+using connect_fold::kPaneCWidth;
 constexpr int kSimpleCap = 480;
 constexpr int kHeroAdvanced = 190;
 constexpr int kHeroSimple = 320;
@@ -39,6 +40,12 @@ constexpr int kListRowHeight = 36;       // connections / contracts / split rule
 constexpr int kKeyValueRowHeight = 34;   // session figures, inspector, dns
 constexpr int kPeerRowHeight = 34;       // the peers list (§1: peers rows are 34)
 constexpr size_t kMaxConnectionRows = 200;  // a cap, not a scroll budget
+// The least height the activity list keeps: three rows. Pane B's fixed blocks
+// above it (the chart, the transport bar, the two status rows, the header and
+// the filter rows) fill a short window by themselves, and the list, the
+// pane's reason to exist, was squeezed to nothing at the 480dip minimum
+// height. With this floor the pane's own scroller takes over instead.
+constexpr int kConnectionsListFloor = 3 * kListRowHeight;
 // The shell chrome between the toplevel and this page: HomeShell's nav rail is
 // pinned at 220dip (HomeShell.cpp kNavExpandedWidth). Only used before the
 // page has an allocation of its own — the fold table is defined on the width
@@ -63,6 +70,20 @@ button.ur-pane-row.ur-pane-row-34 { min-height: 33px; }
 /* the 12px supporting voice ON TOP of a key/value type role (§4.1 inspector
    verdict, §4.6 dns state cells) — a size beside a role, one provider */
 .ur-key.ur-text-12, .ur-value.ur-text-12 { font-size: 12px; }
+/* a text action in a 28px group header (the activity filter's Clear) */
+button.ur-pane-action.ur-text-action {
+  padding: 0 6px; font-family: "PP Neue Montreal"; font-size: 11px; color: #F8F8F8;
+}
+/* the inspector's quick actions: the outlined pane button made compact, and
+   filled action blue (the switches' on color) while their rule is in force */
+button.ur-pane-secondary.ur-quick-action {
+  min-height: 26px; margin: 0; padding: 0 10px; font-size: 12px;
+}
+button.ur-pane-secondary.ur-quick-action.ur-quick-on {
+  background-color: #638BFC; border-color: #638BFC; color: #101010;
+}
+/* the inspector's Reason value when a rule decided it: a link to the rules */
+button.ur-reason-link { min-height: 0; padding: 0 2px; font-weight: normal; }
 )CSS";
 
 void EnsurePageCss() {
@@ -176,6 +197,18 @@ uint64_t SplitRulesSig(const std::optional<urnet::BlockActionOverrideList>& rule
   return h;
 }
 
+uint64_t HostRulesSig(const std::vector<quick_action::HostRule>& rules) {
+  uint64_t h = HashMix(7, rules.size());
+  for (const auto& rule : rules) {
+    h = HashText(h, rule.overrideId);
+    h = HashMix(h, rule.hosts.size());
+    for (const auto& host : rule.hosts) h = HashText(h, host);
+    h = HashMix(h, (rule.hasBlockOverride ? 1u : 0u) | (rule.block ? 2u : 0u) |
+                       (rule.hasRouteOverride ? 4u : 0u) | (rule.routeLocal ? 8u : 0u));
+  }
+  return h;
+}
+
 uint64_t PeersSig(const std::optional<urnet::NetworkPeerList>& peers, int64_t count) {
   if (!peers) return kAbsentSig;
   uint64_t h = HashMix(4, static_cast<uint64_t>(count));
@@ -238,18 +271,68 @@ std::string BlockActionTitle(const urnet::BlockAction& action) {
 
 // THREE verdicts, not two: blocked (coral), local — sent around the tunnel,
 // allowed and unprotected (amber), tunnelled (green).
-const char* VerdictDot(const urnet::BlockAction& action) {
-  if (action.Block) return kDotCoral;
-  if (action.Local) return kDotAmber;
+const char* VerdictDot(bool block, bool local) {
+  if (block) return kDotCoral;
+  if (local) return kDotAmber;
   return kDotGreen;
+}
+const char* VerdictDot(const urnet::BlockAction& action) {
+  return VerdictDot(action.Block, action.Local);
 }
 
 // the dot is decorative, so the WORD is the only place the color's meaning
 // exists for a screen reader
-const char* VerdictWord(const urnet::BlockAction& action) {
-  if (action.Block) return T_("blocked", "Blocked");
-  if (action.Local) return T_("local", "Local");
+const char* VerdictWord(bool block, bool local) {
+  if (block) return T_("blocked", "Blocked");
+  if (local) return T_("local", "Local");
   return T_("allowed", "Allowed");
+}
+
+// The inspector's verdict line, and the copied details' Verdict.
+const char* VerdictSentence(bool block, bool local) {
+  if (block) return T_("adv_verdict_blocked", "Blocked — no packets sent");
+  if (local) return T_("adv_verdict_local", "Bypassed the tunnel — not protected");
+  return T_("adv_verdict_tunnelled", "Tunnelled through URnetwork");
+}
+
+// What decided the action: the default policy, or the kind of override.
+const char* ReasonText(const urnet::BlockAction& action) {
+  if (action.OverrideId.value_or(std::string()).empty()) {
+    return T_("adv_reason_default", "Default policy");
+  }
+  if (action.BlockOverride) return T_("adv_reason_block", "Block override");
+  if (action.RouteOverride) return T_("adv_reason_route", "Route override");
+  return T_("adv_reason_override", "Override");
+}
+
+// What the quick actions read of a decision (QuickAction.hpp).
+quick_action::Facts QuickFacts(const urnet::BlockAction& action) {
+  quick_action::Facts facts;
+  if (action.Hosts) facts.hosts = *action.Hosts;
+  if (action.Ips) facts.ips = *action.Ips;
+  if (action.MatchedHosts) facts.matchedHosts = *action.MatchedHosts;
+  if (action.MatchedIps) facts.matchedIps = *action.MatchedIps;
+  facts.overrideId = action.OverrideId.value_or(std::string());
+  facts.hasBlockOverride = action.BlockOverride.has_value();
+  facts.hasRouteOverride = action.RouteOverride.has_value();
+  facts.block = action.Block;
+  facts.local = action.Local;
+  return facts;
+}
+
+// A quick action's label: what the press leaves behind.
+const char* QuickActionText(quick_action::Label label) {
+  switch (label) {
+    case quick_action::Label::BlockHost:
+      return T_("adv_block_host", "Block this host");
+    case quick_action::Label::AllowHost:
+      return T_("adv_allow_host", "Allow this host");
+    case quick_action::Label::BypassTunnel:
+      return T_("adv_bypass_tunnel", "Bypass the tunnel");
+    case quick_action::Label::AlwaysTunnel:
+      return T_("adv_always_tunnel", "Always tunnel");
+  }
+  return "";
 }
 
 std::string ShortId(const std::string& id) {
@@ -257,6 +340,61 @@ std::string ShortId(const std::string& id) {
 }
 
 int64_t NowMillis() { return g_get_real_time() / 1000; }
+
+// The reconcile key of one routing decision: its id, or for a decision the
+// feed sent without one, its time and title, which hold still from push to
+// push. The prefixes keep the two kinds of key apart.
+std::string ConnectionRowKey(const urnet::BlockAction& action) {
+  if (action.BlockActionId && !action.BlockActionId->empty()) {
+    return "a:" + *action.BlockActionId;
+  }
+  return "t:" + std::to_string(action.Time) + ":" + BlockActionTitle(action);
+}
+
+// "N connections": how many decisions a host's group row stands for.
+std::string ConnectionCountText(int64_t connections) {
+  return Format(TN_("adv_connection_count", "{} connection", "{} connections",
+                    static_cast<unsigned long>(connections)),
+                connections);
+}
+
+// An activity row's meta line: how long ago the decision was made, then the
+// totals the line has always carried ("12s ago   3.4 MiB   120 pkt"). A
+// decision without a time (0) has no age rather than a 56-year one. A host's
+// group row (groupConnections > 0) leads with its count, then the same
+// figures summed, aged by its latest decision.
+std::string ConnectionRowMeta(int64_t groupConnections, int64_t timeMs, int64_t byteCount,
+                              int64_t packetCount, int64_t nowMs) {
+  std::string meta;
+  if (0 < groupConnections) meta = ConnectionCountText(groupConnections) + "   ";
+  if (0 < timeMs) meta += RelativeTime((nowMs - timeMs) / 1000) + "   ";
+  return meta + FormatByteCountCompact(byteCount) + "   " + FormatCountCompact(packetCount) +
+         " pkt";
+}
+
+// What the fold reads of a decision that passed the filter.
+connection_filter::FoldMember FoldMemberOf(const urnet::BlockAction& action) {
+  connection_filter::FoldMember member;
+  member.host = BlockActionTitle(action);
+  member.block = action.Block;
+  member.local = action.Local;
+  member.timeMs = action.Time;
+  member.byteCount = action.ByteCount;
+  member.packetCount = action.PacketCount;
+  return member;
+}
+
+// What the activity filter reads of a decision: its own lists, never copies.
+connection_filter::Decision FilterDecision(const urnet::BlockAction& action) {
+  connection_filter::Decision decision;
+  decision.hosts = action.Hosts ? &*action.Hosts : nullptr;
+  decision.ips = action.Ips ? &*action.Ips : nullptr;
+  decision.matchedHosts = action.MatchedHosts ? &*action.MatchedHosts : nullptr;
+  decision.matchedIps = action.MatchedIps ? &*action.MatchedIps : nullptr;
+  decision.block = action.Block;
+  decision.local = action.Local;
+  return decision;
+}
 
 // The one-row empty sentence a pane group renders instead of a HOLE: the
 // key/value row species carrying only its key.
@@ -347,6 +485,8 @@ ConnectPage::~ConnectPage() {
   *alive_ = false;
   ++(*epoch_);
   tick_.disconnect();
+  // the row menu is parented by hand, so it is unparented by hand
+  if (rowMenu_) rowMenu_->unparent();
 }
 
 // ---- PANE A -----------------------------------------------------------------
@@ -354,6 +494,10 @@ ConnectPage::~ConnectPage() {
 void ConnectPage::BuildPaneA() {
   paneA_ = kit::MakePane(T_("connect", "Connect"));
   paneA_.root->set_size_request(kPaneAWidth, -1);
+  // the peers list at the foot of the pane fades out at the bottom edge while
+  // it overflows (UrTheme.cpp). Pane B's live list does not: rows churning
+  // under a fade flicker.
+  paneA_.scroller->add_css_class("ur-fade-bottom");
   kit::SetAccessibleLabel(*paneA_.root, T_("connect", "Connect"));
   // §0 Simple Mode: "MaxWidth 480 and HorizontalAlignment Center". GTK has no
   // max-width and set_size_request is a FLOOR (it would push the window's own
@@ -828,6 +972,34 @@ void ConnectPage::BuildPaneA() {
   killSwitchNote_->set_visible(false);
   moreOptionsHost_->append(*killSwitchNote_);
 
+  // The second doors to the statistics pane's sheets (ConnectFold.hpp
+  // FoldDoorsShown): shown by ApplyFold exactly while pane C is folded, under
+  // the pane's own title, closing pane A's fixed controls ahead of the peers
+  // list. They open the same single-instance sheets pane C's doors do.
+  foldDoorsHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  {
+    auto header = kit::MakePaneGroupHeader(T_("client_statistics", "Client statistics"));
+    foldDoorsHost_->append(*header.root);
+    auto door = [this](const char* title, std::function<void()> open) {
+      // the row's name is its title (kit::MakePaneTwoLineRowButton)
+      auto row = kit::MakePaneTwoLineRowButton(title, {}, 40);
+      row.root->signal_clicked().connect([open] { open(); });
+      foldDoorsHost_->append(*row.root);
+      return row.root;
+    };
+    door(T_("client_contracts", "Client contracts"), [this] { OpenContractsSheet(); });
+    door(T_("split_rules", "Split rules"), [this] { OpenSplitRulesSheet(); });
+    foldDoorDns_ = door(T_("custom_dns", "Custom DNS"), [this] { OpenDnsSheet(); });
+    foldDoorDns_->set_sensitive(false);  // ApplyDnsCard, as pane C's edit action
+    door(T_("transports", "Transports"), [this] { OpenTransportSheet(); });
+    // the globe follows pane C's provider count row: shown and pressable
+    // only with a session to draw (ApplyLiveStatsGroup)
+    foldDoorGlobe_ = door(T_("provider_locations_title", "Provider Locations"),
+                          [this] { OpenProviderLocations(); });
+    foldDoorGlobe_->set_visible(false);
+  }
+  moreOptionsHost_->append(*foldDoorsHost_);
+
   // §2.8 network peers: the count line over the peer rows. A group header with
   // nothing under it is exactly the HOLE §8 forbids — the group is either a
   // list or a one-row sentence.
@@ -920,7 +1092,111 @@ void ConnectPage::BuildPaneB() {
   // though the list caps at 200 rows
   auto connectionsHeader = kit::MakePaneGroupHeader(T_("connections", "Connections"));
   connectionsCount_ = connectionsHeader.meta;
+  // the one-click reset, shown only while the filter or the search holds rows
+  // back (ApplyConnectionsList writes it); its text is its accessible name
+  connectionsClear_ = Gtk::make_managed<Gtk::Button>(T_("clear", "Clear"));
+  connectionsClear_->add_css_class("ur-pane-action");
+  connectionsClear_->add_css_class("ur-text-action");
+  connectionsClear_->set_valign(Gtk::Align::CENTER);
+  connectionsClear_->set_visible(false);
+  connectionsClear_->signal_clicked().connect([this] { OnConnectionsClearFilters(); });
+  connectionsHeader.trailing->append(*connectionsClear_);
   paneB_.content->append(*connectionsHeader.root);
+
+  // 3.3' the verdict ratio bar under the header: 3px of allowed (green),
+  // blocked (coral) and bypassed (amber), the colors the row dots print.
+  // Decorative: the session rows carry the same numbers in words.
+  verdictRatioBar_ = Gtk::make_managed<Gtk::DrawingArea>();
+  verdictRatioBar_->set_content_height(3);
+  verdictRatioBar_->set_hexpand(true);
+  verdictRatioBar_->set_visible(false);  // nothing to proportion yet
+  kit::MarkDecorative(*verdictRatioBar_);
+  verdictRatioBar_->set_draw_func(
+      [this](const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {
+        double x = 0;
+        const std::pair<double, Rgba> shares[] = {{verdictRatio_.allowed, kUrGreen},
+                                                  {verdictRatio_.blocked, kUrCoral},
+                                                  {verdictRatio_.bypassed, kUrAmber}};
+        for (const auto& [share, color] : shares) {
+          const double w = share * width;
+          cr->set_source_rgba(color.r, color.g, color.b, color.a);
+          cr->rectangle(x, 0, w, height);
+          cr->fill();
+          x += w;
+        }
+      });
+  paneB_.content->append(*verdictRatioBar_);
+
+  // 3.3a the verdict filter (Windows' SelectorBar): the three verdicts the row
+  // dots print, plus All. The labels ellipsize so the four fit the narrowest
+  // two-pane activity column without widening it.
+  {
+    auto* row = kit::MakePaneRow(40);
+    auto* segmented = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 0);
+    segmented->add_css_class("linked");
+    segmented->set_hexpand(true);
+    segmented->set_valign(Gtk::Align::CENTER);
+    auto segment = [this, segmented](Gtk::ToggleButton*& slot, const char* text,
+                                     connection_filter::Verdict verdict) {
+      slot = Gtk::make_managed<Gtk::ToggleButton>();
+      auto* label = Gtk::make_managed<Gtk::Label>(text);
+      label->set_ellipsize(Pango::EllipsizeMode::END);
+      slot->set_child(*label);
+      slot->set_hexpand(true);
+      kit::SetAccessibleLabel(*slot, text);
+      if (slot != verdictAll_) slot->set_group(*verdictAll_);
+      Gtk::ToggleButton* button = slot;
+      button->signal_toggled().connect([this, button, verdict] {
+        if (updatingControls_ || !button->get_active()) return;
+        OnConnectionsVerdictChanged(verdict);
+      });
+      segmented->append(*slot);
+    };
+    segment(verdictAll_, T_("adv_filter_all", "All"), connection_filter::Verdict::All);
+    segment(verdictBlocked_, T_("blocked", "Blocked"), connection_filter::Verdict::Blocked);
+    segment(verdictTunnelled_, T_("adv_filter_tunnelled", "Tunnelled"),
+            connection_filter::Verdict::Tunnelled);
+    segment(verdictBypassed_, T_("adv_filter_bypassed", "Bypassed"),
+            connection_filter::Verdict::Bypassed);
+    verdictAll_->set_active(true);  // before any handler can read it
+    if (auto* inner = RowInner(row)) inner->append(*segmented);
+    paneB_.content->append(*row);
+  }
+  // 3.3b the host/address search (NetworkPage's search row): view-side over
+  // the cached feed, so typing re-runs the reconcile and reads from the top
+  {
+    auto search = kit::MakePaneSearchRow(T_("adv_search_connections", "Search hosts or IPs"));
+    connectionsSearch_ = search.box;
+    connectionsSearch_->signal_changed().connect([this] {
+      if (updatingControls_) return;
+      std::string query = connection_filter::NormalizeQuery(connectionsSearch_->get_text());
+      if (query == connectionsQuery_) return;
+      connectionsQuery_ = std::move(query);
+      ApplyConnectionsList(/*resetScroll=*/true);
+    });
+    // group by host rides the search row, whose field is the one control
+    // here that shrinks gracefully
+    if (auto* inner = RowInner(search.root)) {
+      const char* groupText = T_("adv_group_by_host", "Group by host");
+      auto* groupLabel = Gtk::make_managed<Gtk::Label>(groupText);
+      groupLabel->add_css_class("ur-key");
+      groupLabel->set_ellipsize(Pango::EllipsizeMode::END);
+      kit::MarkDecorative(*groupLabel);  // the switch carries the name
+      inner->append(*groupLabel);
+      connectionsGroupToggle_ = Gtk::make_managed<Gtk::Switch>();
+      connectionsGroupToggle_->set_valign(Gtk::Align::CENTER);
+      kit::SetAccessibleLabel(*connectionsGroupToggle_, groupText);
+      connectionsGroupToggle_->property_active().signal_changed().connect([this] {
+        if (updatingControls_) return;
+        const bool grouped = connectionsGroupToggle_->get_active();
+        if (grouped == connectionsGrouped_) return;
+        connectionsGrouped_ = grouped;
+        ApplyConnectionsList(/*resetScroll=*/true);
+      });
+      inner->append(*connectionsGroupToggle_);
+    }
+    paneB_.content->append(*search.root);
+  }
 
   // 3.4 the list area: the list and the empty reading SWAP, never coexist.
   // ONLY this row scrolls (§3: header/chart/group header are auto rows, the
@@ -928,7 +1204,9 @@ void ConnectPage::BuildPaneB() {
   // live chart and the host count off the top the moment the feed is long
   // enough to need scrolling. A ScrolledWindow does not propagate its child's
   // natural height, so nesting it inside the pane scroller is stable: the
-  // outer never scrolls, the inner takes the leftover height.
+  // outer never scrolls while the window is tall enough, the inner takes the
+  // leftover height. Below that the list keeps kConnectionsListFloor and the
+  // outer scroller engages, so the list is never squeezed out of sight.
   connectionsArea_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   connectionsArea_->set_vexpand(true);
   connectionsHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
@@ -943,11 +1221,12 @@ void ConnectPage::BuildPaneB() {
   connectionsEmpty_->set_vexpand(true);
   connectionsEmpty_->set_valign(Gtk::Align::CENTER);
   connectionsArea_->append(*connectionsEmpty_);
-  auto* connectionsScroll = Gtk::make_managed<Gtk::ScrolledWindow>();
-  connectionsScroll->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
-  connectionsScroll->set_child(*connectionsArea_);
-  connectionsScroll->set_vexpand(true);
-  paneB_.content->append(*connectionsScroll);
+  connectionsScroll_ = Gtk::make_managed<Gtk::ScrolledWindow>();
+  connectionsScroll_->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+  connectionsScroll_->set_child(*connectionsArea_);
+  connectionsScroll_->set_vexpand(true);
+  connectionsScroll_->set_min_content_height(kConnectionsListFloor);
+  paneB_.content->append(*connectionsScroll_);
 
   append(*paneB_.root);
 }
@@ -1048,10 +1327,92 @@ void ConnectPage::BuildInspectorGroup() {
   verdictRow->append(*inspectorVerdict_);
   headline->append(*verdictRow);
   inspectorGroup_->append(*headline);
+
+  // the per-connection quick actions (QuickAction.hpp): the block and route
+  // toggles and Copy details, labelled and lit by ApplyInspector from the live
+  // host rules; gone while nothing is selected. A flow, so a longer language
+  // wraps the three onto two lines instead of widening the 380dip rail.
+  {
+    auto* actions = Gtk::make_managed<Gtk::FlowBox>();
+    actions->set_selection_mode(Gtk::SelectionMode::NONE);
+    actions->set_homogeneous(false);
+    actions->set_max_children_per_line(3);
+    actions->set_column_spacing(8);
+    actions->set_row_spacing(6);
+    actions->set_margin_start(12);
+    actions->set_margin_end(12);
+    actions->set_margin_bottom(10);
+    auto add = [actions](Gtk::Button*& slot, const Glib::ustring& text) {
+      slot = Gtk::make_managed<Gtk::Button>(text);
+      slot->add_css_class("ur-pane-secondary");
+      slot->add_css_class("ur-quick-action");
+      actions->append(*slot);
+      // the flow's own child is not a stop of its own: Tab lands on the button
+      if (auto* child = slot->get_parent()) child->set_focusable(false);
+    };
+    add(inspectorBlockButton_, T_("adv_block_host", "Block this host"));
+    add(inspectorRouteButton_, T_("adv_bypass_tunnel", "Bypass the tunnel"));
+    add(inspectorCopyButton_, T_("adv_copy_details", "Copy details"));
+    inspectorBlockButton_->signal_clicked().connect([this] {
+      if (const auto* action = SelectedConnectionAction()) {
+        RunQuickAction(quick_action::Kind::Block, blockQuick_, QuickFacts(*action));
+      }
+    });
+    inspectorRouteButton_->signal_clicked().connect([this] {
+      if (const auto* action = SelectedConnectionAction()) {
+        RunQuickAction(quick_action::Kind::Route, routeQuick_, QuickFacts(*action));
+      }
+    });
+    inspectorCopyButton_->signal_clicked().connect([this] {
+      if (const auto* action = SelectedConnectionAction()) CopyConnectionDetails(*action);
+    });
+    actions->set_visible(false);
+    inspectorActions_ = actions;
+    inspectorGroup_->append(*actions);
+  }
   inspectorGroup_->append(*kit::MakeDivider());
 
-  inspectorRows_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
-  inspectorGroup_->append(*inspectorRows_);
+  // The fields, rebuilt on every render, in two lists around Reason. Reason
+  // is built once and only relabelled (ApplyInspectorReason): for a
+  // rule-decided connection its value is the one control among the fields,
+  // and a rebuild on every push took its focus and hover about once a second.
+  inspectorRowsAbove_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  inspectorGroup_->append(*inspectorRowsAbove_);
+  {
+    auto row = kit::MakePaneKeyValueRow(T_("adv_reason", "Reason"), {}, kKeyValueRowHeight);
+    CapNatural(row.key, 16);
+    CapNatural(row.value, 20);
+    inspectorReasonValue_ = row.value;
+    // the reason names a rule, and the rules live in the split rules sheet, so
+    // "why did this happen" is one press away: a button that opens it, its
+    // chevron saying so, as the provider count row's does
+    auto* link = Gtk::make_managed<Gtk::Button>();
+    link->add_css_class("flat");
+    link->add_css_class("ur-reason-link");
+    link->set_valign(Gtk::Align::CENTER);
+    auto* content = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 4);
+    inspectorReasonLinkText_ = Gtk::make_managed<Gtk::Label>();
+    inspectorReasonLinkText_->add_css_class("ur-value");
+    inspectorReasonLinkText_->set_ellipsize(Pango::EllipsizeMode::END);
+    CapNatural(inspectorReasonLinkText_, 18);
+    content->append(*inspectorReasonLinkText_);
+    auto* chevron = Gtk::make_managed<Gtk::Image>();
+    chevron->set_from_icon_name("pan-end-symbolic");
+    chevron->set_pixel_size(12);
+    chevron->add_css_class("ur-key");
+    kit::MarkDecorative(*chevron);
+    content->append(*chevron);
+    link->set_child(*content);
+    link->signal_clicked().connect([this] { OpenSplitRulesSheet(); });
+    link->set_visible(false);
+    if (auto* inner = RowInner(row.root)) inner->append(*link);
+    inspectorReasonLink_ = link;
+    inspectorReasonRow_ = row.root;
+    inspectorReasonRow_->set_visible(false);
+    inspectorGroup_->append(*inspectorReasonRow_);
+  }
+  inspectorRowsBelow_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  inspectorGroup_->append(*inspectorRowsBelow_);
 
   inspectorGroup_->set_visible(false);  // Normal mode: gone, not empty
   paneC_.content->append(*inspectorGroup_);
@@ -1088,12 +1449,7 @@ void ConnectPage::BuildDataUsageGroup() {
   kit::MarkDecorative(*providerCountChevron);
   providerCountRow->append(*providerCountChevron);
   providerCountLine_->set_child(*providerCountRow);
-  providerCountLine_->signal_clicked().connect([this] {
-    // the globe has nothing to plot without a session; while connecting the
-    // sheet lists the providers known so far
-    if (!ConnectedNow() && !ConnectingNow()) return;
-    if (on_open_provider_locations) on_open_provider_locations();
-  });
+  providerCountLine_->signal_clicked().connect([this] { OpenProviderLocations(); });
   liveStatsGroup_->append(*providerCountLine_);
   liveStatsGroup_->set_visible(false);  // collapsed with no session: no blank rows
   paneC_.content->append(*liveStatsGroup_);
@@ -1570,88 +1926,399 @@ void ConnectPage::ApplyLiveStatsGroup() {
     // than swallowing the click.
     providerCountLine_->set_sensitive(show && on_open_provider_locations != nullptr);
   }
+  if (foldDoorGlobe_) {
+    // pane A's second door to the globe follows the same rule
+    foldDoorGlobe_->set_visible(show);
+    foldDoorGlobe_->set_sensitive(show && on_open_provider_locations != nullptr);
+  }
 }
 
 // ---- pane B: the routing-decision list ----------------------------------------
 
-void ConnectPage::ApplyConnectionsList() {
+// The activity row, built once per reconcile key. Normal: a static row, no
+// tab stop (200 of them on the way to Connect would be hostile). Advanced: the
+// same row as a real button, clickable, in tab order, Enter/Space; a row whose
+// id the feed omitted cannot be inspected, so it renders inert rather than
+// looking like its neighbours and swallowing the click. A host's group row
+// is the same row over the host's aggregate, and its click is the drill-in,
+// not a selection.
+ConnectPage::ConnectionRow ConnectPage::BuildConnectionRow(const std::string& key,
+                                                           const ConnectionItem& item) {
+  ConnectionRow row;
+  row.key = key;
+  row.group = item.group != nullptr;
+  if (!row.group) row.actionId = item.action->BlockActionId.value_or(std::string());
+  row.selectable = advanced_;
+  if (advanced_) {
+    row.button = kit::MakePaneListRowButton(kListRowHeight);
+    row.button.root->add_css_class("ur-pane-row-36");  // the CSS floor is 40
+    row.root = row.button.root;
+    row.dot = row.button.dot;
+    row.title = row.button.title;
+    row.meta = row.button.meta;
+    if (row.group) {
+      const std::string host = item.group->host;
+      row.button.root->set_sensitive(!host.empty());
+      row.button.root->signal_clicked().connect([this, host] { DrillIntoConnectionGroup(host); });
+    } else {
+      row.button.root->set_sensitive(!row.actionId.empty());
+      const std::string id = row.actionId;
+      row.button.root->signal_clicked().connect(
+          [this, id] { SelectConnection(id); });  // by id, captured by value
+    }
+    // A secondary click, Shift+F10 or the Menu key opens the row's menu: the
+    // inspector's quick actions and Copy details, on this row rather than the
+    // selection, so they are reachable while pane C is folded. By key, like
+    // the click.
+    Gtk::Widget* anchor = row.root;
+    auto press = Gtk::GestureClick::create();
+    press->set_button(GDK_BUTTON_SECONDARY);
+    press->signal_pressed().connect([this, key, anchor](int, double x, double y) {
+      OpenConnectionRowMenu(key, *anchor, x, y);
+    });
+    row.root->add_controller(press);
+    auto keys = Gtk::ShortcutController::create();
+    keys->add_shortcut(Gtk::Shortcut::create(
+        Gtk::ShortcutTrigger::parse_string("<Shift>F10|Menu"),
+        Gtk::CallbackAction::create([this, key](Gtk::Widget& widget, const Glib::VariantBase&) {
+          OpenConnectionRowMenu(key, widget, -1, -1);
+          return true;
+        })));
+    row.root->add_controller(keys);
+  } else {
+    auto plain = kit::MakePaneListRow(kListRowHeight);
+    row.root = plain.root;
+    row.dot = plain.dot;
+    row.title = plain.title;
+    row.meta = plain.meta;
+  }
+  // the row's own name is the whole announcement: its parts must not be read
+  // out again after it
+  kit::MarkDecorative(*row.title);
+  kit::MarkDecorative(*row.meta);
+  UpdateConnectionRow(row, item);
+  return row;
+}
+
+// Everything a push can change about a row already on screen, written in
+// place: the counters and the meta line, the title, the verdict's dot and
+// word. The widget, its focus and its hover are untouched. A group row
+// writes the host's aggregate: the precedence verdict, the sums, the latest
+// decision's age.
+void ConnectPage::UpdateConnectionRow(ConnectionRow& row, const ConnectionItem& item) {
+  const connection_filter::Group* group = item.group;
+  const urnet::BlockAction* action = item.action;
+  row.timeMs = group ? group->latestMs : action->Time;
+  row.byteCount = group ? group->byteCount : action->ByteCount;
+  row.packetCount = group ? group->packetCount : action->PacketCount;
+  row.groupConnections = group ? group->connections : 0;
+  const bool block = group ? group->blocked() : action->Block;
+  const bool local = group ? group->bypassed() : action->Local;
+  std::string title = group ? group->host : BlockActionTitle(*action);
+  if (title.empty()) title = T_("unknown", "unknown");
+  row.title->set_text(title);
+  const char* dot = VerdictDot(block, local);
+  if (row.dotColor != dot) {
+    row.dotColor = dot;
+    row.dot->set_markup(DotMarkup(7, dot));
+  }
+  WriteConnectionRowMeta(row, NowMillis());
+  // the dot is decorative: the NAME is the only place the color's meaning
+  // exists for a screen reader; a group's name carries its count too
+  row.name = title;
+  if (group) row.name += ", " + ConnectionCountText(row.groupConnections);
+  row.name += Glib::ustring(", ") + VerdictWord(block, local);
+  AnnounceConnectionRow(row);
+}
+
+void ConnectPage::WriteConnectionRowMeta(ConnectionRow& row, int64_t nowMs) {
+  std::string meta =
+      ConnectionRowMeta(row.groupConnections, row.timeMs, row.byteCount, row.packetCount, nowMs);
+  if (meta == row.metaText) return;  // a quiet second costs no layout
+  row.metaText = std::move(meta);
+  row.meta->set_text(row.metaText);
+}
+
+void ConnectPage::AnnounceConnectionRow(ConnectionRow& row) {
+  const bool selected = row.selectable && !row.group && !selectedConnectionId_.empty() &&
+                        row.actionId == selectedConnectionId_;
+  // selection rides THREE channels: the fill step and the 2px accent bar
+  // (ApplyConnectionSelectionVisuals), and the announced name gaining the
+  // suffix
+  Glib::ustring announced =
+      selected ? row.name + ", " + T_("adv_selected", "selected") : row.name;
+  if (announced == row.announced) return;
+  row.announced = std::move(announced);
+  kit::SetAccessibleLabel(*row.root, row.announced);
+}
+
+// Incremental. The feed pushes about once a second during live traffic (the
+// counters are in its fingerprint), and a rebuild on every push threw away the
+// keyboard focus and hover of an Advanced row and re-announced the list to a
+// screen reader. Rows are keyed by block action id (ConnectionRowKey) and
+// reconciled against the visible slice (KeyedReconcile.hpp): a new decision
+// is inserted, a living row is rewritten in place, a row past the cap, out of
+// the feed or filtered out is removed. The verdict filter and the search
+// re-evaluate membership through this same pass, so a filter change is an
+// edit, not a rebuild; resetScroll reads its new result set from the top.
+// Group-by-host folds the same filtered feed into one row per display host,
+// keyed by the host: a second kind of row in the same pass, not a second
+// list, and the cap counts groups.
+void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   if (!connectionsHost_) return;
-  // drop the row handles BEFORE the widgets they point at go away
-  connectionRows_.clear();
-  connectionIds_.clear();
-  connectionNames_.clear();
-  RemoveAllChildren(*connectionsHost_);
+  // The Advanced Mode flip changes the row type (static <-> selectable),
+  // which an in-place update cannot morph: the one path that still clears,
+  // and a user gesture, never a push. The handles go before the widgets.
+  if (connectionRowsSelectable_ != advanced_) {
+    connectionRows_.clear();
+    RemoveAllChildren(*connectionsHost_);
+    connectionRowsSelectable_ = advanced_;
+  }
 
   const size_t total = blockActions_ ? blockActions_->size() : 0;
+  // NEWEST FIRST. The Linux feed is delivered oldest-first
+  // (BlockActionViewController::getBlockActions is the window in arrival
+  // order), so the list is walked from the back — the already-shipped
+  // consumer does the same (SplitRulesSheet: "live activity, newest first").
+  // Read forward, the 200-row cap would keep the 200 OLDEST decisions and no
+  // newly contacted host would ever appear again on a busy session.
+  // The filter runs over the whole cached feed (the count needs every match),
+  // and the cap applies to what passes.
+  std::vector<ConnectionItem> visible;
+  std::vector<std::string> keys;
+  std::vector<connection_filter::FoldMember> members;
+  int64_t passed = 0;
   if (blockActions_) {
-    size_t shown = 0;
-    // NEWEST FIRST. The Linux feed is delivered oldest-first
-    // (BlockActionViewController::getBlockActions is the window in arrival
-    // order), so the list is walked from the back — the already-shipped
-    // consumer does the same (SplitRulesSheet: "live activity, newest first").
-    // Read forward, the 200-row cap would keep the 200 OLDEST decisions and no
-    // newly contacted host would ever appear again on a busy session.
     for (auto it = blockActions_->rbegin(); it != blockActions_->rend(); ++it) {
-      if (shown >= kMaxConnectionRows) break;  // a cap, not a scroll budget
-      const urnet::BlockAction& action = *it;
-      std::string title = BlockActionTitle(action);
-      if (title.empty()) title = T_("unknown", "unknown");
-      const std::string meta = FormatByteCountCompact(action.ByteCount) + "   " +
-                               FormatCountCompact(action.PacketCount) + " pkt";
-      const char* dot = VerdictDot(action);
-      const std::string id = action.BlockActionId.value_or(std::string());
-      // the dot is decorative: the NAME is the only place the color's meaning
-      // exists for a screen reader
-      const Glib::ustring name = Glib::ustring(title) + ", " + VerdictWord(action);
-      if (advanced_) {
-        // Advanced: EVERY row is a real button — clickable, in tab order,
-        // Enter/Space. A row whose id the feed omitted cannot be inspected, so
-        // it renders inert (disabled) rather than looking identical to its
-        // neighbours and swallowing the click.
-        auto row = kit::MakePaneListRowButton(kListRowHeight);
-        row.root->add_css_class("ur-pane-row-36");  // the CSS floor is 40
-        row.title->set_text(title);
-        row.meta->set_text(meta);
-        row.dot->set_markup(DotMarkup(7, dot));
-        // the row's own name is the whole announcement: its parts must not be
-        // read out again after it
-        kit::MarkDecorative(*row.title);
-        kit::MarkDecorative(*row.meta);
-        kit::SetAccessibleLabel(*row.root, name);
-        row.root->set_sensitive(!id.empty());
-        row.root->signal_clicked().connect(
-            [this, id] { SelectConnection(id); });  // by id, captured by value
-        connectionsHost_->append(*row.root);
-        connectionRows_.push_back(row);
-        connectionIds_.push_back(id);
-        connectionNames_.push_back(name);
-      } else {
-        // Normal: static rows — 200 tab stops on the way to Connect is hostile
-        auto row = kit::MakePaneListRow(kListRowHeight);
-        row.title->set_text(title);
-        row.meta->set_text(meta);
-        row.dot->set_markup(DotMarkup(7, dot));
-        kit::MarkDecorative(*row.title);
-        kit::MarkDecorative(*row.meta);
-        kit::SetAccessibleLabel(*row.root, name);
-        connectionsHost_->append(*row.root);
+      if (!connection_filter::Passes(verdictFilter_, connectionsQuery_, FilterDecision(*it))) {
+        continue;
       }
-      ++shown;
+      ++passed;
+      if (connectionsGrouped_) {
+        members.push_back(FoldMemberOf(*it));
+        continue;
+      }
+      if (visible.size() >= kMaxConnectionRows) continue;  // a cap, not a scroll budget
+      visible.push_back(ConnectionItem{&*it, nullptr});
+      keys.push_back(ConnectionRowKey(*it));
+    }
+  }
+  // the groups outlive the reconcile below, which points into them
+  const std::vector<connection_filter::Group> groups = connection_filter::FoldGroups(members);
+  for (const auto& group : groups) {
+    if (visible.size() >= kMaxConnectionRows) break;
+    visible.push_back(ConnectionItem{nullptr, &group});
+    keys.push_back("g:" + group.host);
+  }
+
+  std::vector<std::string> onScreen;
+  onScreen.reserve(connectionRows_.size());
+  for (const auto& row : connectionRows_) onScreen.push_back(row.key);
+  for (const reconcile::Step& step : reconcile::Plan(onScreen, keys)) {
+    const auto at = connectionRows_.begin() + static_cast<std::ptrdiff_t>(step.index);
+    switch (step.kind) {
+      case reconcile::StepKind::Remove:
+        connectionsHost_->remove(*at->root);
+        connectionRows_.erase(at);
+        break;
+      case reconcile::StepKind::Update:
+        UpdateConnectionRow(*at, visible[step.wantedIndex]);
+        break;
+      case reconcile::StepKind::Move: {
+        ConnectionRow row = std::move(connectionRows_[step.from]);
+        connectionRows_.erase(connectionRows_.begin() + static_cast<std::ptrdiff_t>(step.from));
+        UpdateConnectionRow(row, visible[step.wantedIndex]);
+        if (step.index == 0) {
+          connectionsHost_->reorder_child_at_start(*row.root);
+        } else {
+          connectionsHost_->reorder_child_after(*row.root, *connectionRows_[step.index - 1].root);
+        }
+        connectionRows_.insert(connectionRows_.begin() + static_cast<std::ptrdiff_t>(step.index),
+                               std::move(row));
+        break;
+      }
+      case reconcile::StepKind::Insert: {
+        ConnectionRow row = BuildConnectionRow(keys[step.wantedIndex], visible[step.wantedIndex]);
+        if (step.index == 0) {
+          connectionsHost_->insert_child_at_start(*row.root);
+        } else {
+          connectionsHost_->insert_child_after(*row.root, *connectionRows_[step.index - 1].root);
+        }
+        connectionRows_.insert(at, std::move(row));
+        break;
+      }
     }
   }
 
+  if (resetScroll && connectionsScroll_) connectionsScroll_->get_vadjustment()->set_value(0.0);
+
   if (connectionsCount_) {
-    // ALWAYS the full feed count, even though rendering caps at 200 rows
-    kit::SetTextOrCollapse(
-        *connectionsCount_,
-        blockActions_ ? Glib::ustring(Format(TN_("host_count", "{} host", "{} hosts",
-                                                 static_cast<unsigned long>(total)),
-                                             total))
-                      : Glib::ustring());
+    // the full feed count, even though rendering caps at 200 rows; while a
+    // filter holds rows back, "N hosts of M", and folded, the hosts of the
+    // decisions that passed
+    const auto count = connection_filter::CountFor(
+        verdictFilter_, connectionsQuery_, connectionsGrouped_,
+        static_cast<int64_t>(groups.size()), passed, static_cast<int64_t>(total));
+    std::string text;
+    if (blockActions_) {
+      text = Format(TN_("host_count", "{} host", "{} hosts",
+                        static_cast<unsigned long>(count.shown)),
+                    count.shown);
+      if (count.ofTotal) text += " " + Format(T_("of_total", "of {}"), count.of);
+    }
+    kit::SetTextOrCollapse(*connectionsCount_, text);
   }
+  if (connectionsClear_) {
+    connectionsClear_->set_visible(
+        connection_filter::ClearOffered(verdictFilter_, connectionsQuery_, connectionsGrouped_));
+  }
+  ApplyVerdictRatioBar();
   ApplySessionCardsVisibility();
   ApplyConnectionSelectionVisuals();
   ApplyInspector();  // a selection that aged out of the feed must SAY so
+}
+
+// The ratio bar's three shares, recomputed only on the block-actions and
+// block-stats pushes: one pass over the cached window for the bypassed count
+// and a redraw, so a live session pays nothing per frame. It collapses while
+// there is nothing to proportion rather than drawing an empty track.
+void ConnectPage::ApplyVerdictRatioBar() {
+  if (!verdictRatioBar_) return;
+  int64_t bypassed = 0;
+  if (blockActions_) {
+    for (const auto& action : *blockActions_) {
+      if (!action.Block && action.Local) ++bypassed;
+    }
+  }
+  const auto ratio = connection_filter::VerdictRatio(
+      blockStats_ ? blockStats_->AllowedCount : 0, blockStats_ ? blockStats_->BlockedCount : 0,
+      bypassed);
+  verdictRatioBar_->set_visible(ratio.has_value());
+  if (!ratio) return;
+  verdictRatio_ = *ratio;
+  verdictRatioBar_->queue_draw();
+}
+
+// The decision or host behind a row's key, resolved from the feed now and
+// owned: the feed is live, and neither the menu nor its presses may point
+// into a list the next push replaces. A group resolves to its host's
+// aggregate over the same filtered feed the list folded, ruled on as the
+// host itself (quick_action::GroupFacts), with its newest decision's
+// deciding override; nullopt once the row has left the feed.
+std::optional<ConnectPage::RowTarget> ConnectPage::ResolveRowTarget(const std::string& key) const {
+  if (!blockActions_) return std::nullopt;
+  if (key.rfind("g:", 0) != 0) {
+    for (const auto& action : *blockActions_) {
+      if (ConnectionRowKey(action) == key) return RowTarget{action, QuickFacts(action)};
+    }
+    return std::nullopt;
+  }
+  const std::string host = key.substr(2);
+  std::vector<connection_filter::FoldMember> members;
+  const urnet::BlockAction* newest = nullptr;
+  for (auto it = blockActions_->rbegin(); it != blockActions_->rend(); ++it) {
+    if (!connection_filter::Passes(verdictFilter_, connectionsQuery_, FilterDecision(*it))) {
+      continue;
+    }
+    if (BlockActionTitle(*it) != host) continue;
+    if (!newest) newest = &*it;
+    members.push_back(FoldMemberOf(*it));
+  }
+  if (!newest) return std::nullopt;
+  const connection_filter::Group group = connection_filter::FoldGroups(members).front();
+  RowTarget target;
+  target.facts =
+      quick_action::GroupFacts(host, group.blocked(), group.bypassed(), QuickFacts(*newest));
+  if (!host.empty()) target.action.Hosts = urnet::StringList{host};
+  target.action.Block = group.blocked();
+  target.action.Local = group.bypassed();
+  target.action.Time = group.latestMs;
+  target.action.ByteCount = group.byteCount;
+  target.action.PacketCount = group.packetCount;
+  target.action.OverrideId = newest->OverrideId;
+  target.action.BlockOverride = newest->BlockOverride;
+  target.action.RouteOverride = newest->RouteOverride;
+  return target;
+}
+
+// The row's menu, built at open and never cached: the quick actions read the
+// live host rules, and a menu that kept the state from when its row was
+// built would offer to remove rules that are gone. The state and the target
+// are captured into the items, so a press does exactly what the open menu
+// showed, as the inspector's buttons do. x, y are the press in the anchor
+// row's coordinates, or negative from the keyboard (the menu points at the
+// row). One popover, on the list area, so a row the next push removes takes
+// nothing with it.
+void ConnectPage::OpenConnectionRowMenu(const std::string& key, Gtk::Widget& anchor, double x,
+                                        double y) {
+  if (!connectionsArea_) return;
+  const std::optional<RowTarget> target = ResolveRowTarget(key);
+  if (!target) return;  // aged out of the feed: nothing honest to offer
+  const quick_action::Facts& facts = target->facts;
+  const quick_action::State blockState =
+      quick_action::StateFor(facts, hostRules_, quick_action::Kind::Block);
+  const quick_action::State routeState =
+      quick_action::StateFor(facts, hostRules_, quick_action::Kind::Route);
+
+  if (!rowMenu_) {
+    rowMenu_ = Gtk::make_managed<Gtk::Popover>();
+    rowMenu_->set_parent(*connectionsArea_);
+    rowMenu_->set_position(Gtk::PositionType::BOTTOM);
+  }
+  auto* menu = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  auto item = [this, menu](const char* text, bool sensitive, bool active,
+                           std::function<void()> run) {
+    auto* button = Gtk::make_managed<Gtk::Button>();
+    auto* label = Gtk::make_managed<Gtk::Label>(text);
+    label->set_xalign(0);
+    button->set_child(*label);
+    button->add_css_class("flat");
+    button->set_sensitive(sensitive);
+    kit::SetAccessibleLabel(*button, active ? Glib::ustring(text) + ", " +
+                                                  T_("adv_rule_active",
+                                                     "rule active, click to remove")
+                                            : Glib::ustring(text));
+    button->signal_clicked().connect([this, run] {
+      rowMenu_->popdown();
+      run();
+    });
+    menu->append(*button);
+  };
+  item(QuickActionText(quick_action::LabelFor(blockState, quick_action::Kind::Block, facts)),
+       blockState.enabled, blockState.active, [this, blockState, facts] {
+         RunQuickAction(quick_action::Kind::Block, blockState, facts);
+       });
+  item(QuickActionText(quick_action::LabelFor(routeState, quick_action::Kind::Route, facts)),
+       routeState.enabled, routeState.active, [this, routeState, facts] {
+         RunQuickAction(quick_action::Kind::Route, routeState, facts);
+       });
+  menu->append(*Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL));
+  item(T_("adv_copy_details", "Copy details"), true, false,
+       [this, action = target->action] { CopyConnectionDetails(action); });
+  rowMenu_->set_child(*menu);
+
+  graphene_rect_t bounds;
+  if (gtk_widget_compute_bounds(anchor.gobj(), GTK_WIDGET(connectionsArea_->gobj()), &bounds)) {
+    const bool pointer = 0 <= x && 0 <= y;
+    rowMenu_->set_pointing_to(
+        pointer ? Gdk::Rectangle(static_cast<int>(bounds.origin.x + x),
+                                 static_cast<int>(bounds.origin.y + y), 1, 1)
+                : Gdk::Rectangle(static_cast<int>(bounds.origin.x),
+                                 static_cast<int>(bounds.origin.y),
+                                 static_cast<int>(bounds.size.width),
+                                 static_cast<int>(bounds.size.height)));
+  }
+  rowMenu_->popup();
+}
+
+// The 1s reading of the meta lines' age: one string per row from the counters
+// it keeps, with no feed read and no rebuild.
+void ConnectPage::RefreshConnectionRowTimes() {
+  if (connectionRows_.empty()) return;
+  const int64_t nowMs = NowMillis();
+  for (auto& row : connectionRows_) {
+    if (0 < row.timeMs) WriteConnectionRowMeta(row, nowMs);
+  }
 }
 
 void ConnectPage::SelectConnection(const std::string& id) {
@@ -1663,26 +2330,74 @@ void ConnectPage::SelectConnection(const std::string& id) {
 
 void ConnectPage::ApplyConnectionSelectionVisuals() {
   // repaint WITHOUT rebuilding: a rebuild would destroy keyboard focus
-  const size_t rows = std::min(connectionRows_.size(),
-                               std::min(connectionIds_.size(), connectionNames_.size()));
-  for (size_t i = 0; i < rows; ++i) {
-    const bool selected =
-        !selectedConnectionId_.empty() && connectionIds_[i] == selectedConnectionId_;
-    kit::SetPaneListRowSelected(connectionRows_[i], selected);
-    if (!connectionRows_[i].root) continue;
-    // selection rides THREE channels: the fill step and the 2px accent bar
-    // (both above), and the announced name gaining the suffix
-    kit::SetAccessibleLabel(
-        *connectionRows_[i].root,
-        selected ? connectionNames_[i] + ", " + T_("adv_selected", "selected")
-                 : connectionNames_[i]);
+  for (auto& row : connectionRows_) {
+    if (!row.selectable) continue;
+    kit::SetPaneListRowSelected(row.button, !row.group && !selectedConnectionId_.empty() &&
+                                                row.actionId == selectedConnectionId_);
+    AnnounceConnectionRow(row);
   }
+}
+
+// The verdict filter's change, from its segment. A changed filter is a new
+// result set: the same incremental pass, read from the top.
+void ConnectPage::OnConnectionsVerdictChanged(connection_filter::Verdict verdict) {
+  if (verdict == verdictFilter_) return;
+  verdictFilter_ = verdict;
+  ApplyConnectionsList(/*resetScroll=*/true);
+}
+
+// What the leaving account searched for and selected must not greet the
+// next one (SignOut.hpp: each network starts fresh): Clear's own reset, in
+// its one pass, with nothing selected.
+void ConnectPage::ResetForSignOut() {
+  // an Undo pressed after the sign-out would remove a rule by the leaving
+  // account's id, and a menu would rule on its connection
+  quickToast_.Dismiss();
+  if (rowMenu_) rowMenu_->popdown();
+  selectedConnectionId_.clear();
+  OnConnectionsClearFilters();
+}
+
+// The one-click reset: the state first, then the controls behind the echo
+// guard so their handlers do not run the pass again, then one pass.
+void ConnectPage::OnConnectionsClearFilters() {
+  verdictFilter_ = connection_filter::Verdict::All;
+  connectionsQuery_.clear();
+  connectionsGrouped_ = false;
+  const bool wasUpdating = updatingControls_;
+  updatingControls_ = true;
+  if (verdictAll_) verdictAll_->set_active(true);
+  if (connectionsSearch_) connectionsSearch_->set_text("");
+  if (connectionsGroupToggle_) connectionsGroupToggle_->set_active(false);
+  updatingControls_ = wasUpdating;
+  ApplyConnectionsList(/*resetScroll=*/true);
+}
+
+// A group row's click, and the whole of its interaction: the search takes
+// the host and the fold goes off, so the group opens in place through the
+// filter that already exists. Not a selection (a group has no one connection
+// to inspect). The same shape as Clear: state, guarded controls, one pass.
+void ConnectPage::DrillIntoConnectionGroup(const std::string& host) {
+  if (host.empty()) return;  // an unnamed group has nothing to search for
+  connectionsGrouped_ = false;
+  connectionsQuery_ = connection_filter::NormalizeQuery(host);
+  const bool wasUpdating = updatingControls_;
+  updatingControls_ = true;
+  if (connectionsGroupToggle_) connectionsGroupToggle_->set_active(false);
+  if (connectionsSearch_) connectionsSearch_->set_text(host);
+  updatingControls_ = wasUpdating;
+  ApplyConnectionsList(/*resetScroll=*/true);
 }
 
 void ConnectPage::ApplySessionCardsVisibility() {
   if (!connectionsHost_ || !connectionsEmpty_) return;
-  // the list and the sentence SWAP; the connected flag gates which
-  const bool showList = ConnectedNow() && connectionsHost_->get_first_child() != nullptr;
+  // The list and the sentence SWAP; the connected flag gates which. A filter
+  // that hides every row of a session that has some keeps the (empty) list:
+  // the count above it says "0 hosts of M", which the sentence would deny.
+  const bool showList = connection_filter::ShowList(
+      ConnectedNow(), connectionsHost_->get_first_child() != nullptr,
+      connection_filter::FilterActive(verdictFilter_, connectionsQuery_),
+      blockActions_ ? static_cast<int64_t>(blockActions_->size()) : 0);
   connectionsHost_->set_visible(showList);
   connectionsEmpty_->set_visible(!showList);
 }
@@ -1845,6 +2560,7 @@ void ConnectPage::ApplyDnsCard() {
   // the editor has nothing to draft from without settings (DnsSheet::Open
   // returns false and does not present) — say so on the control
   if (dnsEditButton_) dnsEditButton_->set_sensitive(present);
+  if (foldDoorDns_) foldDoorDns_->set_sensitive(present);
   ApplyDnsRecommendationPill();  // collapses with the rows
   if (loading) {
     const Glib::ustring loadingText = T_("loading", "Loading...");
@@ -1981,19 +2697,11 @@ std::optional<ConnectPage::ExitRouting> ConnectPage::RoutingForAddresses(
 }
 
 void ConnectPage::ApplyInspector() {
-  if (!inspectorGroup_ || !inspectorRows_) return;
-  RemoveAllChildren(*inspectorRows_);
+  if (!inspectorGroup_ || !inspectorRowsAbove_ || !inspectorRowsBelow_) return;
+  RemoveAllChildren(*inspectorRowsAbove_);
+  RemoveAllChildren(*inspectorRowsBelow_);
 
-  const urnet::BlockAction* action = nullptr;
-  if (!selectedConnectionId_.empty() && blockActions_) {
-    for (const auto& candidate : *blockActions_) {
-      if (candidate.BlockActionId.value_or(std::string()) == selectedConnectionId_) {
-        action = &candidate;
-        break;
-      }
-    }
-  }
-
+  const urnet::BlockAction* action = SelectedConnectionAction();
   if (!action) {
     // two DISTINGUISHABLE empty readings: nothing picked vs picked-and-gone
     inspectorTitle_->set_text(selectedConnectionId_.empty()
@@ -2004,6 +2712,12 @@ void ConnectPage::ApplyInspector() {
     inspectorVerdict_->set_text(
         T_("adv_select_a_row", "Select a row in Activity to inspect it"));
     if (inspectorClear_) inspectorClear_->set_visible(false);
+    // no selection, no actions: a row left behind would offer rules on a
+    // connection that is gone
+    inspectorActions_->set_visible(false);
+    inspectorReasonRow_->set_visible(false);
+    blockQuick_ = {};
+    routeQuick_ = {};
     return;
   }
 
@@ -2011,18 +2725,28 @@ void ConnectPage::ApplyInspector() {
   if (title.empty()) title = T_("unknown", "unknown");
   inspectorTitle_->set_text(title);
   inspectorDot_->set_markup(DotMarkup(8, VerdictDot(*action)));
-  inspectorVerdict_->set_text(
-      action->Block ? T_("adv_verdict_blocked", "Blocked — no packets sent")
-                    : (action->Local ? T_("adv_verdict_local",
-                                          "Bypassed the tunnel — not protected")
-                                     : T_("adv_verdict_tunnelled", "Tunnelled through URnetwork")));
+  inspectorVerdict_->set_text(VerdictSentence(action->Block, action->Local));
   if (inspectorClear_) inspectorClear_->set_visible(true);
 
-  auto add = [this](const Glib::ustring& key, const Glib::ustring& value) {
+  // The quick actions, derived on every render from the live host rules: the
+  // press handlers act on the stored state, so a press does exactly what the
+  // button showed.
+  {
+    const quick_action::Facts facts = QuickFacts(*action);
+    blockQuick_ = quick_action::StateFor(facts, hostRules_, quick_action::Kind::Block);
+    routeQuick_ = quick_action::StateFor(facts, hostRules_, quick_action::Kind::Route);
+    ApplyQuickActionButton(*inspectorBlockButton_, blockQuick_, quick_action::Kind::Block, facts);
+    ApplyQuickActionButton(*inspectorRouteButton_, routeQuick_, quick_action::Kind::Route, facts);
+    inspectorActions_->set_visible(true);
+  }
+
+  // the fields go over Reason until it is written, then under it
+  Gtk::Box* rows = inspectorRowsAbove_;
+  auto add = [&rows](const Glib::ustring& key, const Glib::ustring& value) {
     auto row = kit::MakePaneKeyValueRow(key, value, kKeyValueRowHeight);
     CapNatural(row.key, 16);
     CapNatural(row.value, 20);
-    inspectorRows_->append(*row.root);
+    rows->append(*row.root);
     return row;
   };
   const Glib::ustring none = T_("adv_none", "none");
@@ -2042,17 +2766,8 @@ void ConnectPage::ApplyInspector() {
                     : Glib::ustring(action->Local ? T_("off", "Off") : T_("on", "On")));
   {
     const std::string overrideId = action->OverrideId.value_or(std::string());
-    const char* reason = T_("adv_reason_default", "Default policy");
-    if (!overrideId.empty()) {
-      if (action->BlockOverride) {
-        reason = T_("adv_reason_block", "Block override");
-      } else if (action->RouteOverride) {
-        reason = T_("adv_reason_route", "Route override");
-      } else {
-        reason = T_("adv_reason_override", "Override");
-      }
-    }
-    add(T_("adv_reason", "Reason"), reason);
+    ApplyInspectorReason(ReasonText(*action), !overrideId.empty());
+    rows = inspectorRowsBelow_;
     if (!overrideId.empty()) add(T_("adv_override_id", "Override"), overrideId);
   }
   // TOTALS: a block action carries no per-direction split and the label says so
@@ -2120,6 +2835,132 @@ void ConnectPage::ApplyInspector() {
       row.value->set_focus_on_click(false);
     }
   }
+}
+
+// The persistent Reason row, written in place: the plain value, or for a
+// rule-decided connection the link to the split rules sheet. A push that
+// changes neither writes nothing, so the link keeps its focus and hover.
+void ConnectPage::ApplyInspectorReason(const Glib::ustring& reason, bool link) {
+  inspectorReasonRow_->set_visible(true);
+  inspectorReasonValue_->set_visible(!link);
+  inspectorReasonLink_->set_visible(link);
+  if (reason == inspectorReasonText_) return;
+  inspectorReasonText_ = reason;
+  const Glib::ustring key = T_("adv_reason", "Reason");
+  inspectorReasonValue_->set_text(reason);
+  kit::SetAccessibleLabel(*inspectorReasonValue_, key + ", " + reason);
+  inspectorReasonLinkText_->set_text(reason);
+  // a button whose content is a box has no name of its own
+  kit::SetAccessibleLabel(*inspectorReasonLink_,
+                          key + ", " + reason + ", " +
+                              T_("adv_open_split_rules", "open split rules"));
+}
+
+// The selection in the current feed, or nullptr: nothing is selected, or the
+// action aged out of the window since it was picked.
+const urnet::BlockAction* ConnectPage::SelectedConnectionAction() const {
+  if (selectedConnectionId_.empty() || !blockActions_) return nullptr;
+  for (const auto& candidate : *blockActions_) {
+    if (candidate.BlockActionId.value_or(std::string()) == selectedConnectionId_) return &candidate;
+  }
+  return nullptr;
+}
+
+// A quick action button for its state: outlined while a press would create a
+// rule, filled action blue while one is in force and a press removes it. The
+// word changes too, and the name says the on state, so the fill is never the
+// only channel.
+void ConnectPage::ApplyQuickActionButton(Gtk::Button& button, const quick_action::State& state,
+                                         quick_action::Kind kind,
+                                         const quick_action::Facts& facts) {
+  const char* label = QuickActionText(quick_action::LabelFor(state, kind, facts));
+  button.set_label(label);
+  button.set_sensitive(state.enabled);
+  if (state.active) {
+    button.add_css_class("ur-quick-on");
+    kit::SetAccessibleLabel(button, Glib::ustring(label) + ", " +
+                                        T_("adv_rule_active", "rule active, click to remove"));
+  } else {
+    button.remove_css_class("ur-quick-on");
+    kit::SetAccessibleLabel(button, label);
+  }
+}
+
+// A quick action's press, from the inspector or a row's menu, against the
+// state its button showed: remove the rule in force, or write the inverse of
+// the verdict, then confirm with a toast whose Undo deletes the new rule by
+// id. The overrides are re-read at once: the local-state fallback (no
+// device) fires no override event.
+void ConnectPage::RunQuickAction(quick_action::Kind kind, const quick_action::State& state,
+                                 const quick_action::Facts& facts) {
+  const quick_action::Effect effect = quick_action::EffectFor(state, kind, facts);
+  std::string created;
+  const char* message = nullptr;
+  switch (effect) {
+    case quick_action::Effect::None:
+      return;
+    case quick_action::Effect::RemoveRule:
+      host_.RemoveBlockActionOverride(state.overrideId);
+      message = T_("adv_rule_removed", "Rule removed");
+      break;
+    case quick_action::Effect::CreateBlock:
+      created = host_.AddHostBlockRule(state.hosts, true);
+      message = T_("adv_host_blocked", "This host will be blocked");
+      break;
+    case quick_action::Effect::CreateAllow:
+      created = host_.AddHostBlockRule(state.hosts, false);
+      message = T_("adv_host_allowed", "This host will be allowed");
+      break;
+    case quick_action::Effect::CreateBypass:
+      created = host_.AddHostRouteRule(state.hosts, true);
+      message = T_("adv_host_bypassed", "This host will bypass the tunnel");
+      break;
+    case quick_action::Effect::CreateTunnel:
+      created = host_.AddHostRouteRule(state.hosts, false);
+      message = T_("adv_host_tunnelled", "This host will use the tunnel");
+      break;
+  }
+  // a create that found nowhere to write wrote nothing to confirm
+  if (effect != quick_action::Effect::RemoveRule && created.empty()) return;
+  // (a changed rule re-renders the inspector from there)
+  ApplyOverrides(host_.BlockActionOverrides(), /*force=*/false);
+  if (created.empty()) {
+    quickToast_.Show(*this, message);
+    return;
+  }
+  auto alive = alive_;
+  quickToast_.Show(*this, message, T_("adv_undo", "Undo"), [this, alive, created] {
+    if (!*alive) return;
+    host_.RemoveBlockActionOverride(created);
+    ApplyOverrides(host_.BlockActionOverrides(), /*force=*/false);
+  });
+}
+
+// The inspector's fields, in its own words and order, onto the clipboard:
+// host, addresses, verdict, reason, override, totals, last decision.
+void ConnectPage::CopyConnectionDetails(const urnet::BlockAction& action) {
+  std::string text;
+  auto line = [&text](const char* key, const std::string& value) {
+    if (!text.empty()) text += "\n";
+    text += std::string(key) + ": " + value;
+  };
+  const std::string none = T_("adv_none", "none");
+  const std::string hosts = JoinValues(action.Hosts);
+  const std::string ips = JoinValues(action.Ips);
+  line(T_("adv_host", "Host"), hosts.empty() ? none : hosts);
+  line(T_("adv_addresses", "Addresses"), ips.empty() ? none : ips);
+  line(T_("adv_verdict", "Verdict"), VerdictSentence(action.Block, action.Local));
+  line(T_("adv_reason", "Reason"), ReasonText(action));
+  const std::string overrideId = action.OverrideId.value_or(std::string());
+  if (!overrideId.empty()) line(T_("adv_override_id", "Override"), overrideId);
+  line(T_("adv_packets_total", "Packets (total)"), FormatCountCompact(action.PacketCount));
+  line(T_("adv_bytes_total", "Bytes (total)"), FormatByteCountCompact(action.ByteCount));
+  if (action.Time > 0) {
+    line(T_("adv_last_decision", "Last decision"),
+         RelativeTime(std::max<int64_t>(0, (NowMillis() - action.Time) / 1000)));
+  }
+  get_clipboard()->set_text(text);
+  quickToast_.Show(*this, T_("adv_details_copied", "Connection details copied"));
 }
 
 // The 5 s exit-routing cache refresh (§4.1), fired from the clock and
@@ -2490,6 +3331,7 @@ void ConnectPage::RefreshFeeds(bool force) {
     if (force || changed) {
       blockStats_ = stats;
       ApplySessionRows();
+      ApplyVerdictRatioBar();  // two of the bar's three inputs
       if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
     }
   }
@@ -2503,24 +3345,7 @@ void ConnectPage::RefreshFeeds(bool force) {
       if (contractsSheet_ && contractsSheet_->is_visible()) contractsSheet_->Refresh();
     }
   }
-  {
-    std::optional<urnet::BlockActionOverrideList> rules;
-    if (auto overrides = host_.BlockActionOverrides()) {
-      urnet::BlockActionOverrideList kept;
-      for (const auto& override_ : *overrides) {
-        // a "split rule" is an override whose route override forces local
-        if (override_.RouteOverride && override_.RouteOverride->Local) kept.push_back(override_);
-      }
-      rules = std::move(kept);
-    }
-    const uint64_t sig = SplitRulesSig(rules);
-    if (force || sig != splitRulesSig_) {
-      splitRulesSig_ = sig;
-      splitRules_ = std::move(rules);
-      ApplySplitRuleCount();
-      if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
-    }
-  }
+  ApplyOverrides(host_.BlockActionOverrides(), force);
   {
     auto settings = host_.GetDnsResolverSettings();
     const bool changed =
@@ -2600,6 +3425,46 @@ void ConnectPage::RefreshFeeds(bool force) {
   }
 }
 
+// The overrides, read once, feed two surfaces: the split rules (an override
+// whose route override forces local) behind pane C's count and the sheet,
+// and the host rules the inspector's quick actions read, at full fidelity:
+// a rule's kind and value are the buttons' whole state, and a rule written
+// from any surface (the sheet, the row menu, another device) re-renders them.
+void ConnectPage::ApplyOverrides(std::optional<urnet::BlockActionOverrideList> overrides,
+                                 bool force) {
+  std::optional<urnet::BlockActionOverrideList> rules;
+  std::vector<quick_action::HostRule> hostRules;
+  if (overrides) {
+    urnet::BlockActionOverrideList kept;
+    for (const auto& override_ : *overrides) {
+      if (override_.RouteOverride && override_.RouteOverride->Local) kept.push_back(override_);
+      if (!override_.OverrideId || !override_.Hosts || override_.Hosts->empty()) continue;
+      quick_action::HostRule rule;
+      rule.overrideId = *override_.OverrideId;
+      rule.hosts = *override_.Hosts;
+      rule.hasBlockOverride = override_.BlockOverride.has_value();
+      rule.block = override_.BlockOverride && override_.BlockOverride->Block;
+      rule.hasRouteOverride = override_.RouteOverride.has_value();
+      rule.routeLocal = override_.RouteOverride && override_.RouteOverride->Local;
+      hostRules.push_back(std::move(rule));
+    }
+    rules = std::move(kept);
+  }
+  const uint64_t sig = SplitRulesSig(rules);
+  if (force || sig != splitRulesSig_) {
+    splitRulesSig_ = sig;
+    splitRules_ = std::move(rules);
+    ApplySplitRuleCount();
+    if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
+  }
+  const uint64_t hostSig = HostRulesSig(hostRules);
+  if (force || hostSig != hostRulesSig_) {
+    hostRulesSig_ = hostSig;
+    hostRules_ = std::move(hostRules);
+    if (!selectedConnectionId_.empty()) ApplyInspector();
+  }
+}
+
 // The clock-driven fallback for the change feed.
 //
 // SdkHost::SetDrawerEventHandler is a SINGLE slot and MainWindow owns it; it
@@ -2664,23 +3529,11 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::BlockStats:
       blockStats_ = host_.BlockStatsSnapshot();
       ApplySessionRows();
+      ApplyVerdictRatioBar();  // two of the bar's three inputs
       if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
       break;
     case DrawerEvent::Overrides:
-      if (auto overrides = host_.BlockActionOverrides()) {
-        urnet::BlockActionOverrideList rules;
-        for (const auto& override_ : *overrides) {
-          if (override_.RouteOverride && override_.RouteOverride->Local) {
-            rules.push_back(override_);
-          }
-        }
-        splitRules_ = std::move(rules);
-      } else {
-        splitRules_.reset();
-      }
-      splitRulesSig_ = SplitRulesSig(splitRules_);
-      ApplySplitRuleCount();
-      if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
+      ApplyOverrides(host_.BlockActionOverrides(), /*force=*/true);
       break;
     case DrawerEvent::DnsSettings:
       dnsSettled_ = true;
@@ -2768,6 +3621,13 @@ Gtk::Window* ConnectPage::RootWindow() {
   return dynamic_cast<Gtk::Window*>(get_root());
 }
 
+void ConnectPage::OpenProviderLocations() {
+  // the globe has nothing to plot without a session; while connecting the
+  // sheet lists the providers known so far
+  if (!ConnectedNow() && !ConnectingNow()) return;
+  if (on_open_provider_locations) on_open_provider_locations();
+}
+
 void ConnectPage::OpenContractsSheet() {
   auto* parent = RootWindow();
   if (!parent) return;
@@ -2804,7 +3664,10 @@ void ConnectPage::OpenDnsSheet() {
   // trailing action is desensitized in that state (ApplyDnsCard), so a click
   // that produces nothing cannot happen. Re-decide here too: the feed may have
   // gone away between the last reading and the press.
-  if (!dnsSheet_->Open() && dnsEditButton_) dnsEditButton_->set_sensitive(false);
+  if (!dnsSheet_->Open()) {
+    if (dnsEditButton_) dnsEditButton_->set_sensitive(false);
+    if (foldDoorDns_) foldDoorDns_->set_sensitive(false);
+  }
 }
 
 void ConnectPage::OpenTransportSheet() {
@@ -2869,13 +3732,17 @@ void ConnectPage::ApplyFold(bool force) {
   foldWidth_ = paneWidth;
   if (!changed && !force) return;
 
-  // Simple is ALWAYS one pane, capped and centred; Advanced folds on width.
-  const bool three = advanced_ && paneWidth >= kThreePaneDip;
-  const bool two = advanced_ && paneWidth >= kTwoPaneDip;
+  // Simple is always one pane, capped and centred; Advanced folds on width,
+  // and the third pane waits until activity keeps 330dip beside the rails.
+  const int panes = connect_fold::PaneCount(advanced_, paneWidth);
+  const bool three = panes == 3;
+  const bool two = panes >= 2;
   paneB_.root->set_visible(two);
   paneBRule_->set_visible(two);
   paneC_.root->set_visible(three);
   paneCRule_->set_visible(three);
+  // exactly one set of doors to pane C's sheets: its own, or pane A's
+  if (foldDoorsHost_) foldDoorsHost_->set_visible(connect_fold::FoldDoorsShown(panes));
   if (two) {
     paneA_.root->set_size_request(kPaneAWidth, -1);
     paneA_.root->set_hexpand(false);
@@ -2972,7 +3839,8 @@ void ConnectPage::Tick() {
   // live and the read stays off the per-frame path
   if (tickCount_ % 5 == 0) PullThroughput();
   // every 10th tick (~1 s): re-read the feeds the page has no event path for
-  // (see PollFeeds) and re-run the open split-rules sheet.
+  // (see PollFeeds), re-run the open split-rules sheet and age the activity
+  // rows' meta lines.
   if (tickCount_ % 10 == 0) {
     // With events reaching OnHostEvent this is already the 5 s safety net for
     // the pushes dropped while the window was hidden. A changed feed cascades
@@ -2985,6 +3853,8 @@ void ConnectPage::Tick() {
     // those captions keep the age they had when the sheet was opened (only
     // Open() forces a rebuild). Fixing it needs that entry point on the sheet.
     if (!eventsWired_ || tickCount_ % 50 == 0) PollFeeds();
+    // the activity rows' age, on screen only (the rows outlive a fold)
+    if (paneB_.root && paneB_.root->get_visible()) RefreshConnectionRowTimes();
     // and every 5th of those (5 s), Advanced only: the exit-routing cache
     if (tickCount_ % 50 == 0 && advanced_) RefreshExitRouting();
   }

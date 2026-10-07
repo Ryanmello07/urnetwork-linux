@@ -2210,6 +2210,8 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // code, the departed plan): a sign-out must wipe it, not merely reload it.
     if (accountPage_) accountPage_->ResetForSignOut();
     if (referralsPage_) referralsPage_->ResetForSignOut();
+    // Home's activity view starts fresh too: its filters, search and selection
+    if (connectPage_) connectPage_->ResetForSignOut();
     // The post-sign-up onboarding belongs to the network just created here: a
     // sign-out before it finished must not show it to the next account signed
     // in (each network starts fresh).

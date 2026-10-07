@@ -452,6 +452,29 @@ UR_TEST(sheetOffersClassifiedAppsAndRemovesOnlyItsOwnCopies) {
   UR_EXPECT_TRUE(check != std::string::npos && unlink != std::string::npos && check < unlink);
 }
 
+// The apps already excluded are pinned on top under Excluded and the rest
+// follow under Apps, each header only over rows; the search reads the desktop
+// id as well as the name; each row's switch stays bound to its app.
+UR_TEST(sheetPinsTheExcludedAppsOnTop) {
+  const std::string sheet = ReadSource("ExcludeAppsSheet.cpp");
+  const std::string render = DefinitionBody(sheet, "void ExcludeAppsSheet::Render()");
+  const size_t groups = render.find("for (const bool excludedGroup : {true, false}) {");
+  const size_t skip = render.find("if (app.copyPath.empty() == excludedGroup || !matches(app)) continue;");
+  const size_t header = render.find(
+      "excludedGroup ? T_(\"excluded\", \"Excluded\")");
+  const size_t apps = render.find(": T_(\"apps\", \"Apps\")");
+  const size_t row = render.find("RenderRow(index);");
+  UR_EXPECT_TRUE(groups != std::string::npos && skip != std::string::npos &&
+                 header != std::string::npos && apps != std::string::npos &&
+                 row != std::string::npos);
+  UR_EXPECT_TRUE(groups < skip && skip < header && header < row);
+  UR_EXPECT_TRUE(Contains(render, "if (!headed) {"));
+  UR_EXPECT_TRUE(Contains(render, "Glib::ustring(app.id).casefold().find(query)"));
+  UR_EXPECT_TRUE(Contains(render, "T_(\"no_apps_found\", \"No apps found\")"));
+  const std::string one = DefinitionBody(sheet, "void ExcludeAppsSheet::RenderRow(size_t index)");
+  UR_EXPECT_TRUE(Contains(one, "App& changed = apps_[index];"));
+}
+
 UR_TEST(excludeAppsStringsAreInTheCatalog) {
   const std::string catalog = ReadSource("../po/en.po");
   UR_EXPECT_TRUE(!catalog.empty());
@@ -469,6 +492,8 @@ UR_TEST(excludeAppsStringsAreInTheCatalog) {
            "msgctxt \"search_apps_placeholder\"\nmsgid \"Search apps\"",
            "msgctxt \"no_apps_found\"\nmsgid \"No apps found\"",
            "msgctxt \"manage_apps\"\nmsgid \"Manage apps\"",
+           "msgctxt \"excluded\"\nmsgid \"Excluded\"",
+           "msgctxt \"apps\"\nmsgid \"Apps\"",
        }) {
     if (!Contains(catalog, entry)) UR_FAIL(std::string("po/en.po lacks ") + entry);
   }
