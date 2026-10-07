@@ -961,6 +961,34 @@ void ConnectPage::BuildPaneA() {
   killSwitchNote_->set_visible(false);
   moreOptionsHost_->append(*killSwitchNote_);
 
+  // The second doors to the statistics pane's sheets (ConnectFold.hpp
+  // FoldDoorsShown): shown by ApplyFold exactly while pane C is folded, under
+  // the pane's own title, closing pane A's fixed controls ahead of the peers
+  // list. They open the same single-instance sheets pane C's doors do.
+  foldDoorsHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  {
+    auto header = kit::MakePaneGroupHeader(T_("client_statistics", "Client statistics"));
+    foldDoorsHost_->append(*header.root);
+    auto door = [this](const char* title, std::function<void()> open) {
+      // the row's name is its title (kit::MakePaneTwoLineRowButton)
+      auto row = kit::MakePaneTwoLineRowButton(title, {}, 40);
+      row.root->signal_clicked().connect([open] { open(); });
+      foldDoorsHost_->append(*row.root);
+      return row.root;
+    };
+    door(T_("client_contracts", "Client contracts"), [this] { OpenContractsSheet(); });
+    door(T_("split_rules", "Split rules"), [this] { OpenSplitRulesSheet(); });
+    foldDoorDns_ = door(T_("custom_dns", "Custom DNS"), [this] { OpenDnsSheet(); });
+    foldDoorDns_->set_sensitive(false);  // ApplyDnsCard, as pane C's edit action
+    door(T_("transports", "Transports"), [this] { OpenTransportSheet(); });
+    // the globe follows pane C's provider count row: shown and pressable
+    // only with a session to draw (ApplyLiveStatsGroup)
+    foldDoorGlobe_ = door(T_("provider_locations_title", "Provider Locations"),
+                          [this] { OpenProviderLocations(); });
+    foldDoorGlobe_->set_visible(false);
+  }
+  moreOptionsHost_->append(*foldDoorsHost_);
+
   // §2.8 network peers: the count line over the peer rows. A group header with
   // nothing under it is exactly the HOLE §8 forbids — the group is either a
   // list or a one-row sentence.
@@ -1407,12 +1435,7 @@ void ConnectPage::BuildDataUsageGroup() {
   kit::MarkDecorative(*providerCountChevron);
   providerCountRow->append(*providerCountChevron);
   providerCountLine_->set_child(*providerCountRow);
-  providerCountLine_->signal_clicked().connect([this] {
-    // the globe has nothing to plot without a session; while connecting the
-    // sheet lists the providers known so far
-    if (!ConnectedNow() && !ConnectingNow()) return;
-    if (on_open_provider_locations) on_open_provider_locations();
-  });
+  providerCountLine_->signal_clicked().connect([this] { OpenProviderLocations(); });
   liveStatsGroup_->append(*providerCountLine_);
   liveStatsGroup_->set_visible(false);  // collapsed with no session: no blank rows
   paneC_.content->append(*liveStatsGroup_);
@@ -1875,6 +1898,11 @@ void ConnectPage::ApplyLiveStatsGroup() {
     // MainWindow's LocationOverrideController) the row stays greyed rather
     // than swallowing the click.
     providerCountLine_->set_sensitive(show && on_open_provider_locations != nullptr);
+  }
+  if (foldDoorGlobe_) {
+    // pane A's second door to the globe follows the same rule
+    foldDoorGlobe_->set_visible(show);
+    foldDoorGlobe_->set_sensitive(show && on_open_provider_locations != nullptr);
   }
 }
 
@@ -2505,6 +2533,7 @@ void ConnectPage::ApplyDnsCard() {
   // the editor has nothing to draft from without settings (DnsSheet::Open
   // returns false and does not present) — say so on the control
   if (dnsEditButton_) dnsEditButton_->set_sensitive(present);
+  if (foldDoorDns_) foldDoorDns_->set_sensitive(present);
   ApplyDnsRecommendationPill();  // collapses with the rows
   if (loading) {
     const Glib::ustring loadingText = T_("loading", "Loading...");
@@ -3565,6 +3594,13 @@ Gtk::Window* ConnectPage::RootWindow() {
   return dynamic_cast<Gtk::Window*>(get_root());
 }
 
+void ConnectPage::OpenProviderLocations() {
+  // the globe has nothing to plot without a session; while connecting the
+  // sheet lists the providers known so far
+  if (!ConnectedNow() && !ConnectingNow()) return;
+  if (on_open_provider_locations) on_open_provider_locations();
+}
+
 void ConnectPage::OpenContractsSheet() {
   auto* parent = RootWindow();
   if (!parent) return;
@@ -3601,7 +3637,10 @@ void ConnectPage::OpenDnsSheet() {
   // trailing action is desensitized in that state (ApplyDnsCard), so a click
   // that produces nothing cannot happen. Re-decide here too: the feed may have
   // gone away between the last reading and the press.
-  if (!dnsSheet_->Open() && dnsEditButton_) dnsEditButton_->set_sensitive(false);
+  if (!dnsSheet_->Open()) {
+    if (dnsEditButton_) dnsEditButton_->set_sensitive(false);
+    if (foldDoorDns_) foldDoorDns_->set_sensitive(false);
+  }
 }
 
 void ConnectPage::OpenTransportSheet() {
@@ -3675,6 +3714,8 @@ void ConnectPage::ApplyFold(bool force) {
   paneBRule_->set_visible(two);
   paneC_.root->set_visible(three);
   paneCRule_->set_visible(three);
+  // exactly one set of doors to pane C's sheets: its own, or pane A's
+  if (foldDoorsHost_) foldDoorsHost_->set_visible(connect_fold::FoldDoorsShown(panes));
   if (two) {
     paneA_.root->set_size_request(kPaneAWidth, -1);
     paneA_.root->set_hexpand(false);

@@ -2,7 +2,8 @@
 //
 //   Pane A  CONNECT     330dip rail: status row, the hero canvas, the selected
 //                       provider row, the connect action, provide + connect
-//                       options, network peers.
+//                       options, the second doors to pane C's sheets while
+//                       pane C is folded, network peers.
 //   Pane B  ACTIVITY    star: live throughput header, the transport
 //                       distribution bar under it (opens the transport
 //                       settings editor) + the routing-decision list,
@@ -373,6 +374,8 @@ class ConnectPage : public Gtk::Box {
   void UpdateClock();
 
   // sheets (created on first open against the page's root window)
+  // the provider locations globe, which MainWindow owns: only with a session
+  void OpenProviderLocations();
   void OpenContractsSheet();
   void OpenSplitRulesSheet();
   void OpenDnsSheet();
@@ -541,6 +544,11 @@ class ConnectPage : public Gtk::Box {
   Gtk::Label* peersDot_ = nullptr;
   Gtk::Label* peersText_ = nullptr;
   Gtk::Box* peersHost_ = nullptr;
+  // the second doors to pane C's sheets, shown while pane C is folded
+  // (ApplyFold); the DNS and globe doors follow pane C's own rules for them
+  Gtk::Box* foldDoorsHost_ = nullptr;
+  Gtk::Button* foldDoorDns_ = nullptr;
+  Gtk::Button* foldDoorGlobe_ = nullptr;
   Gtk::Switch* blockerToggle_ = nullptr;
   Gtk::Switch* killSwitchToggle_ = nullptr;
   // What urnetworkd says is REALLY in force, under the switch. A dedicated

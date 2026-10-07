@@ -537,8 +537,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # values every space write starts from, the per-app exclusion's slice, rules
 # and call sites, what a network peer row connects to, the provider card's idle
 # reason, status line, demand histogram and ranking rows, the connect page's
-# provide line, fold table and activity rows' keyed reconcile and filter, the
-# connect inspector's quick actions, the exclusion
+# provide line, fold table and second doors, the activity rows' keyed
+# reconcile and filter, the connect inspector's quick actions, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
 # lines and their filters, which device carries a feedback's log upload, for
@@ -643,6 +643,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/LegacyHomeRemovedTest.cpp',
     'tests/ConnectActivityRowsWiringTest.cpp',
     'tests/ConnectFoldTest.cpp',
+    'tests/ConnectFoldDoorsWiringTest.cpp',
     'tests/KeyedReconcileTest.cpp',
     'tests/ConnectionFilterTest.cpp',
     'tests/QuickActionTest.cpp',
@@ -706,6 +707,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # row menu and toast the same way.
               # SplitRulesSheetWiringTest reads the split rules sheet's search and chips
               # the same way.
+              # ConnectFoldDoorsWiringTest reads the connect page's second doors the same
+              # way.
               # SignOutWiringTest reads SdkHost and the health poll the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and
