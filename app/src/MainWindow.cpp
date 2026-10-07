@@ -20,6 +20,7 @@
 #include "Formatters.hpp"
 #include "UrTheme.hpp"
 #include "I18n.hpp"
+#include "LocationSelection.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -488,11 +489,16 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
 // through TunnelStartResult::Failed with an authorization verdict on the
 // control client (DaemonAuthOutcome). It is rendered from its own copy table
 // below and never through the DaemonUnreachable arm.
-TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
+TunnelStartResult MainWindow::StartTunnelUi() {
+  return StartTunnelUi(host_.SelectedLocation());
+}
+
+TunnelStartResult MainWindow::StartTunnelUi(const std::optional<urnet::ConnectLocation>& target) {
   // Out of balance, a new connection is not started at all: no tunnel, no
   // routes, the upgrade path instead. Every caller (the Connect press, connect
-  // on launch, the post-sign-in connect) passes through here.
-  if (ConnectBlockedByBalance([this, connectDestination] { StartTunnelUi(connectDestination); })) {
+  // on launch, the post-sign-in connect) passes through here, and a stale
+  // balance read repeats the whole start, connect included, once it lands.
+  if (ConnectBlockedByBalance([this, target] { StartTunnelUi(target); })) {
     return TunnelStartResult::Failed;
   }
   // Snapshot the reply counter BEFORE the attempt. LastAuthOutcome() describes
@@ -588,19 +594,17 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   // the point: a rule that has to be remembered ten times is a rule that will
   // be missed again.
   //
-  // SelectedLocation() is respected: a user who has chosen a specific provider
-  // must not be silently moved to "best available". Only an empty selection
-  // asks the SDK to pick.
-  if (result == TunnelStartResult::Started && connectDestination) {
-    // Honour an explicit choice. ConnectBestAvailable() always asks the SDK to
-    // pick, so using it unconditionally would silently move a user off the
-    // provider they selected.
-    if (const auto selected = host_.SelectedLocation(); selected.has_value()) {
-      g_message("connect: routing to the selected provider");
-      host_.Connect(selected);
-    } else {
+  // The target is respected: a user who has chosen a specific provider must
+  // not be silently moved to "best available", which the Connect button did
+  // while the provider row above it named their choice. Only no choice, or a
+  // choice of best available, asks the SDK to pick.
+  if (result == TunnelStartResult::Started) {
+    if (IsBestAvailableSelected(target)) {
       g_message("connect: no destination selected, choosing the best available");
       host_.ConnectBestAvailable();
+    } else {
+      g_message("connect: routing to the selected provider");
+      host_.Connect(target);
     }
   }
   return result;
@@ -2219,14 +2223,10 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // the press into a device with nothing behind it. StartTunnel is cheap when
   // the session is genuinely live (one status read) and self-heals when it is
   // not; the caller is not the right place to guess.
-  // false: this path issues its own connect immediately below, deliberately
-  // unconditional so a Connect press also self-heals a stale session.
-  // Out of balance, nothing starts (ConnectBlockedByBalance) and this press
-  // opens the upgrade path instead. Asked here first so that a stale balance
-  // read repeats the whole press, connect included, once it lands.
-  if (ConnectBlockedByBalance([this] { ToggleConnect(/*disconnect=*/false); })) return;
-  if (StartTunnelUi(/*connectDestination=*/false) != TunnelStartResult::Started) return;
-  host_.ConnectBestAvailable();
+  // The press goes where the provider row says: the selected location, or the
+  // best available with none. Out of balance, nothing starts
+  // (ConnectBlockedByBalance) and this press opens the upgrade path instead.
+  StartTunnelUi();
   // the connect-reading feed reflects the real state as it changes
 }
 

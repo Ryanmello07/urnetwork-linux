@@ -81,12 +81,15 @@ class MainWindow : public Gtk::ApplicationWindow {
   // StartTunnel + render the daemon session state. "Daemon unreachable" and
   // "daemon too old" are DISTINCT actionable lines (MIGRATION.md) — the same
   // gray treatment as the app's other unavailable states, never a blank.
-  // connectDestination: after the tunnel is up, also point it at a provider —
-  // the SELECTED one, or best-available when nothing is chosen. Defaults true
-  // because a tunnel with no destination installs routes, DNS and the filter
-  // and then carries NOTHING, while looking identical to a working one. Only
-  // ToggleConnect passes false, because it issues its own connect.
-  TunnelStartResult StartTunnelUi(bool connectDestination = true);
+  // Once the tunnel is up it is pointed at `target`, or at the best available
+  // provider when the target is none or flagged best available: a tunnel with
+  // no destination installs routes, DNS and the filter and then carries
+  // nothing, while looking identical to a working one.
+  TunnelStartResult StartTunnelUi(const std::optional<urnet::ConnectLocation>& target);
+  // The same, to the location selected now (the Connect button, the tray,
+  // connect on launch, a sign-in). Read before the start, because a start that
+  // builds a new device answers SelectedLocation from that device.
+  TunnelStartResult StartTunnelUi();
   void BuildAuthPages();  // create network / verify / password reset
   void OnGetStarted();  // authLogin discovery -> password / create / inline error
   void OnSignIn();
