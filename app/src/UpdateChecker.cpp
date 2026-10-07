@@ -77,14 +77,14 @@ void OnRestarted(SoupMessage* msg, gpointer data) {
 }
 
 // One GET, streamed into `sink` chunk by chunk. GitHub requires a User-Agent
-// on every request. `status` receives the HTTP status when the request got
-// that far (0 otherwise), so a 404 from an empty release list can be told
-// apart from a failure.
+// on every request. Any status but 200 fails the fetch, and `error` names it.
+// With `followRedirects` false a redirect comes back as its own status and
+// fails the fetch: the release list's URL names the repository by its id, and
+// nothing may move it. The AppImage download, a browser_download_url that
+// 302s to a storage host, follows them over https.
 bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes,
-              GCancellable* cancellable,
-              const std::function<bool(const char*, gsize)>& sink, unsigned* status,
-              std::string& error) {
-  *status = 0;
+              bool followRedirects, GCancellable* cancellable,
+              const std::function<bool(const char*, gsize)>& sink, std::string& error) {
   {
     GError* err = nullptr;
     GUri* uri = g_uri_parse(url.c_str(), G_URI_FLAGS_NONE, &err);
@@ -110,6 +110,7 @@ bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes
     error = "could not build the request";
     return false;
   }
+  if (!followRedirects) soup_message_add_flags(msg, SOUP_MESSAGE_NO_REDIRECT);
   if (accept) soup_message_headers_append(soup_message_get_request_headers(msg), "Accept", accept);
   soup_message_headers_append(soup_message_get_request_headers(msg), "X-GitHub-Api-Version",
                               "2022-11-28");
@@ -122,9 +123,9 @@ bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes
     error = std::string("request failed: ") + (err ? err->message : "?");
     if (err) g_error_free(err);
   } else {
-    *status = soup_message_get_status(msg);
-    if (*status != 200) {
-      error = "http status " + std::to_string(*status);
+    const unsigned status = soup_message_get_status(msg);
+    if (status != 200) {
+      error = "http status " + std::to_string(status);
     } else {
       std::vector<char> chunk(64 * 1024);
       std::uint64_t total = 0;
@@ -431,32 +432,30 @@ void UpdateChecker::RunCheck() {
 
   std::string body;
   std::string error;
-  unsigned status = 0;
   const bool fetched = FetchUrl(
-      update::ReleasesApiUrl(), "application/vnd.github+json", kMaxJsonBytes, cancellable_,
+      update::ReleasesApiUrl(), "application/vnd.github+json", kMaxJsonBytes,
+      /*followRedirects=*/false, cancellable_,
       [&body](const char* data, gsize n) {
         body.append(data, n);
         return true;
       },
-      &status, error);
-  std::vector<update::Release> parsed;
-  if (fetched) {
-    // parse(..., false): a malformed body comes back as `discarded`, not a throw.
-    const nlohmann::json releases = nlohmann::json::parse(body, nullptr, false);
-    if (!releases.is_array()) {
-      g_warning("update: release list was not a JSON array");
-      Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
-      return;
-    }
-    parsed = update::ParseReleases(releases);
-  } else if (status == 404) {
-    // The stable repo has published nothing yet: not an error, "no update".
-    g_message("update: %s has no releases yet", update::kUpdateRepo);
-  } else {
+      error);
+  if (!fetched) {
+    // A repository with no release yet answers an empty list, which is "no
+    // update"; a 404 means the id no longer names a repository this app can
+    // read, and fails like any other status.
     g_warning("update: release check failed: %s", error.c_str());
     Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
     return;
   }
+  // parse(..., false): a malformed body comes back as `discarded`, not a throw.
+  const nlohmann::json releases = nlohmann::json::parse(body, nullptr, false);
+  if (!releases.is_array()) {
+    g_warning("update: release list was not a JSON array");
+    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    return;
+  }
+  const std::vector<update::Release> parsed = update::ParseReleases(releases);
 
   const update::Selection sel =
       update::SelectRelease(parsed, kOwnCode, snapshot_.kind, update::OwnArch());
@@ -558,14 +557,13 @@ void UpdateChecker::RunApply() {
       return;
     }
     std::string error;
-    unsigned status = 0;
     const bool ok = FetchUrl(
-        offer.assetUrl, nullptr, kMaxImageBytes, cancellable_,
+        offer.assetUrl, nullptr, kMaxImageBytes, /*followRedirects=*/true, cancellable_,
         [&out](const char* data, gsize n) {
           out.write(data, static_cast<std::streamsize>(n));
           return out.good();
         },
-        &status, error);
+        error);
     out.close();
     if (!ok || !out.good()) {
       g_warning("update: download failed: %s", ok ? "file write failed" : error.c_str());

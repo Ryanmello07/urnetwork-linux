@@ -11,6 +11,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
+#include "ReleaseSelection.hpp"
+
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -139,9 +141,21 @@ UR_TEST(theCheckerVerifiesBeforeItSwapsAndReadsOnlyTheOfficialList) {
   UR_EXPECT_TRUE_MSG("UpdateChecker.cpp names a GitHub host of its own",
                      !Has(source, "api.github.com") && !Has(source, "github.com/"));
   UR_EXPECT_TRUE_MSG("UpdateChecker.cpp names the nightly repo", !Has(source, "urnetwork/build"));
-  // an empty stable repo is "no update", not an error
-  UR_EXPECT_TRUE_MSG("a 404 from the release list is not treated as 'no releases yet'",
-                     Has(source, "status == 404"));
+  // the list is asked for by the repository id, and a redirect fails it; the
+  // AppImage download follows the storage host's
+  const std::string fetch = FunctionBody(source, "bool FetchUrl(");
+  UR_EXPECT_TRUE_MSG("FetchUrl does not refuse redirects when asked to",
+                     Has(fetch, "if (!followRedirects) soup_message_add_flags(msg, "
+                                "SOUP_MESSAGE_NO_REDIRECT)"));
+  const std::string check = FunctionBody(source, "void UpdateChecker::RunCheck()");
+  UR_EXPECT_TRUE_MSG("the release list request follows redirects",
+                     Has(check, "kMaxJsonBytes,\n      /*followRedirects=*/false"));
+  // an empty stable repo answers an empty list, which is "no update"; a 404
+  // from a list asked for by id means the id no longer resolves, and fails
+  // the check like any other status
+  UR_EXPECT_TRUE_MSG("a 404 from the release list reads as 'no releases yet'",
+                     !Has(check, "== 404") && !Has(check, "404 ==") &&
+                         Has(check, "if (!fetched) {"));
   // verify, THEN swap -- and a mismatch unlinks the download
   const std::string apply = FunctionBody(source, "void UpdateChecker::RunApply()");
   if (apply.empty()) {
@@ -155,6 +169,8 @@ UR_TEST(theCheckerVerifiesBeforeItSwapsAndReadsOnlyTheOfficialList) {
   UR_EXPECT_TRUE_MSG("the apply never swaps the image", swap != std::string::npos);
   UR_EXPECT_TRUE_MSG("the digest is compared AFTER the swap", verify < swap);
   UR_EXPECT_TRUE_MSG("the digest is compared AFTER the save", verify < save);
+  UR_EXPECT_TRUE_MSG("the AppImage download does not follow the storage host's redirect",
+                     Has(apply, "kMaxImageBytes, /*followRedirects=*/true"));
   UR_EXPECT_TRUE_MSG("the apply never runs a package manager or elevates",
                      !Has(apply, "sudo") && !Has(apply, "pkexec") && !Has(apply, "g_spawn"));
   // the running image is kept
@@ -164,6 +180,30 @@ UR_TEST(theCheckerVerifiesBeforeItSwapsAndReadsOnlyTheOfficialList) {
   const std::string cleanup = FunctionBody(source, "void UpdateChecker::CleanupStaleFiles()");
   UR_EXPECT_TRUE_MSG("the next launch does not remove the .bak",
                      Has(cleanup, "update::BackupPath(appimage)"));
+}
+
+UR_TEST(theTarballUpdateAsksTheSameRepositoryIdWithoutRedirects) {
+  // install.sh --update is the daemon tarball's half of the same rule: the
+  // API by kUpdateRepoId, its answer never followed elsewhere
+  const std::string script = ReadSource("../../packaging/tarball/install.sh");
+  if (script.empty()) {
+    UR_FAIL("could not read packaging/tarball/install.sh");
+    return;
+  }
+  const std::string id = std::to_string(urnw::update::kUpdateRepoId);
+  UR_EXPECT_TRUE_MSG("install.sh does not pin the repository id ReleaseSelection.hpp pins",
+                     Has(script, ("UPDATE_REPO_ID='" + id + "'").c_str()));
+  UR_EXPECT_TRUE_MSG("install.sh does not ask the API by the repository id",
+                     Has(script, "UPDATE_API_URL=\"https://api.github.com/repositories/"
+                                 "${UPDATE_REPO_ID}/releases/latest\""));
+  const size_t api = script.find("-o \"${UPDATE_JSON}\"");
+  const size_t call = script.rfind("curl ", api);
+  UR_EXPECT_TRUE_MSG("install.sh's API request is not found", api != std::string::npos &&
+                                                               call != std::string::npos);
+  if (api != std::string::npos && call != std::string::npos) {
+    UR_EXPECT_TRUE_MSG("install.sh's API request follows redirects (-L)",
+                       script.compare(call, 9, "curl -sS ") == 0);
+  }
 }
 
 UR_TEST(theAppImageCarriesNoZsyncUpdateInformation) {

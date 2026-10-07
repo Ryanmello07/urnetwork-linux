@@ -1,11 +1,14 @@
 // Which published release the in-app updater offers, decided pure.
 //
-// THE UPDATE SOURCE IS ONE REPOSITORY: urnetwork/linux (kUpdateRepo). Every
+// The update source is one repository: urnetwork/linux (kUpdateRepo). Every
 // stable Linux release is published by hand to that repo's GitHub releases,
 // carrying the same asset names build/all/run.sh mints for the nightly
 // urnetwork/build release (require_linux_artifacts), so this file speaks the
-// build names and polls the stable repo. The nightly repo, personal forks and
-// every other host are refused by AssetUrlIsOfficial -- an API answer that
+// build names and polls the stable repo. The release list is asked for by the
+// repository's numeric id (kUpdateRepoId), so a rename, or someone
+// registering the owner's old name, cannot move it; the owner and repo stay
+// only for the URLs GitHub spells by name. The nightly repo, personal forks
+// and every other host are refused by AssetUrlIsOfficial -- an API answer that
 // points anywhere else is treated as hostile, never followed.
 //
 // The checker (UpdateChecker.cpp) turns the releases/latest JSON into the
@@ -36,14 +39,21 @@ namespace urnw::update {
 // assets to a release here when it is declared stable.
 inline constexpr const char* kUpdateRepo = "urnetwork/linux";
 
-// The release LIST, not /releases/latest: the stable repo has no release at
+// The id GitHub assigned urnetwork/linux, the path of the release list. An
+// owner/name path follows a rename with a redirect and goes to whoever
+// registers the old name next; an id names this repository for good. The
+// checker refuses redirects on that request, so nothing can move the feed.
+inline constexpr std::uint64_t kUpdateRepoId = 1297137671;
+
+// The release list, not /releases/latest: the stable repo has no release at
 // all until the first one is published (a 404 there), and the newest release
 // is not always the one this build can verify (SelectRelease falls back to an
 // older one that is). 15 is the windows checker's page size: enough history
 // to find a verifiable release behind a broken newest one, small enough to
 // stay well under the body cap.
 inline std::string ReleasesApiUrl() {
-  return std::string("https://api.github.com/repos/") + kUpdateRepo + "/releases?per_page=15";
+  return "https://api.github.com/repositories/" + std::to_string(kUpdateRepoId) +
+         "/releases?per_page=15";
 }
 
 // The human page for a tag (the "Release page" button and the notice for the

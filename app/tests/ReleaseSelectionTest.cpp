@@ -73,8 +73,12 @@ constexpr std::uint64_t kOwn = 895075980;  // 2026.3.23-895075980, a shipped rel
 
 UR_TEST(theUpdateSourceIsTheOfficialStableLinuxRepo) {
   UR_EXPECT_TRUE(std::string(kUpdateRepo) == "urnetwork/linux");
+  // the id GitHub assigned urnetwork/linux (repos/urnetwork/linux .id); the
+  // list is asked for by it, never by a name a rename could redirect
+  UR_EXPECT_EQ(std::uint64_t{1297137671}, kUpdateRepoId);
   UR_EXPECT_TRUE(ReleasesApiUrl() ==
-                 "https://api.github.com/repos/urnetwork/linux/releases?per_page=15");
+                 "https://api.github.com/repositories/1297137671/releases?per_page=15");
+  UR_EXPECT_TRUE(ReleasesApiUrl().find("/repos/") == std::string::npos);
   UR_EXPECT_TRUE(ReleasePageUrl("v2026.3.23-895075980") ==
                  "https://github.com/urnetwork/linux/releases/tag/v2026.3.23-895075980");
   UR_EXPECT_TRUE(ReleasePageUrl({}) == "https://github.com/urnetwork/linux/releases");

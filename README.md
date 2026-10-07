@@ -196,7 +196,10 @@ automatically" turns the timed checks off. The check reads the official
 [urnetwork/linux releases](https://github.com/urnetwork/linux/releases) (the
 nightly `urnetwork/build` releases are never consulted), skips drafts and
 prereleases, and compares the release tag `v<version>` with the running
-version by its release code.
+version by its release code. It asks the GitHub API for the list by the
+repository's numeric id (`/repositories/1297137671/releases`) and refuses a
+redirect, so a renamed repository, or someone registering a name it used to
+have, cannot change where updates come from.
 
 What the app does with a newer release depends on how it was installed:
 
@@ -217,7 +220,8 @@ What the app does with a newer release depends on how it was installed:
   manager.
 - **Daemon install tarball, from a shell** — `sudo urnetwork-daemon/install.sh
   --update` (run from any extracted tarball) asks the GitHub API for the latest
-  stable urnetwork/linux release, downloads its
+  stable urnetwork/linux release (by the same repository id, without following
+  a redirect), downloads its
   `urnetwork-daemon-<v>-<arch>.install.tar.gz`, verifies the SHA-256 against
   the asset digest GitHub publishes, and runs that tarball's installer. It
   fails with a clear message when there is no stable release or the release

@@ -3,14 +3,17 @@
 # update channel.
 #
 # The default source must be the newest STABLE release of urnetwork/linux,
-# resolved through the GitHub releases API (never a made-up download host,
-# never urnetwork/build nightlies or a fork), and the downloaded tarball must
-# match the sha256 digest GitHub reports for that asset before anything from
-# it runs. An explicit --url / UR_TARBALL_URL override keeps working.
+# resolved through the GitHub releases API by the repository's numeric id with
+# no redirect followed (never a made-up download host, never urnetwork/build
+# nightlies, a fork or whoever holds a name the repository moved from), and
+# the downloaded tarball must match the sha256 digest GitHub reports for that
+# asset before anything from it runs. An explicit --url / UR_TARBALL_URL
+# override keeps working.
 #
 # No network: curl and uname are fakes on PATH. The fake curl answers only the
 # URLs a test case maps and fails any other request the way an unresolvable
-# host does (exit 6), logging every URL it was asked for.
+# host does (exit 6), logging every URL it was asked for. A mapped 3xx answer
+# is followed to its Location only when curl was given -L, as curl does.
 set -euo pipefail
 umask 077
 
@@ -47,28 +50,42 @@ case "$1" in
 esac
 EOF
 
-# The map file: one "<url> <http code> <body file>" per line.
+# The map file: one "<url> <http code> <body file> [<location>]" per line.
 cat >"$bin/curl" <<'EOF'
 #!/bin/sh
-out='' wfmt='' fail_on_http=0 url=''
+out='' wfmt='' fail_on_http=0 follow=0 url=''
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) out="$2"; shift 2 ;;
         -w) wfmt="$2"; shift 2 ;;
         -H|-A|--proto|--proto-redir|--max-time|--connect-timeout|--retry) shift 2 ;;
+        --location) follow=1; shift ;;
         --*) shift ;;
-        -*) case "$1" in *f*) fail_on_http=1 ;; esac; shift ;;
+        -*) case "$1" in *f*) fail_on_http=1 ;; esac
+            case "$1" in *L*) follow=1 ;; esac; shift ;;
         *) url="$1"; shift ;;
     esac
 done
 printf '%s\n' "$url" >>"$FAKE_CURL_LOG"
-line="$(awk -v u="$url" '$1 == u { print; exit }' "$FAKE_CURL_MAP")"
-if [ -z "$line" ]; then
-    echo "curl: (6) Could not resolve host: $(printf '%s' "$url" | sed 's|^[a-z]*://||; s|/.*||')" >&2
-    exit 6
-fi
-code="$(printf '%s' "$line" | awk '{print $2}')"
-body="$(printf '%s' "$line" | awk '{print $3}')"
+[ "$follow" = 1 ] && printf '%s\n' "$url" >>"$FAKE_CURL_FOLLOW_LOG"
+while :; do
+    line="$(awk -v u="$url" '$1 == u { print; exit }' "$FAKE_CURL_MAP")"
+    if [ -z "$line" ]; then
+        echo "curl: (6) Could not resolve host: $(printf '%s' "$url" | sed 's|^[a-z]*://||; s|/.*||')" >&2
+        exit 6
+    fi
+    code="$(printf '%s' "$line" | awk '{print $2}')"
+    body="$(printf '%s' "$line" | awk '{print $3}')"
+    location="$(printf '%s' "$line" | awk '{print $4}')"
+    case "$code" in
+        3??) if [ "$follow" = 1 ] && [ -n "$location" ]; then
+                 url="$location"
+                 printf '%s\n' "$url" >>"$FAKE_CURL_LOG"
+                 continue
+             fi ;;
+    esac
+    break
+done
 if [ "$fail_on_http" = 1 ] && [ "$code" -ge 400 ]; then
     echo "curl: (22) The requested URL returned error: $code" >&2
     exit 22
@@ -84,7 +101,9 @@ chmod 0755 "$bin/uname" "$bin/curl"
 version='2026.10.1-1060587890'
 tag="v$version"
 asset="urnetwork-daemon-$version-amd64.install.tar.gz"
-api_url='https://api.github.com/repos/urnetwork/linux/releases/latest'
+repo_id='1297137671'  # urnetwork/linux, as app/src/ReleaseSelection.hpp pins it
+api_url="https://api.github.com/repositories/$repo_id/releases/latest"
+named_api_url='https://api.github.com/repos/urnetwork/linux/releases/latest'
 asset_url="https://github.com/urnetwork/linux/releases/download/$tag/$asset"
 nightly_url="https://github.com/urnetwork/build/releases/download/$tag/$asset"
 
@@ -127,10 +146,11 @@ setup_case() {
     mkdir -p "$case_dir/tmp"
     : >"$case_dir/map"
     : >"$case_dir/curl.log"
+    : >"$case_dir/follow.log"
 }
 
-map_url() {  # map_url <url> <code> <file>
-    printf '%s %s %s\n' "$1" "$2" "$3" >>"$case_dir/map"
+map_url() {  # map_url <url> <code> <file> [<location>]
+    printf '%s %s %s %s\n' "$1" "$2" "$3" "${4:-}" >>"$case_dir/map"
 }
 
 # run_update [installer args...] -> sets rc; stdout/stderr in $case_dir.
@@ -139,6 +159,7 @@ run_update() {
     rc=0
     env PATH="$bin:$PATH" TMPDIR="$case_dir/tmp" \
         FAKE_CURL_MAP="$case_dir/map" FAKE_CURL_LOG="$case_dir/curl.log" \
+        FAKE_CURL_FOLLOW_LOG="$case_dir/follow.log" \
         UPDATE_MARKER="$case_dir/marker" \
         bash "$installer" --update "$@" \
         >"$case_dir/out" 2>"$case_dir/err" </dev/null || rc=$?
@@ -168,6 +189,8 @@ map_url "$asset_url" 200 "$tarball"
 run_update --yes
 never_unofficial default
 requested "$api_url" || fail "default: did not ask $api_url for the latest stable release"
+requested "$named_api_url" && fail "default: asked the API by the repository's name, not its id"
+grep -qxF "$api_url" "$case_dir/follow.log" && fail "default: the API request follows redirects (-L)"
 requested "$asset_url" || fail "default: did not download $asset from urnetwork/linux"
 if [ "$rc" -ne 0 ] || ! ran_update; then
     fail "default: the verified stable tarball's installer did not run (exit $rc)"; show
@@ -237,6 +260,21 @@ map_url "$api_url" 200 "$case_dir/release.json"
 map_url "$asset_url" 200 "$tarball"
 run_update --yes
 if [ "$rc" -eq 0 ] || ran_update; then fail "prerelease: installed a prerelease"; fi
+
+# 7b. The API answers with a redirect (a rename, or another repository now
+#     holding the id's old name): refused, never followed, nothing installed.
+setup_case redirect
+moved_api_url='https://api.github.com/repos/someone/linux/releases/latest'
+printf '{"message":"Moved Permanently","url":"%s"}\n' "$moved_api_url" >"$case_dir/301.json"
+release_json "$case_dir/release.json" false false "$(asset_json "$asset" "$asset_url" "$good_digest")"
+map_url "$api_url" 301 "$case_dir/301.json" "$moved_api_url"
+map_url "$moved_api_url" 200 "$case_dir/release.json"
+map_url "$asset_url" 200 "$tarball"
+run_update --yes
+if [ "$rc" -eq 0 ] || ran_update; then fail "redirect: followed the API's redirect and installed (exit $rc)"; fi
+requested "$moved_api_url" && fail "redirect: asked the URL the API redirected to"
+requested "$asset_url" && fail "redirect: downloaded an asset after the API answered a redirect"
+stderr_has '301' || { fail "redirect: the refusal does not name the HTTP status"; show; }
 
 # 8. Explicit override, both spellings: fetched as given, no API call.
 override_url='https://mirror.example.test/urnetwork-daemon.tar.gz'
