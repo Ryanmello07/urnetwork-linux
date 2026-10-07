@@ -7,7 +7,10 @@
 // tunnel when there is none; before, it only drove a session that was already
 // up. Disconnect, and quit, stop the daemon's tunnel before they unwind the
 // SDK, so the machine's network comes back without waiting on a device rpc.
-// Every start_tunnel names the gesture that asked for it in the journal.
+// Every start_tunnel names the gesture that asked for it in the journal. The
+// selection is the user's choice, as Windows reads it, so a Disconnect keeps
+// it on the provider row and the next press goes back to it; the DNS
+// recommendation alone reads the connected location.
 // MainWindow, SdkHost and the rows need gtkmm and the SDK, so this reads their
 // sources with the comments blanked.
 //
@@ -193,4 +196,34 @@ UR_TEST(ConnectFunnelWiring_EveryStartNamesItsReason) {
       FunnelBody(ReadFunnelSource("SdkHost.cpp"),
                  "TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {");
   UR_EXPECT_TRUE(FunnelHas(start, "g_message(\"connect: start_tunnel requested (%s)\", reason);"));
+}
+
+// The selection: the controller's (it keeps its choice across a Disconnect),
+// then the device's connect location, the persisted one, and the persisted
+// default, the last choice. The connected location keeps the old reading,
+// for the DNS recommendation only.
+UR_TEST(ConnectFunnelWiring_TheSelectionOutlivesADisconnect) {
+  const std::string host = ReadFunnelSource("SdkHost.cpp");
+  const std::string selected =
+      FunnelBody(host, "std::optional<urnet::ConnectLocation> SdkHost::SelectedLocation() {");
+  UR_EXPECT_TRUE(FunnelInOrder(
+      selected, {"if (connectVc_) return connectVc_->getSelectedLocation();",
+                 "device_->getConnectLocation()", "localState_->getConnectLocation()",
+                 "return localState_->getDefaultLocation();"}));
+  const std::string connected =
+      FunnelBody(host, "std::optional<urnet::ConnectLocation> SdkHost::ConnectedLocation() {");
+  UR_EXPECT_TRUE(FunnelInOrder(connected, {"if (device_) return device_->getConnectLocation();",
+                                           "return localState_->getConnectLocation();"}));
+  UR_EXPECT_FALSE(FunnelHas(connected, "getSelectedLocation"));
+  UR_EXPECT_FALSE(FunnelHas(connected, "getDefaultLocation"));
+  // the provider row shows the selection, the dns pill the connected country
+  const std::string page = ReadFunnelSource("ConnectPage.cpp");
+  const std::string reads = FunnelBody(page, "bool ConnectPage::ReadLocations(bool force) {");
+  UR_EXPECT_TRUE(FunnelInOrder(reads, {"auto selected = host_.SelectedLocation();",
+                                       "auto connected = host_.ConnectedLocation();",
+                                       "selectedLocation_ = std::move(selected);",
+                                       "countryCode_ = connected && connected->country_code"}));
+  const std::string dns = ReadFunnelSource("DnsSheet.cpp");
+  UR_EXPECT_TRUE(FunnelHas(dns, "if (auto location = host_.ConnectedLocation()) {"));
+  UR_EXPECT_FALSE(FunnelHas(dns, "SelectedLocation("));
 }

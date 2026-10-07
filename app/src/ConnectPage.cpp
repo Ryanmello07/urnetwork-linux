@@ -2551,22 +2551,9 @@ void ConnectPage::RefreshFeeds(bool force) {
   // is shown by its device name), so the location lands first and the row is
   // rendered at most once per pass.
   bool locationRowDirty = false;
-  {
-    // the connected country drives the dns recommendation, and the selected
-    // location drives the provider row: ONE locked read, on change only
-    auto location = host_.SelectedLocation();
-    const uint64_t sig = LocationSig(location);
-    if (force || sig != locationSig_) {
-      locationSig_ = sig;
-      selectedLocation_ = std::move(location);
-      countryCode_ = selectedLocation_ && selectedLocation_->country_code
-                         ? LowerCopy(*selectedLocation_->country_code)
-                         : std::string();
-      countryName_ =
-          selectedLocation_ ? selectedLocation_->country.value_or(std::string()) : std::string();
-      locationRowDirty = true;
-      ApplyDnsRecommendationPill();
-    }
+  if (ReadLocations(force)) {
+    locationRowDirty = true;
+    ApplyDnsRecommendationPill();
   }
   {
     // the peers feed drives BOTH the peers group and the provider row's peer
@@ -2629,6 +2616,21 @@ void ConnectPage::RefreshFeeds(bool force) {
 // only what actually changed (each read is fingerprinted, so an idle session
 // rebuilds nothing). Once a real event has landed the poll steps back to 5 s.
 void ConnectPage::PollFeeds() { RefreshFeeds(false); }
+
+bool ConnectPage::ReadLocations(bool force) {
+  // The provider row shows the selection, which a Disconnect leaves in place;
+  // the dns pill's regional recommendation follows the connected country.
+  auto selected = host_.SelectedLocation();
+  auto connected = host_.ConnectedLocation();
+  const uint64_t sig = HashMix(LocationSig(selected), LocationSig(connected));
+  if (!force && sig == locationSig_) return false;
+  locationSig_ = sig;
+  selectedLocation_ = std::move(selected);
+  countryCode_ = connected && connected->country_code ? LowerCopy(*connected->country_code)
+                                                      : std::string();
+  countryName_ = connected ? connected->country.value_or(std::string()) : std::string();
+  return true;
+}
 
 void ConnectPage::Resync() {
   ++(*epoch_);  // anything in flight against the old reading is stale
@@ -2729,16 +2731,7 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
       if (contractsSheet_ && contractsSheet_->is_visible()) contractsSheet_->Refresh();
       break;
     case DrawerEvent::Location: {
-      // the provider row and the dns pill's regional recommendation both
-      // follow the connected location — ONE locked read for both
-      auto location = host_.SelectedLocation();
-      locationSig_ = LocationSig(location);
-      selectedLocation_ = std::move(location);
-      countryCode_ = selectedLocation_ && selectedLocation_->country_code
-                         ? LowerCopy(*selectedLocation_->country_code)
-                         : std::string();
-      countryName_ =
-          selectedLocation_ ? selectedLocation_->country.value_or(std::string()) : std::string();
+      ReadLocations(/*force=*/true);
       ApplyLocationRow();
       ApplyDnsRecommendationPill();
       break;

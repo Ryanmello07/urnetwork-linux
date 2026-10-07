@@ -283,6 +283,9 @@ class ConnectPage : public Gtk::Box {
   // force = apply everything (build, resync, mode change).
   void RefreshFeeds(bool force);
   void RefreshAllPanes() { RefreshFeeds(true); }
+  // The provider row's selection and the dns pill's connected country, read
+  // together; true when either moved (or `force`).
+  bool ReadLocations(bool force);
   // The clock-driven fallback for the change feed (see PollFeeds' comment):
   // until MainWindow routes DrawerEvent into OnHostEvent, the page's own clock
   // is the only thing that can keep panes B and C alive.

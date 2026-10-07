@@ -3459,6 +3459,20 @@ void SdkHost::SetProviderStatusPolling(bool polling) {
 
 std::optional<urnet::ConnectLocation> SdkHost::SelectedLocation() {
   std::scoped_lock lock(mutex_);
+  // the controller keeps its selection when the connect location goes nil
+  if (connectVc_) return connectVc_->getSelectedLocation();
+  if (device_) {
+    if (auto location = device_->getConnectLocation()) return location;
+  }
+  if (localState_) {
+    if (auto location = localState_->getConnectLocation()) return location;
+    return localState_->getDefaultLocation();
+  }
+  return std::nullopt;
+}
+
+std::optional<urnet::ConnectLocation> SdkHost::ConnectedLocation() {
+  std::scoped_lock lock(mutex_);
   if (device_) return device_->getConnectLocation();
   if (localState_) return localState_->getConnectLocation();
   return std::nullopt;

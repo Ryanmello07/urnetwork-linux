@@ -849,7 +849,17 @@ class SdkHost {
   // restored preferences; writes go to the device when present (forwarded
   // over the device rpc; the daemon side persists the blocker/dns/overrides)
   // and to LocalState otherwise so the next device creation restores them.
+  // The location the user chose. The connect view controller's selection,
+  // which it keeps across a Disconnect, and with the presentation closed the
+  // device's connect location, are Windows' reads; the connect location
+  // persisted in the LocalState, and then the persisted default location (the
+  // last choice, which ConnectViewController.Connect saves and a Disconnect
+  // leaves), are Linux's, for a closed presentation and for no device. What
+  // the provider row shows and a Connect press connects to.
   std::optional<urnet::ConnectLocation> SelectedLocation();
+  // The location the device is connected to (with no device, the persisted
+  // connect location): what the DNS recommendation reads its country from.
+  std::optional<urnet::ConnectLocation> ConnectedLocation();
   std::optional<urnet::PerformanceProfile> GetPerformanceProfile();
   // Persists to LocalState and applies to the device: unlike the other device
   // settings, DeviceLocal does not persist the profile itself (macOS parity).
