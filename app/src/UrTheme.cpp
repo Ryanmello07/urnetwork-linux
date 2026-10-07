@@ -286,6 +286,7 @@ entry.ur-pane-search, entry.ur-pane-search:focus {
 }
 .ur-status-caption { font-family: "PP Neue Montreal"; font-size: 11px; color: #5A5A5A; }
 .ur-status-value { font-family: "PP Neue Montreal"; font-size: 12px; color: #989898; }
+.ur-status-value.ur-status-mode { color: #638BFC; }
 
 /* ---- the stat tile (windows UrStatLabel/UrStatValue) ------------------- */
 .ur-stat-label { font-family: "PP Neue Montreal"; font-size: 12px; color: #989898; }

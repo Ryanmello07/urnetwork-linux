@@ -11,6 +11,9 @@ constexpr int kNavCompactWidth = 48;    // the compact rail
 // accent bar to icon to label, and accent bar to icon in the compact rail
 constexpr int kNavExpandedGap = 10;
 constexpr int kNavCompactGap = 6;
+// the Advanced fields' fade on a mode flip (Windows' 180 in, 120 out)
+constexpr int kAdvancedFadeInMs = 180;
+constexpr int kAdvancedFadeOutMs = 120;
 }  // namespace
 
 HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
@@ -88,6 +91,15 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
   advancedFields_.append(*kit::MakeStatusSeparator());
   rawField_ = kit::MakeStatusField(T_("adv_raw_status", "Raw status"), false);
   advancedFields_.append(*rawField_.root);
+  // ...closed by a standing tag naming the mode, as Windows has it: the mode
+  // changes what half the app's surfaces mean, so the chrome says which
+  // reading it is in. Caption-less (the word is the fact), in the action
+  // blue chrome wears, and it drops with the fields it closes.
+  advancedFields_.append(*kit::MakeStatusSeparator());
+  modeField_ = kit::MakeStatusField({}, false, T_("adv_advanced_mode", "Advanced mode"));
+  kit::SetStatusFieldValue(modeField_, T_("advanced", "Advanced"));
+  modeField_.value->add_css_class("ur-status-mode");
+  advancedFields_.append(*modeField_.root);
   advancedFields_.set_visible(false);
   statusStrip_.append(advancedFields_);
   contentColumn_.append(statusStrip_);
@@ -164,7 +176,7 @@ void HomeShell::PaintSelection() {
 void HomeShell::SetAdvancedMode(bool on) {
   if (advanced_ == on) return;
   advanced_ = on;
-  advancedFields_.set_visible(on);
+  FadeAdvancedFields(on);
   if (on && !developerItem_) {
     // INSERTED into the footer collection ahead of settings, not un-hidden
     auto* settingsButton = items_.empty() ? nullptr : items_.back().button;
@@ -187,6 +199,37 @@ void HomeShell::SetAdvancedMode(bool on) {
     }
     developerItem_ = nullptr;
   }
+}
+
+void HomeShell::FadeAdvancedFields(bool show) {
+  // a later flip cancels this one's frames and its hide
+  const uint64_t generation = ++advancedFade_;
+  advancedFields_.set_opacity(1.0);
+  // a hard cut when animations are off, or with the strip not on screen
+  // (the mode read at launch), where no frame would run the fade
+  if (!motion::ShouldAnimate() || !statusStrip_.get_mapped()) {
+    advancedFields_.set_visible(show);
+    return;
+  }
+  if (show) {
+    advancedFields_.set_opacity(0.0);
+    advancedFields_.set_visible(true);
+    motion::AnimateValue(advancedFields_, 0, kAdvancedFadeInMs, motion::kStandardP1,
+                         motion::kStandardP2, [this, generation](double eased) {
+                           if (generation == advancedFade_) advancedFields_.set_opacity(eased);
+                         });
+    return;
+  }
+  motion::AnimateValue(
+      advancedFields_, 0, kAdvancedFadeOutMs, motion::kExitP1, motion::kExitP2,
+      [this, generation](double eased) {
+        if (generation == advancedFade_) advancedFields_.set_opacity(1.0 - eased);
+      },
+      [this, generation] {
+        if (generation != advancedFade_) return;
+        advancedFields_.set_visible(false);
+        advancedFields_.set_opacity(1.0);
+      });
 }
 
 void HomeShell::SetCompactNav(bool compact) {

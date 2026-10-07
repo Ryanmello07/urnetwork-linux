@@ -13,6 +13,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <string>
@@ -39,6 +40,7 @@ class HomeShell : public Gtk::Box {
 
   // The Advanced-only Developer item is INSERTED/REMOVED, not hidden; a user
   // standing on it when the mode turns off is navigated away (to settings).
+  // The strip's Advanced fields fade in and out with the flip.
   void SetAdvancedMode(bool on);
   // expanded rail (icon+label, 220) vs compact rail (icons only, 48, each
   // named by its tooltip); shell::NavRailCompact picks it from the width
@@ -75,6 +77,8 @@ class HomeShell : public Gtk::Box {
   void PaintSelection();
   // one item in the rail's current mode: the label, or the tooltip in its place
   void ApplyCompact(NavItem& item);
+  // shows or hides the strip's Advanced fields, faded when animations are on
+  void FadeAdvancedFields(bool show);
 
   Gtk::Box navRail_{Gtk::Orientation::VERTICAL, 0};
   Gtk::Box navPrimary_{Gtk::Orientation::VERTICAL, 2};
@@ -101,6 +105,8 @@ class HomeShell : public Gtk::Box {
   kit::StatusField routesField_;
   kit::StatusField rpcField_;
   kit::StatusField rawField_;
+  kit::StatusField modeField_;  // the "Advanced" tag closing the row
+  uint64_t advancedFade_ = 0;   // the flip whose fade may still write
 
   kit::Snackbar snackbar_;
 };

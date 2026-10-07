@@ -4,8 +4,9 @@
 // floor armed; none while a session has no report yet), and the RPC endpoint
 // only for a session. The strip and its writer need gtkmm, so the wiring cases
 // read HomeShell.cpp and MainWindow.cpp with the comments blanked: every
-// caption is a store lookup, and the fields are fed from the session, the
-// daemon's status poll and the identity.
+// caption is a store lookup, the fields are fed from the session, the
+// daemon's status poll and the identity, and the Advanced fields close with a
+// standing "Advanced" tag and fade in and out with the mode.
 // SPDX-License-Identifier: MPL-2.0
 #include <fstream>
 #include <optional>
@@ -182,4 +183,32 @@ UR_TEST(StatusStripPresentation_TheWindowFeedsTheFields) {
   UR_EXPECT_TRUE(StripFieldsHas(
       stats, "stats.connectionStatus.empty() ? Glib::ustring(T_(\"adv_none\", \"none\"))"));
   UR_EXPECT_FALSE(StripFieldsHas(stats, "SetStatusSession"));
+}
+
+// The tag closes the Advanced fields (so it drops with them), named by the
+// mode and in the action blue; a flip fades them, a hard cut when animations
+// are off or nothing is on screen, and a later flip cancels a pending hide.
+UR_TEST(StatusStripPresentation_TheModeTagAndTheFade) {
+  const std::string shell = ReadStripFieldsSource("HomeShell.cpp");
+  UR_EXPECT_TRUE(StripFieldsInOrder(
+      shell, {"advancedFields_.append(*rawField_.root);",
+              "advancedFields_.append(*kit::MakeStatusSeparator());",
+              "modeField_ = kit::MakeStatusField({}, false, T_(\"adv_advanced_mode\", "
+              "\"Advanced mode\"));",
+              "kit::SetStatusFieldValue(modeField_, T_(\"advanced\", \"Advanced\"));",
+              "modeField_.value->add_css_class(\"ur-status-mode\");",
+              "advancedFields_.append(*modeField_.root);"}));
+  UR_EXPECT_TRUE(StripFieldsHas(ReadStripFieldsSource("UrTheme.cpp"),
+                                ".ur-status-value.ur-status-mode { color: #638BFC; }"));
+  const std::string flip = StripFieldsBody(shell, "void HomeShell::SetAdvancedMode(bool on) {");
+  UR_EXPECT_TRUE(StripFieldsHas(flip, "FadeAdvancedFields("));
+  UR_EXPECT_FALSE(StripFieldsHas(flip, "advancedFields_.set_visible("));
+  const std::string fade =
+      StripFieldsBody(shell, "void HomeShell::FadeAdvancedFields(bool show) {");
+  UR_EXPECT_TRUE(StripFieldsInOrder(
+      fade, {"const uint64_t generation = ++advancedFade_;",
+             "if (!motion::ShouldAnimate() || !statusStrip_.get_mapped()) {",
+             "motion::AnimateValue(advancedFields_, 0, kAdvancedFadeInMs,",
+             "motion::AnimateValue(", "kAdvancedFadeOutMs",
+             "if (generation != advancedFade_) return;", "advancedFields_.set_visible(false);"}));
 }
