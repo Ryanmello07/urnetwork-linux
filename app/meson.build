@@ -660,6 +660,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/Utf8TruncateTest.cpp',
     'tests/ControlReplyWiringTest.cpp',
     'tests/DaemonInstanceGuardTest.cpp',
+    'tests/DaemonCrashOutputTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -710,6 +711,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # sites, meson.build and ../../packaging/lib/common.sh the same way.
               # ControlReplyWiringTest reads the daemon's reply sends and log ring the same way.
               # DaemonInstanceGuardTest reads the daemon's start and revert paths the same way.
+              # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

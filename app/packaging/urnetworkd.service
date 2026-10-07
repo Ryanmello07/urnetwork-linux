@@ -73,6 +73,15 @@ StartLimitIntervalSec=0
 Type=notify
 ExecStart=/usr/lib/urnetwork/urnetworkd
 
+# The Go runtime's own fatal output (an unrecovered goroutine panic, a runtime
+# throw) goes to fd 2 and nowhere else, which here is the journal, so
+# StandardError= stays at its default. GOTRACEBACK=crash has it print every
+# goroutine, not only the one that failed, and then abort, so systemd-coredump
+# keeps a core of the C++ half as well (coredumpctl). Go reads the variable as
+# the library loads, before main, so only the process's creator can set it.
+# The core is root-only, as the key material already in /var/lib/urnetwork is.
+Environment=GOTRACEBACK=crash
+
 # /run/urnetwork: control socket dir. systemd creates it before start and
 # removes it on stop; maintainer scripts pre-create it only as a convenience.
 # Deliberately NOT Group=urnetwork: that would change the daemon's primary gid
