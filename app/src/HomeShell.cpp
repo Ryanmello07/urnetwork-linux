@@ -60,31 +60,33 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
 
   // ---- the status strip -----------------------------------------------------
   statusStrip_.add_css_class("ur-status-strip");
-  stateField_ = kit::MakeStatusField("", /*withDot=*/true, T_("connect", "Connect"));
+  // the dot and the word name themselves; a screen reader hears the name
+  stateField_ =
+      kit::MakeStatusField("", /*withDot=*/true, T_("urnetwork_status", "URnetwork Status"));
   statusStrip_.append(*stateField_.root);
   statusStrip_.append(*kit::MakeStatusSeparator());
   providerField_ =
       kit::MakeStatusField(T_("selected_provider", "Selected provider"), false);
   statusStrip_.append(*providerField_.root);
   statusStrip_.append(*kit::MakeStatusSeparator());
-  trafficField_ = kit::MakeStatusField("", false, T_("site_app_no_traffic", "No traffic yet"));
+  trafficField_ = kit::MakeStatusField(T_("data", "Data"), false);
   statusStrip_.append(*trafficField_.root);
 
-  // the 4 Advanced fields ride the SAME row and drop entirely with the mode
+  // the 5 Advanced fields ride the same row and drop entirely with the mode
   advancedFields_.append(*kit::MakeStatusSeparator());
   networkField_ = kit::MakeStatusField(T_("network", "Network"), false);
   advancedFields_.append(*networkField_.root);
   advancedFields_.append(*kit::MakeStatusSeparator());
-  sessionField_ = kit::MakeStatusField("Session", false);
+  sessionField_ = kit::MakeStatusField(T_("adv_session_mode", "Session"), false);
   advancedFields_.append(*sessionField_.root);
   advancedFields_.append(*kit::MakeStatusSeparator());
-  routesField_ = kit::MakeStatusField("Routes", false);
+  routesField_ = kit::MakeStatusField(T_("adv_routes", "Routes"), false);
   advancedFields_.append(*routesField_.root);
   advancedFields_.append(*kit::MakeStatusSeparator());
-  rpcField_ = kit::MakeStatusField("RPC", false);
+  rpcField_ = kit::MakeStatusField(T_("adv_rpc", "RPC"), false);
   advancedFields_.append(*rpcField_.root);
   advancedFields_.append(*kit::MakeStatusSeparator());
-  rawField_ = kit::MakeStatusField("Raw", false);
+  rawField_ = kit::MakeStatusField(T_("adv_raw_status", "Raw status"), false);
   advancedFields_.append(*rawField_.root);
   advancedFields_.set_visible(false);
   statusStrip_.append(advancedFields_);

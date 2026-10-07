@@ -2773,6 +2773,11 @@ std::string SdkHost::LastTunnelError() {
   return lastTunnelError_;
 }
 
+std::string SdkHost::RpcHostPort() {
+  std::scoped_lock lock(mutex_);
+  return rpcHostPort_;
+}
+
 // ---- live stats (macOS parity: listener-push, not polling) ----------------
 // SubscribeStats runs under StartTunnel's lock; the callbacks (like the existing
 // connection-status listener) read the SDK getters without the lock — the getters

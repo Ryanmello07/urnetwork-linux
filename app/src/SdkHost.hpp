@@ -686,6 +686,8 @@ class SdkHost {
   TunnelStartResult StartTunnel(const char* reason);
   // Human-readable detail for the last non-Started result ("" when none).
   std::string LastTunnelError();
+  // The device rpc's host:port this session dialed, "" with none.
+  std::string RpcHostPort();
   // Both connect calls ask the connect gate first (SetConnectGate) and do
   // nothing when it blocks.
   void ConnectBestAvailable();

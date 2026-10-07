@@ -22,6 +22,7 @@
 #include "I18n.hpp"
 #include "LocationSelection.hpp"
 #include "ShellLayout.hpp"
+#include "StatusStripPresentation.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -238,6 +239,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (upgradeSheet_) upgradeSheet_->OnBalanceChanged();
     // a converted guest's purchase continues once the server stops reporting a guest
     guestUpgrade_.Poll(balance_.IsGuest());
+    ApplyStatusStripDetails();  // the strip's Network field names a guest
     UpdateBalanceNotice();  // a Pro upgrade or a settled poll moves the gate
     // Earnings gates its upgrade door and its plan-flavoured copy on the
     // plan's two bits.
@@ -516,6 +518,8 @@ TunnelStartResult MainWindow::StartTunnelUi(const char* reason,
   // rendered under an unrelated failure — a confidently wrong sentence, which
   // is worse than the generic one. Only a verdict this attempt produced counts.
   const uint64_t replySerialBefore = host_.Control().ReplySerial();
+  // what the daemon said about the last session does not describe this one
+  ForgetDaemonStatus();
   const TunnelStartResult result = host_.StartTunnel(reason);
   const DaemonAuthOutcome authOutcome = host_.Control().ReplySerial() != replySerialBefore
                                             ? host_.Control().LastAuthOutcome()
@@ -980,6 +984,8 @@ bool MainWindow::PollDaemonHealth() {
   }
   const auto status = host_.Control().Status();
   if (!status) return true;      // unreachable is StartTunnelUi's business
+  daemonStatus_ = status;
+  ApplyStatusStripDetails();
   host_.FollowDaemonNetworkCountry(*status);
   host_.FollowDaemonExtenderReset(*status);
   host_.FollowDaemonLogUpload(*status);
@@ -1013,6 +1019,11 @@ bool MainWindow::PollDaemonHealth() {
   ApplyConnectReading(DaemonTunnelGoneReading());
   if (connectPage_) connectPage_->SetDaemonNotice(detail);
   return true;
+}
+
+void MainWindow::ForgetDaemonStatus() {
+  daemonStatus_.reset();
+  ApplyStatusStripDetails();
 }
 
 void MainWindow::ApplyPageBreakpoint(int widthDip) {
@@ -2134,6 +2145,7 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
   stack_.set_visible_child(loggedIn ? "home" : "login");
   // a known out-of-balance state belongs to the session that observed it
   outOfBalance_.Reset();
+  ForgetDaemonStatus();
   if (loggedIn) {
     ApplyConnectReading(host_.CurrentConnectReading());
     // (re)seed the balance/plan store from the (possibly new) jwt: login and
@@ -2215,6 +2227,7 @@ void MainWindow::ToggleConnect(bool disconnect) {
     CancelBalanceCheck();
     ClearBalanceRecovery();
     host_.Disconnect();
+    ForgetDaemonStatus();
     // Re-read every window surface once, now. The page is already showing
     // "Disconnecting…" from its own intent; this keeps the tray, the legacy
     // headline and the status strip from holding "Connected" until whatever the
@@ -2266,6 +2279,12 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // unchanged reading must not re-emit the tray's NewIcon/LayoutUpdated DBus
   // pair or rebuild the page's panes underneath the user.
   if (reading == reading_ && readingApplied_) return;
+  // The strip's session fields move with the session, not with each grid
+  // step. A Disconnect keeps the DeviceRemote, so tunnelBound outlives it.
+  const auto sessionUp = [](const ConnectReading& r) {
+    return health::SessionUp(r.ToSignals(/*disconnectRequested=*/false));
+  };
+  const bool sessionChanged = !readingApplied_ || sessionUp(reading) != sessionUp(reading_);
   readingApplied_ = true;
   const bool wasConnected = connected_;
   reading_ = reading;
@@ -2280,6 +2299,7 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // The page renders the status strip's state field with its own status row
   // (on_status_rendered).
   if (connectPage_) connectPage_->ApplyConnectReading(reading);
+  if (sessionChanged) ApplyStatusStripDetails();
   UpdateBalanceNotice();
   if (on_connected_change && (connected_ != wasConnected || !trayConnectedPushed_)) {
     trayConnectedPushed_ = true;
@@ -2557,9 +2577,54 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
     } else {
       shell_->SetStatusTraffic(T_("site_app_no_traffic", "No traffic yet"));
     }
-    shell_->SetStatusRaw(stats.connectionStatus);
-    shell_->SetStatusSession(host_.hasDevice() ? "tunnel" : "none");
+    shell_->SetStatusRaw(stats.connectionStatus.empty() ? Glib::ustring(T_("adv_none", "none"))
+                                                        : Glib::ustring(stats.connectionStatus));
   }
+}
+
+void MainWindow::ApplyStatusStripDetails() {
+  if (!shell_) return;
+  // signed out there is no jwt to read, and the read would say so on stderr
+  auto byJwt = host_.IsLoggedIn() ? host_.ParseByJwt() : std::nullopt;
+  const std::string networkName = byJwt ? byJwt->NetworkName : std::string();
+  shell_->SetStatusNetwork(balance_.IsGuest() || networkName.empty()
+                               ? Glib::ustring(T_("guest", "Guest"))
+                               : Glib::ustring(networkName));
+  // a session to disconnect from: a DeviceRemote still bound over the current
+  // control session outlives a Disconnect, and is not one
+  const bool haveSession = health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
+  switch (status_strip::SessionWordFor(haveSession)) {
+    case status_strip::SessionWord::Tunnel:
+      shell_->SetStatusSession(T_("adv_mode_tunnel", "tunnel"));
+      break;
+    case status_strip::SessionWord::None:
+      shell_->SetStatusSession(T_("adv_none", "none"));
+      break;
+  }
+  std::optional<status_strip::RouteFacts> facts;
+  if (daemonStatus_) {
+    facts = status_strip::RouteFacts{daemonStatus_->routes_installed, daemonStatus_->dns_applied,
+                                     daemonStatus_->kill_switch == ctl::KillSwitchState::Armed};
+  }
+  switch (status_strip::RoutesWordFor(haveSession, facts)) {
+    case status_strip::RoutesWord::Unknown:
+      shell_->SetStatusRoutes(T_("adv_none", "none"));
+      break;
+    case status_strip::RoutesWord::Off:
+      shell_->SetStatusRoutes(T_("off", "Off"));
+      break;
+    case status_strip::RoutesWord::KillSwitchArmed:
+      shell_->SetStatusRoutes(T_("adv_routes_kill_switch_armed", "off, kill switch armed"));
+      break;
+    case status_strip::RoutesWord::DnsNotApplied:
+      shell_->SetStatusRoutes(T_("adv_routes_dns_degraded", "on, dns not applied"));
+      break;
+    case status_strip::RoutesWord::On:
+      shell_->SetStatusRoutes(T_("on", "On"));
+      break;
+  }
+  const std::string rpc = status_strip::RpcText(haveSession, host_.RpcHostPort());
+  shell_->SetStatusRpc(rpc.empty() ? Glib::ustring(T_("adv_none", "none")) : Glib::ustring(rpc));
 }
 
 // ---- the Pro celebration ----------------------------------------------------

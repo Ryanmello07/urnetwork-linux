@@ -53,7 +53,7 @@ class HomeShell : public Gtk::Box {
   void SetStatusState(const Glib::ustring& word, const std::string& dotHex);
   void SetStatusProvider(const Glib::ustring& provider);
   void SetStatusTraffic(const Glib::ustring& traffic);
-  // the 4 Advanced fields (hidden while Advanced Mode is off)
+  // the 5 Advanced fields (hidden while Advanced Mode is off)
   void SetStatusNetwork(const Glib::ustring& network);
   void SetStatusSession(const Glib::ustring& session);
   void SetStatusRoutes(const Glib::ustring& routes);

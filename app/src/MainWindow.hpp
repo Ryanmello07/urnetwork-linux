@@ -169,6 +169,14 @@ class MainWindow : public Gtk::ApplicationWindow {
   // poll has just proven when it finds urnetworkd no longer carrying.
   ConnectReading DaemonTunnelGoneReading();
   void ApplyStats(const LiveStats& stats);  // the pages' live stats and the status strip
+  // The status strip's Advanced fields that come from the session rather than
+  // the stats: Network, Session, Routes and RPC.
+  void ApplyStatusStripDetails();
+  // The daemon's last status reply this session (PollDaemonHealth), for the
+  // strip's Routes field; dropped when a session starts or ends on purpose.
+  std::optional<ctl::StatusReply> daemonStatus_;
+  // Drops the last reply and renders the strip without it.
+  void ForgetDaemonStatus();
   void OpenProviderLocations();             // the "Connected to N providers" entry point
   // Keep the device-location override pointed at the oldest connected provider
   // that has coordinates. Runs off the SDK change feed rather than from the

@@ -662,6 +662,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ConnectFunnelWiringTest.cpp',
     'tests/RowConnectCoalescerTest.cpp',
     'tests/ShellLayoutTest.cpp',
+    'tests/StatusStripPresentationTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -718,6 +719,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # RowConnectCoalescerTest reads the row clicks' host and window call sites
               # the same way.
               # ShellLayoutTest reads the signed-in shell's layout the same way.
+              # StatusStripPresentationTest reads the status strip's fields and their
+              # writer the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
