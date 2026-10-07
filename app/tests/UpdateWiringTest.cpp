@@ -182,6 +182,26 @@ UR_TEST(theCheckerVerifiesBeforeItSwapsAndReadsOnlyTheOfficialList) {
                      Has(cleanup, "update::BackupPath(appimage)"));
 }
 
+UR_TEST(theCheckJudgesCodesByTheReleaseListsDate) {
+  const std::string source = ReadSource("UpdateChecker.cpp");
+  const std::string fetch = FunctionBody(source, "bool FetchUrl(");
+  UR_EXPECT_TRUE_MSG("FetchUrl does not read the response's Date header",
+                     Has(fetch, "headers->serverUnixSeconds = ResponseDateUnixSeconds(msg)"));
+  UR_EXPECT_TRUE_MSG("the Date header is not parsed as an HTTP date",
+                     Has(FunctionBody(source, "std::int64_t ResponseDateUnixSeconds("),
+                         "soup_date_time_new_from_http_string(date)"));
+  const std::string check = FunctionBody(source, "void UpdateChecker::RunCheck()");
+  const size_t date = check.find("std::int64_t serverUnixSeconds = headers.serverUnixSeconds;");
+  const size_t fallback = check.find("serverUnixSeconds = NowUnix();");
+  const size_t select = check.find("update::OwnArch(), serverUnixSeconds)");
+  UR_EXPECT_TRUE_MSG("RunCheck does not take the server's date from the list's headers",
+                     date != std::string::npos);
+  UR_EXPECT_TRUE_MSG("a list without a Date header has no fallback to this clock",
+                     fallback != std::string::npos && date < fallback);
+  UR_EXPECT_TRUE_MSG("SelectRelease is not judged against the server's date",
+                     select != std::string::npos && fallback < select);
+}
+
 UR_TEST(theTarballUpdateAsksTheSameRepositoryIdWithoutRedirects) {
   // install.sh --update is the daemon tarball's half of the same rule: the
   // API by kUpdateRepoId, its answer never followed elsewhere

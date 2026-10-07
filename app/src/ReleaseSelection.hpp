@@ -157,6 +157,21 @@ inline std::string VersionFromTag(std::string_view tag) {
   return std::string(tag);
 }
 
+// The instant every release code counts from, 2023-05-23T00:00:00Z, in Unix
+// seconds. A code is tenths of a second after it.
+inline constexpr std::int64_t kCodeEpochUnixSeconds = 1684800000;
+
+// How far after the release list's Date header a release code may point. A
+// code is minted from the clock of the machine that built the release, and
+// two days covers any honest skew between that clock and GitHub's.
+inline constexpr std::int64_t kFutureCodeLimitSeconds = 48 * 60 * 60;
+
+// The Unix second a release code names. Codes are at most 18 digits (the
+// grammar above), so this cannot overflow.
+inline constexpr std::int64_t CodeUnixSeconds(std::uint64_t code) {
+  return kCodeEpochUnixSeconds + static_cast<std::int64_t>(code / 10);
+}
+
 // ---- the digest ------------------------------------------------------------
 // GitHub's per-asset `digest` is `sha256:<64 lowercase hex>`. Anything that
 // only ALMOST matches -- another algorithm, truncated hex, uppercase mixed in
@@ -370,8 +385,8 @@ inline std::vector<Release> ParseReleases(const nlohmann::json& body) {
 }
 
 struct Selection {
-  // The newest non-draft, non-prerelease tag that parses, offerable or not --
-  // the developer line names it either way.
+  // The newest non-draft, non-prerelease tag that parses and names no future
+  // code, offerable or not -- the developer line names it either way.
   std::uint64_t newestCode = 0;
   std::string newestVersion;  // v-less
 
@@ -402,8 +417,11 @@ struct Selection {
   std::vector<Skip> skipped;  // releases that parsed but could not be offered, for the log
 };
 
+// The release to offer from `releases` (the API's order), judged against
+// `serverUnixSeconds`, the release list's Date header.
 inline Selection SelectRelease(const std::vector<Release>& releases, std::uint64_t ownCode,
-                               InstallKind kind, std::string_view arch) {
+                               InstallKind kind, std::string_view arch,
+                               std::int64_t serverUnixSeconds) {
   Selection s;
   for (const auto& rel : releases) {
     // Drafts and prereleases are skipped outright rather than merely failing
@@ -412,6 +430,12 @@ inline Selection SelectRelease(const std::vector<Release>& releases, std::uint64
     if (rel.draft || rel.prerelease) continue;
     const std::uint64_t code = ParseReleaseCode(rel.tag);
     if (code == 0) continue;
+    // Before the release can count as the newest: one mistyped or hostile
+    // far-future code would otherwise outrank every real release for good.
+    if (CodeUnixSeconds(code) > serverUnixSeconds + kFutureCodeLimitSeconds) {
+      s.skipped.push_back({rel.tag, "has a future code (more than 48 h after the server's date)"});
+      continue;
+    }
     const std::string ver = VersionFromTag(rel.tag);
     if (code > s.newestCode) {
       s.newestCode = code;

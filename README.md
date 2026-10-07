@@ -194,12 +194,15 @@ after launch, at most once every six hours, and from the Developer page's
 "Check for updates" button. Settings > General > "Check for updates
 automatically" turns the timed checks off. The check reads the official
 [urnetwork/linux releases](https://github.com/urnetwork/linux/releases) (the
-nightly `urnetwork/build` releases are never consulted), skips drafts and
-prereleases, and compares the release tag `v<version>` with the running
-version by its release code. It asks the GitHub API for the list by the
-repository's numeric id (`/repositories/1297137671/releases`) and refuses a
-redirect, so a renamed repository, or someone registering a name it used to
-have, cannot change where updates come from.
+nightly `urnetwork/build` releases are never consulted), skips drafts,
+prereleases and any release whose code names an instant more than two days
+after the release list's own `Date` header (a mistyped or hostile far-future
+tag would otherwise outrank every real release), and compares the release
+tag `v<version>` with the running version by its release code. It asks the
+GitHub API for the list by the repository's numeric id
+(`/repositories/1297137671/releases`) and refuses a redirect, so a renamed
+repository, or someone registering a name it used to have, cannot change
+where updates come from.
 
 What the app does with a newer release depends on how it was installed:
 

@@ -76,15 +76,35 @@ void OnRestarted(SoupMessage* msg, gpointer data) {
   }
 }
 
+// What a GET said beside its body.
+struct FetchHeaders {
+  // The Date header in Unix seconds, 0 when it had none.
+  std::int64_t serverUnixSeconds = 0;
+};
+
+// The response's Date header in Unix seconds, or 0 when it has none or it
+// does not parse.
+std::int64_t ResponseDateUnixSeconds(SoupMessage* msg) {
+  const char* date = soup_message_headers_get_one(soup_message_get_response_headers(msg), "Date");
+  if (!date) return 0;
+  GDateTime* parsed = soup_date_time_new_from_http_string(date);
+  if (!parsed) return 0;
+  const std::int64_t seconds = g_date_time_to_unix(parsed);
+  g_date_time_unref(parsed);
+  return seconds;
+}
+
 // One GET, streamed into `sink` chunk by chunk. GitHub requires a User-Agent
 // on every request. Any status but 200 fails the fetch, and `error` names it.
 // With `followRedirects` false a redirect comes back as its own status and
 // fails the fetch: the release list's URL names the repository by its id, and
 // nothing may move it. The AppImage download, a browser_download_url that
-// 302s to a storage host, follows them over https.
+// 302s to a storage host, follows them over https. `headers`, when given,
+// receives what the response said beside its body.
 bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes,
               bool followRedirects, GCancellable* cancellable,
-              const std::function<bool(const char*, gsize)>& sink, std::string& error) {
+              const std::function<bool(const char*, gsize)>& sink, FetchHeaders* headers,
+              std::string& error) {
   {
     GError* err = nullptr;
     GUri* uri = g_uri_parse(url.c_str(), G_URI_FLAGS_NONE, &err);
@@ -124,6 +144,7 @@ bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes
     if (err) g_error_free(err);
   } else {
     const unsigned status = soup_message_get_status(msg);
+    if (headers) headers->serverUnixSeconds = ResponseDateUnixSeconds(msg);
     if (status != 200) {
       error = "http status " + std::to_string(status);
     } else {
@@ -432,6 +453,7 @@ void UpdateChecker::RunCheck() {
 
   std::string body;
   std::string error;
+  FetchHeaders headers;
   const bool fetched = FetchUrl(
       update::ReleasesApiUrl(), "application/vnd.github+json", kMaxJsonBytes,
       /*followRedirects=*/false, cancellable_,
@@ -439,7 +461,7 @@ void UpdateChecker::RunCheck() {
         body.append(data, n);
         return true;
       },
-      error);
+      &headers, error);
   if (!fetched) {
     // A repository with no release yet answers an empty list, which is "no
     // update"; a 404 means the id no longer names a repository this app can
@@ -457,8 +479,15 @@ void UpdateChecker::RunCheck() {
   }
   const std::vector<update::Release> parsed = update::ParseReleases(releases);
 
-  const update::Selection sel =
-      update::SelectRelease(parsed, kOwnCode, snapshot_.kind, update::OwnArch());
+  // Codes are judged against GitHub's clock, not this machine's. A list
+  // without a Date header is judged against this machine's.
+  std::int64_t serverUnixSeconds = headers.serverUnixSeconds;
+  if (serverUnixSeconds == 0) {
+    g_warning("update: the release list had no Date header; judging by this clock");
+    serverUnixSeconds = NowUnix();
+  }
+  const update::Selection sel = update::SelectRelease(parsed, kOwnCode, snapshot_.kind,
+                                                      update::OwnArch(), serverUnixSeconds);
   for (const auto& skip : sel.skipped) {
     g_warning("update: release %s %s -- skipped", skip.tag.c_str(), skip.reason.c_str());
   }
@@ -563,7 +592,7 @@ void UpdateChecker::RunApply() {
           out.write(data, static_cast<std::streamsize>(n));
           return out.good();
         },
-        error);
+        nullptr, error);
     out.close();
     if (!ok || !out.good()) {
       g_warning("update: download failed: %s", ok ? "file write failed" : error.c_str());
