@@ -1400,6 +1400,13 @@ void ConnectPage::ApplyConnectStatus() {
   // (kDisconnectIntentUs), so this can never latch off.
   connectBtn_->set_sensitive(!disconnecting);
   hero_->set_sensitive(!disconnecting);
+  // the strip says what this row says, from this render
+  if (on_status_rendered) on_status_rendered(text, dot);
+}
+
+void ConnectPage::RepublishStatus() {
+  ApplyConnectStatus();
+  ApplyLocationRow();
 }
 
 void ConnectPage::ApplyBalanceNotice(const balance_notice::Signals& signals) {
@@ -2372,6 +2379,7 @@ void ConnectPage::ApplyLocationRow() {
   kit::SetAccessibleLabel(*locationRow_,
                           Glib::ustring(T_("selected_provider", "Selected provider")) + ", " +
                               text);
+  if (on_location_rendered) on_location_rendered(text);
 }
 
 // §2.8 PeersLine: a stale zero is never presented as fact — with the peer feed

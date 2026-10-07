@@ -146,6 +146,14 @@ class ConnectPage : public Gtk::Box {
   std::function<void()> on_open_data_info;
   // the recovery row's Cancel: a refused start is not run by itself any more
   std::function<void()> on_cancel_balance_recovery;
+  // The window's status strip, which shows on every destination what this page
+  // says: the status row's word and dot after each render (the word the hero is
+  // named by, "Disconnecting…" included), and the provider row's text.
+  std::function<void(const Glib::ustring& text, const std::string& dotHex)> on_status_rendered;
+  std::function<void(const Glib::ustring& text)> on_location_rendered;
+  // Raises both with what the page shows now, for a listener wired after the
+  // page's first render.
+  void RepublishStatus();
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off

@@ -1507,6 +1507,15 @@ void MainWindow::BuildHome() {
   connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
   connectPage_->on_open_data_info = [this] { OpenDataInfo(); };
   connectPage_->on_cancel_balance_recovery = [this] { ClearBalanceRecovery(); };
+  // The strip's state and provider are the page's own render, as on Windows,
+  // so the strip and the Connect page cannot disagree.
+  connectPage_->on_status_rendered = [this](const Glib::ustring& text, const std::string& dot) {
+    if (shell_) shell_->SetStatusState(text, dot);
+  };
+  connectPage_->on_location_rendered = [this](const Glib::ustring& text) {
+    if (shell_) shell_->SetStatusProvider(text);
+  };
+  connectPage_->RepublishStatus();
   shell_->SetPage("connect", *connectPage_);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
     auto* page = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
@@ -2255,18 +2264,8 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // longer say "Connect" over a press that disconnects.
   connected_ = view.action == health::Action::Disconnect;
   if (view.state == health::State::Connected) NoteConnected();
-  // The strip's raw status field carries the controller's OWN token now
-  // (CONNECTING/CONNECTED/CONNECT_FAILED), not the two-word destination
-  // vocabulary the old push could produce.
-  const std::string rawStatus =
-      reading.rawStatus.empty() ? std::string("DISCONNECTED") : reading.rawStatus;
-  // the status strip's state field: dot color per state (§8.1 connect dots).
-  // Green only for the state the hero calls Connected — the strip used to go
-  // green the moment a destination was picked.
-  if (shell_) {
-    shell_->SetStatusState(
-        rawStatus, view.state == health::State::Connected ? "#87FB67" : "#2A60FF");
-  }
+  // The page renders the status strip's state field with its own status row
+  // (on_status_rendered).
   if (connectPage_) connectPage_->ApplyConnectReading(reading);
   UpdateBalanceNotice();
   if (on_connected_change && (connected_ != wasConnected || !trayConnectedPushed_)) {
@@ -2536,9 +2535,9 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
   };
   if (connectPage_) connectPage_->ApplyStats(stats);
   if (earningsPage_) earningsPage_->ApplyProvideState(stats);  // the provide row + gate
-  // the status strip: provider + traffic (+ the Advanced raw field)
+  // the status strip: traffic (+ the Advanced raw field); the provider is the
+  // Connect page's row (on_location_rendered)
   if (shell_) {
-    shell_->SetStatusProvider(T_("best_available_provider", "Best available provider"));
     if (stats.connected) {
       shell_->SetStatusTraffic("↓ " + rate(stats.downBitsPerSecond) +
                                "  ↑ " + rate(stats.upBitsPerSecond));
