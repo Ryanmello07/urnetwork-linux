@@ -166,10 +166,12 @@ UR_TEST(StatusStripPresentation_TheWindowFeedsTheFields) {
       {"daemonStatus_.reset();", "ApplyStatusStripDetails();"}));
   UR_EXPECT_TRUE(
       StripFieldsHas(details, "daemonStatus_->kill_switch == ctl::KillSwitchState::Armed"));
-  const std::string poll = StripFieldsBody(window, "bool MainWindow::PollDaemonHealth() {");
-  UR_EXPECT_TRUE(StripFieldsInOrder(poll, {"const auto status = host_.Control().Status();",
-                                           "daemonStatus_ = status;",
-                                           "ApplyStatusStripDetails();"}));
+  const std::string poll = StripFieldsBody(
+      window,
+      "void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status) {");
+  // kept with a session or without one: the kill switch's floor is armed with none
+  UR_EXPECT_TRUE(StripFieldsInOrder(poll, {"if (status) {", "daemonStatus_ = status;",
+                                           "ApplyStatusStripDetails();", "if (!connected_) {"}));
   UR_EXPECT_TRUE(StripFieldsInOrder(
       StripFieldsBody(window, "void MainWindow::ToggleConnect(bool disconnect) {"),
       {"host_.Disconnect();", "ForgetDaemonStatus();"}));

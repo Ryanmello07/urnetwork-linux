@@ -664,6 +664,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ShellLayoutTest.cpp',
     'tests/StatusStripPresentationTest.cpp',
     'tests/ConnectionHealthWiringTest.cpp',
+    'tests/DaemonStatusPollWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -724,6 +725,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # writer the same way.
               # ConnectionHealthWiringTest reads the degrade hold's host and page call
               # sites the same way.
+              # DaemonStatusPollWiringTest reads the health poll's window and host halves
+              # the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

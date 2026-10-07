@@ -128,6 +128,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // a green "Connected" while blocked or unprotected. This is the consumer for
   // that state.
   bool PollDaemonHealth();
+  // The poll's reply, on the main loop: the follow-ups, the strip's daemon
+  // facts and the protective-teardown verdict.
+  void ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status);
 
  protected:
   // GTK4 has no size-allocate signal; the window's own vfunc is the only place
@@ -176,10 +179,14 @@ class MainWindow : public Gtk::ApplicationWindow {
   // The status strip's Advanced fields that come from the session rather than
   // the stats: Network, Session, Routes and RPC.
   void ApplyStatusStripDetails();
-  // The daemon's last status reply this session (PollDaemonHealth), for the
-  // strip's Routes field; dropped when a session starts or ends on purpose.
+  // The daemon's last status reply (PollDaemonHealth), for the strip's Routes
+  // field; dropped when a session starts or ends on purpose.
   std::optional<ctl::StatusReply> daemonStatus_;
-  // Drops the last reply and renders the strip without it.
+  // Bumped with every drop of daemonStatus_, so a poll reply that was in
+  // flight across a start, a Disconnect or a sign-in or -out is dropped.
+  uint64_t daemonStatusEpoch_ = 0;
+  // Drops the last reply and any still in flight, and renders the strip
+  // without it.
   void ForgetDaemonStatus();
   void OpenProviderLocations();             // the "Connected to N providers" entry point
   // Keep the device-location override pointed at the oldest connected provider

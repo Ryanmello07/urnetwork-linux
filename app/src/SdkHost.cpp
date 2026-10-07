@@ -303,6 +303,12 @@ SdkHost::~SdkHost() {
   // page's bridge makes, and it is the right one against a use-after-free.
   std::scoped_lock lock(reliabilityWorkerMutex_);
   if (reliabilityWorker_.joinable()) reliabilityWorker_.join();
+  // The health poll's status read holds `this` too; unbounded for the same
+  // reason, and it never takes daemonStatusWorkerMutex_.
+  {
+    std::scoped_lock statusLock(daemonStatusWorkerMutex_);
+    if (daemonStatusWorker_.joinable()) daemonStatusWorker_.join();
+  }
   // The provider_stats poll's timeout holds `this` as well.
   if (providerStatsPollId_ != 0) {
     g_source_remove(providerStatsPollId_);
@@ -4355,6 +4361,33 @@ ReliabilitySnapshot SdkHost::ReadReliability(ReliabilityRead scope) {
   return snap;
 }
 
+bool SdkHost::RequestDaemonStatus(std::function<void(std::optional<ctl::StatusReply>)> done) {
+  if (!done) return false;
+  bool expected = false;
+  if (!daemonStatusBusy_.compare_exchange_strong(expected, true)) return false;
+  std::scoped_lock lock(daemonStatusWorkerMutex_);
+  // the previous worker cleared the gate before its marshal, so it may still
+  // be joinable; its join returns as soon as that enqueue is done
+  if (daemonStatusWorker_.joinable()) daemonStatusWorker_.join();
+  daemonStatusWorker_ = std::thread([this, done = std::move(done)]() mutable {
+    std::optional<ctl::StatusReply> status;
+    try {
+      status = control_.Status();
+    } catch (const std::exception& e) {
+      g_warning("sdkhost: daemon status read threw: %s", e.what());
+    } catch (...) {
+      g_warning("sdkhost: daemon status read threw");
+    }
+    // cleared here, before the marshal, so a main loop that never runs the
+    // completion cannot wedge the next read
+    daemonStatusBusy_.store(false);
+    PostToMain([done = std::move(done), status = std::move(status)]() mutable {
+      done(std::move(status));
+    });
+  });
+  return true;
+}
+
 bool SdkHost::RequestReliability(ReliabilityRead scope,
                                  std::function<void(ReliabilitySnapshot)> done) {
   if (!done) return false;
@@ -4623,6 +4656,11 @@ void SdkHost::ReconcileProvider(const char* reason, bool userInitiated, bool set
   ReconcileProviderLocked(reason, userInitiated, settingsChanged);
 }
 
+void SdkHost::ReconcileProvider(const char* reason, const ctl::StatusReply& polled) {
+  std::scoped_lock lock(mutex_);
+  ReconcileProviderLocked(reason, /*userInitiated=*/false, /*settingsChanged=*/false, &polled);
+}
+
 // A provider-only device runs on the network space it was built from. Once a
 // saved value changes that space, start_provider goes out again and the daemon
 // replaces the device (ctl::SameProviderDevice): otherwise a user in China who
@@ -4639,7 +4677,7 @@ void SdkHost::ReconcileProviderAfterSpaceChange(const char* reason) {
 bool SdkHost::ProviderRuns() { return hasDevice() || daemonProviderRunning_.load(); }
 
 void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
-                                      bool settingsChanged) {
+                                      bool settingsChanged, const ctl::StatusReply* polled) {
   if (!localState_ || providerReconcileClosed_) return;
   // An owed sign-out first (SignOut.hpp): nothing below starts while it is owed.
   SettleSignOutLocked(reason, userInitiated);
@@ -4661,8 +4699,11 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
   }
   if (userInitiated) providerBackoff_.NoteSuccess();
 
+  // The caller's reply stands in for a read only with no device bound: one
+  // read before a start that bound a device would drop that device below.
   std::string statusError;
-  const std::optional<ctl::StatusReply> status = control_.Status(&statusError);
+  const std::optional<ctl::StatusReply> status =
+      polled && !device_ ? std::optional<ctl::StatusReply>(*polled) : control_.Status(&statusError);
   if (!status) return;  // unreachable: Connect reports that, and the next poll asks again
   providerStateKnown_ = true;
 
@@ -4752,12 +4793,6 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
             static_cast<long long>(providerBackoff_.DelayMillis() / 1000));
 }
 
-void SdkHost::FollowDaemonNetworkCountry() {
-  if (const std::optional<ctl::StatusReply> status = control_.Status()) {
-    FollowDaemonNetworkCountry(*status);
-  }
-}
-
 void SdkHost::FollowDaemonNetworkCountry(const ctl::StatusReply& status) {
   // Another user's session: the daemon names nothing of it, this included.
   const std::string countryCode = status.redacted ? std::string() : status.network_country_code;
@@ -4808,14 +4843,6 @@ logupload::DaemonAnswer SdkHost::UploadDaemonLogs(const std::string& feedbackId)
   return logupload::DaemonAnswer::NotTaken;
 }
 
-void SdkHost::FollowDaemonLogUpload() {
-  // nothing to wait for: no status call
-  if (pendingLogUploadId_ == 0) return;
-  if (const std::optional<ctl::StatusReply> status = control_.Status()) {
-    FollowDaemonLogUpload(*status);
-  }
-}
-
 void SdkHost::FollowDaemonLogUpload(const ctl::StatusReply& status) {
   // Another user's session: the daemon names nothing of it, this included.
   if (status.redacted) return;
@@ -4831,14 +4858,6 @@ void SdkHost::FollowDaemonLogUpload(const ctl::StatusReply& status) {
   } else {
     g_warning("support: urnetworkd's log upload ended %s (%s device)",
               status.log_upload_state.c_str(), status.log_upload_carrier.c_str());
-  }
-}
-
-void SdkHost::FollowDaemonExtenderReset() {
-  // nothing owed: no status call
-  if (!owedExtenderReset_.Owed()) return;
-  if (const std::optional<ctl::StatusReply> status = control_.Status()) {
-    FollowDaemonExtenderReset(*status);
   }
 }
 

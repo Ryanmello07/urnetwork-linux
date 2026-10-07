@@ -143,16 +143,18 @@ UR_TEST(NetworkCountryWiring_TheGuiFollowsTheDaemon) {
       host, "void SdkHost::FollowDaemonNetworkCountry(const ctl::StatusReply& status)");
   UR_EXPECT_TRUE(Has(follow, "status.redacted ? std::string() : status.network_country_code"));
   UR_EXPECT_TRUE(Has(follow, "urnet::setNetworkCountryCode(countryCode);"));
-  UR_EXPECT_TRUE(Has(FunctionBody(host, "void SdkHost::FollowDaemonNetworkCountry()"),
-                     "control_.Status()"));
 
+  // both branches of the health poll, with the status its worker read
   const std::string poll =
-      FunctionBody(ReadCountrySource("MainWindow.cpp"), "bool MainWindow::PollDaemonHealth()");
+      FunctionBody(ReadCountrySource("MainWindow.cpp"),
+                   "void MainWindow::ApplyDaemonHealth("
+                   "const std::optional<ctl::StatusReply>& status)");
   const size_t idle = poll.find("if (!connected_) {");
-  const size_t idleEnd = poll.find("return true;", idle);
+  const size_t idleEnd = poll.find("return;", idle);
   UR_EXPECT_TRUE(idle != std::string::npos && idleEnd != std::string::npos);
   if (idle == std::string::npos || idleEnd == std::string::npos) return;
-  UR_EXPECT_TRUE(Has(poll.substr(idle, idleEnd - idle), "host_.FollowDaemonNetworkCountry();"));
-  UR_EXPECT_TRUE(Before(poll.substr(idleEnd), "if (!status) return true;",
+  UR_EXPECT_TRUE(
+      Has(poll.substr(idle, idleEnd - idle), "host_.FollowDaemonNetworkCountry(*status);"));
+  UR_EXPECT_TRUE(Before(poll.substr(idleEnd), "if (!status) return;",
                         "host_.FollowDaemonNetworkCountry(*status);"));
 }

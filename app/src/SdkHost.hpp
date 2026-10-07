@@ -761,6 +761,10 @@ class SdkHost {
   // mode that does not provide once nothing is known to run. Main loop.
   void ReconcileProvider(const char* reason, bool userInitiated = false,
                          bool settingsChanged = false);
+  // The health poll's reconcile, decided on the status reply its worker has
+  // just read rather than on a read of its own, so a steady tick waits on
+  // nothing. A device still bound is read afresh (ReconcileProviderLocked).
+  void ReconcileProvider(const char* reason, const ctl::StatusReply& polled);
   // A provider device runs: a tunnel session's (a DeviceRemote is bound) or,
   // with none, the daemon's provider-only device as its status last said. The
   // Earnings page derives a local idle reason only then
@@ -774,9 +778,7 @@ class SdkHost {
   // names from the same spoof list as the daemon's devices. A redacted status
   // (another user's session) or a daemon that predates the field gives "".
   // While the daemon cannot be asked, the last value stays. Main loop: the
-  // window's health poll calls it, with the status it already read when it has
-  // one.
-  void FollowDaemonNetworkCountry();
+  // window's health poll calls it with the status its worker read.
   void FollowDaemonNetworkCountry(const ctl::StatusReply& status);
 
   // "Send feedback with logs" while disconnected (support inbox 2090). The
@@ -794,18 +796,14 @@ class SdkHost {
   logupload::DaemonAnswer UploadDaemonLogs(const std::string& feedbackId);
   // The outcome of the upload UploadDaemonLogs left pending, once the daemon's
   // status names it finished (logupload::CompletionFor): logged, and the wait
-  // ends. The first asks for a status only while an upload is pending. Main
-  // loop (MainWindow::PollDaemonHealth).
-  void FollowDaemonLogUpload();
+  // ends. Main loop (MainWindow::ApplyDaemonHealth, with the poll's status).
   void FollowDaemonLogUpload(const ctl::StatusReply& status);
   // A Reset extenders urnetworkd refused because a bring-up owned its session
   // (OwedExtenderReset), sent again, once, on the reset's worker when the
   // status shows that bring-up settled. It asks for no dialog, so the daemon
   // refuses it rather than prompt (beside another user's live session, or
-  // where authorizing it would need a dialog), and it is then dropped. The
-  // first asks for a status only while a reset is owed. Main loop
-  // (MainWindow::PollDaemonHealth).
-  void FollowDaemonExtenderReset();
+  // where authorizing it would need a dialog), and it is then dropped. Main
+  // loop (MainWindow::ApplyDaemonHealth, with the poll's status).
   void FollowDaemonExtenderReset(const ctl::StatusReply& status);
 
   // ---- Advanced Mode (the windows D5 standing-state contract) --------------
@@ -1199,6 +1197,16 @@ class SdkHost {
   bool RequestReliability(ReliabilityRead scope,
                           std::function<void(ReliabilitySnapshot)> done);
 
+  // One daemon `status` read on a worker, for the window's health poll, and
+  // `done` on the GTK main loop with the reply (nullopt when the daemon did
+  // not answer). The poll used to read on the main loop every 5 s, so a
+  // daemon that accepts the socket but no longer answers held the window for
+  // the control client's 30 s receive timeout on every tick (Windows D4).
+  // Single-flight: false, and no `done`, while a read is in flight, so a slow
+  // daemon costs ticks rather than a queue. `done` may land after its caller
+  // has moved on, so it carries its own staleness guard.
+  bool RequestDaemonStatus(std::function<void(std::optional<ctl::StatusReply>)> done);
+
   // Exposed so the (full-parity) UI/view models can drive the SDK directly.
   urnet::Api& api() { return *api_; }
   // The app-wide client event queue (ClientEvents.hpp): every product event
@@ -1451,8 +1459,10 @@ class SdkHost {
   std::atomic<bool> provideHasNetworkKey_{false};
   // ---- the provider-only device (ReconcileProvider) -------------------------
   // Requires mutex_. settingsChanged: the provider policy was just edited,
-  // which only a new device picks up.
-  void ReconcileProviderLocked(const char* reason, bool userInitiated, bool settingsChanged);
+  // which only a new device picks up. polled: a status the caller has just
+  // read, used in place of a read here while no device is bound.
+  void ReconcileProviderLocked(const char* reason, bool userInitiated, bool settingsChanged,
+                               const ctl::StatusReply* polled = nullptr);
   // After a saved network space value (DoH servers, VLESS, the private
   // extender, the server): the reconcile with settingsChanged, posted to the
   // main loop. Takes no lock, so callers may hold mutex_.
@@ -1559,6 +1569,10 @@ class SdkHost {
   std::atomic<bool> reliabilityBusy_{false};
   std::mutex reliabilityWorkerMutex_;
   std::thread reliabilityWorker_;
+  // RequestDaemonStatus' worker, guarded the same two ways.
+  std::atomic<bool> daemonStatusBusy_{false};
+  std::mutex daemonStatusWorkerMutex_;
+  std::thread daemonStatusWorker_;
   // ResetExtenders' worker, guarded the same two ways: extenderResetBusy_ is
   // its single-flight gate, cleared by the worker before it marshals `done`,
   // and extenderResetWorkerMutex_ guards only the thread object, which ~SdkHost

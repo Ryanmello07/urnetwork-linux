@@ -966,31 +966,64 @@ void MainWindow::size_allocate_vfunc(int width, int height, int baseline) {
 // A user sitting idle would keep a green "Connected" while the daemon had
 // already stopped the session and possibly armed the kill switch.
 bool MainWindow::PollDaemonHealth() {
-  if (!connected_) {
-    // The network country the daemon reads (P052), for this process's own
-    // dials: from the sign-in screen on, signed in or not.
-    host_.FollowDaemonNetworkCountry();
-    // The outcome of a feedback's log upload, while one is pending.
-    host_.FollowDaemonLogUpload();
-    // A Reset extenders the daemon refused during a tunnel bring-up, sent again
-    // once the bring-up settled.
-    host_.FollowDaemonExtenderReset();
-    // Disconnected is when the provider-only device is the provider: start it
-    // after a launch without auto-connect, bring it back after a service
-    // restart or an unexpected drop, and stop one the mode no longer wants.
-    host_.ReconcileProvider("health poll");
-    return true;
-  }
-  const auto status = host_.Control().Status();
-  if (!status) return true;      // unreachable is StartTunnelUi's business
-  daemonStatus_ = status;
+  // On a worker (SdkHost::RequestDaemonStatus): a daemon that accepts the
+  // socket but no longer answers used to hold this window for the control
+  // client's 30 s timeout on every tick. A read still in flight skips the
+  // tick. The one reply serves every follow-up in ApplyDaemonHealth, which
+  // while disconnected used to read the status once each.
+  const uint64_t epoch = daemonStatusEpoch_;
+  // `this` outlives the reply: main.cpp holds the window until main returns,
+  // past app->run() and with it the last main-loop dispatch
+  host_.RequestDaemonStatus([this, epoch](std::optional<ctl::StatusReply> status) {
+    // a start, a Disconnect or a sign-in or -out since the read: its reply
+    // describes a session that is not this one (a "stopped" read before a
+    // start is no stop of the session it started)
+    if (epoch != daemonStatusEpoch_) return;
+    ApplyDaemonHealth(status);
+  });
+  return true;
+}
+
+void MainWindow::ForgetDaemonStatus() {
+  daemonStatus_.reset();
+  ++daemonStatusEpoch_;
   ApplyStatusStripDetails();
+}
+
+void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status) {
+  // the strip's Routes, with a session or without one, when the kill
+  // switch's floor can be armed with no tunnel
+  if (status) {
+    daemonStatus_ = status;
+    ApplyStatusStripDetails();
+  }
+  if (!connected_) {
+    // A daemon that did not answer the worker is asked again next tick: a
+    // read here would hold the window for as long as the worker's took.
+    if (status) {
+      // The network country the daemon reads (P052), for this process's own
+      // dials: from the sign-in screen on, signed in or not.
+      host_.FollowDaemonNetworkCountry(*status);
+      // The outcome of a feedback's log upload, while one is pending.
+      host_.FollowDaemonLogUpload(*status);
+      // A Reset extenders the daemon refused during a tunnel bring-up, sent
+      // again once the bring-up settled.
+      host_.FollowDaemonExtenderReset(*status);
+      // Disconnected is when the provider-only device is the provider: start
+      // it after a launch without auto-connect, bring it back after a service
+      // restart or an unexpected drop, and stop one the mode no longer wants.
+      // Served by this reply, so a steady tick reads nothing on the main loop.
+      host_.ReconcileProvider("health poll", *status);
+    }
+    return;
+  }
+  if (!status) return;  // unreachable is StartTunnelUi's business
   host_.FollowDaemonNetworkCountry(*status);
   host_.FollowDaemonExtenderReset(*status);
   host_.FollowDaemonLogUpload(*status);
   if (status->tunnel_state != ctl::TunnelState::Error &&
       status->tunnel_state != ctl::TunnelState::Stopped) {
-    return true;
+    return;
   }
   // …UNLESS WE ARE THE ONES WHO ASKED. A user disconnect ends with
   // SdkHost::Disconnect -> control_.StopTunnel(), so the daemon's very next
@@ -1002,7 +1035,7 @@ bool MainWindow::PollDaemonHealth() {
   // window's own state and say nothing.
   if (connectPage_ && connectPage_->DisconnectPending()) {
     ApplyConnectReading(DaemonTunnelGoneReading());
-    return true;
+    return;
   }
   // The daemon stopped carrying traffic without us asking. Say so, verbatim —
   // the daemon composes the plain-language reason (including whether the machine
@@ -1017,12 +1050,6 @@ bool MainWindow::PollDaemonHealth() {
             status->error.c_str());
   ApplyConnectReading(DaemonTunnelGoneReading());
   if (connectPage_) connectPage_->SetDaemonNotice(detail);
-  return true;
-}
-
-void MainWindow::ForgetDaemonStatus() {
-  daemonStatus_.reset();
-  ApplyStatusStripDetails();
 }
 
 void MainWindow::ApplyPageBreakpoint(int widthDip) {
@@ -2264,7 +2291,7 @@ void MainWindow::RetryConnect() {
   const auto target = host_.SelectedLocation();
   g_message("connect: retry pressed");
   host_.Disconnect();
-  daemonStatus_.reset();
+  ForgetDaemonStatus();
   StartTunnelUi("retry", target);
 }
 
