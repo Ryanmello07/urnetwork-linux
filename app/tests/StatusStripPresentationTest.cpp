@@ -191,7 +191,7 @@ UR_TEST(StatusStripPresentation_TheWindowFeedsTheFields) {
 UR_TEST(StatusStripPresentation_TheModeTagAndTheFade) {
   const std::string shell = ReadStripFieldsSource("HomeShell.cpp");
   UR_EXPECT_TRUE(StripFieldsInOrder(
-      shell, {"advancedFields_.append(*rawField_.root);",
+      shell, {"appendAdvanced(rawField_, rawSeparator_);",
               "advancedFields_.append(*kit::MakeStatusSeparator());",
               "modeField_ = kit::MakeStatusField({}, false, T_(\"adv_advanced_mode\", "
               "\"Advanced mode\"));",

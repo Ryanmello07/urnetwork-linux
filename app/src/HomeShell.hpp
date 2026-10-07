@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
 #include <string>
 #include <vector>
@@ -44,8 +45,11 @@ class HomeShell : public Gtk::Box {
   // The strip's Advanced fields fade in and out with the flip.
   void SetAdvancedMode(bool on);
   // expanded rail (icon+label, 220) vs compact rail (icons only, 48, each
-  // named by its tooltip); shell::NavRailCompact picks it from the width
+  // named by its tooltip); ApplyBreakpoint picks it from the width
   void SetCompactNav(bool compact);
+  // The window's width (MainWindow::ApplyPageBreakpoint): the rail's mode and
+  // what the status strip has room for (ShellLayout.hpp).
+  void ApplyBreakpoint(int windowWidthDip);
 
   // ---- window-level chrome ------------------------------------------------
   // The standing "this session carries no traffic" notice; empty hides it.
@@ -80,6 +84,9 @@ class HomeShell : public Gtk::Box {
   void ApplyCompact(NavItem& item);
   // shows or hides the strip's Advanced fields, faded when animations are on
   void FadeAdvancedFields(bool show);
+  // the strip's captions, traffic field and Advanced fields for the width
+  // and the mode
+  void ApplyStripLayout();
 
   Gtk::Box body_{Gtk::Orientation::HORIZONTAL, 0};  // the rail and the content
   Gtk::Box navRail_{Gtk::Orientation::VERTICAL, 0};
@@ -100,6 +107,7 @@ class HomeShell : public Gtk::Box {
   Gtk::Box statusStrip_{Gtk::Orientation::HORIZONTAL, 0};
   kit::StatusField stateField_;
   kit::StatusField providerField_;
+  Gtk::Widget* trafficSeparator_ = nullptr;  // drops with the traffic field
   kit::StatusField trafficField_;
   Gtk::Box advancedFields_{Gtk::Orientation::HORIZONTAL, 0};
   kit::StatusField networkField_;
@@ -107,8 +115,16 @@ class HomeShell : public Gtk::Box {
   kit::StatusField routesField_;
   kit::StatusField rpcField_;
   kit::StatusField rawField_;
+  // each Advanced field's leading separator, which drops with it
+  Gtk::Widget* networkSeparator_ = nullptr;
+  Gtk::Widget* sessionSeparator_ = nullptr;
+  Gtk::Widget* routesSeparator_ = nullptr;
+  Gtk::Widget* rpcSeparator_ = nullptr;
+  Gtk::Widget* rawSeparator_ = nullptr;
   kit::StatusField modeField_;  // the "Advanced" tag closing the row
   uint64_t advancedFade_ = 0;   // the flip whose fade may still write
+  // the window's width; until the first breakpoint nothing is dropped
+  int widthDip_ = std::numeric_limits<int>::max();
 
   kit::Snackbar snackbar_;
 };

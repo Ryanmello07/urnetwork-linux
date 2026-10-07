@@ -21,7 +21,6 @@
 #include "UrTheme.hpp"
 #include "I18n.hpp"
 #include "LocationSelection.hpp"
-#include "ShellLayout.hpp"
 #include "StatusStripPresentation.hpp"
 #include "Ui.hpp"
 
@@ -1027,8 +1026,8 @@ void MainWindow::ForgetDaemonStatus() {
 }
 
 void MainWindow::ApplyPageBreakpoint(int widthDip) {
-  // the rail first: it takes its width out of the room the pages get
-  if (shell_) shell_->SetCompactNav(shell::NavRailCompact(widthDip));
+  // the shell first: its rail takes its width out of the room the pages get
+  if (shell_) shell_->ApplyBreakpoint(widthDip);
   if (connectPage_) connectPage_->ApplyBreakpoint(widthDip);
   if (networkPage_) networkPage_->ApplyBreakpoint(widthDip);
   if (settingsPage_) settingsPage_->ApplyBreakpoint(widthDip);

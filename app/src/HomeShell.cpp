@@ -2,6 +2,7 @@
 #include "HomeShell.hpp"
 
 #include "I18n.hpp"
+#include "ShellLayout.hpp"
 #include "UrMotion.hpp"
 
 namespace urnw {
@@ -71,26 +72,29 @@ HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   providerField_ =
       kit::MakeStatusField(T_("selected_provider", "Selected provider"), false);
   statusStrip_.append(*providerField_.root);
-  statusStrip_.append(*kit::MakeStatusSeparator());
+  trafficSeparator_ = kit::MakeStatusSeparator();
+  statusStrip_.append(*trafficSeparator_);
   trafficField_ = kit::MakeStatusField(T_("data", "Data"), false);
   statusStrip_.append(*trafficField_.root);
 
-  // the 5 Advanced fields ride the same row and drop entirely with the mode
-  advancedFields_.append(*kit::MakeStatusSeparator());
+  // the 5 Advanced fields ride the same row and drop entirely with the mode,
+  // and each one after its own separator, which drops with it on a narrow
+  // window (ApplyStripLayout)
+  const auto appendAdvanced = [this](kit::StatusField& field, Gtk::Widget*& separator) {
+    separator = kit::MakeStatusSeparator();
+    advancedFields_.append(*separator);
+    advancedFields_.append(*field.root);
+  };
   networkField_ = kit::MakeStatusField(T_("network", "Network"), false);
-  advancedFields_.append(*networkField_.root);
-  advancedFields_.append(*kit::MakeStatusSeparator());
+  appendAdvanced(networkField_, networkSeparator_);
   sessionField_ = kit::MakeStatusField(T_("adv_session_mode", "Session"), false);
-  advancedFields_.append(*sessionField_.root);
-  advancedFields_.append(*kit::MakeStatusSeparator());
+  appendAdvanced(sessionField_, sessionSeparator_);
   routesField_ = kit::MakeStatusField(T_("adv_routes", "Routes"), false);
-  advancedFields_.append(*routesField_.root);
-  advancedFields_.append(*kit::MakeStatusSeparator());
+  appendAdvanced(routesField_, routesSeparator_);
   rpcField_ = kit::MakeStatusField(T_("adv_rpc", "RPC"), false);
-  advancedFields_.append(*rpcField_.root);
-  advancedFields_.append(*kit::MakeStatusSeparator());
+  appendAdvanced(rpcField_, rpcSeparator_);
   rawField_ = kit::MakeStatusField(T_("adv_raw_status", "Raw status"), false);
-  advancedFields_.append(*rawField_.root);
+  appendAdvanced(rawField_, rawSeparator_);
   // ...closed by a standing tag naming the mode, as Windows has it: the mode
   // changes what half the app's surfaces mean, so the chrome says which
   // reading it is in. Caption-less (the word is the fact), in the action
@@ -180,7 +184,8 @@ void HomeShell::PaintSelection() {
 void HomeShell::SetAdvancedMode(bool on) {
   if (advanced_ == on) return;
   advanced_ = on;
-  FadeAdvancedFields(on);
+  FadeAdvancedFields(shell::StatusStripLayoutFor(widthDip_, on).advancedRow);
+  ApplyStripLayout();
   if (on && !developerItem_) {
     // INSERTED into the footer collection ahead of settings, not un-hidden
     auto* settingsButton = items_.empty() ? nullptr : items_.back().button;
@@ -209,6 +214,7 @@ void HomeShell::FadeAdvancedFields(bool show) {
   // a later flip cancels this one's frames and its hide
   const uint64_t generation = ++advancedFade_;
   advancedFields_.set_opacity(1.0);
+  if (!show && !advancedFields_.get_visible()) return;  // nothing on screen to fade
   // a hard cut when animations are off, or with the strip not on screen
   // (the mode read at launch), where no frame would run the fade
   if (!motion::ShouldAnimate() || !statusStrip_.get_mapped()) {
@@ -234,6 +240,39 @@ void HomeShell::FadeAdvancedFields(bool show) {
         advancedFields_.set_visible(false);
         advancedFields_.set_opacity(1.0);
       });
+}
+
+void HomeShell::ApplyBreakpoint(int windowWidthDip) {
+  SetCompactNav(shell::NavRailCompact(windowWidthDip));
+  widthDip_ = windowWidthDip;
+  // a resize applies at once: a fade still running for a flip is cut short
+  ++advancedFade_;
+  advancedFields_.set_opacity(1.0);
+  advancedFields_.set_visible(shell::StatusStripLayoutFor(widthDip_, advanced_).advancedRow);
+  ApplyStripLayout();
+}
+
+void HomeShell::ApplyStripLayout() {
+  const shell::StatusStripLayout layout = shell::StatusStripLayoutFor(widthDip_, advanced_);
+  // the Normal fields' captions; the Advanced fields keep theirs
+  for (kit::StatusField* field : {&providerField_, &trafficField_}) {
+    if (field->caption) field->caption->set_visible(layout.captions);
+  }
+  trafficSeparator_->set_visible(layout.traffic);
+  trafficField_.root->set_visible(layout.traffic);
+  // The Advanced fields the row has room for, each with its separator; the
+  // tag closes whatever shows. Off the mode the row hides whole, fading, so
+  // its fields are left as they were rather than cut from under the fade.
+  if (!advanced_) return;
+  const auto showAdvanced = [](Gtk::Widget* separator, kit::StatusField& field, bool show) {
+    separator->set_visible(show);
+    field.root->set_visible(show);
+  };
+  showAdvanced(networkSeparator_, networkField_, layout.sessionFields);
+  showAdvanced(sessionSeparator_, sessionField_, layout.sessionFields);
+  showAdvanced(routesSeparator_, routesField_, layout.sessionFields);
+  showAdvanced(rpcSeparator_, rpcField_, layout.rpc);
+  showAdvanced(rawSeparator_, rawField_, layout.raw);
 }
 
 void HomeShell::SetCompactNav(bool compact) {
