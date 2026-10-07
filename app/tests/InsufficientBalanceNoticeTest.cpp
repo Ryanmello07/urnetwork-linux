@@ -154,6 +154,22 @@ UR_TEST(balanceNoticeIsWiredIntoTheWindow) {
   UR_EXPECT_TRUE(Has(app, "kBalanceNoticeDisconnectAction"));
 }
 
+// gtkmm's Gtk::Window removes itself from its application when it is hidden
+// and nothing adds it back when it shows again, so a notice posted through the
+// window's get_application() went nowhere once the window had been hidden to
+// the tray, which is when it is needed. Both the post and the withdraw go
+// through the default application.
+UR_TEST(balanceNoticeGoesThroughTheDefaultApplication) {
+  const std::string window = ReadSource("MainWindow.cpp");
+  const size_t at = window.find("void MainWindow::UpdateBalanceNotice() {");
+  UR_EXPECT_TRUE(at != std::string::npos);
+  const std::string body = window.substr(at, window.find("\n}\n", at) - at);
+  UR_EXPECT_TRUE(Has(window, "Glib::RefPtr<Gio::Application> NotifyingApp() { return Gio::Application::get_default(); }"));
+  UR_EXPECT_TRUE(Has(body, "auto app = NotifyingApp();"));
+  UR_EXPECT_TRUE(Has(body, "if (auto app = NotifyingApp()) app->withdraw_notification(kBalanceNoticeId);"));
+  UR_EXPECT_FALSE(Has(body, "get_application()"));
+}
+
 UR_TEST(balanceNoticeHeldAlertTable) {
   // gate x connect requested x pro x polling: the alert (and its Upgrade and
   // Disconnect) shows only for an unfunded, non-Pro, settled account whose

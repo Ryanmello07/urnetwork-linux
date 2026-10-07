@@ -193,6 +193,7 @@ if build_gui
 executable('urnetwork-gui',
   sources : [
     'src/main.cpp',
+    'src/StartupFailure.cpp',
     'src/SingleInstance.cpp',
     'src/ControlClient.cpp',
     'src/RpcSessionStore.cpp',
@@ -695,6 +696,13 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/StatusStripPresentationTest.cpp',
     'tests/ConnectionHealthWiringTest.cpp',
     'tests/DaemonStatusPollWiringTest.cpp',
+    'tests/BrowserSignInGateTest.cpp',
+    'tests/TrayPolicyTest.cpp',
+    'tests/AccountPlanRowsTest.cpp',
+    'tests/AppPrefsTest.cpp',
+    'tests/WindowGeometryTest.cpp',
+    'tests/SeedphraseInputWiringTest.cpp',
+    'tests/StartupFailureTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -739,7 +747,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # the same way.
               # ConnectFoldDoorsWiringTest reads the connect page's second doors the same
               # way.
-              # SignOutWiringTest reads SdkHost and the health poll the same way.
+              # SignOutWiringTest reads SdkHost, the health poll and the pages' sign-out
+              # resets the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and
               # GUI call sites the same way, and DiagnosticLogWiringTest the support log's.
@@ -772,6 +781,17 @@ urnetwork_tests = executable('urnetwork-tests',
               # sites the same way.
               # DaemonStatusPollWiringTest reads the health poll's window and host halves
               # the same way.
+              # BrowserSignInGateTest reads the browser sign-ins' window call sites the
+              # same way.
+              # TrayPolicyTest reads the tray's watcher and the window's close and
+              # reachability the same way.
+              # AccountPlanRowsTest reads the Account page's Plan pane the same way.
+              # AppPrefsTest reads AppPrefs.hpp's calls into PrefsFile.hpp the same way.
+              # WindowGeometryTest reads the window's restore and save and their
+              # callers the same way.
+              # SeedphraseInputWiringTest reads the seedphrase step the same way.
+              # StartupFailureTest reads the failed start's main.cpp branch and its
+              # dialog the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

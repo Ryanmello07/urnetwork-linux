@@ -686,6 +686,11 @@ msgctxt "app_split_starter"
 msgid "0 split apps"
 msgstr "분할 앱 0개"
 
+#. Linux: the body of the dialog shown when the app cannot start (its SDK host failed to initialize, so there is no window and no tray), under the heading something_went_wrong. The argument is the folder that holds the app's log files. The raw error follows on its own lines, untranslated.
+msgctxt "app_start_failed_detail"
+msgid "URnetwork could not start. Its logs are in {}."
+msgstr "URnetwork를 시작할 수 없습니다. 로그는 {}에 있습니다."
+
 #. Shown on the linux home screen when the urnetworkd system service rejected this app for speaking an older control protocol than the service supports. The fix is updating the app, not the service.
 msgctxt "app_too_old_for_daemon"
 msgid "This app is older than the installed URnetwork system service. Update the app to connect."
@@ -5864,6 +5869,11 @@ msgstr "무료 체험 시작"
 msgctxt "on"
 msgid "On"
 msgstr "켜짐"
+
+#. Linux desktop notification, shown once ever, the first time closing the window hides it to the system tray (only while a tray has the app's icon). Its title is the product name. Windows shows a tray balloon at the same moment under this key.
+msgctxt "onb_tray_balloon_hide"
+msgid "Still running — URnetwork closed to the tray. Click its icon there to open it again."
+msgstr "계속 실행 중 — URnetwork가 트레이로 닫혔습니다. 다시 열려면 트레이에서 아이콘을 클릭하세요."
 
 #. Accessibility description of the onboarding step bubbles: the current step and the total.
 msgctxt "onboarding_step_of"

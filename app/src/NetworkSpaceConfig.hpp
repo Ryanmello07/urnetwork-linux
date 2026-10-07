@@ -13,6 +13,7 @@
 
 #include <unistd.h>
 
+#include <cstdlib>
 #include <optional>
 #include <string>
 
@@ -68,6 +69,21 @@ inline urnet::NetworkSpace BuildUrNetworkSpace(urnet::NetworkSpaceManager& manag
 // BuildUrNetworkSpace: it binds the space start_tunnel hands it.
 inline urnet::NetworkSpace LaunchUrNetworkSpace(urnet::NetworkSpaceManager& manager) {
   return LaunchUrNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(manager);
+}
+
+// The same with URNETWORK_NETWORK_HOST / URNETWORK_NETWORK_ENV resolved: the
+// override's space when one is in force.
+inline urnet::NetworkSpace LaunchUrNetworkSpace(urnet::NetworkSpaceManager& manager,
+                                                const LaunchOverride& launchOverride) {
+  return LaunchUrNetworkSpace<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(manager,
+                                                                                launchOverride);
+}
+
+// URNETWORK_NETWORK_HOST / URNETWORK_NETWORK_ENV, read from this process's
+// environment.
+inline LaunchOverride LaunchOverrideFromEnvironment() {
+  return ResolveLaunchOverride(std::getenv("URNETWORK_NETWORK_HOST"),
+                               std::getenv("URNETWORK_NETWORK_ENV"));
 }
 
 // The value set of a host's space that stores nothing yet

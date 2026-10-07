@@ -268,3 +268,35 @@ UR_TEST(SignOutWiring_TheSignOutEndsWithASignInAndOutlivesTheApp) {
   UR_EXPECT_TRUE(SignOutHas(header, "signout::Obligation signOut_{SignOutMarker()};"));
   UR_EXPECT_TRUE(SignOutHas(header, "std::atomic<bool> signedOut_{false};"));
 }
+
+// Earnings forgets the own-account facts a reload leaves, the points header's
+// and both public switches' (through their echo guards), and abandons a
+// switch's set still in flight, before the reload that empties its panels, and
+// the window's sign-out asks for exactly that.
+UR_TEST(SignOutWiring_EarningsForgetsTheDepartedNetwork) {
+  const std::string page = ReadSignOutSource("EarningsPage.cpp");
+  const std::string reset = SignOutBody(page, "void EarningsPage::ResetForSignOut() {");
+  // a switch's set in flight is abandoned: no watchdog reports it to the next
+  // account, and the switch is free again
+  UR_EXPECT_TRUE(InOrder(reset, {"++pointsPublicFlow_.generation;",
+                                 "pointsPublicFlow_.timer.disconnect();",
+                                 "settingPointsPublic_ = false;",
+                                 "if (pointsPublicToggle_ != nullptr) "
+                                 "pointsPublicToggle_->set_sensitive(true);",
+                                 "++rankingFlow_.generation;", "rankingFlow_.timer.disconnect();",
+                                 "settingRankingPublic_ = false;",
+                                 "publicToggle_->set_sensitive(true);", "Load();"}));
+  UR_EXPECT_TRUE(InOrder(reset, {"ownNetworkId_.clear();", "pointsPublic_ = false;",
+                                 "emojiTag_.clear();", "ownFlagsClock_ = 0;",
+                                 "ownFlagsEditedAt_ = 0;", "ownFlagsAppliedAt_ = 0;",
+                                 "SetPointsToggle(false);", "rankingPublic_ = false;",
+                                 "SetRankingToggle(false);", "Load();"}));
+  UR_EXPECT_TRUE(!SignOutHas(reset, "set_active("));
+  const std::string window = ReadSignOutSource("MainWindow.cpp");
+  const std::string auth = SignOutBody(window, "void MainWindow::ApplyAuthState(bool loggedIn) {");
+  const size_t signedOut = auth.find("} else {");
+  UR_EXPECT_TRUE(signedOut != std::string::npos);
+  const std::string branch = signedOut == std::string::npos ? std::string() : auth.substr(signedOut);
+  UR_EXPECT_TRUE(SignOutHas(branch, "if (earningsPage_) earningsPage_->ResetForSignOut();"));
+  UR_EXPECT_TRUE(!SignOutHas(branch, "earningsPage_->Load()"));
+}

@@ -2,10 +2,11 @@
 //
 // Single-process entry point. Owns the SdkHost (the in-process VPN core), the
 // GTK4 window, and the D-Bus tray. Closing the window hides to the tray and the
-// tunnel keeps running (the Windows/macOS "keep connected" behavior); Quit from
-// the tray is the only real exit. One instance runs per session: a later
-// launch hands itself to it and exits, and one that meets it quitting waits
-// for it to end, then starts (InstanceHandover.hpp).
+// tunnel keeps running (the Windows/macOS "keep connected" behavior); with no
+// tray it minimizes instead (TrayPolicy.hpp). Quit from the tray is the only
+// real exit. One instance runs per session: a later launch hands itself to it
+// and exits, and one that meets it quitting waits for it to end, then starts
+// (InstanceHandover.hpp).
 #include <adwaita.h>
 #include <glib.h>
 #include <giomm/file.h>
@@ -26,7 +27,9 @@
 #include "RuntimePaths.hpp"
 #include "SdkHost.hpp"
 #include "SingleInstance.hpp"
+#include "StartupFailure.hpp"
 #include "Tray.hpp"
+#include "TrayPolicy.hpp"
 #include "UrTheme.hpp"
 
 // Where the message catalogs are installed: meson passes the configured
@@ -123,6 +126,7 @@ int main(int argc, char** argv) {
 
   std::shared_ptr<urnw::MainWindow> window;
   std::shared_ptr<urnw::Tray> tray;
+  bool startFailed = false;  // main's exit status says so (StartupFailure.hpp)
   // This process's own launch is the first activation; every later one is a
   // launch handed to this instance.
   urnw::instance::Activations activations(arguments.kind);
@@ -131,6 +135,27 @@ int main(int argc, char** argv) {
   const auto serve = [&](const urnw::instance::Launch& launch) {
     for (const std::string& uri : launch.uris) host->HandleDeepLink(uri);
     if (window && urnw::instance::ShowsWindow(launch.kind)) window->present();
+  };
+  // A hidden window with no tray to bring it back (an autostart launch, or a
+  // tray that went away) shows again, minimized, once the tray has had its
+  // grace to come back (TrayPolicy.hpp).
+  sigc::connection noTrayGrace;
+  const auto unreachable = [&] {
+    return window && urnw::tray_policy::MustSurface(window->get_visible(), tray && tray->Available());
+  };
+  const auto keepReachable = [&] {
+    noTrayGrace.disconnect();
+    if (!unreachable()) return;
+    noTrayGrace = Glib::signal_timeout().connect(
+        [&]() -> bool {
+          if (unreachable()) {
+            g_message("tray: no tray to bring the window back; showing it minimized");
+            window->minimize();  // before it maps, so it never shows on top
+            window->set_visible(true);
+          }
+          return false;
+        },
+        urnw::tray_policy::kNoTrayGraceMillis);
   };
 
   app->signal_startup().connect([&] {
@@ -151,9 +176,12 @@ int main(int argc, char** argv) {
     // the shared storage dir, which a process about to exit has no business
     // touching.
     if (!host->Initialize(storageDir, logDir)) {
-      g_printerr("failed to initialize SDK\n");
+      // No window and no tray can come now. Said where a desktop launch can
+      // see it, not only on stderr, and the app ends when the dialog closes.
+      startFailed = true;
+      g_printerr("%s", urnw::startup_failure::StderrLine(host->InitializeError(), logDir).c_str());
       urnw::instance::BeginExiting();
-      app->quit();
+      if (!urnw::startup_failure::Show(*app, host->InitializeError(), logDir)) app->quit();
       return;
     }
     adw_init();  // libadwaita stylesheet + platform integration
@@ -193,6 +221,7 @@ int main(int argc, char** argv) {
       // instance about to end. A launch that meets it waits for it to end,
       // then starts.
       urnw::instance::BeginExiting();
+      window->SaveGeometry();  // a quit with the window up never closed it
       // teardown WITHOUT Logout(): Logout wipes the stored jwt, and for a
       // guest network that jwt is the only credential — quitting from the
       // tray was permanently destroying guest accounts (and any balance or
@@ -213,13 +242,30 @@ int main(int argc, char** argv) {
       if (tray) tray->SetRecovery(recovery.forceTunnelOff, recovery.liftKillSwitch);
     };
 
-    // Close = hide to tray (tunnel keeps running); Quit from the tray truly exits.
+    // Close hides to the tray (the tunnel keeps running) while a tray can bring
+    // the window back, and minimizes it otherwise; Quit from the tray truly
+    // exits.
     window->signal_close_request().connect(
         [&]() -> bool {
-          window->set_visible(false);
+          window->SaveGeometry();
+          switch (urnw::tray_policy::OnClose(tray && tray->Available())) {
+            case urnw::tray_policy::CloseAction::Hide:
+              window->set_visible(false);
+              // GTK keeps a minimize() asked for earlier in the run (the grace's,
+              // or a close with no tray) and applies it at every later map, so
+              // the tray's present would map the window minimized. Unmapped, this
+              // only drops that request.
+              window->unminimize();
+              window->NoteHiddenToTray();
+              break;
+            case urnw::tray_policy::CloseAction::Minimize:
+              window->minimize();
+              break;
+          }
           return true;  // stop the default destroy
         },
         false);
+    tray->on_availability_change = [&](bool) { keepReachable(); };
 
     // Hold the application so it survives with only the tray (window hidden).
     // Held here, on the instance only: held before run(), it kept every
@@ -228,6 +274,8 @@ int main(int argc, char** argv) {
     // the window and the tray exist: launches handed to this instance are
     // served from here on
     urnw::instance::OpenLaunches(G_APPLICATION(app->gobj()), serve);
+    // an autostart launch leaves the window hidden: it waits for the tray
+    keepReachable();
   });
 
   app->signal_activate().connect([&] {
@@ -326,5 +374,6 @@ int main(int argc, char** argv) {
         serve(launch);
       });
 
-  return app->run(argc, argv);
+  const int status = app->run(argc, argv);
+  return startFailed ? urnw::startup_failure::kExitStatus : status;
 }

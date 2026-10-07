@@ -23,7 +23,9 @@
 #include "I18n.hpp"
 #include "LocationSelection.hpp"
 #include "StatusStripPresentation.hpp"
+#include "TrayPolicy.hpp"
 #include "Ui.hpp"
+#include "WindowGeometry.hpp"
 
 namespace urnw {
 
@@ -123,10 +125,33 @@ Glib::ustring DaemonAuthRefusalCopy(DaemonAuthOutcome outcome, const std::string
 
 MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   set_title("URnetwork");
-  // The desktop default (windows shell parity): 1120x820dip opens wide of the
-  // 1000dip breakpoint so the brand art shows on first launch; min 400x480.
-  set_default_size(1120, 820);
-  set_size_request(400, 480);
+  // The size the last run left, or the desktop default (windows shell parity:
+  // 1120x820dip, min 400x480). The preview harness always opens at the default.
+  window_geometry::Size size;
+  const bool restore = g_getenv("URNETWORK_PREVIEW_UI") == nullptr;
+  if (restore) {
+    size = window_geometry::SizeToOpenAt(prefs::Get<int64_t>(window_geometry::kWidthKey, 0),
+                                         prefs::Get<int64_t>(window_geometry::kHeightKey, 0));
+  }
+  set_default_size(size.width, size.height);
+  set_size_request(window_geometry::kMinWidth, window_geometry::kMinHeight);
+  if (restore && prefs::Get<bool>(window_geometry::kMaximizedKey, false)) maximize();
+  // Saved again shortly after every resize and maximize as well, not only at
+  // close and Quit: a logout or a SIGTERM ends the app with neither.
+  if (restore) {
+    const auto saveSoon = [this] {
+      geometrySave_.disconnect();
+      geometrySave_ = Glib::signal_timeout().connect(
+          [this] {
+            SaveGeometry();
+            return false;
+          },
+          window_geometry::kSaveDebounceMillis);
+    };
+    property_default_width().signal_changed().connect(saveSoon);
+    property_default_height().signal_changed().connect(saveSoon);
+    property_maximized().signal_changed().connect(saveSoon);
+  }
 
   BuildChrome();
   BuildLogin();
@@ -1134,6 +1159,7 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 // screen — a tray app spends most of its life hidden, and a slideshow nobody
 // can see is pure wakeups.
 MainWindow::~MainWindow() {
+  geometrySave_.disconnect();
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
   host_.SetRowConnect(nullptr);   // and so does the row's start path
@@ -1194,8 +1220,23 @@ void MainWindow::ScheduleAppFocusSync() {
       g_object_unref(window);
     }
     balance_.SetAppFocused(focused);
+    if (const auto away = appFocusAway_.Read(focused, g_get_monotonic_time() / 1000)) {
+      OnAppReturned(*away);
+    }
     return false;
   });
+}
+
+// The browser sign-ins answer only through their deep link, and a browser the
+// user closed sends nothing: coming back enables the affordances again. The
+// attempt stays armed, so a late return still lands in OnWalletAuth and a new
+// click supersedes it (BrowserSignInGate.hpp).
+void MainWindow::OnAppReturned(int64_t awayMillis) {
+  const bool manualSheetOpen = bittensorManualSheet_ && bittensorManualSheet_->get_visible();
+  if (!browserSignIn_.TakeOnReturn(awayMillis, manualSheetOpen)) return;
+  SetLoginBusy(false);
+  // the "Opening your wallet" progress notice is stale now; an error stays
+  if (loginError_.has_css_class("dim-label")) loginError_.set_text("");
 }
 
 void MainWindow::UpdateCarouselRunning() {
@@ -1393,6 +1434,11 @@ void MainWindow::BuildSeedphraseStep() {
   seedphraseView_ = Gtk::make_managed<Gtk::TextView>();
   seedphraseView_->add_css_class("ur-input-multi");
   seedphraseView_->set_wrap_mode(Gtk::WrapMode::WORD);
+  // The phrase is the account's credential: an input method's spellcheck
+  // would rewrite BIP-39 words, and one that learns what is typed would keep
+  // it. The words stay visible, so the purpose stays free form.
+  seedphraseView_->set_input_hints(Gtk::InputHints::NO_SPELLCHECK | Gtk::InputHints::PRIVATE |
+                                   Gtk::InputHints::NO_EMOJI);
   seedphraseView_->set_size_request(-1, 120);
   seedphraseView_->get_buffer()->signal_changed().connect(
       sigc::mem_fun(*this, &MainWindow::OnSeedphraseChanged));
@@ -2049,6 +2095,7 @@ void MainWindow::OnSolanaChooser() {
 void MainWindow::OnSolana(WalletConnect::Provider provider) {
   SetLoginNotice(T_("opening_wallet_in_browser", "Opening your wallet in the browser…"));
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithSolana(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -2062,6 +2109,7 @@ void MainWindow::OnApple() { OnSso(sso::kProviderApple); }
 void MainWindow::OnSso(const std::string& provider) {
   loginError_.set_text("");
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithSso(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -2097,6 +2145,7 @@ void MainWindow::OnBittensorWallet(const std::string& walletId) {
                        : std::string(localized));
   }
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithBittensor(walletId, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -2112,6 +2161,7 @@ void MainWindow::ShowBittensorManualSheet(const SdkHost::BittensorManualRequest&
 // Shared tail of both wallet sign-ins (the SDK callback thread lands here).
 void MainWindow::OnWalletAuth(const AuthResult& result) {
   PostToMain([this, result] {
+    browserSignIn_.Settle();
     SetLoginBusy(false);
     if (!result.ok && bittensor::IsCancelled(result.error)) {
       // the user closed the Bittensor manual sheet: nothing failed
@@ -2266,7 +2316,9 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // that started it
     guestUpgrade_.Clear();
     if (guestConversionSheet_) guestConversionSheet_->set_visible(false);
-    if (earningsPage_) earningsPage_->Load();  // settles every panel on empty
+    // Earnings forgets the departed network's own row, emoji and public
+    // switches, then its reload settles every panel on empty
+    if (earningsPage_) earningsPage_->ResetForSignOut();
     if (settingsPage_) settingsPage_->Load();
     // Account carries account-SUBJECT state (name, login methods, referral
     // code, the departed plan): a sign-out must wipe it, not merely reload it.
@@ -2429,14 +2481,58 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
 // One fixed notification id, so a post replaces and a withdraw always finds it.
 constexpr const char* kBalanceNoticeId = "insufficient-balance";
 
+namespace {
+// The application the desktop notifications go through. Never the window's
+// get_application(): gtkmm's Gtk::Window removes itself from its application
+// when it is hidden (its constructor connects the hide signal to
+// Application::remove_window) and nothing adds it back when it shows again,
+// so after the first hide to the tray every post and withdraw through it went
+// nowhere.
+Glib::RefPtr<Gio::Application> NotifyingApp() { return Gio::Application::get_default(); }
+}  // namespace
+
+constexpr const char* kHideNoticeId = "hidden-to-tray";
+
+// The default size follows the window's size while it is not maximized, so a
+// maximized window keeps the size it returns to.
+void MainWindow::SaveGeometry() {
+  if (g_getenv("URNETWORK_PREVIEW_UI")) return;  // a review's size is not the user's
+  // never shown this run (an autostart quit from the tray): nothing was sized,
+  // and a maximize asked for at startup is not yet the window's state
+  if (!get_realized()) return;
+  int width = 0;
+  int height = 0;
+  get_default_size(width, height);
+  nlohmann::json values = {{window_geometry::kMaximizedKey, is_maximized()}};
+  if (window_geometry::Plausible(width, height)) {
+    values[window_geometry::kWidthKey] = width;
+    values[window_geometry::kHeightKey] = height;
+  }
+  prefs::SetAll(values);
+}
+
+// With no default action, a click on the notice activates the app, which
+// shows the window.
+void MainWindow::NoteHiddenToTray() {
+  if (prefs::Get<bool>(tray_policy::kHideNoticeSeenKey, false)) return;
+  auto app = NotifyingApp();
+  if (!app) return;
+  prefs::Set(tray_policy::kHideNoticeSeenKey, true);  // before the send: once ever
+  // the product name, never translated, as the tray's own title
+  auto notification = Gio::Notification::create("URnetwork");
+  notification->set_body(T_("onb_tray_balloon_hide",
+                            "Still running — URnetwork closed to the tray. Click its icon there "
+                            "to open it again."));
+  app->send_notification(kHideNoticeId, notification);
+}
+
 // Out of balance with a connection requested, the tunnel holds traffic with no
 // provider behind it. Tell the user once per episode, with a Disconnect button;
 // the tracker decides, this only talks to GApplication. It never disconnects.
 void MainWindow::UpdateBalanceNotice() {
   struct Sink {
-    MainWindow& window;
     void Post() {
-      auto app = window.get_application();
+      auto app = NotifyingApp();
       if (!app) return;
       auto notification =
           Gio::Notification::create(T_("insufficient_balance", "Insufficient balance"));
@@ -2448,7 +2544,7 @@ void MainWindow::UpdateBalanceNotice() {
       app->send_notification(kBalanceNoticeId, notification);
     }
     void Withdraw() {
-      if (auto app = window.get_application()) app->withdraw_notification(kBalanceNoticeId);
+      if (auto app = NotifyingApp()) app->withdraw_notification(kBalanceNoticeId);
     }
   };
   balance_notice::Signals signals;
@@ -2457,7 +2553,7 @@ void MainWindow::UpdateBalanceNotice() {
   signals.polling = balance_.IsPolling();
   signals.connectRequested = reading_.destinationSelected;
   if (connectPage_) connectPage_->ApplyBalanceNotice(signals);
-  Sink sink{*this};
+  Sink sink;
   balanceNotice_.Observe(signals, sink);
 
   balance_notice::OutOfBalanceLatch::Observation observation;

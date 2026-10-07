@@ -36,8 +36,10 @@ using urnw::kUrEnvName;
 using urnw::kUrHostName;
 using urnw::kUrLegacyHostName;
 using urnw::kUrLinkHostName;
+using urnw::LaunchOverride;
 using urnw::LaunchUrNetworkSpace;
 using urnw::MigrateLegacyUrNetworkSpace;
+using urnw::ResolveLaunchOverride;
 using urnw::UrNetworkSpaceKey;
 using urnw::UrNetworkSpaceValues;
 
@@ -382,6 +384,95 @@ UR_TEST(theLaunchSamplesTheBundledSpaceBeforeTheRefresh) {
   }
 }
 
+// ---- the launch override (URNETWORK_NETWORK_HOST) ---------------------------
+
+UR_TEST(theLaunchOverrideIsTheHostWithItsEnvOrMain) {
+  UR_EXPECT_FALSE(ResolveLaunchOverride(nullptr, nullptr).Active());
+  UR_EXPECT_FALSE(ResolveLaunchOverride("", "staging").Active());
+  const LaunchOverride main = ResolveLaunchOverride("test.example", nullptr);
+  UR_EXPECT_TRUE(main.Active() && main.host == "test.example" && main.env == kUrEnvName);
+  UR_EXPECT_TRUE(ResolveLaunchOverride("test.example", "").env == kUrEnvName);
+  UR_EXPECT_TRUE(ResolveLaunchOverride("test.example", "staging").env == "staging");
+  // trimmed: a blank host is no override, and a script's newline is not part
+  // of the host
+  UR_EXPECT_FALSE(ResolveLaunchOverride(" ", "staging").Active());
+  UR_EXPECT_FALSE(ResolveLaunchOverride(" \t\r\n", nullptr).Active());
+  const LaunchOverride scripted = ResolveLaunchOverride("test.example\n", " beta ");
+  UR_EXPECT_TRUE(scripted.host == "test.example" && scripted.env == "beta");
+  UR_EXPECT_TRUE(ResolveLaunchOverride(" test.example ", "\t").env == kUrEnvName);
+}
+
+// The override's own host is keyed under its env, every other under "main",
+// and only the override's own space is never made active.
+UR_TEST(theOverridesSpaceIsKeyedByItsEnvAndNeverMadeActive) {
+  const LaunchOverride beta = ResolveLaunchOverride("test.example", "beta");
+  UR_EXPECT_TRUE(urnw::EnvNameFor(beta, "test.example") == "beta");
+  UR_EXPECT_TRUE(urnw::EnvNameFor(beta, "other.example") == kUrEnvName);
+  UR_EXPECT_TRUE(urnw::EnvNameFor(beta, kUrHostName) == kUrEnvName);
+  UR_EXPECT_TRUE(urnw::EnvNameFor(ResolveLaunchOverride(nullptr, "beta"), "test.example") ==
+                 kUrEnvName);
+  UR_EXPECT_TRUE(urnw::IsLaunchOverrideSpace(beta, "test.example", "beta"));
+  UR_EXPECT_FALSE(urnw::IsLaunchOverrideSpace(beta, "test.example", kUrEnvName));
+  UR_EXPECT_FALSE(urnw::IsLaunchOverrideSpace(beta, kUrHostName, kUrEnvName));
+  UR_EXPECT_FALSE(urnw::IsLaunchOverrideSpace(ResolveLaunchOverride(nullptr, nullptr), "", ""));
+}
+
+// An override binds the test network's space, built from its own host and env
+// with derived urls and no migration host over what it stores, after the
+// official space's bootstrap, and never as the active space: a launch without
+// it binds the user's choice again.
+UR_TEST(anOverrideBindsItsOwnSpaceAndLeavesTheChoiceAlone) {
+  RecordingManager manager;
+  manager.storedJson =
+      R"({"key": {"host_name": "test.example", "env_name": "staging"},)"
+      R"( "values": {"api_url": "https://old.example", "migration_host_name": "x",)"
+      R"( "alt_url": "https://alt.example"}})";
+  manager.activeKey = CustomKey();
+  const Space space =
+      LaunchUrNetworkSpace<Key, Values>(manager, ResolveLaunchOverride("test.example", "staging"));
+  UR_EXPECT_TRUE_MSG("bound " + Show(space.key),
+                     space.key.host_name == std::optional<std::string>("test.example") &&
+                         space.key.env_name == std::optional<std::string>("staging"));
+  const std::vector<std::string> expected = {
+      "migrate ur.network/main -> bringyour.com/main",
+      "get bringyour.com/main",  // the official space's stored values
+      "update bringyour.com/main",
+      "get test.example/staging",  // the override's stored values
+      "update test.example/staging",
+  };
+  UR_EXPECT_EQ(static_cast<double>(expected.size()), static_cast<double>(manager.calls.size()));
+  for (size_t i = 0; i < expected.size() && i < manager.calls.size(); ++i) {
+    UR_EXPECT_TRUE_MSG("call " + std::to_string(i) + ": " + manager.calls[i],
+                       manager.calls[i] == expected[i]);
+  }
+  UR_EXPECT_TRUE(manager.activeKey && manager.activeKey->host_name == CustomKey().host_name);
+  UR_EXPECT_TRUE(manager.built.has_value());
+  if (manager.built) {
+    UR_EXPECT_TRUE(manager.built->bundled == std::optional<bool>(false));
+    UR_EXPECT_TRUE(manager.built->link_host_name == std::optional<std::string>("test.example"));
+    UR_EXPECT_TRUE(manager.built->migration_host_name == std::optional<std::string>(""));
+    UR_EXPECT_FALSE(manager.built->api_url.has_value());
+    UR_EXPECT_FALSE(manager.built->platform_url.has_value());
+    // what the space stores and the override does not name is kept
+    UR_EXPECT_TRUE(manager.built->alt_url == std::optional<std::string>("https://alt.example"));
+  }
+}
+
+// No override is the launch exactly as without one.
+UR_TEST(noOverrideIsTheOrdinaryLaunch) {
+  RecordingManager plain;
+  plain.storedJson = kStoredBundledJson;
+  plain.activeKey = CustomKey();
+  LaunchUrNetworkSpace<Key, Values>(plain);
+  RecordingManager resolved;
+  resolved.storedJson = kStoredBundledJson;
+  resolved.activeKey = CustomKey();
+  const Space space =
+      LaunchUrNetworkSpace<Key, Values>(resolved, ResolveLaunchOverride(nullptr, "staging"));
+  UR_EXPECT_TRUE(resolved.calls == plain.calls);
+  UR_EXPECT_TRUE(space.key.host_name == CustomKey().host_name);
+}
+
 // ---- the call sites ---------------------------------------------------------
 
 UR_TEST(theGuiBootstrapsTheSpaceWhereItCreatesTheManager) {
@@ -393,8 +484,17 @@ UR_TEST(theGuiBootstrapsTheSpaceWhereItCreatesTheManager) {
   const std::string init = FunctionBody(source, "bool SdkHost::Initialize(");
   UR_EXPECT_TRUE_MSG("Initialize creates the manager", Has(init, "newNetworkSpaceManager("));
   UR_EXPECT_TRUE_MSG("Initialize runs the launch (the legacy move and the bootstrap ride in it) "
-                     "and binds the space it answers",
-                     Has(init, "networkSpace_ = LaunchUrNetworkSpace(*spaceManager_);"));
+                     "with the environment's override and binds the space it answers",
+                     Has(init, "networkSpace_ = LaunchUrNetworkSpace(*spaceManager_, launchOverride);"));
+  UR_EXPECT_TRUE_MSG("the override is resolved from the environment and warned on every launch",
+                     Position(init, "LaunchOverrideFromEnvironment()") <
+                             Position(init, "This client is NOT talking to ") &&
+                         Position(init, "This client is NOT talking to ") <
+                             Position(init, "LaunchUrNetworkSpace("));
+  const std::string server = FunctionBody(source, "SdkHost::NetworkServer SdkHost::CurrentNetworkServer(");
+  UR_EXPECT_TRUE_MSG("Use default network means the launch's network",
+                     Has(server, "LaunchOverrideFromEnvironment()") &&
+                         !Has(server, "getenv("));
   UR_EXPECT_TRUE_MSG("the launch runs before anything is derived from the space",
                      Position(init, "LaunchUrNetworkSpace(") < Position(init, "getApi()"));
   UR_EXPECT_TRUE_MSG("the GUI binds the user's choice, not always the bundled space",
@@ -409,6 +509,28 @@ UR_TEST(theGuiBootstrapsTheSpaceWhereItCreatesTheManager) {
                      Has(apply, "StoredNetworkSpaceValues(*spaceManager_, key)"));
   UR_EXPECT_TRUE_MSG("ApplyNetworkServer names no migration host of its own",
                      !Has(apply, "migration_host_name"));
+  // under an override, the override's host keeps the override's env, and its
+  // space is bound but never made active
+  UR_EXPECT_TRUE_MSG("ApplyNetworkServer keys the host by the launch's env",
+                     Position(apply, "LaunchOverrideFromEnvironment()") <
+                             Position(apply, "EnvNameFor(launchOverride, hostName)") &&
+                         Has(apply, "key.env_name = envName;") &&
+                         !Has(apply, "key.env_name = std::string(kUrEnvName);"));
+  UR_EXPECT_TRUE_MSG("ApplyNetworkServer activates all but the override's space",
+                     Has(apply, "spaceManager_->setActiveNetworkSpace(*networkSpace_);") &&
+                         Position(apply, "if (!IsLaunchOverrideSpace(launchOverride, hostName, envName)) {") <
+                             Position(apply, "spaceManager_->setActiveNetworkSpace(*networkSpace_);"));
+  const std::string extender = FunctionBody(source, "bool SdkHost::SetPrivateExtender(");
+  UR_EXPECT_TRUE_MSG("a private extender saved in the override's space leaves the active one",
+                     Has(extender, "spaceManager_->setActiveNetworkSpace(*networkSpace_);") &&
+                         Position(extender, "if (!IsLaunchOverrideSpace(LaunchOverrideFromEnvironment(),") <
+                             Position(extender, "spaceManager_->setActiveNetworkSpace(*networkSpace_);"));
+  size_t activations = 0;
+  for (size_t at = source.find("setActiveNetworkSpace("); at != std::string::npos;
+       at = source.find("setActiveNetworkSpace(", at + 1)) {
+    ++activations;
+  }
+  UR_EXPECT_EQ(2, activations);
 }
 
 UR_TEST(theDaemonMovesTheLegacySpaceWhereItCreatesItsManager) {

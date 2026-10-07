@@ -294,9 +294,16 @@ class AccountPage : public Gtk::Box {
   AccountUsageBar* usageBar_ = nullptr;
   Gtk::Button* upgradeButton_ = nullptr;
   Gtk::Label* dailyValue_ = nullptr;
+  // the usage bar's three figures, which its legend only colours
+  Gtk::Label* usedValue_ = nullptr;
+  Gtk::Label* pendingValue_ = nullptr;
+  Gtk::Label* availableValue_ = nullptr;
   Gtk::Label* referralTotals_ = nullptr;
   Gtk::Label* referralBonus_ = nullptr;
   Gtk::Button* referralRetry_ = nullptr;  // shown only on a failed read
+  Gtk::Label* referralDetail_ = nullptr;  // the program's rule, from the terms
+  Gtk::Widget* codesCountRow_ = nullptr;  // hidden while no fetch has answered
+  Gtk::Label* codesCountValue_ = nullptr;
   Gtk::Button* portalRow_ = nullptr;  // Manage Subscription (disabled in flight)
 
   // ---- pane B: profile -------------------------------------------------------

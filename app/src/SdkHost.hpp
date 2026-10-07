@@ -402,6 +402,9 @@ class SdkHost {
   using DrawerEventHandler = std::function<void(DrawerEvent event)>;
 
   bool Initialize(const std::string& storageDir, const std::string& logDir);
+  // Why the last Initialize failed, as the SDK said it; empty after a success.
+  // The startup shows it (StartupFailure.hpp): a failed start has no window.
+  const std::string& InitializeError() const { return initializeError_; }
   bool IsLoggedIn();
 
   // Account discovery for the email-first login flow (Api::authLogin with just
@@ -460,7 +463,10 @@ class SdkHost {
   //
   // Writes the host's values OVER what the space already stores under that
   // key, so re-applying the same server (or returning to one used before)
-  // keeps the VLESS server and the private extender saved in it.
+  // keeps the VLESS server and the private extender saved in it. The space is
+  // made active, so the next launch binds it, except the space of the launch's
+  // URNETWORK_NETWORK_HOST override, which its host is keyed to with the
+  // override's env and which stays bound for this process only.
   bool ApplyNetworkServer(const std::string& hostName, const std::string& apiUrl,
                           const std::string& connectUrl);
   // The active space serialized for the daemon's start_tunnel: the daemon
@@ -1427,6 +1433,7 @@ class SdkHost {
   void ReleaseDeviceRpcDefaultPort();
 
   std::mutex mutex_;
+  std::string initializeError_;  // InitializeError(); the main thread's alone
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::Api> api_;

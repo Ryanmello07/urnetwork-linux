@@ -1615,6 +1615,35 @@ void EarningsPage::Load() {
   }
 }
 
+void EarningsPage::ResetForSignOut() {
+  // what marks the own row on the boards; the next load reads it from the jwt
+  ownNetworkId_.clear();
+  // A switch's set still in flight was the departed account's. Load's epoch
+  // drops its answer, so it is abandoned here: its watchdog would otherwise
+  // report it failed to whoever signs in next, and the switch would stay
+  // insensitive until then.
+  ++pointsPublicFlow_.generation;
+  pointsPublicFlow_.timer.disconnect();
+  settingPointsPublic_ = false;
+  if (pointsPublicToggle_ != nullptr) pointsPublicToggle_->set_sensitive(true);
+  ++rankingFlow_.generation;
+  rankingFlow_.timer.disconnect();
+  settingRankingPublic_ = false;
+  publicToggle_->set_sensitive(true);
+  // the points header's emoji and switch; with the edit markers, or the old
+  // account's last edit would keep the next one's first `me` from applying
+  pointsPublic_ = false;
+  emojiTag_.clear();
+  ownFlagsClock_ = 0;
+  ownFlagsEditedAt_ = 0;
+  ownFlagsAppliedAt_ = 0;
+  SetPointsToggle(false);
+  // the public leaderboard switch: ApplyRanking writes it only with a ranking
+  rankingPublic_ = false;
+  SetRankingToggle(false);
+  Load();
+}
+
 void EarningsPage::ApplyBreakpoint(int widthDip) {
   const int lanes = widthDip >= kThreePaneDip ? 3 : (widthDip >= kTwoPaneDip ? 2 : 1);
   if (lanes_ == lanes) return;

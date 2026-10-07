@@ -108,6 +108,7 @@ anonymous
 anything_else
 app_split_active_none
 app_split_rules
+app_start_failed_detail
 app_too_old_for_daemon
 app_version
 apple
@@ -751,6 +752,7 @@ offer_timeline_reminder
 offer_timeline_today
 offer_timeline_trial_starts
 on
+onb_tray_balloon_hide
 onboarding_step_of
 opening_bittensor_wallet_in_browser
 opening_wallet_in_browser
