@@ -702,6 +702,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/NetworkQuickPickTest.cpp',
     'tests/ProvideModeGlyphTest.cpp',
     'tests/EarningsRankingWiringTest.cpp',
+    'tests/DeveloperActionsWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -788,6 +789,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # same way.
               # ProvideModeGlyphTest reads the provide indicators' two pages the same way.
               # EarningsRankingWiringTest reads the own ranking block the same way.
+              # DeveloperActionsWiringTest reads the Developer page's action buttons the
+              # same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

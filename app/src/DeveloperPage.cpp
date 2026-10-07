@@ -387,23 +387,20 @@ void WriteCell(Gtk::Label& cell, const Glib::ustring& text, int sizePx, const Rg
 }
 
 // ---- action buttons (spec §2.3 MakeActionButton) ---------------------------
-// primary = the pale-yellow accent pill (windows AccentButtonStyle, here
-// .suggested-action); otherwise a flat card-row button wearing the accent as
-// its FOREGROUND. The 48px URButton pills are the sign-in CTA role — never
-// used here.
-Gtk::Button* MakeActionButton(const Glib::ustring& text, bool primary) {
+// The one button role that fits a dense diagnostic surface: a flat card-row
+// button wearing the accent as its foreground, for every action. There is
+// deliberately no primary variant: its fill was the pale lime #EFF7BB, which
+// is kept for earnings and brand accents, and this page has no earnings on
+// it (windows 5d64131). The 48px URButton pills are the sign-in CTA role —
+// never used here.
+Gtk::Button* MakeActionButton(const Glib::ustring& text) {
   auto* button = Gtk::make_managed<Gtk::Button>();
   button->set_halign(Gtk::Align::START);
   button->set_valign(Gtk::Align::CENTER);
-  if (primary) {
-    button->set_label(text);
-    button->add_css_class("suggested-action");
-  } else {
-    button->add_css_class("flat");
-    auto* label = Gtk::make_managed<Gtk::Label>();
-    label->set_markup(Span(text, 13, &kUrAccent));
-    button->set_child(*label);
-  }
+  button->add_css_class("flat");
+  auto* label = Gtk::make_managed<Gtk::Label>();
+  label->set_markup(Span(text, 13, &kUrAccent));
+  button->set_child(*label);
   kit::SetAccessibleLabel(*button, text);
   return button;
 }
@@ -610,7 +607,7 @@ void DeveloperPage::Bridge::Run() {
 DeveloperPage::DeveloperPage(SdkHost& host)
     : Gtk::Box(Gtk::Orientation::VERTICAL, 0), host_(host) {
   EnsureBrandCss();   // .ur-body / .ur-caption / .ur-col-header / the pane rows
-  EnsureDrawerCss();  // .ur-card / .ur-mono-* / suggested-action
+  EnsureDrawerCss();  // .ur-card / .ur-mono-*
   set_hexpand(true);
   set_vexpand(true);
 
@@ -797,14 +794,14 @@ void DeveloperPage::BuildIntroCard() {
 
   auto* actions = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
 
-  // Refresh — PRIMARY and never gated: it only re-reads, and it is how a user
-  // retries after starting the service.
-  auto* refresh = MakeActionButton(T_("dev_refresh", "Refresh"), true);
+  // Refresh — never gated: it only re-reads, and it is how a user retries
+  // after starting the service. It wears the same role as its siblings.
+  auto* refresh = MakeActionButton(T_("dev_refresh", "Refresh"));
   refresh->signal_clicked().connect([this] { SubmitPoll(); });
   actions->append(*refresh);
 
   simulateBtn_ = MakeActionButton(
-      T_("dev_simulate_network_change", "Simulate network change"), false);
+      T_("dev_simulate_network_change", "Simulate network change"));
   simulateBtn_->set_sensitive(false);  // enabled iff the snapshot has a device
   simulateBtn_->signal_clicked().connect([this] {
     RunAction(Action::SimulateNetworkChange,
@@ -812,7 +809,7 @@ void DeveloperPage::BuildIntroCard() {
   });
   actions->append(*simulateBtn_);
 
-  syncBtn_ = MakeActionButton(T_("dev_sync", "Sync"), false);
+  syncBtn_ = MakeActionButton(T_("dev_sync", "Sync"));
   syncBtn_->set_sensitive(false);
   syncBtn_->signal_clicked().connect(
       [this] { RunAction(Action::Sync, T_("dev_sync", "Sync")); });
@@ -820,7 +817,7 @@ void DeveloperPage::BuildIntroCard() {
 
   // Check for updates — NEVER gated on windows (an unauthenticated HTTP GET
   // needs no session, device or service).
-  checkUpdatesBtn_ = MakeActionButton(T_("dev_check_updates", "Check for updates"), false);
+  checkUpdatesBtn_ = MakeActionButton(T_("dev_check_updates", "Check for updates"));
   checkUpdatesBtn_->signal_clicked().connect([this] {
     if (updates_) {
       // The outcome arrives through ApplyUpdateCheck (the window replays
@@ -938,7 +935,7 @@ void DeveloperPage::BuildMeasurementsCard() {
     }
   }
 
-  auto* reset = MakeActionButton(T_("dev_reset_measurements", "Reset measurements"), false);
+  auto* reset = MakeActionButton(T_("dev_reset_measurements", "Reset measurements"));
   reset->signal_clicked().connect([this] {
     RunAction(Action::ResetMetrics, T_("dev_reset_measurements", "Reset measurements"));
   });
@@ -980,7 +977,7 @@ void DeveloperPage::BuildExitsCard() {
       12, &kUrTextMuted));
 
   // Shuffle acts on the whole window, so it lives under the table, not in a row.
-  auto* shuffle = MakeActionButton(T_("dev_shuffle_exits", "Shuffle all exits"), false);
+  auto* shuffle = MakeActionButton(T_("dev_shuffle_exits", "Shuffle all exits"));
   shuffle->signal_clicked().connect([this] { RunShuffleExits(); });
   card.body->append(*shuffle);
 
@@ -1022,10 +1019,10 @@ void DeveloperPage::BuildProbeSuiteCard() {
 
   // The pair reads as one control: half of two always-live buttons would no-op.
   auto* controls = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  probeStartBtn_ = MakeActionButton(T_("dev_probe_suite_start", "Start probe suite"), false);
+  probeStartBtn_ = MakeActionButton(T_("dev_probe_suite_start", "Start probe suite"));
   probeStartBtn_->signal_clicked().connect([this] { RunProbeSuite(true); });
   controls->append(*probeStartBtn_);
-  probeStopBtn_ = MakeActionButton(T_("dev_probe_suite_stop", "Stop"), false);
+  probeStopBtn_ = MakeActionButton(T_("dev_probe_suite_stop", "Stop"));
   probeStopBtn_->set_sensitive(false);
   probeStopBtn_->signal_clicked().connect([this] { RunProbeSuite(false); });
   controls->append(*probeStopBtn_);
@@ -1081,11 +1078,11 @@ void DeveloperPage::BuildSessionLogCard() {
   });
   controls->append(*logFollow_);
 
-  auto* copyButton = MakeActionButton(T_("copy", "Copy"), false);
+  auto* copyButton = MakeActionButton(T_("copy", "Copy"));
   copyButton->signal_clicked().connect([this] { CopySessionLog(); });
   controls->append(*copyButton);
 
-  auto* saveButton = MakeActionButton(T_("save_logs", "Save logs"), false);
+  auto* saveButton = MakeActionButton(T_("save_logs", "Save logs"));
   saveButton->signal_clicked().connect([this] { SaveSessionLog(); });
   controls->append(*saveButton);
   card.body->append(*controls);
@@ -1197,7 +1194,7 @@ void DeveloperPage::BuildOverrideSections() {
 
     if (section.section == Section::Probing) {
       auto* probeAll =
-          MakeActionButton(T_("dev_probe_all_exits_now", "Probe all exits now"), false);
+          MakeActionButton(T_("dev_probe_all_exits_now", "Probe all exits now"));
       probeAll->signal_clicked().connect([this] {
         RunAction(Action::ProbeAllExits, T_("dev_probed_exits", "Probed exits"));
       });
@@ -1205,7 +1202,7 @@ void DeveloperPage::BuildOverrideSections() {
     }
     if (section.section == Section::Observability) {
       auto* reset = MakeActionButton(
-          T_("dev_reset_to_shipped_defaults", "Reset to shipped defaults"), false);
+          T_("dev_reset_to_shipped_defaults", "Reset to shipped defaults"));
       reset->signal_clicked().connect([this] {
         RunAction(Action::ResetSettings,
                   T_("dev_reset_to_shipped_defaults", "Reset to shipped defaults"));
@@ -1568,7 +1565,7 @@ void DeveloperPage::ApplyExits(const std::vector<urnet::Exit>& exits) {
 
       // Migrate is NOT destructive — it moves flows off an exit — so it wears
       // the accent, not danger.
-      auto* migrate = MakeActionButton(T_("dev_migrate", "Migrate"), false);
+      auto* migrate = MakeActionButton(T_("dev_migrate", "Migrate"));
       migrate->set_halign(Gtk::Align::CENTER);
       kit::SetAccessibleLabel(*migrate,
                               Glib::ustring(T_("dev_migrate", "Migrate")) + " " + shortId);
