@@ -371,6 +371,7 @@ void SdkHost::ReleaseDeviceRpcDefaultPort() {
 
 bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDir) {
   std::scoped_lock lock(mutex_);
+  initializeError_.clear();
   // A sign-out an earlier run could not deliver: the first reconcile (the
   // health poll's) or a Connect delivers it before anything starts.
   signOut_.Load();
@@ -435,6 +436,7 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     return true;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] initialize failed: %s\n", e.what());
+    initializeError_ = e.what();
     return false;
   }
 }

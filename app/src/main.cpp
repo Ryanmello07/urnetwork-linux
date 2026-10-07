@@ -27,6 +27,7 @@
 #include "RuntimePaths.hpp"
 #include "SdkHost.hpp"
 #include "SingleInstance.hpp"
+#include "StartupFailure.hpp"
 #include "Tray.hpp"
 #include "TrayPolicy.hpp"
 #include "UrTheme.hpp"
@@ -125,6 +126,7 @@ int main(int argc, char** argv) {
 
   std::shared_ptr<urnw::MainWindow> window;
   std::shared_ptr<urnw::Tray> tray;
+  bool startFailed = false;  // main's exit status says so (StartupFailure.hpp)
   // This process's own launch is the first activation; every later one is a
   // launch handed to this instance.
   urnw::instance::Activations activations(arguments.kind);
@@ -174,9 +176,12 @@ int main(int argc, char** argv) {
     // the shared storage dir, which a process about to exit has no business
     // touching.
     if (!host->Initialize(storageDir, logDir)) {
-      g_printerr("failed to initialize SDK\n");
+      // No window and no tray can come now. Said where a desktop launch can
+      // see it, not only on stderr, and the app ends when the dialog closes.
+      startFailed = true;
+      g_printerr("%s", urnw::startup_failure::StderrLine(host->InitializeError(), logDir).c_str());
       urnw::instance::BeginExiting();
-      app->quit();
+      if (!urnw::startup_failure::Show(*app, host->InitializeError(), logDir)) app->quit();
       return;
     }
     adw_init();  // libadwaita stylesheet + platform integration
@@ -369,5 +374,6 @@ int main(int argc, char** argv) {
         serve(launch);
       });
 
-  return app->run(argc, argv);
+  const int status = app->run(argc, argv);
+  return startFailed ? urnw::startup_failure::kExitStatus : status;
 }

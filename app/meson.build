@@ -193,6 +193,7 @@ if build_gui
 executable('urnetwork-gui',
   sources : [
     'src/main.cpp',
+    'src/StartupFailure.cpp',
     'src/SingleInstance.cpp',
     'src/ControlClient.cpp',
     'src/RpcSessionStore.cpp',
@@ -701,6 +702,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/AppPrefsTest.cpp',
     'tests/WindowGeometryTest.cpp',
     'tests/SeedphraseInputWiringTest.cpp',
+    'tests/StartupFailureTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -788,6 +790,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # WindowGeometryTest reads the window's restore and save and their
               # callers the same way.
               # SeedphraseInputWiringTest reads the seedphrase step the same way.
+              # StartupFailureTest reads the failed start's main.cpp branch and its
+              # dialog the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

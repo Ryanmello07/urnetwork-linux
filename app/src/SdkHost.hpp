@@ -402,6 +402,9 @@ class SdkHost {
   using DrawerEventHandler = std::function<void(DrawerEvent event)>;
 
   bool Initialize(const std::string& storageDir, const std::string& logDir);
+  // Why the last Initialize failed, as the SDK said it; empty after a success.
+  // The startup shows it (StartupFailure.hpp): a failed start has no window.
+  const std::string& InitializeError() const { return initializeError_; }
   bool IsLoggedIn();
 
   // Account discovery for the email-first login flow (Api::authLogin with just
@@ -1430,6 +1433,7 @@ class SdkHost {
   void ReleaseDeviceRpcDefaultPort();
 
   std::mutex mutex_;
+  std::string initializeError_;  // InitializeError(); the main thread's alone
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::Api> api_;

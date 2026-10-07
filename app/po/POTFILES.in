@@ -48,6 +48,7 @@ src/UsageBar.cpp
 src/DataInfoSheet.cpp
 src/EarningsPage.cpp
 src/SolanaWalletSheet.cpp
+src/StartupFailure.cpp
 src/AccountPage.cpp
 src/ReferralRoyalty.cpp
 src/ReferralCodeBox.cpp
