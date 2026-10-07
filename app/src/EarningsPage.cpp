@@ -5527,7 +5527,7 @@ void EarningsPage::SettlePointsBoardPreview() {
 
 void EarningsPage::ApplyProvideState(const LiveStats& stats) {
   const auto visual = ProvideModeGlyphFor(stats.provideMode, stats.providePaused);
-  provideModeDot_.set_markup("<span foreground='" + HexForMarkup(visual.color) + "'>" +
+  provideModeDot_.set_markup(std::string("<span foreground='") + visual.colorHex + "'>" +
                              visual.glyph + "</span>");
   controlMode_ = host_.GetProvideControlMode();
   if (provideModeValue_) provideModeValue_->set_text(ProvideModeValueText(controlMode_));

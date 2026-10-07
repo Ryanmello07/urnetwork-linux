@@ -23,6 +23,7 @@
 #include "LocationSelection.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
 #include "ProvideLine.hpp"
+#include "ProvideModeGlyph.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -1876,18 +1877,12 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
                                                "   ↑ " + FormatBitRate(stats.upBitsPerSecond))
                                : Glib::ustring());
   }
-  // provide indicator: solid dot = Network tier, ring = Public
+  // provide indicator: solid dot = Network tier, ring = Public, muted = not
+  // providing; the Earnings page's rule (ProvideModeGlyph.hpp)
   if (provideDot_) {
-    const char* glyph = "●";
-    const char* color = "#FF6C58";
-    switch (stats.provideMode) {
-      case 3: glyph = "◉"; color = stats.providePaused ? "#F5C242" : "#87FB67"; break;
-      case 1:
-      case 2: color = "#87FB67"; break;
-      default: break;
-    }
-    provideDot_->set_markup(std::string("<span foreground='") + color + "'>" + glyph +
-                            "</span>");
+    const auto visual = ProvideModeGlyphFor(stats.provideMode, stats.providePaused);
+    provideDot_->set_markup(std::string("<span foreground='") + visual.colorHex + "'>" +
+                            visual.glyph + "</span>");
   }
   if (discoverableText_) {
     discoverableText_->set_text(
