@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <utility>
 
 #include <adwaita.h>
 #include <glib.h>
@@ -992,6 +993,30 @@ void ConnectPage::BuildPaneB() {
   connectionsHeader.trailing->append(*connectionsClear_);
   paneB_.content->append(*connectionsHeader.root);
 
+  // 3.3' the verdict ratio bar under the header: 3px of allowed (green),
+  // blocked (coral) and bypassed (amber), the colors the row dots print.
+  // Decorative: the session rows carry the same numbers in words.
+  verdictRatioBar_ = Gtk::make_managed<Gtk::DrawingArea>();
+  verdictRatioBar_->set_content_height(3);
+  verdictRatioBar_->set_hexpand(true);
+  verdictRatioBar_->set_visible(false);  // nothing to proportion yet
+  kit::MarkDecorative(*verdictRatioBar_);
+  verdictRatioBar_->set_draw_func(
+      [this](const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {
+        double x = 0;
+        const std::pair<double, Rgba> shares[] = {{verdictRatio_.allowed, kUrGreen},
+                                                  {verdictRatio_.blocked, kUrCoral},
+                                                  {verdictRatio_.bypassed, kUrAmber}};
+        for (const auto& [share, color] : shares) {
+          const double w = share * width;
+          cr->set_source_rgba(color.r, color.g, color.b, color.a);
+          cr->rectangle(x, 0, w, height);
+          cr->fill();
+          x += w;
+        }
+      });
+  paneB_.content->append(*verdictRatioBar_);
+
   // 3.3a the verdict filter (Windows' SelectorBar): the three verdicts the row
   // dots print, plus All. The labels ellipsize so the four fit the narrowest
   // two-pane activity column without widening it.
@@ -1920,9 +1945,31 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
     connectionsClear_->set_visible(
         connection_filter::ClearOffered(verdictFilter_, connectionsQuery_, connectionsGrouped_));
   }
+  ApplyVerdictRatioBar();
   ApplySessionCardsVisibility();
   ApplyConnectionSelectionVisuals();
   ApplyInspector();  // a selection that aged out of the feed must SAY so
+}
+
+// The ratio bar's three shares, recomputed only on the block-actions and
+// block-stats pushes: one pass over the cached window for the bypassed count
+// and a redraw, so a live session pays nothing per frame. It collapses while
+// there is nothing to proportion rather than drawing an empty track.
+void ConnectPage::ApplyVerdictRatioBar() {
+  if (!verdictRatioBar_) return;
+  int64_t bypassed = 0;
+  if (blockActions_) {
+    for (const auto& action : *blockActions_) {
+      if (!action.Block && action.Local) ++bypassed;
+    }
+  }
+  const auto ratio = connection_filter::VerdictRatio(
+      blockStats_ ? blockStats_->AllowedCount : 0, blockStats_ ? blockStats_->BlockedCount : 0,
+      bypassed);
+  verdictRatioBar_->set_visible(ratio.has_value());
+  if (!ratio) return;
+  verdictRatio_ = *ratio;
+  verdictRatioBar_->queue_draw();
 }
 
 // The 1s reading of the meta lines' age: one string per row from the counters
@@ -2815,6 +2862,7 @@ void ConnectPage::RefreshFeeds(bool force) {
     if (force || changed) {
       blockStats_ = stats;
       ApplySessionRows();
+      ApplyVerdictRatioBar();  // two of the bar's three inputs
       if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
     }
   }
@@ -2989,6 +3037,7 @@ void ConnectPage::OnHostEvent(DrawerEvent event) {
     case DrawerEvent::BlockStats:
       blockStats_ = host_.BlockStatsSnapshot();
       ApplySessionRows();
+      ApplyVerdictRatioBar();  // two of the bar's three inputs
       if (splitRulesSheet_ && splitRulesSheet_->is_visible()) splitRulesSheet_->Refresh();
       break;
     case DrawerEvent::Overrides:

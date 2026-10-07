@@ -254,3 +254,28 @@ UR_TEST(ConnectActivity_GroupByHostFoldsInsideThePass) {
   UR_EXPECT_TRUE(Mentions(ActivityBody(page, "std::string ConnectionCountText("),
                           "TN_(\"adv_connection_count\", \"{} connection\", \"{} connections\","));
 }
+
+// The verdict ratio bar sits under the Connections header, decorative, and is
+// recomputed on the block-actions and block-stats pushes, never per frame.
+UR_TEST(ConnectActivity_TheRatioBarRidesTheFeedPushes) {
+  const std::string page = ReadActivitySource("ConnectPage.cpp");
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::BuildPaneB()"),
+                            {"paneB_.content->append(*connectionsHeader.root);",
+                             "verdictRatioBar_ = Gtk::make_managed<Gtk::DrawingArea>();",
+                             "verdictRatioBar_->set_content_height(3);",
+                             "kit::MarkDecorative(*verdictRatioBar_);",
+                             "paneB_.content->append(*verdictRatioBar_);",
+                             "T_(\"adv_filter_all\", \"All\")"}));
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::ApplyVerdictRatioBar()"),
+                            {"if (!action.Block && action.Local) ++bypassed;",
+                             "connection_filter::VerdictRatio(",
+                             "verdictRatioBar_->set_visible(ratio.has_value());",
+                             "verdictRatioBar_->queue_draw();"}));
+  UR_EXPECT_TRUE(Mentions(ActivityBody(page, "void ConnectPage::ApplyConnectionsList("),
+                          "ApplyVerdictRatioBar();"));
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::RefreshFeeds("),
+                            {"host_.BlockStatsSnapshot()", "ApplyVerdictRatioBar();"}));
+  UR_EXPECT_TRUE(InSequence(ActivityBody(page, "void ConnectPage::OnHostEvent("),
+                            {"case DrawerEvent::BlockStats:", "ApplyVerdictRatioBar();", "break;"}));
+  UR_EXPECT_TRUE(!Mentions(ActivityBody(page, "void ConnectPage::Tick()"), "ApplyVerdictRatioBar"));
+}

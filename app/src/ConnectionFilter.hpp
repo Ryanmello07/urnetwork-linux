@@ -1,9 +1,9 @@
 // What the connect page's activity list shows of the routing-decision feed:
 // the verdict filter (All, Blocked, Tunnelled, Bypassed), the host/address
-// search, the group-by-host fold, and the header count that reads "N hosts
-// of M" while any of them holds rows back. All of it is view-side over the
-// feed the page already caches, so the filter and a push can never disagree
-// about the feed.
+// search, the group-by-host fold, the header count that reads "N hosts of M"
+// while any of them holds rows back, and the verdict ratio bar under the
+// header. All of it is view-side over the feeds the page already caches, so
+// the filter and a push can never disagree about the feed.
 //
 // The three verdicts are the ones the row dots print: blocked, tunnelled
 // (allowed through the tunnel) and bypassed (allowed around it, a local
@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -187,6 +188,30 @@ inline std::vector<Group> FoldGroups(const std::vector<FoldMember>& members) {
   std::stable_sort(groups.begin(), groups.end(),
                    [](const Group& a, const Group& b) { return a.latestMs > b.latestMs; });
   return groups;
+}
+
+// ---- the verdict ratio bar -------------------------------------------------
+
+// The shares of the 3px bar under the Connections header, in its order:
+// allowed (green), blocked (coral), bypassed (amber). Allowed and blocked are
+// the session's BlockStats counts; the bypassed count is the cached window's,
+// the only place a bypass count exists (the SDK keeps no session one), so the
+// bar mixes the two scopes, as Windows' does.
+struct Ratio {
+  double allowed = 0;
+  double blocked = 0;
+  double bypassed = 0;
+};
+
+// nullopt when there is nothing to proportion; a negative count reads as 0.
+// The sum is taken in double, so no count can overflow it.
+inline std::optional<Ratio> VerdictRatio(int64_t allowed, int64_t blocked, int64_t bypassed) {
+  const double a = static_cast<double>(std::max<int64_t>(0, allowed));
+  const double b = static_cast<double>(std::max<int64_t>(0, blocked));
+  const double l = static_cast<double>(std::max<int64_t>(0, bypassed));
+  const double total = a + b + l;
+  if (total <= 0) return std::nullopt;
+  return Ratio{a / total, b / total, l / total};
 }
 
 }  // namespace urnw::connection_filter

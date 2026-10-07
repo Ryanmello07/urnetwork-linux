@@ -259,6 +259,9 @@ class ConnectPage : public Gtk::Box {
   void DrillIntoConnectionGroup(const std::string& host);
   // the meta lines' age on the 1s clock, from each row's own counters
   void RefreshConnectionRowTimes();
+  // the verdict ratio bar under the Connections header (VerdictRatio), on the
+  // block-actions and block-stats pushes only
+  void ApplyVerdictRatioBar();
   void ApplyConnectionSelectionVisuals();
   void SelectConnection(const std::string& id);
   void ApplySessionCardsVisibility();
@@ -537,6 +540,8 @@ class ConnectPage : public Gtk::Box {
   Gtk::Box* connectionsArea_ = nullptr;
   Gtk::Box* connectionsHost_ = nullptr;
   Gtk::Widget* connectionsEmpty_ = nullptr;
+  Gtk::DrawingArea* verdictRatioBar_ = nullptr;
+  connection_filter::Ratio verdictRatio_;  // what the bar last drew
   Gtk::ScrolledWindow* connectionsScroll_ = nullptr;
   // the rows on screen. The selection is held by block-action id, never by
   // index: rows move as the feed moves.

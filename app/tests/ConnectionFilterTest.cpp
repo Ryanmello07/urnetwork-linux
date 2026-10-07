@@ -1,10 +1,12 @@
 // What the connect page's activity list shows of the feed (ConnectionFilter.hpp):
 // the verdict filter, the host/address search, the group-by-host fold, the
 // "N hosts of M" count, when the header offers Clear, and when an empty list
-// stands in for the "no session" sentence.
+// stands in for the "no session" sentence, and the verdict ratio bar's shares.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -23,6 +25,7 @@ using urnw::connection_filter::QueryPasses;
 using urnw::connection_filter::ShowList;
 using urnw::connection_filter::Verdict;
 using urnw::connection_filter::VerdictPasses;
+using urnw::connection_filter::VerdictRatio;
 
 // Each verdict passes exactly its decisions; All passes every one.
 UR_TEST(ConnectionFilter_VerdictsSplitTheFeedThreeWays) {
@@ -188,4 +191,27 @@ UR_TEST(ConnectionFilter_AnEmptyFilteredListIsNotAnEmptySession) {
   UR_EXPECT_FALSE(ShowList(true, false, true, 0));
   UR_EXPECT_FALSE(ShowList(false, true, false, 3));
   UR_EXPECT_FALSE(ShowList(false, false, true, 3));
+}
+
+// Nothing to proportion collapses the bar; otherwise the shares sum to one.
+UR_TEST(ConnectionFilter_TheRatioBarProportionsTheThreeVerdicts) {
+  UR_EXPECT_FALSE(VerdictRatio(0, 0, 0).has_value());
+  UR_EXPECT_FALSE(VerdictRatio(-3, 0, -1).has_value());
+  const auto ratio = VerdictRatio(6, 3, 1);
+  UR_EXPECT_TRUE(ratio.has_value());
+  UR_EXPECT_NEAR(0.6, ratio->allowed, 1e-12);
+  UR_EXPECT_NEAR(0.3, ratio->blocked, 1e-12);
+  UR_EXPECT_NEAR(0.1, ratio->bypassed, 1e-12);
+  UR_EXPECT_NEAR(1.0, ratio->allowed + ratio->blocked + ratio->bypassed, 1e-12);
+  const auto local = VerdictRatio(0, 0, 4);
+  UR_EXPECT_TRUE(local.has_value());
+  UR_EXPECT_NEAR(0.0, local->allowed, 1e-12);
+  UR_EXPECT_NEAR(0.0, local->blocked, 1e-12);
+  UR_EXPECT_NEAR(1.0, local->bypassed, 1e-12);
+  // counts near the int64 limit do not overflow the sum
+  const int64_t huge = std::numeric_limits<int64_t>::max();
+  const auto big = VerdictRatio(huge, huge, 0);
+  UR_EXPECT_TRUE(big.has_value());
+  UR_EXPECT_NEAR(0.5, big->allowed, 1e-12);
+  UR_EXPECT_NEAR(0.5, big->blocked, 1e-12);
 }
