@@ -153,6 +153,12 @@ msgctxt "adv_clear_selection"
 msgid "Clear selection"
 msgstr "Hapus pilihan"
 
+#. Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.
+msgctxt "adv_connection_count"
+msgid "{} connection"
+msgid_plural "{} connections"
+msgstr[0] "{} koneksi"
+
 #. Connection inspector: label of the exit dial failures row.
 msgctxt "adv_exit_dial_failures"
 msgid "Dial failures"
@@ -222,6 +228,11 @@ msgstr "Di luar terowongan"
 msgctxt "adv_filter_tunnelled"
 msgid "Tunnelled"
 msgstr "Melalui terowongan"
+
+#. Connect page, Activity pane: label of the switch beside the search field that folds the list of connections into one row per host (with the count, the summed traffic and the latest decision). Clicking a host's row turns the switch off and searches for that host.
+msgctxt "adv_group_by_host"
+msgid "Group by host"
+msgstr "Kelompokkan menurut host"
 
 #. Connection inspector: label of the host row.
 msgctxt "adv_host"

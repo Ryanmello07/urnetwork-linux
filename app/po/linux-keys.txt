@@ -18,6 +18,7 @@ adv_advanced_mode
 adv_advanced_mode_note
 adv_bytes_total
 adv_clear_selection
+adv_connection_count
 adv_exit_dial_failures
 adv_exit_flows
 adv_exit_flows_total
@@ -32,6 +33,7 @@ adv_exits
 adv_filter_all
 adv_filter_bypassed
 adv_filter_tunnelled
+adv_group_by_host
 adv_host
 adv_inspector
 adv_kill_switch_applying
