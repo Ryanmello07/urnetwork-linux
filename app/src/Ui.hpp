@@ -80,6 +80,13 @@ Gtk::Label* MakeCaption(const std::string& text);
 
 void RemoveAllChildren(Gtk::Box& box);
 void SetPointerCursor(Gtk::Widget& widget);
+// Click-to-copy text as a real button: `label`, styled by the caller, inside
+// a button with the platform's chrome off (.ur-copy-text), so the text is in
+// the tab order, Enter or Space copies it and a screen reader hears a button
+// named by the text and described by `hint` ("Copy to Clipboard"), which is
+// also its tooltip. A label alone could only be clicked.
+Gtk::Button* MakeCopyTextButton(Gtk::Label& label, const Glib::ustring& hint,
+                                std::function<void()> copy);
 // Pop a toast on the nearest enclosing AdwToastOverlay (MainWindow wraps its
 // page stack in one; the detail sheets carry their own). No-op without one.
 void ShowToast(Gtk::Widget& context, const std::string& message);

@@ -248,6 +248,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   bool wideLogin_ = false;
   // reveal rings (the signed-out Hero Bloom table)
   motion::MotionBin* brandBin_ = nullptr;      // the wordmark's reveal ring (120ms beat)
+  int64_t revealStartedUs_ = 0;  // monotonic start of the reveal in flight, 0 for none
   motion::MotionBin* emailGroupBin_ = nullptr;
   motion::MotionBin* getStartedBin_ = nullptr;
   motion::MotionBin* orBin_ = nullptr;
@@ -400,6 +401,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   // tray app: skip window-widget updates while hidden (resynced on show) so a
   // hidden window doesn't churn on high-frequency SDK updates
   bool windowVisible_ = false;
+  bool homeRevealed_ = false;  // Home has shown once in this window (its entrance)
   sigc::connection appFocusSync_;      // the pending coalesced focus reading
   sigc::connection geometrySave_;      // the pending save after a resize
   signin::AppFocusAway appFocusAway_;  // how long the coalesced reading was away

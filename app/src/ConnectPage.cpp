@@ -12,6 +12,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 
+#include "DisplayText.hpp"
 #include "ExtenderProvideRowPaint.hpp"
 #include "FailsafeNotice.hpp"
 #include "FastDnsCopy.hpp"
@@ -22,6 +23,7 @@
 #include "LocationSelection.hpp"
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
 #include "ProvideLine.hpp"
+#include "ProvideModeGlyph.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -1875,18 +1877,12 @@ void ConnectPage::ApplyStats(const LiveStats& stats) {
                                                "   ↑ " + FormatBitRate(stats.upBitsPerSecond))
                                : Glib::ustring());
   }
-  // provide indicator: solid dot = Network tier, ring = Public
+  // provide indicator: solid dot = Network tier, ring = Public, muted = not
+  // providing; the Earnings page's rule (ProvideModeGlyph.hpp)
   if (provideDot_) {
-    const char* glyph = "●";
-    const char* color = "#FF6C58";
-    switch (stats.provideMode) {
-      case 3: glyph = "◉"; color = stats.providePaused ? "#F5C242" : "#87FB67"; break;
-      case 1:
-      case 2: color = "#87FB67"; break;
-      default: break;
-    }
-    provideDot_->set_markup(std::string("<span foreground='") + color + "'>" + glyph +
-                            "</span>");
+    const auto visual = ProvideModeGlyphFor(stats.provideMode, stats.providePaused);
+    provideDot_->set_markup(std::string("<span foreground='") + visual.colorHex + "'>" +
+                            visual.glyph + "</span>");
   }
   if (discoverableText_) {
     discoverableText_->set_text(
@@ -3240,7 +3236,7 @@ void ConnectPage::ApplyLocationRow() {
   const auto& location = selectedLocation_;
   Glib::ustring text = T_("best_available_provider", "Best available provider");
   if (!IsBestAvailableSelected(location)) {
-    std::string displayName = location->name.value_or(std::string());
+    std::string displayName = SanitizeExternalDisplayText(location->name.value_or(std::string()));
     if (peers_) {
       for (const auto& peer : *peers_) {
         if (IsPeerSelected(location, peer)) {
@@ -3302,12 +3298,13 @@ void ConnectPage::ApplyPeersList() {
     const Glib::ustring name = PeerDisplayName(peer);
     row.title->set_text(name);
     // what the device IS — two phones with the same name are still distinct
-    row.meta->set_text(peer.DeviceSpec);
+    const Glib::ustring spec = SanitizeExternalDisplayText(peer.DeviceSpec);
+    row.meta->set_text(spec);
     CapNatural(row.title, 18);
     CapNatural(row.meta, 14);
     kit::MarkDecorative(*row.title);
     kit::MarkDecorative(*row.meta);
-    kit::SetAccessibleLabel(*row.root, name + ", " + Glib::ustring(peer.DeviceSpec));
+    kit::SetAccessibleLabel(*row.root, name + ", " + spec);
     peersHost_->append(*row.root);
   }
 }

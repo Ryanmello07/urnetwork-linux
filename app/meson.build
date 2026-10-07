@@ -703,6 +703,18 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/WindowGeometryTest.cpp',
     'tests/SeedphraseInputWiringTest.cpp',
     'tests/StartupFailureTest.cpp',
+    'tests/LocationRowNameTest.cpp',
+    'tests/LocationsSheetWiringTest.cpp',
+    'tests/CopyTextButtonWiringTest.cpp',
+    'tests/DisplayTextTest.cpp',
+    'tests/NetworkQuickPickTest.cpp',
+    'tests/ProvideModeGlyphTest.cpp',
+    'tests/EarningsRankingWiringTest.cpp',
+    'tests/DeveloperActionsWiringTest.cpp',
+    'tests/RevealBreadcrumbsWiringTest.cpp',
+    'tests/HomeEntranceWiringTest.cpp',
+    'tests/ConnectCanvasRimWiringTest.cpp',
+    'tests/PlanPickerWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -743,8 +755,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # and extender panel, and their host feed, the same way.
               # QuickActionWiringTest reads the quick actions' host writers, press,
               # row menu and toast the same way.
-              # SplitRulesSheetWiringTest reads the split rules sheet's search and chips
-              # the same way.
+              # SplitRulesSheetWiringTest reads the split rules sheet's search, chips and
+              # row buttons the same way.
               # ConnectFoldDoorsWiringTest reads the connect page's second doors the same
               # way.
               # SignOutWiringTest reads SdkHost, the health poll and the pages' sign-out
@@ -792,6 +804,21 @@ urnetwork_tests = executable('urnetwork-tests',
               # SeedphraseInputWiringTest reads the seedphrase step the same way.
               # StartupFailureTest reads the failed start's main.cpp branch and its
               # dialog the same way.
+              # LocationsSheetWiringTest reads the location chooser's rows, the Network
+              # page's row name and their css the same way.
+              # CopyTextButtonWiringTest reads the click-to-copy texts' sheets and their
+              # button the same way.
+              # DisplayTextTest reads the external names' display sites the same way.
+              # NetworkQuickPickTest reads the Network page's best available detail the
+              # same way.
+              # ProvideModeGlyphTest reads the provide indicators' two pages the same way.
+              # EarningsRankingWiringTest reads the own ranking block the same way.
+              # DeveloperActionsWiringTest reads the Developer page's action buttons the
+              # same way.
+              # RevealBreadcrumbsWiringTest reads the window reveal's log lines the same way.
+              # HomeEntranceWiringTest reads the root stack's sign-in swap the same way.
+              # ConnectCanvasRimWiringTest reads the hero canvas's rim and orbits the same way.
+              # PlanPickerWiringTest reads the plan cards and their css the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

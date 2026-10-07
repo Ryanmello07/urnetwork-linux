@@ -153,6 +153,11 @@ msgctxt "adv_always_tunnel"
 msgid "Always tunnel"
 msgstr "始终经隧道"
 
+#. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
+msgctxt "adv_best_available_note"
+msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
+msgstr "URnetwork 会为你挑选运行正常且最快的提供商，不限位置，并随网络变化重新挑选。"
+
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
 msgctxt "adv_block_host"
 msgid "Block this host"
@@ -418,6 +423,11 @@ msgstr "覆盖"
 msgctxt "adv_packets_total"
 msgid "Packets (total)"
 msgstr "数据包（总计）"
+
+#. Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.
+msgctxt "adv_pick_location_note"
+msgid "Pick a country, region, city or device in the list to connect there instead."
+msgstr "如需改为连接到特定位置，请在列表中选择国家、地区、城市或设备。"
 
 #. Connection inspector: label of the probe age row.
 msgctxt "adv_probe_age"
@@ -1983,6 +1993,11 @@ msgstr "此设备上的另一位用户正通过 URnetwork 连接。请从其会�
 msgctxt "daemon_unreachable"
 msgid "The URnetwork system service is not running. Install or start it, then try again."
 msgstr "URnetwork 系统服务未运行。请安装或启动该服务，然后重试。"
+
+#. Key of the daily data balance row on the Account page, in the data info sheet and under the usage bar: a label beside its right-aligned value, so it carries no colon.
+msgctxt "daily_data_balance"
+msgid "Daily Data Balance"
+msgstr "每日数据余额"
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "daily_data_balance_label"

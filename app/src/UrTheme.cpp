@@ -178,7 +178,8 @@ scrolledwindow.ur-fade-bottom > undershoot.bottom {
 .ur-value.dim-label,
 .ur-row-title.dim-label { color: #989898; }
 .ur-value.ur-label-faint,
-.ur-row-title.ur-label-faint { color: #5A5A5A; }
+.ur-row-title.ur-label-faint,
+.ur-pane-meta.ur-label-faint { color: #5A5A5A; }
 /* ...and a STATE beats a tone. A lime figure (money that arrived, the payout
    wallet's total) or a danger figure carries a third class, so it outranks
    the muted default it is layered on. The same holds for a supporting line

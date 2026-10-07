@@ -723,7 +723,7 @@ everything else is already the documented behavior. **Accessors:** `ThroughputPo
 (`kMinFraction`, mac minNonZeroValue) then renormalized; 0.5px right overshoot kills seams;
 all-zero → faint full-width track (alpha .35). Legend (spacing 12; dot+label spacing 4):
 `used_data_key` → "Used", `pending_data_key` → "Pending", `available_data_key` → "Available".
-Daily row: `daily_data_balance_label` → "Daily Data Balance:" (dim, hexpand) +
+Daily row: `daily_data_balance` → "Daily Data Balance" (dim, hexpand) +
 `FormatByteCountCompact(dailyBalance)`. Separator. Referral row:
 `total_referral_count` → "Total referrals: {}" (hexpand) + `referral_bonus` → "+{} GiB/Month"
 with {} = totalReferrals × 30.

@@ -24,14 +24,18 @@
 
 #include <string>
 
+#include "DisplayText.hpp"
+
 namespace urnw {
 
 // A network peer's display name: DeviceName, else DeviceSpec, else the client id.
-// Shared with the Connect page's location row.
+// Shared with the Connect page's location row. Another device named it, so it
+// is filtered for display (DisplayText.hpp), and a name the filter empties
+// falls through to the next.
 template <class Peer>
 std::string PeerDisplayName(const Peer& peer) {
-  if (!peer.DeviceName.empty()) return peer.DeviceName;
-  if (!peer.DeviceSpec.empty()) return peer.DeviceSpec;
+  if (std::string name = SanitizeExternalDisplayText(peer.DeviceName); !name.empty()) return name;
+  if (std::string spec = SanitizeExternalDisplayText(peer.DeviceSpec); !spec.empty()) return spec;
   return peer.ClientId.value_or(std::string());
 }
 

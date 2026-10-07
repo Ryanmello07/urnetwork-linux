@@ -211,7 +211,8 @@ One predicate (`ApplyMoreOptionsVisibility`, called only from ApplyAdvancedMode 
 Indicator semantics from `stats.provideMode` (an effective-tier bit set: 0 none, 1 network, 2 friends-and-family, 3 public) — per-case only:
 - 3 (public): color = providePaused ? `#F5C242` amber : `#87FB67` green; **ring Visible** (dot + outer ring = Public tier; amber while paused because pause stops public provide only).
 - 1 (network — also Auto while idle) or 2 (friends-and-family): green, solid dot, no ring.
-- default/0: `#FF6C58` coral (not providing), no ring.
+- default/0: `#989898` muted (not providing — a setting the user chose, not an error, so no coral; windows 572c876), no ring.
+One rule, `ProvideModeGlyphFor` (Linux `ProvideModeGlyph.hpp`), shared with the Earnings page's provide-mode row.
 Ring stroke gets the same brush as the dot fill.
 
 Provide mode picker row: Border `UrPaneRowStyle` **MinHeight 44, Padding 8,4** containing `ProvideModeBar` — a 4-item segmented control (WinUI SelectorBar; port as linked toggle group), VCenter, SelectionChanged `OnProvideModeChanged`. Items: `ProvideAutoItem` Loc("auto") “Auto” | `ProvideAlwaysItem` Loc("always") “Always” | `ProvideNetworkItem` Loc("network") “Network” | `ProvideNeverItem` Loc("never") “Never”.

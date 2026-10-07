@@ -153,6 +153,11 @@ msgctxt "adv_always_tunnel"
 msgid "Always tunnel"
 msgstr "Siempre por el túnel"
 
+#. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
+msgctxt "adv_best_available_note"
+msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
+msgstr "URnetwork elige por ti los proveedores operativos más rápidos, sin restricción de ubicación, y vuelve a elegir a medida que cambia la red."
+
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
 msgctxt "adv_block_host"
 msgid "Block this host"
@@ -419,6 +424,11 @@ msgstr "Anulación"
 msgctxt "adv_packets_total"
 msgid "Packets (total)"
 msgstr "Paquetes (total)"
+
+#. Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.
+msgctxt "adv_pick_location_note"
+msgid "Pick a country, region, city or device in the list to connect there instead."
+msgstr "Elige un país, una región, una ciudad o un dispositivo de la lista para conectarte allí."
 
 #. Connection inspector: label of the probe age row.
 msgctxt "adv_probe_age"
@@ -1988,6 +1998,11 @@ msgstr "Otro usuario de este dispositivo está conectado a través de URnetwork.
 msgctxt "daemon_unreachable"
 msgid "The URnetwork system service is not running. Install or start it, then try again."
 msgstr "El servicio del sistema URnetwork no está en ejecución. Instálalo o inícialo y vuelve a intentarlo."
+
+#. Key of the daily data balance row on the Account page, in the data info sheet and under the usage bar: a label beside its right-aligned value, so it carries no colon.
+msgctxt "daily_data_balance"
+msgid "Daily Data Balance"
+msgstr "Saldo de datos diario"
 
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "daily_data_balance_label"

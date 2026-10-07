@@ -1,6 +1,7 @@
-// The split rules sheet's activity search and its amber Local chips. The
-// sheet needs GTK and the SDK, so this reads its source; the match itself is
-// ConnectionFilter.hpp's QueryPasses, which ConnectionFilterTest.cpp covers.
+// The split rules sheet's activity search, its amber Local chips and its rows'
+// buttons. The sheet needs GTK and the SDK, so this reads its source; the
+// match itself is ConnectionFilter.hpp's QueryPasses, which
+// ConnectionFilterTest.cpp covers.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
@@ -84,4 +85,38 @@ UR_TEST(SplitRulesSheet_LocalChipsAreAmber) {
   UR_EXPECT_TRUE(css.find(".ur-chip-amber { color: #F5C242;") != std::string::npos);
   UR_EXPECT_TRUE(css.find(".ur-chip-amber-hi { color: #101010; background-color: #F5C242; }") !=
                  std::string::npos);
+}
+
+// A rule row and an activity row open the editor, so each is a button: in
+// the tab order, opened with Enter or Space and named for a screen reader
+// from what it shows. They used to be boxes with a click gesture, which a
+// keyboard could not reach. Remove and Route locally are buttons beside the
+// row's, never inside it, and Remove is named.
+UR_TEST(SplitRulesSheet_RowsAreNamedButtons) {
+  const std::string sheet = ReadSheetSource("SplitRulesSheet.cpp");
+  UR_EXPECT_TRUE(sheet.find("GestureClick") == std::string::npos);
+  UR_EXPECT_TRUE(SheetInSequence(SheetBody(sheet, "EditorRow MakeEditorRow()"),
+                                 {"out.button = Gtk::make_managed<Gtk::Button>();",
+                                  "out.button->add_css_class(\"ur-card-tappable\");",
+                                  "kit::MarkDecorative(*out.content);",
+                                  "out.button->set_child(*out.content);",
+                                  "out.row->append(*out.button);"}));
+  // the chips neither take focus nor swallow the row's click
+  UR_EXPECT_TRUE(SheetInSequence(SheetBody(sheet, "Gtk::FlowBox* MakeChipFlow()"),
+                                 {"flow->set_can_focus(false);", "flow->set_can_target(false);"}));
+  UR_EXPECT_TRUE(SheetInSequence(
+      SheetBody(sheet, "void SplitRulesSheet::RebuildRules()"),
+      {"auto row = MakeEditorRow();", "row.content->append(*flow);",
+       "kit::SetAccessibleLabel(*row.button, JoinRowName(nameParts));",
+       "row.button->signal_clicked().connect([this, ruleCopy] { OpenEditorForRule(ruleCopy); });",
+       "remove->set_tooltip_text(T_(\"remove\", \"Remove\"));",
+       "kit::SetAccessibleLabel(*remove, T_(\"remove\", \"Remove\"));", "row.row->append(*remove);",
+       "rulesBox_.append(*row.row);"}));
+  UR_EXPECT_TRUE(SheetInSequence(
+      SheetBody(sheet, "void SplitRulesSheet::RebuildActivity()"),
+      {"auto row = MakeEditorRow();", "row.content->append(*textColumn);",
+       "row.button->set_tooltip_text(detail);",
+       "kit::SetAccessibleLabel(*row.button, JoinRowName(nameParts));",
+       "row.button->signal_clicked().connect([this, actionCopy] { OpenEditorForAction(actionCopy); });",
+       "row.row->append(*routeLocal);", "activityBox_.append(*row.row);"}));
 }

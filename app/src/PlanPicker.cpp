@@ -3,11 +3,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 #include <graphene.h>
 
 #include "I18n.hpp"
 #include "OfferCard.hpp"
+#include "PaneKit.hpp"
 #include "ReferralPanel.hpp"  // EnsureOnboardingCss
 #include "Ui.hpp"
 #include "UrMotion.hpp"
@@ -60,6 +62,27 @@ void PointOnRoundedRect(double w, double h, double r, double t, double& px, doub
 
 double Now() { return g_get_monotonic_time() / 1000.0; }  // ms
 
+// A plan card's accessible name: its visible lines in order, the empty ones
+// left out. A card's content is a box, which GTK names from nothing.
+Glib::ustring PlanCardName(std::initializer_list<Glib::ustring> lines) {
+  Glib::ustring name;
+  for (const Glib::ustring& line : lines) {
+    if (line.empty()) continue;
+    if (!name.empty()) name += ", ";
+    name += line;
+  }
+  return name;
+}
+
+// The two cards are a radio pair to assistive tech: the selected one is
+// checked.
+void SetPlanCardChecked(Gtk::Widget& card, bool checked) {
+  gtk_accessible_update_state(GTK_ACCESSIBLE(card.gobj()), GTK_ACCESSIBLE_STATE_CHECKED,
+                              checked ? GTK_ACCESSIBLE_TRISTATE_TRUE
+                                      : GTK_ACCESSIBLE_TRISTATE_FALSE,
+                              -1);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -68,7 +91,11 @@ double Now() { return g_get_monotonic_time() / 1000.0; }  // ms
 class GoldPlanCard : public Gtk::Overlay {
  public:
   GoldPlanCard() {
+    // A radio to assistive tech, as the monthly card is. The role can only be
+    // set before the card's accessible state is first touched.
+    g_object_set(gobj(), "accessible-role", GTK_ACCESSIBLE_ROLE_RADIO, nullptr);
     EnsureOnboardingCss();
+    add_css_class("ur-onb-gold-card");
     set_overflow(Gtk::Overflow::VISIBLE);
     auto* content = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
     content->set_margin(22);
@@ -101,6 +128,7 @@ class GoldPlanCard : public Gtk::Overlay {
     column->append(trial_);
     content->append(*column);
     set_child(*content);
+    kit::MarkDecorative(*content);  // the card's name reads the lines
 
     pill_.set_text(T_("best_value", "Best value"));
     pill_.add_css_class("ur-onb-pill-gold");
@@ -110,6 +138,7 @@ class GoldPlanCard : public Gtk::Overlay {
     pill_.set_margin_top(-14);
     add_overlay(pill_);
     set_clip_overlay(pill_, false);
+    kit::MarkDecorative(pill_);
 
     click_ = Gtk::GestureClick::create();
     click_->signal_released().connect([this](int, double, double) {
@@ -117,6 +146,26 @@ class GoldPlanCard : public Gtk::Overlay {
     });
     add_controller(click_);
     SetPointerCursor(*this);
+    // In the tab order, and Enter or Space picks the plan, as on the monthly
+    // card's button.
+    set_focusable(true);
+    auto keys = Gtk::EventControllerKey::create();
+    keys->signal_key_pressed().connect(
+        [this](guint keyval, guint, Gdk::ModifierType) -> bool {
+          switch (keyval) {
+            case GDK_KEY_Return:
+            case GDK_KEY_KP_Enter:
+            case GDK_KEY_ISO_Enter:
+            case GDK_KEY_space:
+            case GDK_KEY_KP_Space:
+              if (on_select) on_select();
+              return true;
+            default:
+              return false;
+          }
+        },
+        false);
+    add_controller(keys);
 
     if (motion::ShouldAnimate()) {
       start_ = Now();
@@ -142,9 +191,12 @@ class GoldPlanCard : public Gtk::Overlay {
     equivalent_.set_text(equivalent);
     equivalent_.set_visible(!equivalent.empty());
     trial_.set_text(trial);
+    kit::SetAccessibleLabel(*this, PlanCardName({price, saving, equivalent, trial,
+                                                 pill_.get_text()}));
   }
   void SetSelected(bool selected) {
     selected_ = selected;
+    SetPlanCardChecked(*this, selected);
     dot_.set_markup("<span foreground='" + HexForMarkup(kProGold) + "' size='" +
                     std::to_string(14 * PANGO_SCALE) + "'>" + (selected ? "●" : "○") + "</span>");
     queue_draw();
@@ -259,7 +311,10 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   };
   append(*yearlyCard_);
 
-  monthlyCard_ = Gtk::make_managed<Gtk::Button>();
+  // a radio to assistive tech, as the yearly card is; the role is
+  // construct-only, so the button comes from the C constructor
+  monthlyCard_ = Gtk::manage(Glib::wrap(GTK_BUTTON(
+      g_object_new(GTK_TYPE_BUTTON, "accessible-role", GTK_ACCESSIBLE_ROLE_RADIO, nullptr))));
   monthlyCard_->add_css_class("ur-onb-plan");
   monthlyCard_->set_margin_top(16);
   auto* monthlyRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
@@ -305,6 +360,7 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   monthlyReserve->add_overlay(*monthlyColumn);
   monthlyRow->append(*monthlyReserve);
   monthlyCard_->set_child(*monthlyRow);
+  kit::MarkDecorative(*monthlyRow);  // the card's name reads the lines
   monthlyCard_->signal_clicked().connect([this] {
     Select(false);
     if (on_select) on_select(false);
@@ -332,6 +388,7 @@ void PlanPicker::SetTexts(const PlanCardTexts& texts) {
   monthlyText_->set_text(texts.monthlyPrice);
   monthlyLine_->set_text(texts.monthlyLine);
   monthlyLine_->set_visible(!texts.monthlyLine.empty());
+  kit::SetAccessibleLabel(*monthlyCard_, PlanCardName({texts.monthlyPrice, texts.monthlyLine}));
 }
 
 void PlanPicker::Select(bool yearly) {
@@ -348,6 +405,7 @@ void PlanPicker::Paint() {
   if (monthlyCard_) {
     if (yearly_) monthlyCard_->remove_css_class("selected");
     else monthlyCard_->add_css_class("selected");
+    SetPlanCardChecked(*monthlyCard_, !yearly_);
   }
   if (monthlyDot_) {
     const Rgba& color = yearly_ ? kUrTextMuted : kUrPink;

@@ -247,7 +247,7 @@ Localization keys used (Adv-style key + English):
 | `unknown` | "unknown" |
 | `remote` / `blocked` / `local` | "Remote" / "Blocked" / "Local" |
 | `used_data_key` / `pending_data_key` / `available_data_key` | "Used" / "Pending" / "Available" |
-| `daily_data_balance_label` | "Daily Data Balance:" |
+| `daily_data_balance_label` | "Daily Data Balance:" (Linux: `daily_data_balance`, "Daily Data Balance") |
 | `total_referrals_lld` | "Total Referrals: {}" |
 | `referral_bonus` | "+{} GiB/Month" |
 
