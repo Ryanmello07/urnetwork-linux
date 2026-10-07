@@ -46,6 +46,7 @@
 #include "Tunnel.hpp"
 #include "daemon/ControlServer.hpp"
 #include "daemon/DaemonLog.hpp"
+#include "daemon/GlogFlusher.hpp"
 #include "daemon/HostMemory.hpp"
 #include "daemon/InstanceGuard.hpp"
 #include "daemon/NetworkCountryWatcher.hpp"
@@ -1285,6 +1286,8 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  // The SDK's log on disk within a second while a device runs (GlogFlusher.hpp).
+  urnw::glogflush::Start();
   GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
   Daemon daemon{loop, &tunnel, &server};
   g_unix_signal_add(SIGTERM, &OnTerminate, &daemon);

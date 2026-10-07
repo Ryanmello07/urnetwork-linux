@@ -24,6 +24,7 @@
 #include "TunnelPolicy.hpp"
 #include "daemon/HostMemory.hpp"
 #include "daemon/DaemonLog.hpp"
+#include "daemon/GlogFlusher.hpp"
 #include "daemon/SupportDiagnostics.hpp"
 
 namespace urnw {
@@ -547,6 +548,9 @@ ctl::StatusReply TunnelHost::Start(const ctl::StartTunnelRequest& config) {
   JoinWorker();  // a previous worker that has already finished
   stopRequested_.store(false);
   busy_.store(true);
+  // The bring-up writes the SDK's log from here on; the reaper takes over once
+  // it is over.
+  glogflush::SetActive(true);
   killSwitchRequested_.store(config.kill_switch);
   {
     std::scoped_lock lock(statusMutex_);
@@ -1193,13 +1197,21 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
   }
   busy_.store(false);
   if (upFacts) support::LogTunnelUp(*upFacts, upInterface);
+  // The SDK's log of the bring-up, up or failed, on disk now rather than at
+  // glog's next 30 s flush, from the flusher's thread.
+  glogflush::Request();
 }
 
 void TunnelHost::Stop(const std::string& reason) {
   stopRequested_.store(true);
   JoinWorker();
-  std::scoped_lock lock(opMutex_);
-  StopInternalLocked(reason);
+  {
+    std::scoped_lock lock(opMutex_);
+    StopInternalLocked(reason);
+  }
+  // The teardown's lines on disk now, from the flusher's thread: this is the
+  // main loop, and the flush fsyncs.
+  glogflush::Request();
 }
 
 // Release retired IoLoops whose done callback has actually fired. Called from
@@ -2462,6 +2474,10 @@ void TunnelHost::Reap() {
   // next tick that finds the lock free.
   std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
   if (!lock.owns_lock()) return;  // next tick
+  // The SDK writes its log while a device runs, so that is when it is flushed
+  // every second.
+  glogflush::SetActive(device_.has_value() || providerDevice_.has_value() ||
+                       uploadDevice_.has_value());
   ReapRetiredLoopsLocked();
   if (CheckTunnelStormLocked()) return;  // the tunnel is gone; nothing else to reap
   // Ordered AFTER the storm guard: if traffic is already amplifying, stop it

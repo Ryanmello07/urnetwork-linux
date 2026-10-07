@@ -310,6 +310,7 @@ executable('urnetworkd',
     'src/daemon/HostMemory.cpp',
     'src/daemon/NetworkCountryWatcher.cpp',
     'src/daemon/SupportDiagnostics.cpp',
+    'src/daemon/GlogFlusher.cpp',
     'src/Tunnel.cpp',
     'src/ControlClient.cpp',
     'src/LocationOverride.cpp',
@@ -662,6 +663,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/DaemonInstanceGuardTest.cpp',
     'tests/DaemonCrashOutputTest.cpp',
     'tests/TunnelHostLockWiringTest.cpp',
+    'tests/GlogFlushWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -714,6 +716,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # DaemonInstanceGuardTest reads the daemon's start and revert paths the same way.
               # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
               # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
+              # GlogFlushWiringTest reads the daemon's glog flushes the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
