@@ -47,6 +47,7 @@ adv_kill_switch_state_unknown
 adv_kill_switch_still_installed_fix
 adv_last_decision
 adv_matched
+adv_mode_tunnel
 adv_na
 adv_no_selection
 adv_none
@@ -61,10 +62,15 @@ adv_reason_block
 adv_reason_default
 adv_reason_override
 adv_reason_route
+adv_routes
+adv_routes_dns_degraded
+adv_routes_kill_switch_armed
+adv_rpc
 adv_select_a_row
 adv_selected
 adv_selection_gone
 adv_session_exit_country
+adv_session_mode
 adv_unknown_exit
 adv_verdict_blocked
 adv_verdict_local
@@ -1039,6 +1045,7 @@ update
 update_password
 update_referral_network
 upgrade
+urnetwork_status
 usdc_payouts_until_migration
 usdc_waiting
 usdc_wallet_address

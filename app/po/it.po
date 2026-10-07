@@ -303,7 +303,7 @@ msgctxt "adv_mode_rpc_only"
 msgid "rpc-only"
 msgstr "solo RPC"
 
-#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
 msgctxt "adv_mode_tunnel"
 msgid "tunnel"
 msgstr "tunnel"
@@ -378,17 +378,17 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "Override di percorso"
 
-#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
 msgctxt "adv_routes"
 msgid "Routes"
 msgstr "Route"
 
-#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
 msgctxt "adv_routes_dns_degraded"
 msgid "on, dns not applied"
 msgstr "attive, DNS non applicato"
 
-#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
 msgctxt "adv_routes_kill_switch_armed"
 msgid "off, kill switch armed"
 msgstr "disattive, Kill switch armato"
@@ -398,7 +398,7 @@ msgctxt "adv_routes_no_firewall"
 msgid "on, no leak guard"
 msgstr "attive, nessuna protezione dalle perdite"
 
-#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
 msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
@@ -423,7 +423,7 @@ msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "Paese di uscita della sessione"
 
-#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
 msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "Sessione"
@@ -8942,7 +8942,7 @@ msgctxt "urnetwork_referral_code"
 msgid "URnetwork Referral Code"
 msgstr "Codice di riferimento URnetwork"
 
-#. Used in NetworkApp.swift.
+#. Used in NetworkApp.swift. Also the Windows and Linux status strip's name for its connection state field, read by screen readers.
 msgctxt "urnetwork_status"
 msgid "URnetwork Status"
 msgstr "Stato URnetwork"
