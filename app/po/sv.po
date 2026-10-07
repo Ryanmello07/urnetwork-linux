@@ -1338,7 +1338,7 @@ msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "Det gick inte att ansluta"
 
-#. Windows Connect page reason line when connecting failed.
+#. Windows and Linux Connect page reason line when connecting failed.
 msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "Inga leverantörer gick att nå. Ett nytt försök bygger upp anslutningen från början."
@@ -1368,22 +1368,22 @@ msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "Din internettrafik är inte skyddad."
 
-#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+#. Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
 msgctxt "conn_reason_auth"
 msgid "Signing in to the platform is failing…"
 msgstr "Inloggningen till plattformen misslyckas…"
 
-#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+#. Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
 msgctxt "conn_reason_platform"
 msgid "Contacting the platform…"
 msgstr "Kontaktar plattformen…"
 
-#. Windows Connect page reason line while the selected providers do not answer.
+#. Windows and Linux Connect page reason line while the selected providers do not answer.
 msgctxt "conn_reason_providers"
 msgid "Providers not responding — retrying…"
 msgstr "Leverantörerna svarar inte – försöker igen…"
 
-#. Windows Connect page reason line while the platform asks the app to slow down.
+#. Windows and Linux Connect page reason line while the platform asks the app to slow down.
 msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "Begränsad – väntar…"

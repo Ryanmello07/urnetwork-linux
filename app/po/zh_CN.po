@@ -1336,7 +1336,7 @@ msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "无法连接"
 
-#. Windows Connect page reason line when connecting failed.
+#. Windows and Linux Connect page reason line when connecting failed.
 msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "无法连接到任何提供商。重试会从头重建连接。"
@@ -1366,22 +1366,22 @@ msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "你的互联网流量未受保护。"
 
-#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+#. Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
 msgctxt "conn_reason_auth"
 msgid "Signing in to the platform is failing…"
 msgstr "登录平台一直失败…"
 
-#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+#. Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
 msgctxt "conn_reason_platform"
 msgid "Contacting the platform…"
 msgstr "正在联系平台…"
 
-#. Windows Connect page reason line while the selected providers do not answer.
+#. Windows and Linux Connect page reason line while the selected providers do not answer.
 msgctxt "conn_reason_providers"
 msgid "Providers not responding — retrying…"
 msgstr "提供商无响应 — 正在重试…"
 
-#. Windows Connect page reason line while the platform asks the app to slow down.
+#. Windows and Linux Connect page reason line while the platform asks the app to slow down.
 msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "请求受限 — 正在等待…"

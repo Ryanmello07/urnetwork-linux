@@ -182,8 +182,13 @@ conn_connect_on_launch
 conn_connect_on_launch_note
 conn_degraded
 conn_failed
+conn_failed_detail
 conn_finding_providers
 conn_not_protected
+conn_reason_auth
+conn_reason_platform
+conn_reason_providers
+conn_reason_rate_limited
 conn_traffic_blocked
 conn_traffic_blocked_unprotected
 connect
@@ -886,6 +891,7 @@ reset_link_sent_to
 resolvers
 restore_default_transports
 restore_most_secure_settings
+retry
 route_internet
 route_you
 rules

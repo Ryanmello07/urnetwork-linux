@@ -1340,7 +1340,7 @@ msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "Не вдалося підключитися"
 
-#. Windows Connect page reason line when connecting failed.
+#. Windows and Linux Connect page reason line when connecting failed.
 msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "Не вдалося зв’язатися з жодним провайдером. Повторна спроба вибудовує з’єднання з нуля."
@@ -1370,22 +1370,22 @@ msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "Ваш інтернет-трафік не захищено."
 
-#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+#. Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
 msgctxt "conn_reason_auth"
 msgid "Signing in to the platform is failing…"
 msgstr "Не вдається увійти на платформу…"
 
-#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+#. Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
 msgctxt "conn_reason_platform"
 msgid "Contacting the platform…"
 msgstr "Зв’язок із платформою…"
 
-#. Windows Connect page reason line while the selected providers do not answer.
+#. Windows and Linux Connect page reason line while the selected providers do not answer.
 msgctxt "conn_reason_providers"
 msgid "Providers not responding — retrying…"
 msgstr "Провайдери не відповідають — повторна спроба…"
 
-#. Windows Connect page reason line while the platform asks the app to slow down.
+#. Windows and Linux Connect page reason line while the platform asks the app to slow down.
 msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "Перевищено ліміт запитів — очікування…"
