@@ -71,6 +71,10 @@ class ConnectPage : public Gtk::Box {
   // (connectPage_->SetDaemonNotice(text)) or a user whose urnetworkd is
   // missing/stopped/mismatched reads only "Disconnected" on the new Home.
   void SetDaemonNotice(const Glib::ustring& notice);
+  // The daemon's dead-tunnel failsafe counts down on the live tunnel
+  // (failsafe_notice::ShowsArmedWarning): the notice line warns that it will be
+  // turned off unless something gets through, when no daemon notice holds it.
+  void SetFailsafeArmed(bool armed);
   // The out-of-balance held alert under the connect action (urnetwork/android#483):
   // shown when balance_notice::HeldAlert holds, with Upgrade and Disconnect.
   void ApplyBalanceNotice(const balance_notice::Signals& signals);
@@ -349,6 +353,7 @@ class ConnectPage : public Gtk::Box {
   gint64 disconnectRequestedAtUs_ = 0;
   LiveStats stats_;
   Glib::ustring daemonNotice_;
+  bool failsafeArmed_ = false;
   std::string selectedConnectionId_;
 
   // ---- the feed caches (§5) --------------------------------------------------

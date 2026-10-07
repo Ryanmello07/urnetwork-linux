@@ -11,6 +11,7 @@
 #include <gtk/gtk.h>
 
 #include "ExtenderProvideRowPaint.hpp"
+#include "FailsafeNotice.hpp"
 #include "FastDnsCopy.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
@@ -1370,7 +1371,14 @@ void ConnectPage::ApplyConnectStatus() {
                              ? T_("conn_not_protected",
                                   "Your internet traffic is not protected.")
                              : "");
-  kit::SetTextOrCollapse(*daemonNoticeText_, daemonNotice_);
+  // The daemon's notice first: it says what already happened. The failsafe's
+  // warning says what happens next if nothing changes.
+  Glib::ustring notice = daemonNotice_;
+  if (notice.empty() && failsafeArmed_) {
+    const failsafe_notice::Copy armed = failsafe_notice::ArmedCopy();
+    notice = T_(armed.key, armed.english);
+  }
+  kit::SetTextOrCollapse(*daemonNoticeText_, notice);
 
   canvas_->SetState(heroState);
   // the hero's accessible name IS the current status text (its content is a
@@ -1429,6 +1437,12 @@ void ConnectPage::ApplyBalanceRecovery(const balance_notice::RecoveryLines& line
 
 void ConnectPage::SetDaemonNotice(const Glib::ustring& notice) {
   daemonNotice_ = notice;
+  ApplyConnectStatus();
+}
+
+void ConnectPage::SetFailsafeArmed(bool armed) {
+  if (armed == failsafeArmed_) return;
+  failsafeArmed_ = armed;
   ApplyConnectStatus();
 }
 

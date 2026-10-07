@@ -17,6 +17,7 @@
 #include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
 #include "DaemonUnreachableCopy.hpp"
+#include "FailsafeNotice.hpp"
 #include "Formatters.hpp"
 #include "UrTheme.hpp"
 #include "I18n.hpp"
@@ -952,6 +953,8 @@ void MainWindow::size_allocate_vfunc(int width, int height, int baseline) {
 // already stopped the session and possibly armed the kill switch.
 bool MainWindow::PollDaemonHealth() {
   if (!connected_) {
+    // A countdown belongs to a live tunnel, and there is none.
+    if (connectPage_) connectPage_->SetFailsafeArmed(false);
     // The network country the daemon reads (P052), for this process's own
     // dials: from the sign-in screen on, signed in or not.
     host_.FollowDaemonNetworkCountry();
@@ -964,13 +967,36 @@ bool MainWindow::PollDaemonHealth() {
     // after a launch without auto-connect, bring it back after a service
     // restart or an unexpected drop, and stop one the mode no longer wants.
     host_.ReconcileProvider("health poll");
+    // What the daemon holds while this window holds no session: the tray's
+    // recovery items, and the stop of a session this window saw end, which
+    // Windows explains in exactly this state. The connect feed can report the
+    // disconnect before any poll reads the stop, or the daemon can be
+    // restarting, so the explanation waits until a status is read.
+    const std::optional<ctl::StatusReply> daemon = host_.Control().Status();
+    PushTrayRecovery(daemon ? failsafe_notice::TrayRecoveryFor(/*windowConnected=*/false, *daemon)
+                            : failsafe_notice::TrayRecovery{});
+    if (daemon && stopExplanationOwed_) {
+      stopExplanationOwed_ = false;
+      if (const auto failsafe =
+              failsafe_notice::StoppedCopy(daemon->stop_reason, daemon->kill_switch)) {
+        if (connectPage_) connectPage_->SetDaemonNotice(T_(failsafe->key, failsafe->english));
+      }
+    }
     return true;
   }
   const auto status = host_.Control().Status();
   if (!status) return true;      // unreachable is StartTunnelUi's business
+  // The window holds the session, so its own Disconnect is the recovery.
+  PushTrayRecovery(failsafe_notice::TrayRecoveryFor(/*windowConnected=*/true, *status));
   host_.FollowDaemonNetworkCountry(*status);
   host_.FollowDaemonExtenderReset(*status);
   host_.FollowDaemonLogUpload(*status);
+  // The dead-tunnel failsafe's countdown on the live tunnel, warned about
+  // before the daemon turns it off, never after.
+  if (connectPage_) {
+    connectPage_->SetFailsafeArmed(
+        failsafe_notice::ShowsArmedWarning(status->failsafe_armed, status->tunnel_state));
+  }
   if (status->tunnel_state != ctl::TunnelState::Error &&
       status->tunnel_state != ctl::TunnelState::Stopped) {
     return true;
@@ -985,22 +1011,63 @@ bool MainWindow::PollDaemonHealth() {
   // window's own state and say nothing.
   if (connectPage_ && connectPage_->DisconnectPending()) {
     ApplyConnectReading(DaemonTunnelGoneReading());
+    stopExplanationOwed_ = false;
     return true;
   }
   // The daemon stopped carrying traffic without us asking. Say so, verbatim —
   // the daemon composes the plain-language reason (including whether the machine
   // is now blocked and how to lift it), and inventing our own wording here would
   // be a third place that can disagree about what happened.
-  const Glib::ustring detail =
+  //
+  // The dead-tunnel failsafe is the exception, as on Windows: its two outcomes
+  // have store strings in the user's language, chosen by the kill switch the
+  // daemon reports now. A kill switch that could not be armed keeps the
+  // daemon's sentence, which says what is left behind.
+  Glib::ustring detail =
       status->error.empty()
           ? Glib::ustring(T_("tunnel_stopped_unexpectedly", "The connection stopped."))
           : Glib::ustring(status->error);
+  if (const auto failsafe =
+          failsafe_notice::StoppedCopy(status->stop_reason, status->kill_switch)) {
+    detail = T_(failsafe->key, failsafe->english);
+  }
   g_warning("connect: the daemon stopped the session (%s): %s",
             status->error_code.empty() ? "no code" : status->error_code.c_str(),
             status->error.c_str());
   ApplyConnectReading(DaemonTunnelGoneReading());
+  // Explained here: the disconnected poll owes nothing more for this stop.
+  stopExplanationOwed_ = false;
   if (connectPage_) connectPage_->SetDaemonNotice(detail);
   return true;
+}
+
+void MainWindow::PushTrayRecovery(const failsafe_notice::TrayRecovery& recovery) {
+  if (trayRecoveryPushed_ && recovery == trayRecovery_) return;
+  trayRecoveryPushed_ = true;
+  trayRecovery_ = recovery;
+  if (on_tray_recovery_change) on_tray_recovery_change(recovery);
+}
+
+// The tray's recovery items act on the daemon directly: the window holds no
+// session for its own Disconnect to end. Neither does anything once the window
+// holds one again, since the item is withdrawn then.
+void MainWindow::ForceTunnelOff() {
+  if (connected_ || !trayRecovery_.forceTunnelOff) return;
+  g_message("tray: forcing the daemon's tunnel off (recovery)");
+  std::string error;
+  if (!host_.Control().StopTunnel(&error)) {
+    g_warning("tray: stop_tunnel failed: %s", error.empty() ? "no detail" : error.c_str());
+  }
+  PollDaemonHealth();
+}
+
+void MainWindow::LiftKillSwitch() {
+  if (connected_ || !trayRecovery_.liftKillSwitch) return;
+  g_message("tray: turning the kill switch off (unblock this machine)");
+  // All three legs, as the Settings switch turns it off, so the next connect
+  // does not arm it again. The daemon's write runs on a worker; the next poll
+  // reads its outcome and withdraws the item.
+  host_.SetKillSwitch(false);
 }
 
 void MainWindow::ApplyPageBreakpoint(int widthDip) {
@@ -2254,6 +2321,8 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // and this window's press logging all read this one bit, so the menu can no
   // longer say "Connect" over a press that disconnects.
   connected_ = view.action == health::Action::Disconnect;
+  // A session this window held has ended: the next disconnected poll reads why.
+  if (connected_ != wasConnected) stopExplanationOwed_ = wasConnected;
   if (view.state == health::State::Connected) NoteConnected();
   // The strip's raw status field carries the controller's OWN token now
   // (CONNECTING/CONNECTED/CONNECT_FAILED), not the two-word destination

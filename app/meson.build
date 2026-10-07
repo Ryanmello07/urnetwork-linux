@@ -667,6 +667,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/GlogFlushWiringTest.cpp',
     'tests/TunnelWatchdogTest.cpp',
     'tests/DeadTunnelWiringTest.cpp',
+    'tests/FailsafeNoticeTest.cpp',
+    'tests/FailsafeNoticeWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -721,7 +723,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
               # GlogFlushWiringTest reads the daemon's glog flushes the same way.
               # DeadTunnelWiringTest reads the dead-tunnel failsafe's daemon call sites the
-              # same way.
+              # same way, and FailsafeNoticeWiringTest its health poll and connect page.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

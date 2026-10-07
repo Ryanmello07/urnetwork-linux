@@ -205,6 +205,13 @@ int main(int argc, char** argv) {
     window->on_connected_change = [&](bool connected) {
       if (tray) tray->SetConnected(connected);
     };
+    // The recovery items, for when the window holds no session
+    // (failsafe_notice::TrayRecovery).
+    tray->on_force_tunnel_off = [&] { window->ForceTunnelOff(); };
+    tray->on_lift_kill_switch = [&] { window->LiftKillSwitch(); };
+    window->on_tray_recovery_change = [&](const urnw::failsafe_notice::TrayRecovery& recovery) {
+      if (tray) tray->SetRecovery(recovery.forceTunnelOff, recovery.liftKillSwitch);
+    };
 
     // Close = hide to tray (tunnel keeps running); Quit from the tray truly exits.
     window->signal_close_request().connect(
