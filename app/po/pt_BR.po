@@ -687,6 +687,11 @@ msgctxt "app_split_starter"
 msgid "0 split apps"
 msgstr "0 apps divididos"
 
+#. Linux: the body of the dialog shown when the app cannot start (its SDK host failed to initialize, so there is no window and no tray), under the heading something_went_wrong. The argument is the folder that holds the app's log files. The raw error follows on its own lines, untranslated.
+msgctxt "app_start_failed_detail"
+msgid "URnetwork could not start. Its logs are in {}."
+msgstr "Não foi possível iniciar a URnetwork. Os logs estão em {}."
+
 #. Shown on the linux home screen when the urnetworkd system service rejected this app for speaking an older control protocol than the service supports. The fix is updating the app, not the service.
 msgctxt "app_too_old_for_daemon"
 msgid "This app is older than the installed URnetwork system service. Update the app to connect."

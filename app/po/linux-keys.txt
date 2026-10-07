@@ -108,6 +108,7 @@ anonymous
 anything_else
 app_split_active_none
 app_split_rules
+app_start_failed_detail
 app_too_old_for_daemon
 app_version
 apple
