@@ -143,6 +143,26 @@ msgctxt "adv_advanced_mode_note"
 msgid "Show raw values, identifiers, the connection inspector and the reliability tuning surface across the app."
 msgstr "Menampilkan nilai mentah, pengenal, pemeriksa koneksi, dan penyetelan keandalan di seluruh aplikasi."
 
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that allows the connection's host. It adds an allowing rule for a host that was blocked, or removes the rule blocking it while one is in force, so the label always names what the press leaves behind.
+msgctxt "adv_allow_host"
+msgid "Allow this host"
+msgstr "Izinkan host ini"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that keeps the connection's host inside the VPN tunnel. It adds a rule for a host that bypassed the tunnel, or removes the bypass rule while one is in force.
+msgctxt "adv_always_tunnel"
+msgid "Always tunnel"
+msgstr "Selalu melalui terowongan"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
+msgctxt "adv_block_host"
+msgid "Block this host"
+msgstr "Blokir host ini"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that sends the connection's host directly from this device, outside the VPN. It adds a split rule, or removes the rule keeping the host in the tunnel while one is in force.
+msgctxt "adv_bypass_tunnel"
+msgid "Bypass the tunnel"
+msgstr "Lewati terowongan"
+
 #. Connection inspector: label of the total bytes row.
 msgctxt "adv_bytes_total"
 msgid "Bytes (total)"
@@ -158,6 +178,16 @@ msgctxt "adv_connection_count"
 msgid "{} connection"
 msgid_plural "{} connections"
 msgstr[0] "{} koneksi"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that copies the connection's details (host, addresses, verdict, reason, totals) to the clipboard.
+msgctxt "adv_copy_details"
+msgid "Copy details"
+msgstr "Salin detail"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after Copy details put the connection's details on the clipboard.
+msgctxt "adv_details_copied"
+msgid "Connection details copied"
+msgstr "Detail koneksi disalin"
 
 #. Connection inspector: label of the exit dial failures row.
 msgctxt "adv_exit_dial_failures"
@@ -238,6 +268,26 @@ msgstr "Kelompokkan menurut host"
 msgctxt "adv_host"
 msgid "Host"
 msgstr "Host"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule allowing the connection's host from now on.
+msgctxt "adv_host_allowed"
+msgid "This host will be allowed"
+msgstr "Host ini akan diizinkan"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule blocking the connection's host from now on.
+msgctxt "adv_host_blocked"
+msgid "This host will be blocked"
+msgstr "Host ini akan diblokir"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a split rule sending the connection's host outside the VPN tunnel from now on.
+msgctxt "adv_host_bypassed"
+msgid "This host will bypass the tunnel"
+msgstr "Host ini akan melewati terowongan"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule keeping the connection's host inside the VPN tunnel from now on.
+msgctxt "adv_host_tunnelled"
+msgid "This host will use the tunnel"
+msgstr "Host ini akan menggunakan terowongan"
 
 #. Connection inspector: heading of the inspector pane.
 msgctxt "adv_inspector"
@@ -349,6 +399,11 @@ msgctxt "adv_none"
 msgid "none"
 msgstr "tidak ada"
 
+#. Connect page, Advanced Mode, the connection inspector: the end of the Reason value's name for screen readers when a rule decided the connection, because pressing the value opens the Split rules sheet. Lowercase: it follows a comma.
+msgctxt "adv_open_split_rules"
+msgid "open split rules"
+msgstr "buka aturan pemisahan"
+
 #. Connection inspector: label of the override id row.
 msgctxt "adv_override_id"
 msgid "Override"
@@ -429,6 +484,16 @@ msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
 
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: added to a rule button's name for screen readers, after its label, while the button's rule is in force: pressing it removes the rule. Lowercase: it follows a comma.
+msgctxt "adv_rule_active"
+msgid "rule active, click to remove"
+msgstr "aturan aktif, klik untuk menghapus"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press removed the rule that was in force for the connection's host.
+msgctxt "adv_rule_removed"
+msgid "Rule removed"
+msgstr "Aturan dihapus"
+
 #. Connect page, Activity pane: placeholder and accessible name of the search field above the list of connections. Typing filters the list to the connections whose host name or IP address contains the text.
 msgctxt "adv_search_connections"
 msgid "Search hosts or IPs"
@@ -459,10 +524,20 @@ msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "Sesi"
 
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.
+msgctxt "adv_undo"
+msgid "Undo"
+msgstr "Urungkan"
+
 #. Connection inspector: exit value when the destination is not in the routing table.
 msgctxt "adv_unknown_exit"
 msgid "Not in the routing table"
 msgstr "Tidak ada di tabel perutean"
+
+#. Connect page, Advanced Mode: the label of the verdict line (blocked, tunnelled, or bypassed the tunnel) in the connection details Copy details puts on the clipboard.
+msgctxt "adv_verdict"
+msgid "Verdict"
+msgstr "Putusan"
 
 #. Connection inspector: verdict, the connection was blocked and no packets were sent.
 msgctxt "adv_verdict_blocked"
