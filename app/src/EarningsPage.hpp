@@ -542,7 +542,7 @@ class EarningsPage : public Gtk::Box {
 
   // pane C widgets
   Gtk::Label* netProvidedValue_ = nullptr;
-  Gtk::Label* rankValue_ = nullptr;
+  Gtk::Label* rankValue_ = nullptr;  // the Current Ranking header's meta
   Gtk::Switch* publicToggle_ = nullptr;
   kit::Snackbar leaderboardInfo_;
   // the data board's own-ranking block, hidden while the Points board shows

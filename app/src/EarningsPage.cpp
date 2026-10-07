@@ -1998,12 +1998,15 @@ void EarningsPage::BuildNetworkPane() {
   kit::SetAccessibleLabel(*paneC_.root, T_("network_earnings", "Network earnings"));
   Gtk::Box* content = paneC_.content;
 
-  // 1 + 2. own ranking
+  // 1 + 2. own ranking. The rank rides the group header as its meta
+  // ("Current Ranking … #42"), so the Net Provided row under it is one label
+  // and one figure, not two figures merging on one baseline.
   {
-    Gtk::Widget* header =
-        kit::MakePaneGroupHeader(T_("current_ranking", "Current Ranking")).root;
-    content->append(*header);
-    dataRankingWidgets_.push_back(header);
+    auto header = kit::MakePaneGroupHeader(T_("current_ranking", "Current Ranking"));
+    rankValue_ = header.meta;
+    rankValue_->set_visible(true);  // always a rank or the faint dash
+    content->append(*header.root);
+    dataRankingWidgets_.push_back(header.root);
   }
   {
     auto row = MakePaddedRow(12);
@@ -2012,15 +2015,11 @@ void EarningsPage::BuildNetworkPane() {
     key->add_css_class("ur-key");
     key->set_xalign(0);
     key->set_hexpand(true);
-    key->set_valign(Gtk::Align::END);
+    key->set_valign(Gtk::Align::CENTER);
     kit::MarkDecorative(*key);
     grid->append(*key);
-    auto* figures = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
     netProvidedValue_ = MakeStrongValue(18);
-    figures->append(*netProvidedValue_);
-    rankValue_ = MakeStrongValue(22);
-    figures->append(*rankValue_);
-    grid->append(*figures);
+    grid->append(*netProvidedValue_);
     row.content->append(*grid);
     content->append(*row.root);
     dataRankingWidgets_.push_back(row.root);
