@@ -128,6 +128,8 @@ UR_TEST(settingsDrivesTheCheckerAndRendersItsStates) {
   for (const char* input :
        {"in.outcome = snap.lastCheck;", "in.newestKnown = !snap.newestVersion.empty();",
         "in.newestOutranksOwn = snap.newestCode > update::ParseReleaseCode(UR_APP_VERSION);",
+        "in.stale = snap.checkStale;",
+        "in.held = holdLeft > std::chrono::steady_clock::duration::zero();",
         "update::UpdateStateLineFor(in)"}) {
     UR_EXPECT_TRUE_MSG(std::string("the state line does not read ") + input,
                        Has(state, input));
@@ -141,6 +143,29 @@ UR_TEST(settingsDrivesTheCheckerAndRendersItsStates) {
                      newest != std::string::npos &&
                          check.find("snapshot_.newestCode = sel.newestCode;", newest + 1) !=
                              std::string::npos);
+  UR_EXPECT_TRUE_MSG("the stale line does not name the last success's date",
+                     Has(state, "UpdateChecker::LocalDate(snap.lastSuccessUnix)"));
+  UR_EXPECT_TRUE_MSG("the held line does not name when GitHub may be asked again",
+                     Has(state, "UpdateChecker::LocalDateTime(snap.holdUntilUnix)"));
+  UR_EXPECT_TRUE_MSG("the stale line's second sentence is not looked up",
+                     Has(state, "T_(line.detailKey, line.detailEnglish)"));
+  // whether the hold lasts is read off the steady clock the checker keeps it
+  // on, never off the time the line names, so a system clock set back does
+  // not keep Check now held
+  UR_EXPECT_TRUE_MSG("the checker does not publish its steady hold beside the time it names",
+                     Has(check, "snapshot_.holdUntil = holdUntil_;") &&
+                         Has(check, "snapshot_.holdUntilUnix = wait > 0 ? NowUnix() + wait : 0;"));
+  UR_EXPECT_TRUE_MSG("Settings reads the hold off the wall clock",
+                     Has(state, "snap.holdUntil - std::chrono::steady_clock::now()") &&
+                         !Has(state, "snap.holdUntilUnix >") && !Has(state, "snap.holdUntilUnix -"));
+  // the hold ends with no snapshot: the line is read again then, and the
+  // timer dies with the page
+  UR_EXPECT_TRUE_MSG("the line is not read again when GitHub's hold ends",
+                     Has(state, "holdEnd_ = Glib::signal_timeout().connect_seconds(") &&
+                         Has(state, "ApplyUpdateState(updateSnapshot_);\n          return false;"));
+  UR_EXPECT_TRUE_MSG("the hold's timer outlives the page",
+                     Has(FunctionBody(source, "SettingsPage::~SettingsPage()"),
+                         "holdEnd_.disconnect();"));
   UR_EXPECT_TRUE_MSG("the state line's key is not looked up",
                      Has(state, "T_(line.textKey, line.textEnglish)"));
   UR_EXPECT_TRUE_MSG("Check now is not held while a check is in flight",
@@ -283,6 +308,68 @@ UR_TEST(noCheckIsSentWhileGitHubAsksTheNetworkToWait) {
   const std::string autoCheck = FunctionBody(source, "void UpdateChecker::SetAutoCheckEnabled(");
   UR_EXPECT_TRUE_MSG("turning automatic checks on schedules a check before the hold ends",
                      Has(autoCheck, "nextAutoUnix_ = NowUnix() + SecondsUntil(holdUntil_);"));
+}
+
+UR_TEST(aCheckThatHasNotReachedGitHubForThreeDaysIsSaid) {
+  const std::string source = ReadSource("UpdateChecker.cpp");
+  // the first launch that tries seeds the baseline, before the worker runs
+  const std::string start = FunctionBody(source, "void UpdateChecker::Start()");
+  const size_t read = start.find("prefs::Get<std::int64_t>(kLastSuccessPrefKey, 0)");
+  const size_t seed = start.find("prefs::Set(kLastSuccessPrefKey, snapshot_.lastSuccessUnix);");
+  const size_t worker = start.find("worker_ = std::thread(");
+  UR_EXPECT_TRUE_MSG("Start does not seed update_last_check_success before the worker",
+                     read != std::string::npos && seed != std::string::npos && read < seed &&
+                         seed < worker);
+  UR_EXPECT_TRUE_MSG("the success baseline is not its own pref",
+                     Has(source, "kLastSuccessPrefKey = \"update_last_check_success\";"));
+  // only a check that reached GitHub writes it, and clears the warning;
+  // every check still restarts the throttle
+  const std::string check = FunctionBody(source, "void UpdateChecker::RunCheck()");
+  const size_t failed = check.find("g_warning(\"update: release check failed: %s\"");
+  const std::string persist = "prefs::Set(kLastSuccessPrefKey, succeeded);";
+  const size_t succeeded = check.find(persist);
+  UR_EXPECT_TRUE_MSG("the success is persisted before the fetch's failure path returns",
+                     failed != std::string::npos && succeeded != std::string::npos &&
+                         failed < succeeded);
+  // only once the list came back: a 404 or any other status returns first
+  const size_t notFetched = check.find("if (!fetched) {");
+  const size_t notFetchedReturn = check.find("return;", notFetched);
+  UR_EXPECT_TRUE_MSG("the success is persisted on a path where the list did not come back",
+                     notFetched != std::string::npos && notFetched < failed &&
+                         notFetchedReturn < succeeded);
+  UR_EXPECT_TRUE_MSG("a success does not clear the warning",
+                     Has(check, "snapshot_.lastSuccessUnix = succeeded;\n"
+                                "    snapshot_.checkStale = false;"));
+  UR_EXPECT_TRUE_MSG("RunCheck writes the success baseline twice",
+                     succeeded == std::string::npos ||
+                         check.find("kLastSuccessPrefKey", succeeded + persist.size()) ==
+                             std::string::npos);
+  UR_EXPECT_TRUE_MSG("the worker no longer restarts the throttle after every check",
+                     Has(FunctionBody(source, "void UpdateChecker::WorkerLoop()"),
+                         "prefs::Set(kLastCheckPrefKey, now);"));
+  // every failure goes through CheckFailed, which asks the pure rule
+  UR_EXPECT_TRUE_MSG("a failure path sets Failed without the stale rule",
+                     !Has(check, "s.lastCheck = CheckOutcome::Failed"));
+  size_t calls = 0;
+  for (size_t at = check.find("CheckFailed();"); at != std::string::npos;
+       at = check.find("CheckFailed();", at + 1)) {
+    ++calls;
+  }
+  UR_EXPECT_EQ(size_t{3}, calls);  // held, not fetched, not a JSON array
+  const std::string failure = FunctionBody(source, "void UpdateChecker::CheckFailed()");
+  UR_EXPECT_TRUE_MSG("CheckFailed does not ask CheckIsStale with automatic checks",
+                     Has(failure, "update::CheckIsStale(now, s.lastSuccessUnix, autoCheck_ && "
+                                  "kOwnCode != 0)"));
+  // turning automatic checks off takes the warning down, on puts it back
+  UR_EXPECT_TRUE_MSG("SetAutoCheckEnabled does not recompute the warning",
+                     Has(FunctionBody(source, "void UpdateChecker::SetAutoCheckEnabled("),
+                         "update::CheckIsStale(now, s.lastSuccessUnix, on && kOwnCode != 0)"));
+  // and the developer line says it too
+  const std::string developer =
+      FunctionBody(ReadSource("DeveloperPage.cpp"), "void DeveloperPage::ApplyUpdateCheck(");
+  UR_EXPECT_TRUE_MSG("the developer line does not say since when checks have failed",
+                     Has(developer, "if (snap.checkStale) {") &&
+                         Has(developer, "UpdateChecker::LocalDate(snap.lastSuccessUnix)"));
 }
 
 UR_TEST(theTarballUpdateAsksTheSameRepositoryIdWithoutRedirects) {

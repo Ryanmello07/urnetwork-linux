@@ -213,6 +213,7 @@ class SettingsPage : public Gtk::Box {
   Gtk::Button* checkNow_ = nullptr;
   Gtk::Label* updateState_ = nullptr;
   Gtk::Widget* updateStateRow_ = nullptr;
+  sigc::connection holdEnd_;  // re-reads the line when GitHub's hold ends
   void ApplyUpdateState(const UpdateChecker::Snapshot& snap);
   // The update notice (hidden until a newer release is known): a two-line row
   // whose action verb follows the checker's phase, plus a selectable prose

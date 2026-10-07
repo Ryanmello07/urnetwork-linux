@@ -1,6 +1,6 @@
-// When the updater asks GitHub again after a refused request
-// (UpdateSchedule.hpp), on the windows app's vectors (update-release-tests.cpp
-// Schedule), and how a rate-limit header is read.
+// When the updater asks GitHub again after a refused request, and when it says
+// it has not been able to (UpdateSchedule.hpp), on the windows app's vectors
+// (update-release-tests.cpp Schedule), and how a rate-limit header is read.
 //
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
@@ -85,4 +85,18 @@ UR_TEST(aRateLimitHeaderIsReadAsDigitsOnly) {
   UR_EXPECT_EQ(std::int64_t{-1}, ParseDecimalHeader("5 ", -1));
   UR_EXPECT_EQ(std::int64_t{-1}, ParseDecimalHeader("Wed, 21 Oct 2026 07:28:00 GMT", -1));
   UR_EXPECT_EQ(std::int64_t{-1}, ParseDecimalHeader("1000000000000000000", -1));
+}
+
+UR_TEST(checksAreStaleAfterSeventyTwoHoursWithoutASuccess) {
+  constexpr std::int64_t kStale = 72 * 60 * 60;
+  UR_EXPECT_EQ(kStale, kStaleAfterSeconds);
+  UR_EXPECT_FALSE(CheckIsStale(kServerUnix, kServerUnix - kStale, true));  // exactly 72 h
+  UR_EXPECT_TRUE(CheckIsStale(kServerUnix, kServerUnix - kStale - 1, true));
+  UR_EXPECT_FALSE(CheckIsStale(kServerUnix, kServerUnix - 3600, true));
+  // with automatic checks off nothing is said
+  UR_EXPECT_FALSE(CheckIsStale(kServerUnix, kServerUnix - kStale - 1, false));
+  // without a baseline nothing is claimed
+  UR_EXPECT_FALSE(CheckIsStale(kServerUnix, 0, true));
+  // a success after this clock's now (a clock set back) is not stale
+  UR_EXPECT_FALSE(CheckIsStale(kServerUnix, kServerUnix + 3600, true));
 }

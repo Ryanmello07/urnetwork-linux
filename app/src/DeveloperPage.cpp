@@ -901,6 +901,12 @@ void DeveloperPage::ApplyUpdateCheck(const UpdateChecker::Snapshot& snap) {
       text = T_("dev_update_check_failed", "The update check failed — see the app log.");
       break;
   }
+  // Settings' warning, here too: no check has reached GitHub for 72 hours.
+  if (snap.checkStale) {
+    text += "\n";
+    text += Format(T_("upd_check_stale_title", "Couldn't check for updates since {}"),
+                   UpdateChecker::LocalDate(snap.lastSuccessUnix));
+  }
   SetLineOrCollapse(updateCheckText_, text, 12, &kUrTextMuted);
 }
 

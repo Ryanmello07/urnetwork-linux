@@ -54,6 +54,9 @@ constexpr std::uint64_t kMaxImageBytes = 1ull * 1024 * 1024 * 1024;
 
 constexpr const char* kAutoCheckPrefKey = "check_updates_automatically";
 constexpr const char* kLastCheckPrefKey = "update_last_check_at";  // unix seconds
+// Unix seconds of the last check that reached GitHub; the six-hour throttle
+// above counts every completed check, failed ones too, so it cannot say this.
+constexpr const char* kLastSuccessPrefKey = "update_last_check_success";
 
 const std::uint64_t kOwnCode = update::ParseReleaseCode(UR_APP_VERSION);
 
@@ -70,6 +73,18 @@ std::int64_t SecondsUntil(Clock::time_point deadline) {
 std::string EnvOr(const char* name) {
   const char* v = g_getenv(name);
   return v ? std::string(v) : std::string();
+}
+
+// A Unix second in this machine's zone, in a g_date_time_format pattern; ""
+// when it cannot be represented.
+std::string FormatLocal(std::int64_t unixSeconds, const char* pattern) {
+  GDateTime* moment = g_date_time_new_from_unix_local(unixSeconds);
+  if (!moment) return {};
+  gchar* text = g_date_time_format(moment, pattern);
+  g_date_time_unref(moment);
+  std::string out = text ? text : "";
+  g_free(text);
+  return out;
 }
 
 // ---- the fetch ---------------------------------------------------------------
@@ -309,8 +324,24 @@ update::InstallKind UpdateChecker::DetectInstallKind() {
   return update::DetectInstallKind(probe);
 }
 
+std::string UpdateChecker::LocalDate(std::int64_t unixSeconds) {
+  return FormatLocal(unixSeconds, "%x");
+}
+
+std::string UpdateChecker::LocalDateTime(std::int64_t unixSeconds) {
+  return FormatLocal(unixSeconds, "%x, %R");
+}
+
 void UpdateChecker::Start() {
   autoCheck_ = AutoCheckEnabled();
+  // When a check last reached GitHub; before any has, this first launch is
+  // when checks began, so 72 hours of failures from now are reported too.
+  // Before the worker exists, so no lock is needed.
+  snapshot_.lastSuccessUnix = prefs::Get<std::int64_t>(kLastSuccessPrefKey, 0);
+  if (snapshot_.lastSuccessUnix <= 0) {
+    snapshot_.lastSuccessUnix = NowUnix();
+    prefs::Set(kLastSuccessPrefKey, snapshot_.lastSuccessUnix);
+  }
   if (kOwnCode == 0) {
     g_message("update: dev build (%s) -- automatic checking disabled; the developer "
               "screen's manual check still runs and reports", UR_APP_VERSION);
@@ -367,6 +398,11 @@ void UpdateChecker::SetAutoCheckEnabled(bool on) {
     // never before GitHub said it may be asked again.
     if (on) nextAutoUnix_ = NowUnix() + SecondsUntil(holdUntil_);
   }
+  // "The app keeps trying" is said only while it does.
+  const std::int64_t now = NowUnix();
+  Mutate([now, on](Snapshot& s) {
+    s.checkStale = update::CheckIsStale(now, s.lastSuccessUnix, on && kOwnCode != 0);
+  });
   cv_.notify_all();
   g_message("update: automatic checking %s", on ? "enabled" : "disabled");
 }
@@ -379,6 +415,14 @@ void UpdateChecker::Mutate(const std::function<void(Snapshot&)>& fn) {
     copy = snapshot_;
   }
   Publish(copy);
+}
+
+void UpdateChecker::CheckFailed() {
+  const std::int64_t now = NowUnix();
+  Mutate([this, now](Snapshot& s) {
+    s.lastCheck = CheckOutcome::Failed;
+    s.checkStale = update::CheckIsStale(now, s.lastSuccessUnix, autoCheck_ && kOwnCode != 0);
+  });
 }
 
 void UpdateChecker::Publish(const Snapshot& copy) {
@@ -442,7 +486,7 @@ void UpdateChecker::WorkerLoop() {
         RunCheck();
       } catch (const std::exception& e) {
         g_warning("update: check threw: %s", e.what());
-        Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+        CheckFailed();
       }
       // Any completed check -- manual or automatic -- restarts the cadence
       // and the persisted throttle; two checks 30 seconds apart cannot say
@@ -485,7 +529,7 @@ void UpdateChecker::RunCheck() {
   if (held) {
     // GitHub asked for no request before then; a manual check waits too.
     g_warning("update: GitHub asked for no request yet; the check is not sent");
-    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    CheckFailed();
     return;
   }
   Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });
@@ -512,23 +556,28 @@ void UpdateChecker::RunCheck() {
     }
     std::lock_guard<std::mutex> lock(mutex_);
     holdUntil_ = wait > 0 ? Clock::now() + std::chrono::seconds(wait) : Clock::time_point{};
+    snapshot_.holdUntil = holdUntil_;
+    snapshot_.holdUntilUnix = wait > 0 ? NowUnix() + wait : 0;
   }
   if (!fetched) {
     // A repository with no release yet answers an empty list, which is "no
     // update"; a 404 means the id no longer names a repository this app can
     // read, and fails like any other status.
     g_warning("update: release check failed: %s", error.c_str());
-    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    CheckFailed();
     return;
   }
   // parse(..., false): a malformed body comes back as `discarded`, not a throw.
   const nlohmann::json releases = nlohmann::json::parse(body, nullptr, false);
   if (!releases.is_array()) {
     g_warning("update: release list was not a JSON array");
-    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    CheckFailed();
     return;
   }
   const std::vector<update::Release> parsed = update::ParseReleases(releases);
+  // GitHub was reached: the list came back.
+  const std::int64_t succeeded = NowUnix();
+  prefs::Set(kLastSuccessPrefKey, succeeded);
 
   // Codes are judged against GitHub's clock, not this machine's. A list
   // without a Date header is judged against this machine's.
@@ -583,6 +632,8 @@ void UpdateChecker::RunCheck() {
         offer_ = Offer{};
       }
     }
+    snapshot_.lastSuccessUnix = succeeded;
+    snapshot_.checkStale = false;
     copy = snapshot_;
   }
   Publish(copy);

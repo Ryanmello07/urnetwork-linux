@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <string>
@@ -774,6 +775,7 @@ SettingsPage::~SettingsPage() {
   // orphan every in-flight completion: each checks the epoch before touching
   // the page or its sheets
   ++*epoch_;
+  holdEnd_.disconnect();
 }
 
 // ---- load pipeline (§9) -----------------------------------------------------
@@ -1202,21 +1204,55 @@ void SettingsPage::ApplyUpdateState(const UpdateChecker::Snapshot& snap) {
   in.outcome = snap.lastCheck;
   in.newestKnown = !snap.newestVersion.empty();
   in.newestOutranksOwn = snap.newestCode > update::ParseReleaseCode(UR_APP_VERSION);
+  in.stale = snap.checkStale;
+  // Whether GitHub's hold lasts is read off the steady clock, as the checker
+  // reads it, so a system clock set back cannot stretch it; holdUntilUnix is
+  // only the time the line names.
+  const std::chrono::steady_clock::duration holdLeft =
+      snap.holdUntil - std::chrono::steady_clock::now();
+  in.held = holdLeft > std::chrono::steady_clock::duration::zero();
   const update::UpdateStateLine line = update::UpdateStateLineFor(in);
-  Glib::ustring text;
-  if (line.textKey[0] != '\0') {
-    const char* pattern = T_(line.textKey, line.textEnglish);
-    switch (line.version) {
-      case update::StateVersion::None:
-        text = pattern;
-        break;
-      case update::StateVersion::Newest:
-        text = Format(pattern, snap.newestVersion);
-        break;
-    }
+  // The hold ends without a snapshot to say so: read the line again then, so
+  // Check now does not wait for the next check.
+  holdEnd_.disconnect();
+  if (in.held) {
+    holdEnd_ = Glib::signal_timeout().connect_seconds(
+        [this] {
+          ApplyUpdateState(updateSnapshot_);
+          return false;
+        },
+        static_cast<unsigned int>(std::chrono::ceil<std::chrono::seconds>(holdLeft).count()));
   }
-  kit::SetTextOrCollapse(*updateState_, text);
-  if (line.failed && !text.empty()) SetToned(*updateState_, kUrDanger, text);
+  // The store's sentence with its {} filled in: a version is data (release
+  // grammar), a date or time is this machine's locale's.
+  const auto fill = [&snap](const char* pattern, update::StateArgument argument) {
+    switch (argument) {
+      case update::StateArgument::None:
+        return std::string(pattern);
+      case update::StateArgument::NewestVersion:
+        return Format(pattern, snap.newestVersion);
+      case update::StateArgument::LastSuccessDate:
+        return Format(pattern, UpdateChecker::LocalDate(snap.lastSuccessUnix));
+      case update::StateArgument::HoldEndTime:
+        return Format(pattern, UpdateChecker::LocalDateTime(snap.holdUntilUnix));
+    }
+    return std::string(pattern);
+  };
+  const std::string text =
+      line.textKey[0] != '\0' ? fill(T_(line.textKey, line.textEnglish), line.argument) : "";
+  const std::string detail =
+      line.detailKey[0] != '\0'
+          ? fill(T_(line.detailKey, line.detailEnglish), line.detailArgument)
+          : "";
+  kit::SetTextOrCollapse(*updateState_, detail.empty() ? text : text + "\n" + detail);
+  if (!text.empty() && line.tone != update::StateTone::Muted) {
+    // the first sentence in its tone, the second in the line's own
+    const Rgba& tone = line.tone == update::StateTone::Danger ? kUrDanger : kUrAmber;
+    Glib::ustring markup = "<span foreground='" + HexForMarkup(tone) + "'>" +
+                           Glib::Markup::escape_text(text) + "</span>";
+    if (!detail.empty()) markup += "\n" + Glib::Markup::escape_text(detail);
+    updateState_->set_markup(markup);
+  }
   updateStateRow_->set_visible(!text.empty());
   checkNow_->set_sensitive(updates_ != nullptr && line.canCheck);
 }

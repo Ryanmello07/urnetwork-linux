@@ -84,6 +84,18 @@ class UpdateChecker {
     // Its release code, 0 when none: Settings says "up to date" only when it
     // does not outrank this build.
     std::uint64_t newestCode = 0;
+    // Unix seconds of the last check that reached GitHub (the release list
+    // came back), persisted; before any has, the first launch that tried.
+    std::int64_t lastSuccessUnix = 0;
+    // Automatic checks are on and none has reached GitHub for more than 72
+    // hours (update::CheckIsStale): Settings says since when.
+    bool checkStale = false;
+    // When GitHub asked for no request before: holdUntilUnix in Unix
+    // seconds, the time Settings names (0 when none), and holdUntil the same
+    // moment on the steady clock, which says whether it has come, so a
+    // system clock set back cannot stretch it (its epoch when none).
+    std::int64_t holdUntilUnix = 0;
+    std::chrono::steady_clock::time_point holdUntil{};
   };
 
   // Invoked ON THE GTK MAIN LOOP (PostToMain), never with a lock held.
@@ -127,6 +139,11 @@ class UpdateChecker {
   // Settings notice can be built before the first check.
   static update::InstallKind DetectInstallKind();
 
+  // A Unix second in this machine's zone: the locale's short date, and that
+  // date with the time, for the stale and held lines.
+  static std::string LocalDate(std::int64_t unixSeconds);
+  static std::string LocalDateTime(std::int64_t unixSeconds);
+
  private:
   // Everything an apply needs, captured at check time so a release list that
   // changes mid-flight cannot redirect an apply the user already clicked.
@@ -142,6 +159,9 @@ class UpdateChecker {
   void RunCheck();
   void RunApply();
   void CleanupStaleFiles();
+  // A check that did not reach GitHub: Failed, and stale once none has for
+  // three days.
+  void CheckFailed();
   // Copy under the lock, mutate, publish outside it.
   void Mutate(const std::function<void(Snapshot&)>& fn);
   void Publish(const Snapshot& copy);

@@ -1,5 +1,5 @@
-// What an update check came to, and when the checker asks GitHub again,
-// decided pure.
+// What an update check came to, when the checker asks GitHub again, and when
+// it tells the user it has not been able to, decided pure.
 //
 // Requests are anonymous: GitHub allows 60 an hour per IP address, and every
 // user behind one exit or one NAT shares them, a URnetwork exit included when
@@ -9,6 +9,10 @@
 // never asks before then, manual checks included, and never waits more than a
 // day whatever a header says, so a hostile or broken header cannot stop checks
 // for good.
+//
+// A check that cannot succeed must not fail silently forever: when none has
+// reached GitHub for kStaleAfterSeconds, Settings says "Couldn't check for
+// updates since <date>" until one does.
 //
 // No GTK or libsoup: UpdateChecker.cpp asks it, Settings' line under Check
 // now (UpdateStatePresentation.hpp) reads its CheckOutcome, and
@@ -32,6 +36,9 @@ enum class CheckOutcome {
   DevBuild,     // a release exists but this is a dev build (code 0): never offered
   Failed,       // the fetch or the parse failed; details in the log
 };
+
+// How long without a successful check before the app says so.
+inline constexpr std::int64_t kStaleAfterSeconds = 72 * 60 * 60;
 
 // The longest a refused request can push the next one out.
 inline constexpr std::int64_t kMaxBackoffSeconds = 24 * 60 * 60;
@@ -61,6 +68,16 @@ inline constexpr std::int64_t NextCheckDelaySeconds(std::int64_t cadenceSeconds,
   }
   wait = std::min(wait, kMaxBackoffSeconds);
   return std::max(cadenceSeconds, wait);
+}
+
+// Whether the app should say it has not been able to check: automatic checks
+// are on (`checking`), and the last success (or the first launch that tried,
+// when none has succeeded) is more than kStaleAfterSeconds ago. A clock set
+// back before the last success is not stale.
+inline constexpr bool CheckIsStale(std::int64_t nowUnixSeconds, std::int64_t lastSuccessUnixSeconds,
+                                   bool checking) {
+  return checking && lastSuccessUnixSeconds > 0 &&
+         nowUnixSeconds - lastSuccessUnixSeconds > kStaleAfterSeconds;
 }
 
 // A response header's value as a decimal count, or `fallback` when it is

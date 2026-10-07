@@ -206,7 +206,9 @@ repository, or someone registering a name it used to have, cannot change
 where updates come from. Requests are anonymous, and GitHub allows 60 an hour
 per address: when it refuses one and says when to ask again (`Retry-After`,
 or the rate limit's reset), no check is sent before then, manual ones
-included, for at most a day.
+included, for at most a day, and Settings says until when. While automatic
+checks are on and none has reached GitHub for three days, Settings says
+"Couldn't check for updates since <date>", since a newer release may be out.
 
 What the app does with a newer release depends on how it was installed:
 
