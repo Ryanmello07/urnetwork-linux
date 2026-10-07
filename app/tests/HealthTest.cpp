@@ -232,3 +232,78 @@ UR_TEST(theButtonAndTheHeadlineComeFromTheSameReading) {
     }
   }
 }
+
+// ---- the degrade hold (Windows' Tracker, over CONNECTED) -------------------
+
+UR_TEST(degradeHoldKeepsABlipConnectedAndCallsALossDegraded) {
+  DegradeHold hold;
+  UR_EXPECT_TRUE(hold.Update(true, false, 0) == ProofLoss::None);  // never proven: nothing held
+  UR_EXPECT_TRUE(hold.Update(true, true, 1000) == ProofLoss::None);
+  // the controller stops saying CONNECTED: held for the hold, then lost
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000) == ProofLoss::Held);
+  UR_EXPECT_EQ(2000 + DegradeHold::kDegradeHoldMillis, hold.ReevalAtMillis());
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000 + DegradeHold::kDegradeHoldMillis - 1) ==
+                 ProofLoss::Held);
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000 + DegradeHold::kDegradeHoldMillis) ==
+                 ProofLoss::Lost);
+  UR_EXPECT_EQ(0, hold.ReevalAtMillis());
+  // one CONNECTED recovers at once, and the next loss starts a fresh hold
+  UR_EXPECT_TRUE(hold.Update(true, true, 20000) == ProofLoss::None);
+  UR_EXPECT_TRUE(hold.Update(true, false, 21000) == ProofLoss::Held);
+  UR_EXPECT_EQ(21000 + DegradeHold::kDegradeHoldMillis, hold.ReevalAtMillis());
+}
+
+UR_TEST(degradeHoldStartsOverWithTheSessionOrANewAttempt) {
+  DegradeHold hold;
+  hold.Update(true, true, 0);
+  // a session that goes down takes its proof with it
+  UR_EXPECT_TRUE(hold.Update(false, false, 1000) == ProofLoss::None);
+  UR_EXPECT_TRUE(hold.Update(true, false, 2000) == ProofLoss::None);
+  // and so does a deliberate connect: a new location's window is not a loss
+  hold.Update(true, true, 3000);
+  hold.NoteNewAttempt();
+  UR_EXPECT_TRUE(hold.Update(true, false, 4000) == ProofLoss::None);
+  UR_EXPECT_TRUE(hold.Update(true, false, 4000 + 10 * DegradeHold::kDegradeHoldMillis) ==
+                 ProofLoss::None);
+  UR_EXPECT_EQ(0, hold.ReevalAtMillis());
+}
+
+UR_TEST(stateTableDegraded) {
+  Signals held = Session(SdkStatus::Connecting, 4);
+  held.proofLoss = ProofLoss::Held;
+  ExpectRow("a blip in the hold", held, State::Connected, "Connected", Dot::Green,
+            Hero::Connected, Action::Disconnect);
+  Signals lost = Session(SdkStatus::Connecting, 4);
+  lost.proofLoss = ProofLoss::Lost;
+  ExpectRow("a loss past the hold", lost, State::Degraded, "Connection degraded — reconnecting",
+            Dot::Coral, Hero::Connecting, Action::Disconnect);
+  UR_EXPECT_TRUE(std::string(Render(lost).textKey) == "conn_degraded");
+  // a session that was working and settled on failure since is degraded
+  lost.sdk = SdkStatus::Failed;
+  ExpectRow("lost, then failed", lost, State::Degraded, "Connection degraded — reconnecting",
+            Dot::Coral, Hero::Connecting, Action::Disconnect);
+  // the user's Disconnect and a session that is down still outrank it
+  lost.disconnectRequested = true;
+  UR_EXPECT_TRUE(Render(lost).state == State::Disconnecting);
+  Signals down = lost;
+  down.disconnectRequested = false;
+  down.tunnelBound = false;
+  UR_EXPECT_TRUE(Render(down).state == State::Disconnected);
+}
+
+UR_TEST(trafficIsHeldOnlyWhileNothingProvenCarriesASession) {
+  Signals evaluating = Session(SdkStatus::Connecting, 4);
+  UR_EXPECT_TRUE(TrafficHeld(Render(evaluating), evaluating));
+  Signals failed = Session(SdkStatus::Failed, 4);
+  UR_EXPECT_TRUE(TrafficHeld(Render(failed), failed));
+  Signals lost = Session(SdkStatus::Connecting, 4);
+  lost.proofLoss = ProofLoss::Lost;
+  UR_EXPECT_TRUE(TrafficHeld(Render(lost), lost));
+  for (const Signals& s : {Session(SdkStatus::Connected, 4), Session(SdkStatus::Connecting, 0),
+                           Signals{}}) {
+    UR_EXPECT_FALSE(TrafficHeld(Render(s), s));
+  }
+  // the held line claims "blocked, not exposed" only with the floor in force
+  UR_EXPECT_TRUE(std::string(HeldLineFor(true).key) == "conn_traffic_blocked");
+  UR_EXPECT_TRUE(std::string(HeldLineFor(false).key) == "conn_traffic_blocked_unprotected");
+}

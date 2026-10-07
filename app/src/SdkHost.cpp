@@ -308,10 +308,15 @@ SdkHost::~SdkHost() {
     g_source_remove(providerStatsPollId_);
     providerStatsPollId_ = 0;
   }
-  // ...and so does a settling row click's.
+  // ...and so does a settling row click's, and the degrade hold's.
   if (rowConnectTimerId_ != 0) {
     g_source_remove(rowConnectTimerId_);
     rowConnectTimerId_ = 0;
+  }
+  {
+    std::scoped_lock degradeLock(degradeMutex_);
+    if (degradeReevalId_ != 0) g_source_remove(degradeReevalId_);
+    degradeReevalId_ = 0;
   }
   // Last, and unconditionally: the reservation is the only member that is a
   // kernel resource rather than an SDK handle, and leaking it would keep the
@@ -2906,6 +2911,48 @@ void SdkHost::NoteDaemonTunnelGone() {
 }
 
 ConnectReading SdkHost::ReadConnectReading() {
+  ConnectReading r = ReadConnectFacts();
+  const bool sessionUp = health::SessionUp(r.ToSignals(/*disconnectRequested=*/false));
+  const int64_t nowMillis = g_get_monotonic_time() / 1000;
+  int64_t armInMillis = -1;
+  {
+    std::scoped_lock lock(degradeMutex_);
+    r.proofLoss =
+        degradeHold_.Update(sessionUp, r.sdk == health::SdkStatus::Connected, nowMillis);
+    const int64_t reevalAt = degradeHold_.ReevalAtMillis();
+    if (reevalAt != 0 && reevalAt != degradeReevalAtMillis_) {
+      degradeReevalAtMillis_ = reevalAt;
+      if (degradeReevalId_ != 0) g_source_remove(degradeReevalId_);
+      degradeReevalId_ = 0;
+      armInMillis = reevalAt - nowMillis;
+    }
+  }
+  if (armInMillis >= 0) {
+    // one millisecond past the end, so the reading taken then is past it
+    const guint id = g_timeout_add(
+        static_cast<guint>(armInMillis + 1),
+        [](gpointer data) -> gboolean {
+          auto* self = static_cast<SdkHost*>(data);
+          {
+            std::scoped_lock lock(self->degradeMutex_);
+            self->degradeReevalId_ = 0;
+          }
+          if (self->onReading_) self->onReading_(self->CurrentConnectReading());
+          return G_SOURCE_REMOVE;
+        },
+        this);
+    std::scoped_lock lock(degradeMutex_);
+    degradeReevalId_ = id;
+  }
+  return r;
+}
+
+void SdkHost::NoteNewConnectAttempt() {
+  std::scoped_lock lock(degradeMutex_);
+  degradeHold_.NoteNewAttempt();
+}
+
+ConnectReading SdkHost::ReadConnectFacts() {
   ConnectReading r;
   const bool haveDevice = device_.has_value();
   r.tunnelBound = haveDevice && deviceControlGeneration_ == control_.SessionGeneration();
@@ -4340,6 +4387,8 @@ bool SdkHost::RequestReliability(ReliabilityRead scope,
 void SdkHost::ConnectBestAvailable() {
   // a location pick or a press while out of balance starts nothing
   if (connectGate_ && connectGate_([this] { ConnectBestAvailable(); })) return;
+  // a deliberate connect: proof the last destination earned does not carry over
+  NoteNewConnectAttempt();
   std::scoped_lock lock(mutex_);
   // THE CALLER GOT HERE BELIEVING THERE IS A SESSION. Verify that with the
   // daemon before driving anything: if the service restarted (or another
@@ -4414,6 +4463,7 @@ void SdkHost::ConnectBestAvailable() {
 
 void SdkHost::Connect(const std::optional<urnet::ConnectLocation>& location) {
   if (connectGate_ && connectGate_([this, location] { Connect(location); })) return;
+  NoteNewConnectAttempt();
   std::scoped_lock lock(mutex_);
   if (connectVc_) {
     connectVc_->connect(location);
@@ -4486,6 +4536,7 @@ void SdkHost::RunRowConnect(const std::optional<urnet::ConnectLocation>& locatio
 
 void SdkHost::Disconnect() {
   CancelRowConnect("disconnect");
+  NoteNewConnectAttempt();
   std::scoped_lock lock(mutex_);
   // Bring the daemon's tunnel down. Ending the provider session does not
   // touch the tun device or the 31 capture routes — those are the daemon's,

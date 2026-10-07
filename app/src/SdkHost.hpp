@@ -194,6 +194,9 @@ struct ConnectReading {
   bool tunnelBound = false;
   int64_t providerCount = 0;  // grid.getWindowCurrentSize()
   bool insufficientBalance = false;
+  // The degrade hold's verdict on this session (health::DegradeHold), so the
+  // page, the strip and the tray read one verdict.
+  health::ProofLoss proofLoss = health::ProofLoss::None;
 
   // Value equality, so a consumer can skip a rebuild when nothing moved. It
   // compares EVERY field on purpose: a partial comparison would be one more
@@ -201,7 +204,8 @@ struct ConnectReading {
   bool operator==(const ConnectReading& o) const {
     return sdk == o.sdk && rawStatus == o.rawStatus &&
            destinationSelected == o.destinationSelected && tunnelBound == o.tunnelBound &&
-           providerCount == o.providerCount && insufficientBalance == o.insufficientBalance;
+           providerCount == o.providerCount && insufficientBalance == o.insufficientBalance &&
+           proofLoss == o.proofLoss;
   }
   bool operator!=(const ConnectReading& o) const { return !(*this == o); }
 
@@ -213,6 +217,7 @@ struct ConnectReading {
     s.providerCount = providerCount;
     s.insufficientBalance = insufficientBalance;
     s.disconnectRequested = disconnectRequested;
+    s.proofLoss = proofLoss;
     return s;
   }
 };
@@ -1312,7 +1317,17 @@ class SdkHost {
   // Re-reads EVERY field from the live SDK getters. Takes no lock (same
   // contract as ReadStats): it is called from SDK listener threads, from the
   // GTK loop, and from inside StartTunnelLocked with mutex_ already held.
+  // The reading's facts, then the degrade hold folded over them.
   ConnectReading ReadConnectReading();
+  ConnectReading ReadConnectFacts();
+  // The degrade hold (health::DegradeHold) over every reading, under its own
+  // lock because readings are taken on any thread, and the one-shot timeout
+  // that reads again when a running hold ends, since nothing else may.
+  std::mutex degradeMutex_;
+  health::DegradeHold degradeHold_;
+  int64_t degradeReevalAtMillis_ = 0;  // the hold end the timeout is armed for
+  unsigned int degradeReevalId_ = 0;    // g_timeout source id; 0 = unarmed
+  void NoteNewConnectAttempt();
   void PublishConnectReading();  // ReadConnectReading() -> onReading_
 
   // ---- kill switch internals ------------------------------------------------

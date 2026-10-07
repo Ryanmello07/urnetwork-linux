@@ -1340,7 +1340,8 @@ void ConnectPage::ApplyConnectStatus() {
   // Asked once, here, because DisconnectIntentLive SETTLES the intent as a
   // side effect and the label has to see the same answer the headline did.
   const bool disconnecting = DisconnectIntentLive();
-  const health::Reading view = health::Render(reading_.ToSignals(disconnecting));
+  const health::Signals signals = reading_.ToSignals(disconnecting);
+  const health::Reading view = health::Render(signals);
   renderedState_ = view.state;
 
   const Glib::ustring text = T_(view.textKey, view.textEnglish);
@@ -1371,6 +1372,18 @@ void ConnectPage::ApplyConnectStatus() {
                              ? T_("conn_not_protected",
                                   "Your internet traffic is not protected.")
                              : "");
+  // Traffic held, not exposed (Windows #27): nothing proven carries the
+  // session, so what is routed into the tunnel goes nowhere, and the line says
+  // whether the kill switch's floor keeps it from leaving another way.
+  Glib::ustring held;
+  if (health::TrafficHeld(view, signals)) {
+    const KillSwitchStatus killSwitch = host_.CurrentKillSwitchStatus();
+    const health::HeldLine line =
+        health::HeldLineFor(killSwitch.installed_known &&
+                            killSwitch.installed == ctl::KillSwitchState::Connected);
+    held = T_(line.key, line.english);
+  }
+  kit::SetTextOrCollapse(*trafficHeldText_, held);
   kit::SetTextOrCollapse(*daemonNoticeText_, daemonNotice_);
 
   canvas_->SetState(heroState);
@@ -2585,6 +2598,8 @@ void ConnectPage::RefreshFeeds(bool force) {
     host_.RefreshKillSwitchStatus([this, epoch, seen](KillSwitchStatus) {
       if (*epoch != seen) return;
       ApplyKillSwitchUi();
+      // the held line names whether the floor is in force
+      if (trafficHeldText_->get_visible()) ApplyConnectStatus();
     });
   }
 }

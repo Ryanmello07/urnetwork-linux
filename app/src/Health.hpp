@@ -56,6 +56,7 @@
 #pragma once
 
 #include <cctype>
+#include <cstdint>
 #include <string>
 
 namespace urnw {
@@ -77,6 +78,7 @@ enum class State {
   Connecting,     // a session is up, no provider has been proven yet
   Evaluating,     // a session is up, providers are in the window, none proven
   Connected,      // a session is up and the controller says providers are attached
+  Degraded,       // was Connected this session, and has not been for kDegradeHoldMillis
   Failed,         // the provider window settled on failure
   Disconnecting,  // a teardown THE USER ASKED FOR is in flight
   Blocked,        // out of balance (overrides the connection reading)
@@ -91,6 +93,10 @@ enum class Dot { Idle, Connecting, Green, Coral, Amber };
 
 // The one action the hero and the button share.
 enum class Action { Connect, Disconnect };
+
+// Proof this session had and no longer has (DegradeHold, below): Held while
+// the hold runs, Lost after it.
+enum class ProofLoss { None, Held, Lost };
 
 inline SdkStatus ParseSdkStatus(const std::string& raw) {
   if (raw.empty()) return SdkStatus::Unknown;
@@ -126,6 +132,9 @@ struct Signals {
   // by the caller (ConnectPage::DisconnectIntentLive: it clears the moment the
   // session actually reads down, and in any case after 8s).
   bool disconnectRequested = false;
+  // This session was Connected and the controller says otherwise now: the
+  // hold's verdict, stamped by SdkHost (DegradeHold).
+  ProofLoss proofLoss = ProofLoss::None;
 };
 
 // THE ONE PREDICATE. "There is something to disconnect from." It selects the
@@ -157,6 +166,11 @@ inline State Aggregate(const Signals& s) {
   // A session IS up. Only the controller's own status can say whether
   // providers are attached.
   if (s.sdk == SdkStatus::Connected) return State::Connected;
+  // It said so earlier in this session: a blip stays Connected for the hold,
+  // and a loss past it is Degraded, which outranks a window that has settled
+  // on failure since (a session that was working is not one that never did).
+  if (s.proofLoss == ProofLoss::Held) return State::Connected;
+  if (s.proofLoss == ProofLoss::Lost) return State::Degraded;
   if (s.sdk == SdkStatus::Failed) return State::Failed;
   // Connecting, DestinationSet, Disconnected and Unknown all mean the same
   // thing over a live session: it is coming up and no provider has been proven
@@ -185,6 +199,14 @@ inline Reading Render(const Signals& s) {
       r.textEnglish = "Connected";
       r.dot = Dot::Green;
       r.hero = Hero::Connected;
+      break;
+    case State::Degraded:
+      // Windows' wording: the SDK reconnects on its own, so the line says so
+      // rather than asking for a press the recovery does not need
+      r.textKey = "conn_degraded";
+      r.textEnglish = "Connection degraded — reconnecting";
+      r.dot = Dot::Coral;
+      r.hero = Hero::Connecting;
       break;
     case State::Evaluating:
       r.textKey = "conn_finding_providers";
@@ -231,6 +253,89 @@ inline Reading Render(const Signals& s) {
   r.action = (SessionUp(s) || s.disconnectRequested) ? Action::Disconnect : Action::Connect;
   return r;
 }
+
+// Nothing proven carries the session's traffic: it is routed into the tunnel
+// and held there. True for Evaluating, Degraded and Failed over a session.
+inline bool TrafficHeld(const Reading& r, const Signals& s) {
+  return SessionUp(s) && (r.state == State::Evaluating || r.state == State::Degraded ||
+                          r.state == State::Failed);
+}
+
+// The line under the status row while traffic is held, as Windows words it.
+// "Blocked, not exposed" is true only while the kill switch's floor is in
+// force beside the tunnel (ctl::KillSwitchState::Connected); otherwise, or
+// with no answer from the daemon, traffic that does not follow the capture
+// routes can still leave, and the line says so.
+struct HeldLine {
+  const char* key;
+  const char* english;
+};
+
+inline HeldLine HeldLineFor(bool floorInForce) {
+  if (floorInForce) {
+    return {"conn_traffic_blocked",
+            "No working provider right now — your traffic is blocked, not exposed. Disconnect "
+            "to go back to your normal connection."};
+  }
+  return {"conn_traffic_blocked_unprotected",
+          "No working provider right now — traffic sent into the tunnel is going nowhere, and "
+          "leak protection is off, so some traffic may bypass it. Disconnect to go back to "
+          "your normal connection."};
+}
+
+// The degrade hold, as Windows' Tracker has it, over this app's proof (the
+// controller's CONNECTED, its MinSatisfied). Once a session has been
+// Connected, a controller that stops saying so is held at Connected for
+// kDegradeHoldMillis, because a provider migration or a probe cycle takes it
+// away for a second or two routinely and a headline that flickers on every
+// one is noise; past the hold the session is Degraded. Recovery is immediate
+// and one-sided, and a session that goes down, or a deliberate connect or
+// disconnect (NoteNewAttempt), starts over: a new location's window building
+// up is Connecting, not a loss.
+//
+// The clock is injected (monotonic milliseconds), so the hold is tested
+// without one. Not thread safe: SdkHost holds it under its own lock.
+class DegradeHold {
+ public:
+  static constexpr int64_t kDegradeHoldMillis = 7000;
+
+  // `sessionUp` and `connected` (the controller says CONNECTED) of one reading.
+  ProofLoss Update(bool sessionUp, bool connected, int64_t nowMillis) {
+    reevalAtMillis_ = 0;
+    if (!sessionUp) {
+      NoteNewAttempt();
+      return ProofLoss::None;
+    }
+    if (connected) {
+      proven_ = true;
+      lostAtMillis_ = -1;
+      return ProofLoss::None;
+    }
+    if (!proven_) return ProofLoss::None;
+    if (lostAtMillis_ < 0) lostAtMillis_ = nowMillis;
+    if (nowMillis - lostAtMillis_ < kDegradeHoldMillis) {
+      reevalAtMillis_ = lostAtMillis_ + kDegradeHoldMillis;
+      return ProofLoss::Held;
+    }
+    return ProofLoss::Lost;
+  }
+
+  // When the clock, not a new reading, ends a running hold; 0 with none.
+  // Readings stop arriving exactly when everything is stuck, so the holder
+  // has to read again then.
+  int64_t ReevalAtMillis() const { return reevalAtMillis_; }
+
+  void NoteNewAttempt() {
+    proven_ = false;
+    lostAtMillis_ = -1;
+    reevalAtMillis_ = 0;
+  }
+
+ private:
+  bool proven_ = false;
+  int64_t lostAtMillis_ = -1;
+  int64_t reevalAtMillis_ = 0;
+};
 
 }  // namespace health
 }  // namespace urnw
