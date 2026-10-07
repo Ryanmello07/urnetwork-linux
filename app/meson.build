@@ -307,9 +307,11 @@ executable('urnetworkd',
     'src/daemon/ControlServer.cpp',
     'src/daemon/TunnelHost.cpp',
     'src/daemon/DaemonLog.cpp',
+    'src/daemon/ExitSampler.cpp',
     'src/daemon/HostMemory.cpp',
     'src/daemon/NetworkCountryWatcher.cpp',
     'src/daemon/SupportDiagnostics.cpp',
+    'src/daemon/GlogFlusher.cpp',
     'src/Tunnel.cpp',
     'src/ControlClient.cpp',
     'src/LocationOverride.cpp',
@@ -657,6 +659,19 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/InstanceHandoverWiringTest.cpp',
     'tests/LaunchAtStartupTest.cpp',
     'tests/LaunchAtStartupWiringTest.cpp',
+    'tests/Utf8TruncateTest.cpp',
+    'tests/ControlReplyWiringTest.cpp',
+    'tests/DaemonInstanceGuardTest.cpp',
+    'tests/DaemonCrashOutputTest.cpp',
+    'tests/TunnelHostLockWiringTest.cpp',
+    'tests/GlogFlushWiringTest.cpp',
+    'tests/TunnelWatchdogTest.cpp',
+    'tests/DeadTunnelWiringTest.cpp',
+    'tests/FailsafeNoticeTest.cpp',
+    'tests/FailsafeNoticeWiringTest.cpp',
+    'tests/TeardownOrderWiringTest.cpp',
+    'tests/SelfRestartTest.cpp',
+    'tests/SelfRestartWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -705,6 +720,15 @@ urnetwork_tests = executable('urnetwork-tests',
               # SingleInstance.cpp, the autostart entry and the launcher the same way.
               # LaunchAtStartupWiringTest reads the startup toggle's Settings and launch call
               # sites, meson.build and ../../packaging/lib/common.sh the same way.
+              # ControlReplyWiringTest reads the daemon's reply sends and log ring the same way.
+              # DaemonInstanceGuardTest reads the daemon's start and revert paths the same way.
+              # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
+              # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
+              # GlogFlushWiringTest reads the daemon's glog flushes the same way.
+              # DeadTunnelWiringTest reads the dead-tunnel failsafe's daemon call sites the
+              # same way, and FailsafeNoticeWiringTest its health poll and connect page.
+              # TeardownOrderWiringTest reads TunnelHost's teardowns the same way.
+              # SelfRestartWiringTest reads the daemon's self-restart and the unit the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

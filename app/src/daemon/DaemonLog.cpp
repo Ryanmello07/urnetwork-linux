@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "Utf8Truncate.hpp"
+
 namespace urnw {
 namespace {
 
@@ -25,7 +27,7 @@ constexpr gint64 kInitialTailBytes = 64 * 1024;
 
 // A single line beyond this is a runaway (a serialized blob, a stack dump with
 // no newlines): truncate rather than let one entry dominate the ring and the
-// reply frame.
+// reply frame. The cut never splits a UTF-8 character (TruncateUtf8).
 constexpr std::size_t kMaxLineBytes = 8 * 1024;
 
 int64_t NowUnixMillis() {
@@ -54,10 +56,7 @@ DaemonLog& DaemonLog::Instance() {
 }
 
 void DaemonLog::AppendLocked(const char* source, std::string text) {
-  if (text.size() > kMaxLineBytes) {
-    text.resize(kMaxLineBytes);
-    text += " ...[truncated]";
-  }
+  if (TruncateUtf8(text, kMaxLineBytes)) text += " ...[truncated]";
   ctl::LogLine line;
   line.seq = ++lastSeq_;
   line.unix_ms = NowUnixMillis();

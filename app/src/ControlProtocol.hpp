@@ -1321,9 +1321,16 @@ struct StatusReply {
   bool ipv6_captured = false;
   std::string tunnel_interface;    // "urnet0" while up
   // Why the last session ended: "user" (an explicit stop_tunnel), "io_loop"
-  // (the SDK loop finished under us), "start_failed", "daemon_shutdown", or ""
-  // when no session has ended.
+  // (the SDK loop finished under us), "start_failed", "daemon_shutdown",
+  // "orphaned", a protective teardown's own reason ("tunnel_storm",
+  // "egress_unprotected" and the like), one of the dead-tunnel failsafe's
+  // kStopReasonFailsafe* (IsFailsafeStop), or "" when no session has ended.
   std::string stop_reason;
+  // The dead-tunnel failsafe (TunnelWatchdog.hpp) is counting down on the live
+  // session and will end it soon unless something gets through, so the app can
+  // warn before the teardown rather than explain it after. Additive within v1;
+  // absent parses false, which is what a daemon without the failsafe is.
+  bool failsafe_armed = false;
   int64_t up_since_millis = 0;     // unix millis of the up edge, 0 while down
   // A control client currently owns this tunnel. false with tunnel_state=up is
   // a captured machine with no UI attached — the state the tray "Stop the
@@ -1416,6 +1423,7 @@ inline void to_json(nlohmann::json& j, const StatusReply& v) {
   j["ipv6_captured"] = v.ipv6_captured;
   j["tunnel_interface"] = v.tunnel_interface;
   j["stop_reason"] = v.stop_reason;
+  j["failsafe_armed"] = v.failsafe_armed;
   j["up_since_millis"] = v.up_since_millis;
   j["owner_connected"] = v.owner_connected;
   j["rpc_pinned"] = v.rpc_pinned;
@@ -1452,6 +1460,7 @@ inline void from_json(const nlohmann::json& j, StatusReply& v) {
   detail::Get(j, "ipv6_captured", v.ipv6_captured);  // absent = false = understates
   detail::Get(j, "tunnel_interface", v.tunnel_interface);
   detail::Get(j, "stop_reason", v.stop_reason);
+  detail::Get(j, "failsafe_armed", v.failsafe_armed);  // absent = no countdown
   detail::Get(j, "up_since_millis", v.up_since_millis);
   detail::Get(j, "owner_connected", v.owner_connected);
   detail::Get(j, "rpc_pinned", v.rpc_pinned);  // absent = false = fails closed
@@ -1481,6 +1490,19 @@ inline provide::DaemonProviderFacts ProviderFactsFrom(const StatusReply& status)
   facts.ownerConnected = status.owner_connected;
   facts.providerControlMode = status.provider_control_mode;
   return facts;
+}
+
+// The stop reasons of the dead-tunnel failsafe (TunnelWatchdog.hpp), one per
+// rule: no proven exit for 90 s, traffic in and nothing back for 20 s, the SDK
+// not answering for 30 s. The spellings are Windows' TunnelStatus::stop_reason.
+inline constexpr const char* kStopReasonFailsafeNoExit = "failsafe_no_exit";
+inline constexpr const char* kStopReasonFailsafeNoInbound = "failsafe_no_inbound";
+inline constexpr const char* kStopReasonFailsafeSdkUnresponsive = "failsafe_sdk_unresponsive";
+
+// The daemon ended the session by itself because it carried nothing. One
+// predicate for every surface, and it knows a failsafe reason added later.
+inline bool IsFailsafeStop(const std::string& stopReason) {
+  return stopReason.rfind("failsafe_", 0) == 0;
 }
 
 // The non-owner, non-root view of a tunnel somebody else on this machine
@@ -1877,6 +1899,9 @@ inline constexpr const char* kCodeTunOpenFailed = "tun_open_failed";
 // into the tunnel, re-sent, re-captured). Measured once on a real machine at
 // 1.34 Gbps out / 0 in, 3.38 Tb sent before a human noticed and killed it.
 inline constexpr const char* kCodeTunnelStorm = "tunnel_storm";
+// The dead-tunnel failsafe ended a session that was up but carried nothing
+// (stop_reason says which rule, IsFailsafeStop).
+inline constexpr const char* kCodeTunnelDead = "tunnel_dead";
 // The device handed back an address/mtu/prefix that is not usable.
 inline constexpr const char* kCodeTunConfigInvalid = "tun_config_invalid";
 // `ip`, `nft` or `resolvectl` is not installed.
@@ -1963,9 +1988,25 @@ inline std::string ReplyCode(const nlohmann::json& j) {
   return code;
 }
 
+// The one way a frame becomes bytes on the socket, for both binaries.
+//
+// A plain dump() throws type_error.316 on a string that is not valid UTF-8, and
+// the frames carry strings neither binary wrote: SDK errors, resolvectl and nft
+// output, SDK log lines. The daemon sends from glib callbacks, so that throw
+// was std::terminate in a root process holding the capture routes. With
+// error_handler_t::replace a bad byte becomes U+FFFD instead. The strings at
+// risk are human-readable diagnostics; the peer acts on codes, flags and
+// states, which the daemon writes itself. DecodeFrame stays strict.
+//
+// dump() can still throw on allocation, so senders keep their try.
+inline std::string DumpForWire(const nlohmann::json& j) {
+  return j.dump(/*indent=*/-1, /*indent_char=*/' ', /*ensure_ascii=*/false,
+                nlohmann::json::error_handler_t::replace);
+}
+
 // One frame per line. nlohmann's dump() never emits raw newlines (they are
 // escaped inside strings), so '\n' is an unambiguous frame terminator.
-inline std::string EncodeFrame(const nlohmann::json& j) { return j.dump() + "\n"; }
+inline std::string EncodeFrame(const nlohmann::json& j) { return DumpForWire(j) + "\n"; }
 
 // Parses one line (with or without its trailing newline). Returns nullopt for
 // anything that is not a single JSON object — the caller treats that as a

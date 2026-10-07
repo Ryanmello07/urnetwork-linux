@@ -149,8 +149,9 @@ old leaking behaviour, kept only as an escape hatch. It does not fake a pass:
   tunnel"*, that is this — **report it, with `journalctl -u urnetworkd`**. The shipped
   `95-urnetwork.conf` marks only `urnet0` unmanaged; it does **not** stop NetworkManager
   owning `resolv.conf`.
-* **`sudo urnetworkd --revert` while connected** restores `/etc/resolv.conf` underneath the
-  live session. Don't run it as a "cleanup" mid-test.
+* **`sudo urnetworkd --revert` while the daemon runs** is refused: it would restore
+  `/etc/resolv.conf` underneath the live session. `--force` overrides that; don't use it as a
+  "cleanup" mid-test.
 
 ### 0.4 What you are actually being asked to discover
 

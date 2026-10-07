@@ -87,7 +87,7 @@ UR_TEST(ProvideWiring_TheDaemonRefusesBesideATunnelAndUnderTheArmedFloor) {
 UR_TEST(ProvideWiring_EveryTeardownRetiresTheProviderFirst) {
   const std::string host = ReadProvideSource("daemon/TunnelHost.cpp");
   const std::string stop = FunctionBody(host, "void TunnelHost::StopInternalLocked(");
-  UR_EXPECT_TRUE(Before(stop, "RetireProviderDeviceLocked();", "const bool hadSession"));
+  UR_EXPECT_TRUE(Before(stop, "RetireProviderDeviceLocked();", "RevertSessionMachineLocked();"));
   const std::string run = FunctionBody(host, "void TunnelHost::RunStart(");
   UR_EXPECT_TRUE(Before(run, "StopInternalLocked(std::string());", "egressMarker_.Attach("));
   // one copy of the identity rules for both devices

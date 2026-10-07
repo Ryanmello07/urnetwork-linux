@@ -1341,17 +1341,17 @@ msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "无法连接到任何提供商。重试会从头重建连接。"
 
-#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing. Linux Connect page: shown on its own on the notice line under the connect controls while no other notice is there.
 msgctxt "conn_failsafe_armed"
 msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
 msgstr "如果很快仍没有任何流量通过，URnetwork 会自动关闭隧道，让你保持联网。"
 
-#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+#. Windows and Linux Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
 msgctxt "conn_failsafe_blocked"
 msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
 msgstr "隧道无法传输流量，因此 URnetwork 已将其关闭。断网保护已开启，因此在你重新连接或关闭断网保护之前，任何流量都不会离开这台电脑 — 没有发生任何泄漏。"
 
-#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+#. Windows and Linux Connect page line, and Windows tray notification, after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
 msgctxt "conn_failsafe_restored"
 msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
 msgstr "为了让你保持在线，URnetwork 已断开你的连接：隧道处于开启状态，但没有任何流量通过。你的流量现在正常发出，并且不受保护。按“连接”重试。"
@@ -1421,12 +1421,12 @@ msgctxt "conn_tray_failsafe_stopped"
 msgid "Disconnected (the tunnel failed)"
 msgstr "已断开（隧道故障）"
 
-#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck. Linux tray menu item that stops the service's tunnel while the app holds no session of its own.
 msgctxt "conn_tray_force_tunnel_off"
 msgid "Force the tunnel off (recovery)"
 msgstr "强制关闭隧道（恢复）"
 
-#. Windows tray menu item that lifts the kill switch's block on this computer.
+#. Windows and Linux tray menu item that lifts the kill switch's block on this computer.
 msgctxt "conn_tray_lift_kill_switch"
 msgid "Turn off the kill switch (unblock this machine)"
 msgstr "关闭断网保护（解除这台电脑的阻断）"

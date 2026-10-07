@@ -1343,17 +1343,17 @@ msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "Δεν ήταν δυνατή η επικοινωνία με κανέναν πάροχο. Η επανάληψη ξαναχτίζει τη σύνδεση από την αρχή."
 
-#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing. Linux Connect page: shown on its own on the notice line under the connect controls while no other notice is there.
 msgctxt "conn_failsafe_armed"
 msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
 msgstr "Αν δεν περάσει τίποτα σύντομα, το URnetwork θα απενεργοποιήσει αυτόματα τη σήραγγα ώστε να μη μείνετε χωρίς internet."
 
-#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+#. Windows and Linux Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
 msgctxt "conn_failsafe_blocked"
 msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
 msgstr "Η σήραγγα δεν μπορούσε να μεταφέρει κίνηση, οπότε το URnetwork την τερμάτισε. Το Kill switch είναι ενεργό, οπότε τίποτα δεν φεύγει από αυτόν τον υπολογιστή μέχρι να συνδεθείτε ξανά ή να απενεργοποιήσετε το Kill switch — δεν υπάρχει καμία διαρροή."
 
-#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+#. Windows and Linux Connect page line, and Windows tray notification, after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
 msgctxt "conn_failsafe_restored"
 msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
 msgstr "Το URnetwork σάς αποσύνδεσε για να παραμείνετε online: η σήραγγα ήταν ενεργή αλλά δεν περνούσε τίποτα. Η κίνησή σας βγαίνει τώρα κανονικά και ΔΕΝ προστατεύεται. Πατήστε Σύνδεση για να δοκιμάσετε ξανά."
@@ -1423,12 +1423,12 @@ msgctxt "conn_tray_failsafe_stopped"
 msgid "Disconnected (the tunnel failed)"
 msgstr "Αποσυνδεδεμένο (η σήραγγα απέτυχε)"
 
-#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck. Linux tray menu item that stops the service's tunnel while the app holds no session of its own.
 msgctxt "conn_tray_force_tunnel_off"
 msgid "Force the tunnel off (recovery)"
 msgstr "Αναγκαστική απενεργοποίηση της σήραγγας (ανάκτηση)"
 
-#. Windows tray menu item that lifts the kill switch's block on this computer.
+#. Windows and Linux tray menu item that lifts the kill switch's block on this computer.
 msgctxt "conn_tray_lift_kill_switch"
 msgid "Turn off the kill switch (unblock this machine)"
 msgstr "Απενεργοποίηση του Kill switch (ξεμπλοκάρισμα αυτού του υπολογιστή)"

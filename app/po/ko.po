@@ -1341,17 +1341,17 @@ msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "어떤 제공업체에도 연결할 수 없었습니다. 다시 시도하면 연결을 처음부터 다시 구성합니다."
 
-#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing. Linux Connect page: shown on its own on the notice line under the connect controls while no other notice is there.
 msgctxt "conn_failsafe_armed"
 msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
 msgstr "곧 아무것도 통과하지 못하면 인터넷을 계속 사용할 수 있도록 URnetwork가 터널을 자동으로 끕니다."
 
-#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+#. Windows and Linux Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
 msgctxt "conn_failsafe_blocked"
 msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
 msgstr "터널이 트래픽을 전달하지 못해 URnetwork가 터널을 종료했습니다. 킬 스위치가 켜져 있어 다시 연결하거나 킬 스위치를 끌 때까지 이 컴퓨터에서 아무것도 나가지 않습니다 — 유출은 없습니다."
 
-#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+#. Windows and Linux Connect page line, and Windows tray notification, after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
 msgctxt "conn_failsafe_restored"
 msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
 msgstr "온라인 상태를 유지하도록 URnetwork가 연결을 해제했습니다: 터널은 켜져 있었지만 아무것도 통과하지 못했습니다. 이제 트래픽이 평소처럼 나가며 보호되지 않습니다. 다시 시도하려면 연결을 누르세요."
@@ -1421,12 +1421,12 @@ msgctxt "conn_tray_failsafe_stopped"
 msgid "Disconnected (the tunnel failed)"
 msgstr "연결 해제됨(터널 실패)"
 
-#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck. Linux tray menu item that stops the service's tunnel while the app holds no session of its own.
 msgctxt "conn_tray_force_tunnel_off"
 msgid "Force the tunnel off (recovery)"
 msgstr "터널 강제 종료(복구)"
 
-#. Windows tray menu item that lifts the kill switch's block on this computer.
+#. Windows and Linux tray menu item that lifts the kill switch's block on this computer.
 msgctxt "conn_tray_lift_kill_switch"
 msgid "Turn off the kill switch (unblock this machine)"
 msgstr "킬 스위치 끄기(이 컴퓨터 차단 해제)"

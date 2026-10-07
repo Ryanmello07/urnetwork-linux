@@ -17,6 +17,7 @@
 #include "BittensorManualSheet.hpp"
 #include "ConnectPage.hpp"
 #include "DataInfoSheet.hpp"
+#include "FailsafeNotice.hpp"
 #include "HomeShell.hpp"
 #include "InsufficientBalanceNotice.hpp"
 #include "AccountPage.hpp"
@@ -70,6 +71,13 @@ class MainWindow : public Gtk::ApplicationWindow {
   // URNW_ONBOARDING_PREVIEW review has it open, else null.
   Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
   std::function<void(bool connected)> on_connected_change;
+  // The tray's recovery items (failsafe_notice::TrayRecoveryFor), pushed from
+  // the health poll when they change.
+  std::function<void(failsafe_notice::TrayRecovery)> on_tray_recovery_change;
+  // The two items' actions, for a session this window does not hold: stop the
+  // daemon's tunnel, and turn the kill switch off.
+  void ForceTunnelOff();
+  void LiftKillSwitch();
 
  private:
   void BuildChrome();         // 48px title bar: 20px app icon + PP NeueBit wordmark
@@ -295,6 +303,14 @@ class MainWindow : public Gtk::ApplicationWindow {
   bool readingApplied_ = false;
   bool trayConnectedPushed_ = false;
   bool connected_ = false;
+  // A session this window saw has ended and no status has been read since:
+  // the explanation of a failsafe stop is owed to the disconnected poll, since
+  // the connect feed can report the disconnect before a poll reads the stop.
+  bool stopExplanationOwed_ = false;
+  // What the tray last offered, and whether anything was pushed yet.
+  failsafe_notice::TrayRecovery trayRecovery_;
+  bool trayRecoveryPushed_ = false;
+  void PushTrayRecovery(const failsafe_notice::TrayRecovery& recovery);
   // The out-of-balance desktop notification (InsufficientBalanceNotice.hpp),
   // fed from the connect reading and the balance store.
   balance_notice::Tracker balanceNotice_;

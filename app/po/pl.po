@@ -1345,17 +1345,17 @@ msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "Nie udało się połączyć z żadnym dostawcą. Ponowna próba buduje połączenie od zera."
 
-#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing. Linux Connect page: shown on its own on the notice line under the connect controls while no other notice is there.
 msgctxt "conn_failsafe_armed"
 msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
 msgstr "Jeśli wkrótce nic nie przejdzie, URnetwork automatycznie wyłączy tunel, żebyś nie stracił dostępu do internetu."
 
-#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+#. Windows and Linux Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
 msgctxt "conn_failsafe_blocked"
 msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
 msgstr "Tunel nie mógł przenosić ruchu, więc URnetwork go wyłączył. Kill switch jest włączony, więc nic nie opuszcza tego komputera, dopóki nie połączysz się ponownie lub nie wyłączysz Kill switch — nic nie wycieka."
 
-#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+#. Windows and Linux Connect page line, and Windows tray notification, after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
 msgctxt "conn_failsafe_restored"
 msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
 msgstr "URnetwork rozłączył Cię, żebyś pozostał online: tunel działał, ale nic przez niego nie przechodziło. Twój ruch wychodzi teraz normalnie i NIE jest chroniony. Naciśnij Połącz, aby spróbować ponownie."
@@ -1425,12 +1425,12 @@ msgctxt "conn_tray_failsafe_stopped"
 msgid "Disconnected (the tunnel failed)"
 msgstr "Rozłączono (awaria tunelu)"
 
-#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck. Linux tray menu item that stops the service's tunnel while the app holds no session of its own.
 msgctxt "conn_tray_force_tunnel_off"
 msgid "Force the tunnel off (recovery)"
 msgstr "Wymuś wyłączenie tunelu (odzyskiwanie)"
 
-#. Windows tray menu item that lifts the kill switch's block on this computer.
+#. Windows and Linux tray menu item that lifts the kill switch's block on this computer.
 msgctxt "conn_tray_lift_kill_switch"
 msgid "Turn off the kill switch (unblock this machine)"
 msgstr "Wyłącz Kill switch (odblokuj ten komputer)"

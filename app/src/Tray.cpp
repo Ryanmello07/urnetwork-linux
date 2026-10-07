@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include "FailsafeNotice.hpp"
 #include "I18n.hpp"
 #include "RuntimePaths.hpp"
 
@@ -81,7 +82,15 @@ constexpr const char* kMenuXml = R"XML(
 </node>)XML";
 
 // Menu item ids (0 is the root).
-enum : int { kIdConnect = 1, kIdSep = 2, kIdShow = 3, kIdQuit = 4 };
+enum : int {
+  kIdConnect = 1,
+  kIdSep = 2,
+  kIdShow = 3,
+  kIdQuit = 4,
+  kIdRecoverySep = 5,
+  kIdForceTunnelOff = 6,
+  kIdLiftKillSwitch = 7,
+};
 
 std::string ConnectLabel(bool connected) {
   return connected ? T_("disconnect", "Disconnect") : T_("connect", "Connect");
@@ -151,6 +160,21 @@ static void MenuMethod(GDBusConnection*, const gchar*, const gchar*, const gchar
     GVariantBuilder kids;
     g_variant_builder_init(&kids, G_VARIANT_TYPE("av"));
     g_variant_builder_add(&kids, "v", BuildItem(kIdConnect, ConnectLabel(self->connectedForIcon()), false));
+    // The recovery items, apart from the everyday ones so they read as
+    // recovery, and only while each is the answer to something.
+    if (self->offersForceTunnelOff() || self->offersLiftKillSwitch()) {
+      g_variant_builder_add(&kids, "v", BuildItem(kIdRecoverySep, "", true));
+    }
+    if (self->offersForceTunnelOff()) {
+      const failsafe_notice::Copy copy = failsafe_notice::TrayRecovery::ForceTunnelOffCopy();
+      g_variant_builder_add(&kids, "v",
+                            BuildItem(kIdForceTunnelOff, T_(copy.key, copy.english), false));
+    }
+    if (self->offersLiftKillSwitch()) {
+      const failsafe_notice::Copy copy = failsafe_notice::TrayRecovery::LiftKillSwitchCopy();
+      g_variant_builder_add(&kids, "v",
+                            BuildItem(kIdLiftKillSwitch, T_(copy.key, copy.english), false));
+    }
     g_variant_builder_add(&kids, "v", BuildItem(kIdSep, "", true));
     g_variant_builder_add(&kids, "v",
                           BuildItem(kIdShow, T_("show_urnetwork", "Show URnetwork"), false));
@@ -175,6 +199,15 @@ static void MenuMethod(GDBusConnection*, const gchar*, const gchar*, const gchar
       if (id == kIdConnect && self->on_toggle_connect) self->on_toggle_connect();
       else if (id == kIdShow && self->on_show) self->on_show();
       else if (id == kIdQuit && self->on_quit) self->on_quit();
+      // A click on a menu the host fetched before the item was withdrawn does
+      // nothing: forcing the tunnel off must never reach a session the window
+      // has since taken up.
+      if (id == kIdForceTunnelOff && self->offersForceTunnelOff() && self->on_force_tunnel_off) {
+        self->on_force_tunnel_off();
+      }
+      if (id == kIdLiftKillSwitch && self->offersLiftKillSwitch() && self->on_lift_kill_switch) {
+        self->on_lift_kill_switch();
+      }
     }
     if (data) g_variant_unref(data);
     g_dbus_method_invocation_return_value(inv, nullptr);
@@ -265,7 +298,19 @@ void Tray::SetConnected(bool connected) {
   // Tell the host the icon changed and bump the menu so "Connect"/"Disconnect" refreshes.
   g_dbus_connection_emit_signal(conn_, nullptr, "/StatusNotifierItem",
                                 "org.kde.StatusNotifierItem", "NewIcon", nullptr, nullptr);
+  EmitMenuLayoutUpdated();
+}
+
+void Tray::SetRecovery(bool forceTunnelOff, bool liftKillSwitch) {
+  if (forceTunnelOff == force_tunnel_off_ && liftKillSwitch == lift_kill_switch_) return;
+  force_tunnel_off_ = forceTunnelOff;
+  lift_kill_switch_ = liftKillSwitch;
+  EmitMenuLayoutUpdated();
+}
+
+void Tray::EmitMenuLayoutUpdated() {
   menu_revision_++;
+  if (!conn_) return;
   g_dbus_connection_emit_signal(conn_, nullptr, "/MenuBar", "com.canonical.dbusmenu",
                                 "LayoutUpdated", g_variant_new("(ui)", menu_revision_, 0), nullptr);
 }

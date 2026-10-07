@@ -16,6 +16,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include <fcntl.h>
 #include <netinet/in.h>  // IPPROTO_TCP/IPPROTO_UDP for the self-test probes
+#include <sys/file.h>    // flock, for the instance lock
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -45,7 +46,9 @@
 #include "Tunnel.hpp"
 #include "daemon/ControlServer.hpp"
 #include "daemon/DaemonLog.hpp"
+#include "daemon/GlogFlusher.hpp"
 #include "daemon/HostMemory.hpp"
+#include "daemon/InstanceGuard.hpp"
 #include "daemon/NetworkCountryWatcher.hpp"
 #include "daemon/SupportDiagnostics.hpp"
 #include "daemon/TunnelHost.hpp"
@@ -838,12 +841,85 @@ int ReportPreflight() {
   return missingRequired;
 }
 
+// Takes the instance lock (InstanceGuard.hpp) and returns its descriptor, which
+// the caller keeps open for as long as it may touch the machine's tunnel state.
+// -1 with *held when another process holds it. -1 without *held when the lock
+// file cannot be opened at all (a dev run without root): that is logged and the
+// socket probe alone decides.
+int TakeInstanceLock(bool* held) {
+  *held = false;
+  // systemd's RuntimeDirectory= normally made it. A manual run makes it with
+  // the narrower mode, which ControlServer::Start then sets to its real one.
+  ::mkdir(urnw::ctl::kControlSocketDir, 0750);
+  const int fd = ::open(urnw::instance::kInstanceLockPath,
+                        O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
+  if (fd < 0) {
+    std::fprintf(stderr, "urnetworkd: could not open %s (%s); checking the control socket only\n",
+                 urnw::instance::kInstanceLockPath, std::strerror(errno));
+    return -1;
+  }
+  if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+    const int error = errno;
+    ::close(fd);
+    if (error == EWOULDBLOCK) {
+      *held = true;
+    } else {
+      std::fprintf(stderr, "urnetworkd: could not lock %s (%s); checking the control socket only\n",
+                   urnw::instance::kInstanceLockPath, std::strerror(error));
+    }
+    return -1;
+  }
+  return fd;
+}
+
+// One non-blocking connect() on the control socket, closed at once. A live
+// daemon logs it as a connection that never said hello.
+bool ControlSocketAnswers(const std::string& path) {
+  sockaddr_un addr{};
+  addr.sun_family = AF_UNIX;
+  if (path.size() >= sizeof(addr.sun_path)) return false;
+  std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
+  const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+  if (fd < 0) return false;
+  ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+  ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL) | O_NONBLOCK);
+  const int result = ::connect(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
+  const int error = errno;
+  ::close(fd);
+  return urnw::instance::SocketAnswers(result, error);
+}
+
+// Both probes, for urnw::instance::Decide. *lockFd gets the lock when this
+// process took it.
+urnw::instance::Probe ProbeOtherDaemon(int* lockFd) {
+  urnw::instance::Probe probe;
+  *lockFd = TakeInstanceLock(&probe.lockHeld);
+  probe.socketAnswers = ControlSocketAnswers(urnw::ControlServer::SocketPath());
+  return probe;
+}
+
+// "it holds <lock> and answers on <socket>", for the refusals.
+std::string DescribeOtherDaemon(const urnw::instance::Probe& probe) {
+  std::string text = "it ";
+  if (probe.lockHeld) text += std::string("holds ") + urnw::instance::kInstanceLockPath;
+  if (probe.lockHeld && probe.socketAnswers) text += " and ";
+  if (probe.socketAnswers) text += "answers on " + urnw::ControlServer::SocketPath();
+  return text;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   bool foreground = false;
+  // --revert --force, in either order.
+  bool force = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
+    if (arg == "--force" || arg == "-f") force = true;
+  }
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--force" || arg == "-f") continue;
     if (arg == "--version") {
       std::printf("urnetworkd %s (control protocol %d, sdk %s)\n", UR_APP_VERSION,
                   urnw::ctl::kControlProtocolVersion, urnet::version().c_str());
@@ -968,16 +1044,51 @@ int main(int argc, char** argv) {
                      arg.c_str(), SelfPath(argv[0]).c_str(), arg.c_str());
         return 1;
       }
-      if (!preserveArmed && ::access(urnw::ControlServer::SocketPath().c_str(), F_OK) == 0) {
+      // Never under a live daemon (InstanceGuard.hpp): the sweep cannot tell its
+      // tunnel from a dead one's. The lock, when taken, is held to the end of
+      // the sweep, so a daemon cannot start in the middle of it.
+      int instanceLockFd = -1;
+      const urnw::instance::Probe probe = ProbeOtherDaemon(&instanceLockFd);
+      const urnw::instance::Verdict verdict = urnw::instance::Decide(
+          preserveArmed ? urnw::instance::Mode::RevertUnlessArmed
+                        : urnw::instance::Mode::Revert,
+          probe, force);
+      if (verdict == urnw::instance::Verdict::Refuse && preserveArmed) {
+        // ExecStopPost of a daemon that exited while another one runs: that
+        // one owns the state, and this stop is not a failure.
         std::fprintf(stderr,
-                     "urnetworkd --revert: WARNING — %s still exists, so urnetworkd may still be "
-                     "running. It re-installs its own ruleset within seconds of anything removing "
-                     "it; stop it first (systemctl stop urnetworkd) or this will not stick.\n"
+                     "urnetworkd %s: another urnetworkd is running (%s), so its tunnel state "
+                     "is left alone\n",
+                     arg.c_str(), DescribeOtherDaemon(probe).c_str());
+        return 0;
+      }
+      if (verdict == urnw::instance::Verdict::Refuse) {
+        std::fprintf(stderr,
+                     "urnetworkd %s: refused, urnetworkd is running (%s).\n"
+                     "  The sweep cannot tell a running tunnel from one a dead daemon left "
+                     "behind: it would delete the running tunnel's capture routes, policy rules "
+                     "and firewall table and restore /etc/resolv.conf under it while the app "
+                     "still says Connected, and the daemon would put its firewall table back "
+                     "within seconds.\n"
+                     "  To disconnect, use the app. To clean up, stop the daemon first:\n"
+                     "    sudo systemctl stop urnetworkd\n"
+                     "    sudo %s %s\n"
+                     "  To sweep under the running daemon anyway: sudo %s %s --force\n",
+                     arg.c_str(), DescribeOtherDaemon(probe).c_str(), SelfPath(argv[0]).c_str(),
+                     arg.c_str(), SelfPath(argv[0]).c_str(), arg.c_str());
+        return 1;
+      }
+      if (verdict == urnw::instance::Verdict::ProceedWithWarning) {
+        std::fprintf(stderr,
+                     "urnetworkd %s: WARNING: urnetworkd is running (%s); sweeping anyway "
+                     "because of --force. It re-installs its own ruleset within seconds of "
+                     "anything removing it; stop it first (systemctl stop urnetworkd) or this "
+                     "will not stick.\n"
                      "  This sweep ALSO restores /etc/resolv.conf if a tunnel took it over. On a "
                      "host with no systemd-resolved that is how DNS reaches the tunnel, so running "
                      "this against a LIVE session pulls the tunnel's resolver out from under it "
                      "and names stop resolving until you reconnect.\n",
-                     urnw::ControlServer::SocketPath().c_str());
+                     arg.c_str(), DescribeOtherDaemon(probe).c_str());
       }
       // Whether the sweep is SUPPOSED to leave a table behind, decided before
       // it runs (it clears the marker on the paths where it does not).
@@ -1011,8 +1122,8 @@ int main(int argc, char** argv) {
     }
     if (arg == "--help" || arg == "-h") {
       std::printf(
-          "usage: urnetworkd [--foreground] [--diagnose] [--selftest-egress] [--revert]\n"
-          "                  [--version]\n"
+          "usage: urnetworkd [--foreground] [--diagnose] [--selftest-egress]\n"
+          "                  [--revert [--force]] [--version]\n"
           "URnetwork privileged daemon: control socket at %s,\n"
           "device RPC on 127.0.0.1:%d while the tunnel is up.\n"
           "  --diagnose             print the host preflight (ip/nft/resolvectl, cgroup, tun),\n"
@@ -1026,9 +1137,12 @@ int main(int argc, char** argv) {
           "                         2 = could not be measured\n"
           "  --revert               lift the URnetwork firewall table, policy rules, capture\n"
           "                         routes, and clear the armed marker; then exit. Run this when\n"
-          "                         a machine is stuck blocked. Requires root.\n"
+          "                         a machine is stuck blocked. Requires root. Refused while a\n"
+          "                         urnetworkd is running: stop it first\n"
+          "  --force, -f            with --revert: sweep even under a running urnetworkd\n"
           "  --revert-unless-armed  the same sweep, but a machine that was armed when the daemon\n"
-          "                         died stays armed (used by the unit's ExecStopPost)\n"
+          "                         died stays armed (used by the unit's ExecStopPost). Leaves\n"
+          "                         the machine alone while another urnetworkd is running\n"
           "  --foreground           do not send the systemd readiness notification\n",
           urnw::ControlServer::SocketPath().c_str(), urnw::ctl::kDeviceRpcPort);
       PrintRecovery(argv[0]);
@@ -1036,6 +1150,27 @@ int main(int argc, char** argv) {
     }
     std::fprintf(stderr, "urnetworkd: unknown argument '%s'\n", arg.c_str());
     return 2;
+  }
+  if (force) {
+    std::fprintf(stderr, "urnetworkd: --force only applies to --revert\n");
+    return 2;
+  }
+
+  // One daemon per machine, decided before this one touches anything: the
+  // startup sweep below would delete a running daemon's tunnel state, and
+  // ControlServer::Start would take its socket over (InstanceGuard.hpp). The
+  // lock stays held for the life of the process; the kernel drops it at exit.
+  int instanceLockFd = -1;
+  if (const urnw::instance::Probe probe = ProbeOtherDaemon(&instanceLockFd);
+      urnw::instance::Decide(urnw::instance::Mode::Serve, probe, /*force=*/false) !=
+      urnw::instance::Verdict::Proceed) {
+    std::fprintf(stderr,
+                 "urnetworkd: another urnetworkd is already running (%s). A second one would "
+                 "sweep the running tunnel's firewall table, policy rules, capture routes and "
+                 "DNS and take its control socket over. Stop it first (sudo systemctl stop "
+                 "urnetworkd), or use the one that is running.\n",
+                 DescribeOtherDaemon(probe).c_str());
+    return 1;
   }
 
   // A dead control client must surface as a send() error, not kill the daemon.
@@ -1117,6 +1252,9 @@ int main(int argc, char** argv) {
   // it down. Adopting after construction (not inside it) keeps the sweep and
   // the host independent of each other's ordering.
   if (sweptArmedFloor) tunnel.AdoptArmedFloor();
+  // A daemon that ended itself over a wedged SDK left why its tunnel stopped;
+  // the app reads it from this one (SelfRestart.hpp).
+  tunnel.RestoreStopRecord();
   // Off by default: a tunnel survives a GUI crash or restart and is adoptable.
   // Set $URNETWORK_ORPHAN_TIMEOUT_SECONDS to have the daemon stop a tunnel
   // nobody has owned for that long — the "captured machine with no UI"
@@ -1151,6 +1289,8 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  // The SDK's log on disk within a second while a device runs (GlogFlusher.hpp).
+  urnw::glogflush::Start();
   GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
   Daemon daemon{loop, &tunnel, &server};
   g_unix_signal_add(SIGTERM, &OnTerminate, &daemon);

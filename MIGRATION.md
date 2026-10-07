@@ -150,7 +150,7 @@ Verbs (request `{"verb":…,"id":N,…}` → reply `{"id":N,"ok":bool,…}`):
 | Verb | Payload | Reply |
 |---|---|---|
 | `hello` | `protocol_version`, `sdk_version` | `protocol_version`, `sdk_version`, `daemon_version` |
-| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `provider_running`, `provider_mode`, `provider_client_count`, `network_country_code`, `log_upload_id`, `log_upload_state`, `log_upload_carrier` |
+| `status` | — | `tunnel_state`, `rpc_port`, `client_id`, `error`, `stop_reason`, `failsafe_armed`, `provider_running`, `provider_mode`, `provider_client_count`, `network_country_code`, `log_upload_id`, `log_upload_state`, `log_upload_carrier` |
 | `start_tunnel` | `by_jwt`, `instance_id`, `app_version` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `attach_tunnel` | `instance_id`, `rpc_session_id` | `ok`, `rpc_port`, `instance_id`, `rpc_session_id` |
 | `stop_tunnel` | — | `ok` |
@@ -259,6 +259,39 @@ applies the same value to its own process from its health poll. Absent (an older
 daemon) parses `""`, and a redacted status carries none. ModemManager is asked only
 while its bus name has an owner and never with auto-start, so a disabled ModemManager
 stays stopped.
+
+The daemon ends a tunnel that is up but carries nothing (the dead-tunnel failsafe,
+`app/src/TunnelWatchdog.hpp`, Windows' TunnelWatchdog). A thread of its own asks the
+session's device for its proven exits every 2 s and tells it of a network change, so the
+main loop makes no call on that device, and the reaper reads the tun's packet counters
+once a second: 8 or more packets in, nothing back and no proven exit for 20 s, no proven
+exit for 90 s, or no completed answer from the SDK for 30 s ends the session, unless a
+packet came back out of the tunnel in the last 20 s. A suspend or a stalled daemon
+rebases every window, and a new destination generation gets its own clocks while its
+window forms. The session ends as the other protective teardowns do: the armed floor
+when the kill switch was asked for, no table otherwise, and nothing reconnects. The
+veto has a known hole (`docs/linux_agent_help.md` 6.4, task #44): the tun's counters
+cannot tell a provider's packet from one the SDK writes itself, and the SDK answers DNS
+on the tun and resets DoT locally, so a machine whose apps keep resolving can keep a
+dead tunnel up; closing it needs an SDK count of the packets no provider sent.
+`status.tunnel_state` is `error`, `stop_reason` names the rule (`failsafe_no_inbound`,
+`failsafe_no_exit`, `failsafe_sdk_unresponsive`; `ctl::IsFailsafeStop`), `error_code`
+is `tunnel_dead` and `error` says whether the machine is now blocked.
+`status.failsafe_armed` is true while a countdown on the live session is within 30 s of
+firing, so the GUI can warn first. Both are additive within v1 (an older daemon sends
+neither, and `failsafe_armed` parses false), and a redacted status carries no countdown.
+
+For `failsafe_sdk_unresponsive` the daemon cannot finish the teardown: every call left on
+the session's device would wait on the lock the SDK is stuck behind. It lands the machine
+as above, writes the stop to `/run/urnetwork/last-stop.json` and exits with status 75
+(`app/src/daemon/SelfRestart.hpp`); `Restart=on-failure` starts a clean daemon 2 s later,
+which publishes that stop as its `status` (`tunnel_state` `error`, the same
+`stop_reason`, `error_code` and `error`) until the next start, and deletes the file. The
+GUI sees its control connection drop and come back, as after any service restart. What
+is left: a stop that reaches a wedged device before the failsafe's 30 s verdict (a
+Disconnect, the IoLoop's death, the daemon's own SIGTERM) still waits on it on the main
+loop, since the bounded, abandonable SDK teardown of `docs/linux_agent_help.md` 6.5 is
+not ported.
 
 `reset_extenders` is Account > Extenders' Reset extenders (connect `EXTENDER.md` E7). The
 GUI resets its own network space with the SDK's `NetworkSpace::resetExtenders`, which
