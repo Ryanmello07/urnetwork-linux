@@ -237,6 +237,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   bool wideLogin_ = false;
   // reveal rings (the signed-out Hero Bloom table)
   motion::MotionBin* brandBin_ = nullptr;      // the wordmark's reveal ring (120ms beat)
+  int64_t revealStartedUs_ = 0;  // monotonic start of the reveal in flight, 0 for none
   motion::MotionBin* emailGroupBin_ = nullptr;
   motion::MotionBin* getStartedBin_ = nullptr;
   motion::MotionBin* orBin_ = nullptr;

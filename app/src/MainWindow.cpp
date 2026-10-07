@@ -1207,13 +1207,22 @@ void MainWindow::UpdateCarouselRunning() {
 // The signed-out Hero Bloom (motion-overhaul spec §2.1): the hero springs
 // 0.92 -> 1 under a 500ms fade while the rings unfold around it on the 40ms
 // stagger grid. Delays and directions are the spec's signed-out table.
+//
+// The reveal fails silently by design (a wrong choreography is still a
+// working window), so it leaves breadcrumbs in the log, in the Windows
+// client's words: a "no animations" report is diagnosable from the log alone.
 void MainWindow::RunSignedOutReveal() {
   using namespace motion;
-  if (!ShouldAnimate()) return;
+  if (!ShouldAnimate()) {
+    g_message("reveal: not armed (animations off in GTK)");
+    return;
+  }
   if (!heroBin_) return;
   SettleReveal();  // a reveal still running from a previous show settles first
+  g_message("reveal: armed (signed-out table)");
   ArmHeroBloom(*heroBin_);
   StartHeroBloom(*heroBin_);
+  revealStartedUs_ = g_get_monotonic_time();
   // the brand beat: the wordmark joins mid-hero-settle — the signed-out table's
   // AppTitleBar row (+8 -> rises up, delay 120)
   if (brandBin_) RiseIn(*brandBin_, Rise::Up, kDist8, kBrandBeatMs);
@@ -1222,11 +1231,18 @@ void MainWindow::RunSignedOutReveal() {
   RiseIn(*orBin_, Rise::Down, kDist8, 300);
   RiseIn(*emailGroupBin_, Rise::Down, kDist8, 320);
   RiseIn(*getStartedBin_, Rise::Down, kDist8, 360);
+  g_message("reveal: started");
 }
 
 // CancelToFinal: every pose the reveal ever writes is either animated back to
 // settled or restored right here — never left stranded (the settle invariant).
 void MainWindow::SettleReveal() {
+  // the last rise lands at 360 + kSlowMs; a settle before then cuts one short
+  const int64_t revealMs = 360 + motion::kSlowMs;
+  if (revealStartedUs_ != 0 && g_get_monotonic_time() - revealStartedUs_ < revealMs * 1000) {
+    g_message("reveal: cancel-to-final while armed (hidden or superseded mid-bloom)");
+  }
+  revealStartedUs_ = 0;
   for (motion::MotionBin* bin : {heroBin_, brandBin_, emailGroupBin_, getStartedBin_,
                                  orBin_, walletBin_, secondaryBin_}) {
     if (bin) bin->settle();
