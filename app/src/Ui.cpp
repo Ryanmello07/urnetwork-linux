@@ -32,6 +32,11 @@ window.background { background-color: #101010; color: #f8f8f8; }
 /* windows UrCardPressedBrush #2A2A2A */
 .ur-card-tappable:active {
   background-color: #2a2a2a; border-color: alpha(#ffffff, .22); }
+/* the same row as a real button (in the tab order, Enter or Space picks it,
+   a button to a screen reader): the button's own fill, padding and bold face
+   off, so it looks like the box it replaces; the focus ring stays */
+button.ur-card-tappable { background: none; box-shadow: none; padding: 0;
+  min-height: 0; min-width: 0; font-weight: normal; }
 .ur-banner { background-color: #1c1c1c; border-radius: 12px; padding: 12px; }
 /* dns recommendation pill: a small left-aligned coral-tinted capsule atop the
    Custom DNS card, nudging when the applied dns settings differ from the

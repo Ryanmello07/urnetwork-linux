@@ -114,7 +114,7 @@ UR_TEST(peerDisplayNameIsTheDeviceNameThenSpecThenClientId) {
 UR_TEST(locationsSheetPeerRowConnectsThroughPeerConnectLocation) {
   const std::string source = ReadSource("LocationsSheet.cpp");
   UR_EXPECT_TRUE(!source.empty());
-  const std::string body = DefinitionBody(source, "Gtk::Box* LocationsSheet::MakePeerRow(");
+  const std::string body = DefinitionBody(source, "Gtk::Button* LocationsSheet::MakePeerRow(");
   UR_EXPECT_TRUE(!body.empty());
   UR_EXPECT_TRUE(
       body.find("host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));") !=

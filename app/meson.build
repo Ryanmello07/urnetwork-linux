@@ -695,6 +695,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/StatusStripPresentationTest.cpp',
     'tests/ConnectionHealthWiringTest.cpp',
     'tests/DaemonStatusPollWiringTest.cpp',
+    'tests/LocationRowNameTest.cpp',
+    'tests/LocationsSheetWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -772,6 +774,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # sites the same way.
               # DaemonStatusPollWiringTest reads the health poll's window and host halves
               # the same way.
+              # LocationsSheetWiringTest reads the location chooser's rows, the Network
+              # page's row name and their css the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

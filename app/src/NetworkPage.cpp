@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "I18n.hpp"
+#include "LocationRowName.hpp"
 #include "LocationSelection.hpp"
 #include "PeerLocation.hpp"  // PeerDisplayName, PeerConnectLocation — shared with the chooser
 #include "UrTheme.hpp"
@@ -355,14 +356,20 @@ Gtk::Button* NetworkPage::MakeRow(const Glib::ustring& title, const Glib::ustrin
 
   // The button's content is a box => no automatic name; it carries the whole
   // row (title, meta, then the state words; the selected state rides the name
-  // too — GTK has no separate FullDescription surface here).
-  Glib::ustring name = title;
-  if (!meta.empty()) name += ", " + meta;
-  if (unstable) name += Glib::ustring(", ") + T_("unstable_providers_warning", "* (may be unstable)");
-  if (strongPrivacy) name += Glib::ustring(", ") + T_("strong_anonymization", "Strong Anonymization");
-  if (providing) name += Glib::ustring(", ") + T_("network_peers", "Network peers");
-  if (selected) name += Glib::ustring(", ") + T_("selected_provider", "Selected provider");
-  kit::SetAccessibleLabel(*row.root, name);
+  // too — GTK has no separate FullDescription surface here). The location
+  // chooser names its rows the same way (LocationRowName.hpp).
+  LocationRowStates states;
+  states.unstable = unstable;
+  states.strongPrivacy = strongPrivacy;
+  states.providing = providing;
+  states.selected = selected;
+  const LocationRowWords words{
+      T_("unstable_providers_warning", "* (may be unstable)"),
+      T_("strong_anonymization", "Strong Anonymization"),
+      T_("network_peers", "Network peers"),
+      T_("selected_provider", "Selected provider"),
+  };
+  kit::SetAccessibleLabel(*row.root, LocationRowName(title, meta, states, words));
   return row.root;
 }
 
