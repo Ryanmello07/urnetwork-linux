@@ -1,8 +1,9 @@
 // The window and the tray (TrayPolicy.hpp): closing hides to the tray only
 // while a tray has taken the icon and minimizes otherwise, and a hidden window
 // with no tray shows again, minimized, once the tray's grace has passed. The
-// tray and the window need gio and gtkmm, so the wiring cases read Tray.cpp and
-// main.cpp with the comments blanked.
+// first hide to the tray says so once ever. The tray and the window need gio
+// and gtkmm, so the wiring cases read Tray.cpp, main.cpp and MainWindow.cpp
+// with the comments blanked.
 // SPDX-License-Identifier: MPL-2.0
 #include <fstream>
 #include <sstream>
@@ -184,4 +185,35 @@ UR_TEST(TrayPolicyWiring_TheWindowHidesOnlyToATrayAndNeverStaysUnreachable) {
              "window->set_visible(true);", "urnw::tray_policy::kNoTrayGraceMillis"}));
   UR_EXPECT_TRUE(TrayPolicyHas(
       main, "urnw::tray_policy::MustSurface(window->get_visible(), tray && tray->Available())"));
+}
+
+// The first hide to the tray says the app still runs there: only from the
+// close's hide branch, once ever, recorded before the send, so neither Quit nor
+// a close with no tray (it minimizes) can show it, and nothing shows it twice.
+UR_TEST(TrayPolicyWiring_OnlyTheFirstHideToTheTraySaysSo) {
+  UR_EXPECT_TRUE(std::string(urnw::tray_policy::kHideNoticeSeenKey) == "onb_tray_balloon_seen");
+  const std::string main = ReadTrayPolicySource("main.cpp");
+  const std::string close =
+      TrayPolicySpan(main, "window->signal_close_request().connect(", "return true;");
+  UR_EXPECT_TRUE(TrayPolicyInOrder(
+      close, {"CloseAction::Hide:", "window->set_visible(false);", "window->NoteHiddenToTray();",
+              "break;", "CloseAction::Minimize:"}));
+  size_t calls = 0;
+  for (size_t at = main.find("NoteHiddenToTray"); at != std::string::npos;
+       at = main.find("NoteHiddenToTray", at + 1)) {
+    ++calls;
+  }
+  UR_EXPECT_EQ(1, calls);
+  const std::string quit = TrayPolicySpan(main, "tray->on_quit = [&] {", "\n    };\n");
+  UR_EXPECT_TRUE(!quit.empty());
+  UR_EXPECT_FALSE(TrayPolicyHas(quit, "NoteHiddenToTray"));
+  const std::string window = ReadTrayPolicySource("MainWindow.cpp");
+  const std::string notice = TrayPolicyBody(window, "void MainWindow::NoteHiddenToTray() {");
+  UR_EXPECT_TRUE(TrayPolicyInOrder(
+      notice, {"if (prefs::Get<bool>(tray_policy::kHideNoticeSeenKey, false)) return;",
+               "auto app = NotifyingApp();", "prefs::Set(tray_policy::kHideNoticeSeenKey, true);",
+               "Gio::Notification::create(\"URnetwork\")", "T_(\"onb_tray_balloon_hide\"",
+               "app->send_notification(kHideNoticeId, notification);"}));
+  // the window was just hidden: gtkmm has removed it from its application
+  UR_EXPECT_FALSE(TrayPolicyHas(notice, "get_application()"));
 }

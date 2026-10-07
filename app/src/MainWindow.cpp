@@ -23,6 +23,7 @@
 #include "I18n.hpp"
 #include "LocationSelection.hpp"
 #include "StatusStripPresentation.hpp"
+#include "TrayPolicy.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -2457,6 +2458,23 @@ namespace {
 // nowhere.
 Glib::RefPtr<Gio::Application> NotifyingApp() { return Gio::Application::get_default(); }
 }  // namespace
+
+constexpr const char* kHideNoticeId = "hidden-to-tray";
+
+// With no default action, a click on the notice activates the app, which
+// shows the window.
+void MainWindow::NoteHiddenToTray() {
+  if (prefs::Get<bool>(tray_policy::kHideNoticeSeenKey, false)) return;
+  auto app = NotifyingApp();
+  if (!app) return;
+  prefs::Set(tray_policy::kHideNoticeSeenKey, true);  // before the send: once ever
+  // the product name, never translated, as the tray's own title
+  auto notification = Gio::Notification::create("URnetwork");
+  notification->set_body(T_("onb_tray_balloon_hide",
+                            "Still running — URnetwork closed to the tray. Click its icon there "
+                            "to open it again."));
+  app->send_notification(kHideNoticeId, notification);
+}
 
 // Out of balance with a connection requested, the tunnel holds traffic with no
 // provider behind it. Tell the user once per episode, with a Disconnect button;

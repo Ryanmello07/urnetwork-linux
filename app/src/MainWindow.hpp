@@ -70,6 +70,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // it never starts a connection.
   static constexpr const char* kBalanceNoticeDisconnectAction = "balance-notice-disconnect";
   void DisconnectFromBalanceNotice();
+  // Closing just hid the window to the tray: the first time ever, a
+  // notification says the app is still running there (TrayPolicy.hpp).
+  void NoteHiddenToTray();
   // The screenshot hook (main.cpp URNETWORK_SHOOT) renders this window when a
   // URNW_ONBOARDING_PREVIEW review has it open, else null.
   Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }

@@ -7,6 +7,8 @@
 //   "connect_on_launch"       bool   opt-in auto-connect, DEFAULT FALSE
 //   "onboarding_pending"      bool   a network was just created here: show the
 //                                    post-sign-up onboarding once (MainWindow)
+//   "onb_tray_balloon_seen"   bool   the first hide to the tray was announced
+//                                    (TrayPolicy.hpp)
 // Header-only; nlohmann + glib only.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once

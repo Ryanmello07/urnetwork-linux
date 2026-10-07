@@ -249,6 +249,7 @@ int main(int argc, char** argv) {
               // the tray's present would map the window minimized. Unmapped, this
               // only drops that request.
               window->unminimize();
+              window->NoteHiddenToTray();
               break;
             case urnw::tray_policy::CloseAction::Minimize:
               window->minimize();

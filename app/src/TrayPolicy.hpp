@@ -13,6 +13,11 @@
 // session, often after the autostart entries, and comes back a few seconds
 // after a restart.
 //
+// The first time closing hides the window to the tray, a desktop notification
+// says the app is still running there (MainWindow::NoteHiddenToTray), once
+// ever: the close is the moment the user asks where it went. Quit never
+// reaches it, and neither does a close with no tray.
+//
 // Header-only and free of GTK (tests/TrayPolicyTest.cpp); main.cpp applies it.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -20,6 +25,10 @@
 namespace urnw::tray_policy {
 
 inline constexpr int kNoTrayGraceMillis = 5000;
+
+// The app_prefs.json key that records the hide notice as shown, set before it
+// is sent so a crash cannot show it twice (Windows' key for its balloon).
+inline constexpr const char* kHideNoticeSeenKey = "onb_tray_balloon_seen";
 
 enum class CloseAction {
   Hide,      // to the tray, which brings it back
