@@ -253,6 +253,25 @@ run_update --yes
 if [ "$rc" -eq 0 ] || ran_update; then fail "offrepo: installed an asset hosted outside urnetwork/linux"; fi
 requested "$nightly_url" && fail "offrepo: downloaded from the urnetwork/build nightly repo"
 
+# 6b. On urnetwork/linux's download path but not this release's own file:
+#     another tag's path, another file, a path that climbs out, a query.
+other_tag_url="https://github.com/urnetwork/linux/releases/download/v2026.9.1-1000000000/$asset"
+other_file_url="https://github.com/urnetwork/linux/releases/download/$tag/urnetwork-daemon-$version-arm64.install.tar.gz"
+climb_url="https://github.com/urnetwork/linux/releases/download/$tag/../../../build/$asset"
+query_url="$asset_url?x=1"
+n=0
+for wrong in "$other_tag_url" "$other_file_url" "$climb_url" "$query_url"; do
+    n=$((n + 1))
+    setup_case "wrongpath-$n"
+    release_json "$case_dir/release.json" false false "$(asset_json "$asset" "$wrong" "$good_digest")"
+    map_url "$api_url" 200 "$case_dir/release.json"
+    map_url "$wrong" 200 "$tarball"
+    run_update --yes
+    if [ "$rc" -eq 0 ] || ran_update; then fail "wrongpath: installed $wrong"; fi
+    requested "$wrong" && fail "wrongpath: downloaded $wrong"
+    stderr_has 'not hosted by' || { fail "wrongpath: the refusal of $wrong does not say why"; show; }
+done
+
 # 7. A prerelease (or draft) answer is never installed.
 setup_case prerelease
 release_json "$case_dir/release.json" false true "$(asset_json "$asset" "$asset_url" "$good_digest")"

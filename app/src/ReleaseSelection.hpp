@@ -7,9 +7,11 @@
 // build names and polls the stable repo. The release list is asked for by the
 // repository's numeric id (kUpdateRepoId), so a rename, or someone
 // registering the owner's old name, cannot move it; the owner and repo stay
-// only for the URLs GitHub spells by name. The nightly repo, personal forks
-// and every other host are refused by AssetUrlIsOfficial -- an API answer that
-// points anywhere else is treated as hostile, never followed.
+// only for the URLs GitHub spells by name. A release's download URL must be
+// exactly the one its tag and asset name have on that repo (IsFeedAssetUrl):
+// the nightly repo, personal forks, every other host and any other path are
+// refused -- an API answer that points anywhere else is treated as hostile,
+// never followed.
 //
 // The checker (UpdateChecker.cpp) turns the releases/latest JSON into the
 // plain structs below and asks SelectRelease; the decision itself -- the tag
@@ -67,13 +69,25 @@ inline std::string ReleasePageUrl(std::string_view tag) {
   return url;
 }
 
-// A release asset may only be downloaded from the official repo's own
-// download path. Scheme, host and the repo path are all checked: a redirect
-// elsewhere is libsoup's business and happens AFTER this gate, over https.
-inline bool AssetUrlIsOfficial(std::string_view url) {
-  const std::string prefix =
-      std::string("https://github.com/") + kUpdateRepo + "/releases/download/";
-  return url.size() > prefix.size() && url.compare(0, prefix.size(), prefix) == 0;
+// The download URL the official repo gives `asset` of the release `tag`:
+// https://github.com/urnetwork/linux/releases/download/<tag>/<asset>. The tag
+// and the asset name come from the grammar, which has nothing to
+// percent-encode.
+inline std::string FeedAssetUrl(std::string_view tag, std::string_view asset) {
+  std::string url = std::string("https://github.com/") + kUpdateRepo + "/releases/download/";
+  url.append(tag);
+  url.push_back('/');
+  url.append(asset);
+  return url;
+}
+
+// Whether a release names exactly that URL for its asset. Matched whole: a
+// URL that only starts with the repo's download path can name another tag's
+// file, another file, or a path a server resolves elsewhere. The storage
+// host's redirect is libsoup's business and happens after this gate, over
+// https.
+inline bool IsFeedAssetUrl(std::string_view tag, std::string_view asset, std::string_view url) {
+  return !tag.empty() && !asset.empty() && url == FeedAssetUrl(tag, asset);
 }
 
 // ---- the tag grammar: v<YYYY.M.D>-<code>[-beta] -----------------------------
@@ -419,7 +433,7 @@ inline Selection SelectRelease(const std::vector<Release>& releases, std::uint64
       s.skipped.push_back({rel.tag, "lacks " + name});
       continue;
     }
-    if (!AssetUrlIsOfficial(match->url)) {
+    if (!IsFeedAssetUrl(rel.tag, name, match->url)) {
       // Named right, hosted wrong: refused, and the next older release is
       // considered instead.
       s.skipped.push_back({rel.tag, name + " is not hosted by " + kUpdateRepo});

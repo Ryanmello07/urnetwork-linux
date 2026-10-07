@@ -87,25 +87,44 @@ UR_TEST(theUpdateSourceIsTheOfficialStableLinuxRepo) {
   UR_EXPECT_TRUE(ReleasePageUrl({}).find("urnetwork/build") == std::string::npos);
 }
 
-UR_TEST(onlyTheOfficialRepoMayServeAnAsset) {
-  UR_EXPECT_TRUE(AssetUrlIsOfficial(
-      "https://github.com/urnetwork/linux/releases/download/v2026.3.23-895075980/"
-      "URnetwork-2026.3.23-895075980-amd64.AppImage"));
-  // the nightly repo
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "https://github.com/urnetwork/build/releases/download/v2026.3.23-895075980/"
-      "URnetwork-2026.3.23-895075980-amd64.AppImage"));
-  // a personal fork of the same name
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "https://github.com/someone/linux/releases/download/v2026.3.23-895075980/"
-      "URnetwork-2026.3.23-895075980-amd64.AppImage"));
-  // a lookalike host, a scheme downgrade, the repo page itself, nothing
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "https://github.com.example/urnetwork/linux/releases/download/v1/x.AppImage"));
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(
-      "http://github.com/urnetwork/linux/releases/download/v1/x.AppImage"));
-  UR_EXPECT_FALSE(AssetUrlIsOfficial("https://github.com/urnetwork/linux/releases/download/"));
-  UR_EXPECT_FALSE(AssetUrlIsOfficial(""));
+UR_TEST(onlyTheReleasesOwnDownloadPathMayServeAnAsset) {
+  const std::string tag = "v2026.3.23-895075980";
+  const std::string asset = "URnetwork-2026.3.23-895075980-amd64.AppImage";
+  const std::string exact =
+      "https://github.com/urnetwork/linux/releases/download/" + tag + "/" + asset;
+  UR_EXPECT_TRUE(FeedAssetUrl(tag, asset) == exact);
+  UR_EXPECT_TRUE(IsFeedAssetUrl(tag, asset, exact));
+  // the nightly repo, a personal fork of the same name
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset, "https://github.com/urnetwork/build/releases/download/" + tag + "/" + asset));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset, "https://github.com/someone/linux/releases/download/" + tag + "/" + asset));
+  // a lookalike host, a scheme downgrade, the download path alone, nothing
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com.example/urnetwork/linux/releases/download/" + tag + "/" + asset));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset, "http://github.com/urnetwork/linux/releases/download/" + tag + "/" + asset));
+  UR_EXPECT_FALSE(
+      IsFeedAssetUrl(tag, asset, "https://github.com/urnetwork/linux/releases/download/"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, asset, ""));
+  // on the official repo's download path, but not this release's file:
+  // another tag, another asset, a query or fragment, a path that climbs out
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com/urnetwork/linux/releases/download/v2026.3.1-800000000/" + asset));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com/urnetwork/linux/releases/download/" + tag +
+          "/URnetwork-2026.3.23-895075980-arm64.AppImage"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, asset, exact + "?x"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, asset, exact + "#x"));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(
+      tag, asset,
+      "https://github.com/urnetwork/linux/releases/download/" + tag + "/../../../build/" + asset));
+  // no tag or no asset names no URL
+  UR_EXPECT_FALSE(IsFeedAssetUrl("", asset, FeedAssetUrl("", asset)));
+  UR_EXPECT_FALSE(IsFeedAssetUrl(tag, "", FeedAssetUrl(tag, "")));
 }
 
 // ---- the tag grammar --------------------------------------------------------
@@ -321,6 +340,37 @@ UR_TEST(anAssetHostedOutsideTheOfficialRepoIsRefused) {
     UR_EXPECT_EQ(size_t{1}, s.skipped.size());
     UR_EXPECT_TRUE(s.skipped[0].reason ==
                    "URnetwork-" + v + "-amd64.AppImage is not hosted by urnetwork/linux");
+  }
+}
+
+UR_TEST(anAssetOnTheOfficialPathButNotItsOwnIsRefusedAndAnOlderOneOffered) {
+  const std::string newer = "2026.4.2-900000002";
+  const std::string older = "2026.4.1-900000001";
+  const std::string name = "URnetwork-" + newer + "-amd64.AppImage";
+  const std::string own = std::string(kOfficialDownload) + "v" + newer + "/" + name;
+  for (const std::string& url :
+       {std::string(kOfficialDownload) + "v" + older + "/" + name,  // another tag's path
+        std::string(kOfficialDownload) + "v" + newer + "/URnetwork-" + newer +
+            "-arm64.AppImage",  // another asset
+        own + "?x", own + "/../x.AppImage"}) {
+    nlohmann::json rel = ReleaseJson(newer, false, false, AllAssets(newer), kDigest);
+    for (auto& asset : rel["assets"]) {
+      if (asset["name"] == name) asset["browser_download_url"] = url;
+    }
+    const auto releases = ParseReleases(nlohmann::json::array({
+        rel,
+        ReleaseJson(older, false, false, AllAssets(older), kDigest),
+    }));
+    const Selection s = SelectRelease(releases, kOwn, InstallKind::AppImage, "amd64");
+    UR_EXPECT_TRUE_MSG(url + " was offered", s.version == older);
+    UR_EXPECT_TRUE(s.newestVersion == newer);
+    UR_EXPECT_TRUE(s.assetUrl ==
+                   std::string(kOfficialDownload) + "v" + older + "/URnetwork-" + older +
+                       "-amd64.AppImage");
+    UR_EXPECT_TRUE(s.updateAvailable);
+    UR_EXPECT_EQ(size_t{1}, s.skipped.size());
+    UR_EXPECT_TRUE(!s.skipped.empty() && s.skipped[0].tag == "v" + newer &&
+                   s.skipped[0].reason == name + " is not hosted by urnetwork/linux");
   }
 }
 

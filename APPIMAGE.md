@@ -1017,8 +1017,9 @@ different payload.
       (`/repositories/1297137671/releases/latest`, without following a redirect, so a
       rename or a re-registered name cannot move it; drafts and prereleases refused,
       never `urnetwork/build` nightlies or a fork), downloads the own-arch
-      `.install.tar.gz` from that repo's download path, and verifies it against the
-      asset's API `digest` (sha256) before extracting it. No stable release, or no
-      tarball in it, is a clear error, never a guessed URL. `--url` (with optional
-      `--sha256`) overrides the source. Keep it opt-in, and never auto-upgrade a
-      daemon holding a live tunnel without the user's say-so.
+      `.install.tar.gz` from exactly
+      `https://github.com/urnetwork/linux/releases/download/<tag>/<asset>`, and
+      verifies it against the asset's API `digest` (sha256) before extracting it. No
+      stable release, or no tarball in it, is a clear error, never a guessed URL.
+      `--url` (with optional `--sha256`) overrides the source. Keep it opt-in, and
+      never auto-upgrade a daemon holding a live tunnel without the user's say-so.

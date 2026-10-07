@@ -638,13 +638,11 @@ if [ "${DO_UPDATE}" = 1 ]; then
         [ -n "${UPDATE_INDEX}" ] || \
             die "the latest stable release ${UPDATE_TAG} of ${UPDATE_REPO} does not include ${UPDATE_ASSET} -- no install tarball to update from; see ${UPDATE_RELEASES_PAGE}/tag/${UPDATE_TAG}"
         UPDATE_URL="$(json_field "${UPDATE_FLAT}" ".assets[${UPDATE_INDEX}].browser_download_url")"
-        case "${UPDATE_URL}" in
-            "${UPDATE_DOWNLOAD_PREFIX}"*) ;;
-            *) die "${UPDATE_ASSET} in ${UPDATE_TAG} is not hosted by ${UPDATE_REPO} (${UPDATE_URL:-no URL}) -- refusing it" ;;
-        esac
-        case "${UPDATE_URL}" in
-            *[[:space:]]*|*..*) die "${UPDATE_ASSET} has a malformed download URL -- refusing it" ;;
-        esac
+        # Exactly this release's file on urnetwork/linux, as the app's
+        # IsFeedAssetUrl: a URL that only starts with the download path can
+        # name another tag's file, another file or a path that climbs out.
+        [ "${UPDATE_URL}" = "${UPDATE_DOWNLOAD_PREFIX}${UPDATE_TAG}/${UPDATE_ASSET}" ] || \
+            die "${UPDATE_ASSET} in ${UPDATE_TAG} is not hosted by ${UPDATE_REPO} at its own download path (${UPDATE_URL:-no URL}) -- refusing it"
         UPDATE_DIGEST="$(json_field "${UPDATE_FLAT}" ".assets[${UPDATE_INDEX}].digest" | tr 'A-F' 'a-f')"
         printf '%s' "${UPDATE_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$' || \
             die "${UPDATE_ASSET} in ${UPDATE_TAG} has no usable sha256 digest in the GitHub API -- refusing to install it unverified"
