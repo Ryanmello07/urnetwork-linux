@@ -696,6 +696,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ConnectionHealthWiringTest.cpp',
     'tests/DaemonStatusPollWiringTest.cpp',
     'tests/BrowserSignInGateTest.cpp',
+    'tests/TrayPolicyTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -775,6 +776,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # the same way.
               # BrowserSignInGateTest reads the browser sign-ins' window call sites the
               # same way.
+              # TrayPolicyTest reads the tray's watcher and the window's close and
+              # reachability the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

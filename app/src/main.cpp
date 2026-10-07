@@ -2,10 +2,11 @@
 //
 // Single-process entry point. Owns the SdkHost (the in-process VPN core), the
 // GTK4 window, and the D-Bus tray. Closing the window hides to the tray and the
-// tunnel keeps running (the Windows/macOS "keep connected" behavior); Quit from
-// the tray is the only real exit. One instance runs per session: a later
-// launch hands itself to it and exits, and one that meets it quitting waits
-// for it to end, then starts (InstanceHandover.hpp).
+// tunnel keeps running (the Windows/macOS "keep connected" behavior); with no
+// tray it minimizes instead (TrayPolicy.hpp). Quit from the tray is the only
+// real exit. One instance runs per session: a later launch hands itself to it
+// and exits, and one that meets it quitting waits for it to end, then starts
+// (InstanceHandover.hpp).
 #include <adwaita.h>
 #include <glib.h>
 #include <giomm/file.h>
@@ -27,6 +28,7 @@
 #include "SdkHost.hpp"
 #include "SingleInstance.hpp"
 #include "Tray.hpp"
+#include "TrayPolicy.hpp"
 #include "UrTheme.hpp"
 
 // Where the message catalogs are installed: meson passes the configured
@@ -132,6 +134,27 @@ int main(int argc, char** argv) {
     for (const std::string& uri : launch.uris) host->HandleDeepLink(uri);
     if (window && urnw::instance::ShowsWindow(launch.kind)) window->present();
   };
+  // A hidden window with no tray to bring it back (an autostart launch, or a
+  // tray that went away) shows again, minimized, once the tray has had its
+  // grace to come back (TrayPolicy.hpp).
+  sigc::connection noTrayGrace;
+  const auto unreachable = [&] {
+    return window && urnw::tray_policy::MustSurface(window->get_visible(), tray && tray->Available());
+  };
+  const auto keepReachable = [&] {
+    noTrayGrace.disconnect();
+    if (!unreachable()) return;
+    noTrayGrace = Glib::signal_timeout().connect(
+        [&]() -> bool {
+          if (unreachable()) {
+            g_message("tray: no tray to bring the window back; showing it minimized");
+            window->minimize();  // before it maps, so it never shows on top
+            window->set_visible(true);
+          }
+          return false;
+        },
+        urnw::tray_policy::kNoTrayGraceMillis);
+  };
 
   app->signal_startup().connect([&] {
     // SDK INIT BELONGS HERE, NOT BEFORE app->run(). A launch the handover
@@ -213,13 +236,28 @@ int main(int argc, char** argv) {
       if (tray) tray->SetRecovery(recovery.forceTunnelOff, recovery.liftKillSwitch);
     };
 
-    // Close = hide to tray (tunnel keeps running); Quit from the tray truly exits.
+    // Close hides to the tray (the tunnel keeps running) while a tray can bring
+    // the window back, and minimizes it otherwise; Quit from the tray truly
+    // exits.
     window->signal_close_request().connect(
         [&]() -> bool {
-          window->set_visible(false);
+          switch (urnw::tray_policy::OnClose(tray && tray->Available())) {
+            case urnw::tray_policy::CloseAction::Hide:
+              window->set_visible(false);
+              // GTK keeps a minimize() asked for earlier in the run (the grace's,
+              // or a close with no tray) and applies it at every later map, so
+              // the tray's present would map the window minimized. Unmapped, this
+              // only drops that request.
+              window->unminimize();
+              break;
+            case urnw::tray_policy::CloseAction::Minimize:
+              window->minimize();
+              break;
+          }
           return true;  // stop the default destroy
         },
         false);
+    tray->on_availability_change = [&](bool) { keepReachable(); };
 
     // Hold the application so it survives with only the tray (window hidden).
     // Held here, on the instance only: held before run(), it kept every
@@ -228,6 +266,8 @@ int main(int argc, char** argv) {
     // the window and the tray exist: launches handed to this instance are
     // served from here on
     urnw::instance::OpenLaunches(G_APPLICATION(app->gobj()), serve);
+    // an autostart launch leaves the window hidden: it waits for the tray
+    keepReachable();
   });
 
   app->signal_activate().connect([&] {

@@ -29,6 +29,12 @@ const std::string& TrayIconThemePath() {
   return path;
 }
 
+// The desktop's tray, which takes the icon (RegisterStatusNotifierItem).
+constexpr const char* kWatcherName = "org.kde.StatusNotifierWatcher";
+constexpr const char* kWatcherPath = "/StatusNotifierWatcher";
+// Whether a host is there to draw the icons the watcher took.
+constexpr const char* kHostRegisteredProperty = "IsStatusNotifierHostRegistered";
+
 // ---- interface definitions ------------------------------------------------
 
 constexpr const char* kSniXml = R"XML(
@@ -249,12 +255,25 @@ const GDBusInterfaceVTable Tray::kMenuVtable = {MenuMethod, MenuGetProp, nullptr
 // ---- lifecycle ------------------------------------------------------------
 
 Tray::Tray() {
+  cancellable_ = g_cancellable_new();
   service_name_ = "org.kde.StatusNotifierItem-" + std::to_string(::getpid()) + "-1";
   owner_id_ = g_bus_own_name(
       G_BUS_TYPE_SESSION, service_name_.c_str(), G_BUS_NAME_OWNER_FLAGS_NONE,
       +[](GDBusConnection* c, const gchar*, gpointer u) { static_cast<Tray*>(u)->OnBusAcquired(c); },
-      +[](GDBusConnection*, const gchar*, gpointer u) { static_cast<Tray*>(u)->RegisterWithWatcher(); },
+      +[](GDBusConnection*, const gchar*, gpointer u) { static_cast<Tray*>(u)->OnItemNamed(); },
       +[](GDBusConnection* c, const gchar*, gpointer u) { static_cast<Tray*>(u)->OnNameLost(c); },
+      this, nullptr);
+  // The watcher is the desktop's tray: it can come after the app (a session's
+  // tray host starts late) and come back (a restarted plasmashell or
+  // gnome-shell), and every new owner has to be told about the icon again.
+  watcher_watch_id_ = g_bus_watch_name(
+      G_BUS_TYPE_SESSION, kWatcherName, G_BUS_NAME_WATCHER_FLAGS_NONE,
+      +[](GDBusConnection*, const gchar*, const gchar*, gpointer u) {
+        static_cast<Tray*>(u)->OnWatcherAppeared();
+      },
+      +[](GDBusConnection*, const gchar*, gpointer u) {
+        static_cast<Tray*>(u)->OnWatcherVanished();
+      },
       this, nullptr);
 }
 
@@ -273,6 +292,23 @@ void Tray::OnBusAcquired(GDBusConnection* conn) {
     g_dbus_node_info_unref(info);
   }
   g_clear_error(&err);
+  // A host that comes or goes behind a watcher that stays: the spec's
+  // StatusNotifierHostRegistered, KDE's StatusNotifierHostUnregistered, and
+  // the property's change where the watcher announces it. Each is answered
+  // by reading the property again.
+  const auto onHostSignal = +[](GDBusConnection*, const gchar*, const gchar*, const gchar*,
+                                const gchar*, GVariant*, gpointer u) {
+    static_cast<Tray*>(u)->ReadHostRegistered();
+  };
+  host_registered_sub_ = g_dbus_connection_signal_subscribe(
+      conn, kWatcherName, kWatcherName, "StatusNotifierHostRegistered", kWatcherPath, nullptr,
+      G_DBUS_SIGNAL_FLAGS_NONE, onHostSignal, this, nullptr);
+  host_unregistered_sub_ = g_dbus_connection_signal_subscribe(
+      conn, kWatcherName, kWatcherName, "StatusNotifierHostUnregistered", kWatcherPath, nullptr,
+      G_DBUS_SIGNAL_FLAGS_NONE, onHostSignal, this, nullptr);
+  host_property_sub_ = g_dbus_connection_signal_subscribe(
+      conn, kWatcherName, "org.freedesktop.DBus.Properties", "PropertiesChanged", kWatcherPath,
+      kWatcherName, G_DBUS_SIGNAL_FLAGS_NONE, onHostSignal, this, nullptr);
 }
 
 // The well-known name could not be owned. Inside a Flatpak that is not a
@@ -290,15 +326,118 @@ void Tray::OnNameLost(GDBusConnection* conn) {
   const char* unique = g_dbus_connection_get_unique_name(conn);
   if (!unique) return;
   service_name_ = unique;
+  OnItemNamed();
+}
+
+void Tray::OnItemNamed() {
+  item_named_ = true;
   RegisterWithWatcher();
 }
 
+// Registered once the item has its name and a watcher is there, whichever
+// comes last; the reply says whether the icon is on a tray.
 void Tray::RegisterWithWatcher() {
-  if (!conn_) return;
-  g_dbus_connection_call(conn_, "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
-                         "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem",
+  if (!conn_ || !item_named_ || !watcher_present_) return;
+  g_dbus_connection_call(conn_, kWatcherName, kWatcherPath, kWatcherName,
+                         "RegisterStatusNotifierItem",
                          g_variant_new("(s)", service_name_.c_str()), nullptr,
-                         G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+                         G_DBUS_CALL_FLAGS_NONE, -1, cancellable_, &Tray::OnRegistered, this);
+}
+
+void Tray::OnRegistered(GObject* source, GAsyncResult* result, gpointer self) {
+  GError* error = nullptr;
+  if (GVariant* reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error)) {
+    g_variant_unref(reply);
+  }
+  // cancelled: the tray is being destroyed, and `self` with it
+  if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+    g_error_free(error);
+    return;
+  }
+  auto* tray = static_cast<Tray*>(self);
+  if (error) {
+    g_warning("tray: the StatusNotifierWatcher refused the icon: %s", error->message);
+    g_error_free(error);
+    tray->SetRegistered(false);
+    return;
+  }
+  // a reply from a watcher that has gone since says nothing about the tray
+  if (!tray->watcher_present_) return;
+  tray->SetRegistered(true);
+  tray->ReadHostRegistered();
+}
+
+// A watcher can run with no host to draw what it took: KDE's lives in kded,
+// so it stays while the panel's tray is removed or plasmashell is down.
+void Tray::ReadHostRegistered() {
+  if (!conn_ || !watcher_present_) return;
+  g_dbus_connection_call(conn_, kWatcherName, kWatcherPath, "org.freedesktop.DBus.Properties",
+                         "Get", g_variant_new("(ss)", kWatcherName, kHostRegisteredProperty),
+                         G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NONE, -1, cancellable_,
+                         &Tray::OnHostRegisteredRead, this);
+}
+
+void Tray::OnHostRegisteredRead(GObject* source, GAsyncResult* result, gpointer self) {
+  GError* error = nullptr;
+  GVariant* reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error);
+  // cancelled: the tray is being destroyed, and `self` with it
+  if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+    g_error_free(error);
+    return;
+  }
+  auto* tray = static_cast<Tray*>(self);
+  bool hostRegistered = false;
+  if (reply) {
+    GVariant* value = nullptr;
+    g_variant_get(reply, "(v)", &value);
+    if (g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN)) {
+      hostRegistered = g_variant_get_boolean(value);
+    }
+    g_variant_unref(value);
+    g_variant_unref(reply);
+  } else {
+    // no answer is no host: the window must not hide to an icon nobody draws
+    g_warning("tray: could not read whether a tray host is registered: %s", error->message);
+    g_error_free(error);
+  }
+  if (!tray->watcher_present_) return;
+  tray->SetHostRegistered(hostRegistered);
+}
+
+void Tray::OnWatcherAppeared() {
+  watcher_present_ = true;
+  RegisterWithWatcher();
+}
+
+void Tray::OnWatcherVanished() {
+  g_message("tray: no StatusNotifierWatcher on the session bus");
+  watcher_present_ = false;
+  SetRegistered(false);
+  SetHostRegistered(false);
+}
+
+void Tray::SetRegistered(bool registered) {
+  if (registered == registered_) return;
+  const bool wasAvailable = Available();
+  registered_ = registered;
+  g_message("tray: the watcher %s the icon", registered ? "took" : "does not hold");
+  NoteAvailability(wasAvailable);
+}
+
+void Tray::SetHostRegistered(bool hostRegistered) {
+  if (hostRegistered == host_registered_) return;
+  const bool wasAvailable = Available();
+  host_registered_ = hostRegistered;
+  g_message("tray: %s", hostRegistered ? "a tray host draws the icons"
+                                       : "no tray host draws the icons");
+  NoteAvailability(wasAvailable);
+}
+
+void Tray::NoteAvailability(bool wasAvailable) {
+  const bool available = Available();
+  if (available == wasAvailable) return;
+  g_message("tray: the icon is %s the tray", available ? "on" : "off");
+  if (on_availability_change) on_availability_change(available);
 }
 
 void Tray::SetState(bool sessionUp, bool proven, const std::string& status) {
@@ -330,9 +469,15 @@ void Tray::EmitMenuLayoutUpdated() {
 }
 
 Tray::~Tray() {
+  g_cancellable_cancel(cancellable_);
+  if (watcher_watch_id_) g_bus_unwatch_name(watcher_watch_id_);
+  for (guint sub : {host_registered_sub_, host_unregistered_sub_, host_property_sub_}) {
+    if (conn_ && sub) g_dbus_connection_signal_unsubscribe(conn_, sub);
+  }
   if (conn_ && sni_reg_) g_dbus_connection_unregister_object(conn_, sni_reg_);
   if (conn_ && menu_reg_) g_dbus_connection_unregister_object(conn_, menu_reg_);
   if (owner_id_) g_bus_unown_name(owner_id_);
+  g_object_unref(cancellable_);
 }
 
 }  // namespace urnw
