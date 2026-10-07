@@ -9,6 +9,7 @@
 #include <glib.h>
 #include <libsoup/soup.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -23,6 +24,7 @@
 
 #include "AppPrefs.hpp"
 #include "Ui.hpp"
+#include "UpdateSchedule.hpp"
 
 // The build stamp: meson passes -DUR_APP_VERSION into the GUI (see
 // meson.build); the fallback keeps this TU self-contained, the same idiom
@@ -57,6 +59,14 @@ const std::uint64_t kOwnCode = update::ParseReleaseCode(UR_APP_VERSION);
 
 std::int64_t NowUnix() { return g_get_real_time() / G_USEC_PER_SEC; }
 
+// Whole seconds from now until `deadline` on the steady clock, rounded up; 0
+// once it has come.
+std::int64_t SecondsUntil(Clock::time_point deadline) {
+  const Clock::duration left = deadline - Clock::now();
+  if (left <= Clock::duration::zero()) return 0;
+  return std::chrono::ceil<std::chrono::seconds>(left).count();
+}
+
 std::string EnvOr(const char* name) {
   const char* v = g_getenv(name);
   return v ? std::string(v) : std::string();
@@ -80,6 +90,10 @@ void OnRestarted(SoupMessage* msg, gpointer data) {
 struct FetchHeaders {
   // The Date header in Unix seconds, 0 when it had none.
   std::int64_t serverUnixSeconds = 0;
+  // What a refused request said about asking again (UpdateSchedule.hpp).
+  std::int64_t retryAfterSeconds = 0;
+  std::int64_t rateLimitResetUnixSeconds = 0;
+  bool rateLimitExhausted = false;
 };
 
 // The response's Date header in Unix seconds, or 0 when it has none or it
@@ -146,6 +160,18 @@ bool FetchUrl(const std::string& url, const char* accept, std::uint64_t maxBytes
     const unsigned status = soup_message_get_status(msg);
     if (headers) headers->serverUnixSeconds = ResponseDateUnixSeconds(msg);
     if (status != 200) {
+      if (headers) {
+        // GitHub says when to ask again: Retry-After for a secondary limit,
+        // the reset time once the hour's requests are spent.
+        SoupMessageHeaders* response = soup_message_get_response_headers(msg);
+        headers->retryAfterSeconds = update::ParseDecimalHeader(
+            soup_message_headers_get_one(response, "Retry-After"), 0);
+        headers->rateLimitResetUnixSeconds = update::ParseDecimalHeader(
+            soup_message_headers_get_one(response, "X-RateLimit-Reset"), 0);
+        headers->rateLimitExhausted =
+            update::ParseDecimalHeader(
+                soup_message_headers_get_one(response, "X-RateLimit-Remaining"), -1) == 0;
+      }
       error = "http status " + std::to_string(status);
     } else {
       std::vector<char> chunk(64 * 1024);
@@ -337,8 +363,9 @@ void UpdateChecker::SetAutoCheckEnabled(bool on) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     autoCheck_ = on;
-    // The user just asked for updates; answer now, not in six hours.
-    if (on) nextAutoUnix_ = NowUnix();
+    // The user just asked for updates; answer now, not in six hours, but
+    // never before GitHub said it may be asked again.
+    if (on) nextAutoUnix_ = NowUnix() + SecondsUntil(holdUntil_);
   }
   cv_.notify_all();
   g_message("update: automatic checking %s", on ? "enabled" : "disabled");
@@ -419,11 +446,12 @@ void UpdateChecker::WorkerLoop() {
       }
       // Any completed check -- manual or automatic -- restarts the cadence
       // and the persisted throttle; two checks 30 seconds apart cannot say
-      // different things.
+      // different things. Never before GitHub's own Retry-After or rate-limit
+      // reset.
       const std::int64_t now = NowUnix();
       prefs::Set(kLastCheckPrefKey, now);
       lock.lock();
-      nextAutoUnix_ = now + update::kCheckIntervalSeconds;
+      nextAutoUnix_ = now + std::max(update::kCheckIntervalSeconds, SecondsUntil(holdUntil_));
       continue;
     }
     if (timed) {
@@ -449,6 +477,17 @@ void UpdateChecker::CleanupStaleFiles() {
 // ---- the check ---------------------------------------------------------------
 
 void UpdateChecker::RunCheck() {
+  bool held = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    held = Clock::now() < holdUntil_;
+  }
+  if (held) {
+    // GitHub asked for no request before then; a manual check waits too.
+    g_warning("update: GitHub asked for no request yet; the check is not sent");
+    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    return;
+  }
   Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });
 
   std::string body;
@@ -462,6 +501,18 @@ void UpdateChecker::RunCheck() {
         return true;
       },
       &headers, error);
+  {
+    // A list that came back ends a hold; a refusal that says when to ask
+    // again starts one, on the steady clock.
+    const update::RateLimit limit{headers.retryAfterSeconds, headers.rateLimitResetUnixSeconds,
+                                  headers.rateLimitExhausted, headers.serverUnixSeconds};
+    const std::int64_t wait = fetched ? 0 : update::NextCheckDelaySeconds(0, limit);
+    if (wait > 0) {
+      g_warning("update: GitHub asked for no request for %lld s", static_cast<long long>(wait));
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    holdUntil_ = wait > 0 ? Clock::now() + std::chrono::seconds(wait) : Clock::time_point{};
+  }
   if (!fetched) {
     // A repository with no release yet answers an empty list, which is "no
     // update"; a 404 means the id no longer names a repository this app can

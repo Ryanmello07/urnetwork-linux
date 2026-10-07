@@ -202,6 +202,52 @@ UR_TEST(theCheckJudgesCodesByTheReleaseListsDate) {
                      select != std::string::npos && fallback < select);
 }
 
+UR_TEST(noCheckIsSentWhileGitHubAsksTheNetworkToWait) {
+  const std::string source = ReadSource("UpdateChecker.cpp");
+  // a refused list's Retry-After and rate-limit reset are read off the
+  // response, digits only
+  const std::string fetch = FunctionBody(source, "bool FetchUrl(");
+  for (const char* header : {"\"Retry-After\"", "\"X-RateLimit-Reset\"",
+                             "\"X-RateLimit-Remaining\"), -1) == 0"}) {
+    UR_EXPECT_TRUE_MSG(std::string("FetchUrl does not read ") + header,
+                       Has(fetch, header));
+  }
+  UR_EXPECT_TRUE_MSG("the headers are not read as decimal counts",
+                     Has(fetch, "update::ParseDecimalHeader("));
+  // the check returns before any request while the hold lasts, and a refusal
+  // that says when to ask again starts one, capped by the pure schedule
+  const std::string check = FunctionBody(source, "void UpdateChecker::RunCheck()");
+  const size_t held = check.find("held = Clock::now() < holdUntil_;");
+  const size_t heldReturn = check.find("return;", held);
+  const size_t fetchCall = check.find("FetchUrl(");
+  UR_EXPECT_TRUE_MSG("RunCheck does not test the hold",
+                     held != std::string::npos);
+  UR_EXPECT_TRUE_MSG("RunCheck sends the request while GitHub holds it",
+                     held != std::string::npos && heldReturn < fetchCall);
+  const size_t delay = check.find("update::NextCheckDelaySeconds(0, limit)");
+  const size_t start = check.find(
+      "holdUntil_ = wait > 0 ? Clock::now() + std::chrono::seconds(wait) : Clock::time_point{};");
+  UR_EXPECT_TRUE_MSG("a refusal's headers do not set the hold",
+                     delay != std::string::npos && start != std::string::npos &&
+                         fetchCall < delay && delay < start);
+  UR_EXPECT_TRUE_MSG("a list that came back does not end the hold",
+                     Has(check, "const std::int64_t wait = fetched ? 0 : "));
+  // the hold is kept on the steady clock, so setting the system clock back
+  // cannot stretch it past the day the schedule allows
+  UR_EXPECT_TRUE_MSG("the hold is kept on the wall clock",
+                     Has(ReadSource("UpdateChecker.hpp"),
+                         "std::chrono::steady_clock::time_point holdUntil_{};") &&
+                         !Has(source, "holdUntilUnix_"));
+  // and nothing schedules a check before it
+  const std::string loop = FunctionBody(source, "void UpdateChecker::WorkerLoop()");
+  UR_EXPECT_TRUE_MSG("the cadence schedules a check before the hold ends",
+                     Has(loop, "nextAutoUnix_ = now + std::max(update::kCheckIntervalSeconds, "
+                               "SecondsUntil(holdUntil_));"));
+  const std::string autoCheck = FunctionBody(source, "void UpdateChecker::SetAutoCheckEnabled(");
+  UR_EXPECT_TRUE_MSG("turning automatic checks on schedules a check before the hold ends",
+                     Has(autoCheck, "nextAutoUnix_ = NowUnix() + SecondsUntil(holdUntil_);"));
+}
+
 UR_TEST(theTarballUpdateAsksTheSameRepositoryIdWithoutRedirects) {
   // install.sh --update is the daemon tarball's half of the same rule: the
   // API by kUpdateRepoId, its answer never followed elsewhere

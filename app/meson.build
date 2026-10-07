@@ -530,7 +530,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # and connect-sheet rules, the wallet bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
-# install-kind probe, the launch throttle) and its wiring, the split-rules
+# install-kind probe, the launch throttle), when it asks GitHub again after
+# a refusal, and its wiring, the split-rules
 # activity row's reading of the block action reason (the safety-rule chip and
 # the route-locally offer), the VLESS editor's form, visibility rules,
 # settings mapping and messages and the stored network space values every
@@ -607,6 +608,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/GuestConversionTest.cpp',
     'tests/GuestPurchaseRefusalWiringTest.cpp',
     'tests/ReleaseSelectionTest.cpp',
+    'tests/UpdateScheduleTest.cpp',
     'tests/UpdateWiringTest.cpp',
     'tests/CatalogLookupTest.cpp',
     'tests/ReferralCodeStateTest.cpp',

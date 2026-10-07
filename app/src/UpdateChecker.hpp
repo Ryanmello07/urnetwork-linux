@@ -7,7 +7,8 @@
 // thirty seconds after launch when the persisted six-hour throttle says so,
 // every six hours while the app lives, and on the developer screen's button.
 // The "check automatically" preference (Settings) gates the timed checks
-// only; a manual check always runs and reports.
+// only; a manual check always runs and reports. No check, manual or timed, is
+// sent while GitHub has asked this network to wait (UpdateSchedule.hpp).
 //
 // WHAT AN APPLY DOES depends on how the GUI is installed (DetectInstallKind):
 //
@@ -31,6 +32,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -154,6 +156,11 @@ class UpdateChecker {
   bool applyRequested_ = false;
   bool autoCheck_ = true;
   std::int64_t nextAutoUnix_ = 0;  // unix seconds; seeded from the persisted throttle
+  // When GitHub said it may be asked again (a refused list's Retry-After or
+  // rate-limit reset, at most a day out), on the steady clock, so a system
+  // clock set back cannot stretch it; the clock's epoch when there is no
+  // hold. No check is sent before it, manual or automatic.
+  std::chrono::steady_clock::time_point holdUntil_{};
   Snapshot snapshot_;
   Offer offer_;
 

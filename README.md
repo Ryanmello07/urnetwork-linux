@@ -202,7 +202,10 @@ tag `v<version>` with the running version by its release code. It asks the
 GitHub API for the list by the repository's numeric id
 (`/repositories/1297137671/releases`) and refuses a redirect, so a renamed
 repository, or someone registering a name it used to have, cannot change
-where updates come from.
+where updates come from. Requests are anonymous, and GitHub allows 60 an hour
+per address: when it refuses one and says when to ask again (`Retry-After`,
+or the rate limit's reset), no check is sent before then, manual ones
+included, for at most a day.
 
 What the app does with a newer release depends on how it was installed:
 
