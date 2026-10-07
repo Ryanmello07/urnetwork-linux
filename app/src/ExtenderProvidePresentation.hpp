@@ -34,6 +34,9 @@ inline constexpr const char* kProvideStateError = "error";
 
 inline constexpr const char* kProvideErrorRevoked = "revoked";
 inline constexpr const char* kProvideErrorStart = "start";
+// tcp 443, the one port the role requires, could not be bound (usually another
+// program holds it): the role stays off and the SDK binds again every few minutes
+inline constexpr const char* kProvideErrorTcpUnavailable = "tcp_unavailable";
 inline constexpr const char* kProvideErrorListen = "listen";
 inline constexpr const char* kProvideErrorActivationFailed = "activation_failed";
 inline constexpr const char* kProvideErrorActivationRefused = "activation_refused";
@@ -148,6 +151,12 @@ inline ProvideRow ProvideRowFor(bool haveStatus, bool supported, const std::stri
     } else if (errorCase == kProvideErrorStart) {
       row.textKey = "extender_start_failed";
       row.textEnglish = "Could not start: {}";
+      row.argument = reason;
+    } else if (errorCase == kProvideErrorTcpUnavailable) {
+      // the Reason is the tcp 443 bind error
+      row.textKey = "extender_tcp_unavailable";
+      row.textEnglish =
+          "TCP port 443 is in use by another program. Trying again every few minutes: {}";
       row.argument = reason;
     } else if (errorCase == kProvideErrorListen) {
       row.textKey = "extender_listen_failed";

@@ -4293,6 +4293,11 @@ msgctxt "extender_statistics"
 msgid "Extender statistics"
 msgstr ""
 
+#. Extender status when TCP port 443, the one port the extender requires, cannot be bound, usually because another program (often another provider on the same computer) holds it. The extender stays off and tries the port again every few minutes on its own, so this is not the user's mistake: keep the tone calm. The argument is the bind error.
+msgctxt "extender_tcp_unavailable"
+msgid "TCP port 443 is in use by another program. Trying again every few minutes: {}"
+msgstr ""
+
 #. Title of the extenders panel in the connect drawer and of the Extenders section under account.
 msgctxt "extenders"
 msgid "Extenders"
