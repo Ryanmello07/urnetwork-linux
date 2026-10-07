@@ -8,6 +8,9 @@ namespace urnw {
 namespace {
 constexpr int kNavExpandedWidth = 220;  // windows OpenPaneLength
 constexpr int kNavCompactWidth = 48;    // the compact rail
+// accent bar to icon to label, and accent bar to icon in the compact rail
+constexpr int kNavExpandedGap = 10;
+constexpr int kNavCompactGap = 6;
 }  // namespace
 
 HomeShell::HomeShell() : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0) {
@@ -103,7 +106,8 @@ HomeShell::NavItem* HomeShell::MakeNavItem(Gtk::Box& parent, const std::string& 
   item.tag = tag;
   item.button = Gtk::make_managed<Gtk::Button>();
   item.button->add_css_class("ur-nav-item");
-  auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10);
+  auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, kNavExpandedGap);
+  item.row = row;
   item.accent = Gtk::make_managed<Gtk::Box>();
   item.accent->add_css_class("ur-nav-accent");
   item.accent->set_size_request(3, 16);
@@ -123,6 +127,7 @@ HomeShell::NavItem* HomeShell::MakeNavItem(Gtk::Box& parent, const std::string& 
   kit::SetAccessibleLabel(*item.button, label);
   item.button->signal_clicked().connect([this, tag] { Navigate(tag); });
   parent.append(*item.button);
+  ApplyCompact(item);
   items_.push_back(item);
   return &items_.back();
 }
@@ -186,8 +191,23 @@ void HomeShell::SetCompactNav(bool compact) {
   if (compact_ == compact) return;
   compact_ = compact;
   navRail_.set_size_request(compact ? kNavCompactWidth : kNavExpandedWidth, -1);
-  for (auto& item : items_) {
-    if (item.label) item.label->set_visible(!compact);
+  if (compact) {
+    navRail_.add_css_class("compact");
+  } else {
+    navRail_.remove_css_class("compact");
+  }
+  for (auto& item : items_) ApplyCompact(item);
+}
+
+void HomeShell::ApplyCompact(NavItem& item) {
+  // the icon alone names nothing: the label moves into the tooltip, and the
+  // accessible label (set at build) stays
+  if (item.label) item.label->set_visible(!compact_);
+  if (item.row) item.row->set_spacing(compact_ ? kNavCompactGap : kNavExpandedGap);
+  if (compact_ && item.label) {
+    item.button->set_tooltip_text(item.label->get_text());
+  } else {
+    item.button->set_has_tooltip(false);
   }
 }
 

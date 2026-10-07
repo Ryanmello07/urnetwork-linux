@@ -21,6 +21,7 @@
 #include "UrTheme.hpp"
 #include "I18n.hpp"
 #include "LocationSelection.hpp"
+#include "ShellLayout.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -1015,6 +1016,8 @@ bool MainWindow::PollDaemonHealth() {
 }
 
 void MainWindow::ApplyPageBreakpoint(int widthDip) {
+  // the rail first: it takes its width out of the room the pages get
+  if (shell_) shell_->SetCompactNav(shell::NavRailCompact(widthDip));
   if (connectPage_) connectPage_->ApplyBreakpoint(widthDip);
   if (networkPage_) networkPage_->ApplyBreakpoint(widthDip);
   if (settingsPage_) settingsPage_->ApplyBreakpoint(widthDip);

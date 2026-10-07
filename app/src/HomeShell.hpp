@@ -40,7 +40,8 @@ class HomeShell : public Gtk::Box {
   // The Advanced-only Developer item is INSERTED/REMOVED, not hidden; a user
   // standing on it when the mode turns off is navigated away (to settings).
   void SetAdvancedMode(bool on);
-  // expanded rail (icon+label, 220) vs compact rail (icons only, 48)
+  // expanded rail (icon+label, 220) vs compact rail (icons only, 48, each
+  // named by its tooltip); shell::NavRailCompact picks it from the width
   void SetCompactNav(bool compact);
 
   // ---- window-level chrome ------------------------------------------------
@@ -65,12 +66,15 @@ class HomeShell : public Gtk::Box {
   struct NavItem {
     std::string tag;
     Gtk::Button* button = nullptr;
+    Gtk::Box* row = nullptr;      // accent, icon, label
     Gtk::Box* accent = nullptr;   // the 3px selection bar
     Gtk::Label* label = nullptr;  // hidden in compact mode
   };
   NavItem* MakeNavItem(Gtk::Box& parent, const std::string& tag, NavIcon::Kind icon,
                        const Glib::ustring& label);
   void PaintSelection();
+  // one item in the rail's current mode: the label, or the tooltip in its place
+  void ApplyCompact(NavItem& item);
 
   Gtk::Box navRail_{Gtk::Orientation::VERTICAL, 0};
   Gtk::Box navPrimary_{Gtk::Orientation::VERTICAL, 2};
