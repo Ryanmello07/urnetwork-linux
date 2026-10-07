@@ -1,4 +1,5 @@
-// When the update checker asks GitHub again, decided pure.
+// What an update check came to, and when the checker asks GitHub again,
+// decided pure.
 //
 // Requests are anonymous: GitHub allows 60 an hour per IP address, and every
 // user behind one exit or one NAT shares them, a URnetwork exit included when
@@ -9,8 +10,10 @@
 // day whatever a header says, so a hostile or broken header cannot stop checks
 // for good.
 //
-// No GTK or libsoup: UpdateChecker.cpp asks it, and tests/UpdateScheduleTest.cpp
-// runs it on any host. Same arrangement as the windows app's UpdateSchedule.h.
+// No GTK or libsoup: UpdateChecker.cpp asks it, Settings' line under Check
+// now (UpdateStatePresentation.hpp) reads its CheckOutcome, and
+// tests/UpdateScheduleTest.cpp runs it on any host. Same arrangement as the
+// windows app's UpdateSchedule.h.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -19,6 +22,16 @@
 #include <cstdint>
 
 namespace urnw::update {
+
+// What the last check came to. UpdateChecker publishes it in every snapshot.
+enum class CheckOutcome {
+  NeverRan,
+  InFlight,
+  NoUpdate,     // nothing newer, or no stable release published yet
+  UpdateFound,
+  DevBuild,     // a release exists but this is a dev build (code 0): never offered
+  Failed,       // the fetch or the parse failed; details in the log
+};
 
 // The longest a refused request can push the next one out.
 inline constexpr std::int64_t kMaxBackoffSeconds = 24 * 60 * 60;

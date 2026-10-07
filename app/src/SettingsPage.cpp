@@ -25,6 +25,7 @@
 #include "SplitRulesSheet.hpp"      // reused as-is (the split-rule editor)
 #include "SupportContact.hpp"
 #include "Ui.hpp"
+#include "UpdateStatePresentation.hpp"
 #include "UrTheme.hpp"
 #include "VlessSheet.hpp"
 
@@ -1023,6 +1024,26 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
   launchAtStartup_->property_active().signal_changed().connect(
       [this] { OnLaunchAtStartupToggled(); });
 
+  // Row 2c -- a check now, and the last check's outcome on the state line
+  // under it, as the Windows Settings version section has them: whether this
+  // build is current had no answer in Settings until a newer release came
+  // along, and the only manual check was on the Advanced-only developer page.
+  // CheckNow coalesces with a queued or running check. The line is written by
+  // ApplyUpdateState (UpdateStatePresentation.hpp).
+  checkNow_ = AddButtonRow(host, T_("dev_check_updates", "Check for updates"), {},
+                           T_("upd_check_now", "Check now"));
+  checkNow_->set_sensitive(false);  // until the window binds the checker
+  checkNow_->signal_clicked().connect([this] {
+    if (updates_) updates_->CheckNow();
+  });
+  {
+    auto state = MakeProseRow({}, kStatePadY);
+    updateState_ = state.line;
+    updateStateRow_ = state.root;
+    updateStateRow_->set_visible(false);
+    host.append(*updateStateRow_);
+  }
+
   // Row 3 -- the update notice. Hidden until a newer stable release is known
   // (UpdateChecker -> ApplyUpdate). The verb on the right follows the phase:
   // Install (the AppImage downloads, verifies and swaps itself), Relaunch,
@@ -1051,7 +1072,10 @@ void SettingsPage::BuildGeneralSection(Gtk::Box& host) {
   }
 }
 
-void SettingsPage::SetUpdateChecker(UpdateChecker* checker) { updates_ = checker; }
+void SettingsPage::SetUpdateChecker(UpdateChecker* checker) {
+  updates_ = checker;
+  if (checkNow_) checkNow_->set_sensitive(updates_ != nullptr);
+}
 
 // The entry as the filesystem has it, written under the echo guard.
 void SettingsPage::ApplyLaunchAtStartup() {
@@ -1079,6 +1103,8 @@ void SettingsPage::OnLaunchAtStartupToggled() {
 void SettingsPage::ApplyUpdate(const UpdateChecker::Snapshot& snap) {
   if (!updateRow_) return;
   updateSnapshot_ = snap;
+  // The check's outcome first: it is true whether or not anything is offered.
+  ApplyUpdateState(snap);
   using Phase = UpdateChecker::Phase;
   if (snap.phase == Phase::None) {
     updateRow_->set_visible(false);
@@ -1169,6 +1195,30 @@ void SettingsPage::ApplyUpdate(const UpdateChecker::Snapshot& snap) {
   kit::SetTextOrCollapse(*updateCommand_, command);
   updateCommandRow_->set_visible(!command.empty());
   updateRow_->set_visible(true);
+}
+
+void SettingsPage::ApplyUpdateState(const UpdateChecker::Snapshot& snap) {
+  update::UpdateStateInputs in;
+  in.outcome = snap.lastCheck;
+  in.newestKnown = !snap.newestVersion.empty();
+  in.newestOutranksOwn = snap.newestCode > update::ParseReleaseCode(UR_APP_VERSION);
+  const update::UpdateStateLine line = update::UpdateStateLineFor(in);
+  Glib::ustring text;
+  if (line.textKey[0] != '\0') {
+    const char* pattern = T_(line.textKey, line.textEnglish);
+    switch (line.version) {
+      case update::StateVersion::None:
+        text = pattern;
+        break;
+      case update::StateVersion::Newest:
+        text = Format(pattern, snap.newestVersion);
+        break;
+    }
+  }
+  kit::SetTextOrCollapse(*updateState_, text);
+  if (line.failed && !text.empty()) SetToned(*updateState_, kUrDanger, text);
+  updateStateRow_->set_visible(!text.empty());
+  checkNow_->set_sensitive(updates_ != nullptr && line.canCheck);
 }
 
 void SettingsPage::OnUpdateButton() {

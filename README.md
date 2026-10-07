@@ -190,9 +190,10 @@ still a manual follow-up; today everything ships from the GitHub release.
 ## Updates
 
 The GUI checks for updates itself (`app/src/UpdateChecker.cpp`): thirty seconds
-after launch, at most once every six hours, and from the Developer page's
-"Check for updates" button. Settings > General > "Check for updates
-automatically" turns the timed checks off. The check reads the official
+after launch, at most once every six hours, and from the "Check now" button of
+Settings > General > "Check for updates" (and the Developer page's), under which
+Settings says what the last check came to. Settings > General > "Check for
+updates automatically" turns the timed checks off. The check reads the official
 [urnetwork/linux releases](https://github.com/urnetwork/linux/releases) (the
 nightly `urnetwork/build` releases are never consulted), skips drafts,
 prereleases and any release whose code names an instant more than two days

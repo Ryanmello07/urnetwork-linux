@@ -551,6 +551,7 @@ void UpdateChecker::RunCheck() {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     snapshot_.newestVersion = sel.newestVersion;
+    snapshot_.newestCode = sel.newestCode;
     if (kOwnCode == 0) {
       snapshot_.lastCheck = sel.newestCode ? CheckOutcome::DevBuild : CheckOutcome::NoUpdate;
     } else if (sel.updateAvailable) {
@@ -578,6 +579,7 @@ void UpdateChecker::RunCheck() {
         snapshot_.kind = kind;
         snapshot_.lastCheck = CheckOutcome::NoUpdate;
         snapshot_.newestVersion = sel.newestVersion;
+        snapshot_.newestCode = sel.newestCode;
         offer_ = Offer{};
       }
     }

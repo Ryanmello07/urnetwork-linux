@@ -5,7 +5,8 @@
 // so the whole destination is one row species per list.
 //
 //   Pane A "General" — what the app DOES: the General group (product updates,
-//     automatic update checks) then the Connections group (kill switch + its
+//     automatic update checks, a check now with the last check's outcome) then
+//     the Connections group (kill switch + its
 //     two honesty disclosures, blocked locations, VLESS, app split rules, the
 //     VPN service row).
 //   Pane B "Device" — what this machine IS: the Device group (name, spec),
@@ -102,8 +103,9 @@ class SettingsPage : public Gtk::Box {
   void SetAdvancedMode(bool on);
 
   // The window's updater (UpdateChecker.hpp). The auto-check toggle writes
-  // its preference through it, and every snapshot it publishes is replayed
-  // into the "Update available" row under the toggle: Install / Relaunch for
+  // its preference through it, Check now asks it for a check, and every
+  // snapshot it publishes is replayed into the line under Check now (the last
+  // check's outcome) and the "Update available" row: Install / Relaunch for
   // the AppImage, the release page plus the package-manager command for every
   // other install. Bind-then-replay, like the advanced-mode handler.
   void SetUpdateChecker(UpdateChecker* checker);
@@ -206,6 +208,12 @@ class SettingsPage : public Gtk::Box {
   bool applyingLaunchAtStartup_ = false;  // echo guard
   void ApplyLaunchAtStartup();
   void OnLaunchAtStartupToggled();
+  // Check now, and the state line under it that says what the last check came
+  // to (hidden while there is nothing to say); one writer, ApplyUpdateState.
+  Gtk::Button* checkNow_ = nullptr;
+  Gtk::Label* updateState_ = nullptr;
+  Gtk::Widget* updateStateRow_ = nullptr;
+  void ApplyUpdateState(const UpdateChecker::Snapshot& snap);
   // The update notice (hidden until a newer release is known): a two-line row
   // whose action verb follows the checker's phase, plus a selectable prose
   // row carrying the command or the saved file's path.

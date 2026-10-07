@@ -102,6 +102,10 @@ Element order, top→bottom:
 - Init: `IsOn(UpdateChecker::AutoCheckEnabled())` (static read of the prefs file).
 - Toggled: `Updates().SetAutoCheckEnabled(IsOn())` — persists, and turning it ON fires a check immediately ("answer now, not in six hours"). Checker cadence facts (for the note's honesty): launch check after **30 s** delay, then every **6 h**.
 
+**Check for updates (44px ButtonRow + state line) — Linux, after "Launch URnetwork on system startup"**
+- Windows 5d64131 puts an "Update" value row (the running build plus the last check's outcome) and a "Check for updates" / "Check now" ButtonRow in the About pane's version section (§5.1). Linux puts them on pane A, beside the auto-check toggle and the update notice, so they never fold: label `dev_check_updates` = "Check for updates", button `upd_check_now` = "Check now" → `UpdateChecker::CheckNow()` (coalesces; held while a check is in flight).
+- The 12px state line under it (padding 12,8, hidden while empty) says what the last check came to, in the developer page's sentences (`UpdateStatePresentation.hpp`): nothing before a check has run in this session (a launch inside the 6 h throttle asks nothing), `dev_update_checking`, `dev_update_up_to_date` / `dev_update_no_releases`, `dev_update_dev_build`, `dev_update_check_failed` (danger tone). It says nothing while a release is offered, since the update notice under it names that release, nor when the newest release outranks this build but is not offered (no file for this install, no usable digest, an install kind that cannot update), where "up to date" would not be true: the snapshot carries `newestCode` for that, as Windows' does. Written by `ApplyUpdate` before the notice's Phase::None return.
+
 ### 3.2 Connections group — `BuildConnectionsSection`
 Group header: `Heading(Loc("site_app_connections"))` = "Connections" (28px strip).
 

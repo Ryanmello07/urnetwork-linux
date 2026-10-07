@@ -112,6 +112,39 @@ UR_TEST(settingsDrivesTheCheckerAndRendersItsStates) {
                      Has(general, "updates_->SetAutoCheckEnabled(on)"));
   UR_EXPECT_TRUE_MSG("the toggle still carries the 'does not exist in this tree' TODO",
                      !Has(general, "TODO(sdk-wiring): urnw::UpdateChecker"));
+  // Check now runs a real check, from a row between the startup toggle and
+  // the notice, and the line under it is written before the notice's early
+  // return, so "up to date" and "the check failed" reach the page too
+  const size_t startup = general.find("launchAtStartup_ = AddToggleRow(");
+  const size_t checkNow = general.find(
+      "checkNow_ = AddButtonRow(host, T_(\"dev_check_updates\", \"Check for updates\"), {},");
+  const size_t notice = general.find("updateRow_ = row.root;");
+  UR_EXPECT_TRUE_MSG("Settings has no Check now row between the startup toggle and the notice",
+                     startup != std::string::npos && checkNow != std::string::npos &&
+                         notice != std::string::npos && startup < checkNow && checkNow < notice);
+  UR_EXPECT_TRUE_MSG("Check now does not call UpdateChecker::CheckNow",
+                     Has(general, "if (updates_) updates_->CheckNow();"));
+  const std::string state = FunctionBody(source, "void SettingsPage::ApplyUpdateState(");
+  for (const char* input :
+       {"in.outcome = snap.lastCheck;", "in.newestKnown = !snap.newestVersion.empty();",
+        "in.newestOutranksOwn = snap.newestCode > update::ParseReleaseCode(UR_APP_VERSION);",
+        "update::UpdateStateLineFor(in)"}) {
+    UR_EXPECT_TRUE_MSG(std::string("the state line does not read ") + input,
+                       Has(state, input));
+  }
+  // the checker publishes the newest release's code beside its version, so
+  // "up to date" is not said of a newer release this install is not offered
+  const std::string check =
+      FunctionBody(ReadSource("UpdateChecker.cpp"), "void UpdateChecker::RunCheck()");
+  const size_t newest = check.find("snapshot_.newestCode = sel.newestCode;");
+  UR_EXPECT_TRUE_MSG("RunCheck does not publish the newest release's code",
+                     newest != std::string::npos &&
+                         check.find("snapshot_.newestCode = sel.newestCode;", newest + 1) !=
+                             std::string::npos);
+  UR_EXPECT_TRUE_MSG("the state line's key is not looked up",
+                     Has(state, "T_(line.textKey, line.textEnglish)"));
+  UR_EXPECT_TRUE_MSG("Check now is not held while a check is in flight",
+                     Has(state, "checkNow_->set_sensitive(updates_ != nullptr && line.canCheck);"));
   const std::string button = FunctionBody(source, "void SettingsPage::OnUpdateButton()");
   UR_EXPECT_TRUE_MSG("Install does not begin the apply", Has(button, "updates_->BeginInstall()"));
   UR_EXPECT_TRUE_MSG("Relaunch does not relaunch", Has(button, "updates_->Relaunch()"));
@@ -127,6 +160,10 @@ UR_TEST(settingsDrivesTheCheckerAndRendersItsStates) {
     UR_EXPECT_TRUE_MSG(std::string("ApplyUpdate does not render ") + phase, Has(apply, phase));
   }
   UR_EXPECT_TRUE_MSG("the package-manager command is not shown", Has(apply, "snap.command"));
+  const size_t written = apply.find("ApplyUpdateState(snap);");
+  const size_t none = apply.find("if (snap.phase == Phase::None) {");
+  UR_EXPECT_TRUE_MSG("the check's outcome is not written before the notice's early return",
+                     written != std::string::npos && none != std::string::npos && written < none);
 }
 
 UR_TEST(theCheckerVerifiesBeforeItSwapsAndReadsOnlyTheOfficialList) {
