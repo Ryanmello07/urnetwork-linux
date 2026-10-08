@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "AccountPage.hpp"
+#include "AccountPlanRows.hpp"
 
 #include "ReferralRoyalty.hpp"
 
@@ -19,6 +20,7 @@
 #include "BittensorWalletFlow.hpp"
 #include "WalletBridgeRoute.hpp"
 #include "DeleteAccountOutcome.hpp"
+#include "DisplayText.hpp"
 #include "Formatters.hpp"
 #include "GuestConversionSheet.hpp"
 #include "I18n.hpp"
@@ -121,6 +123,24 @@ void ApplyFieldState(Gtk::Label& line, AccountFieldState state,
       break;
   }
   SetToned(line, tone, text);
+}
+
+// A pane A balance figure: the compact byte count once a snapshot has landed,
+// its state before (AccountPlanRows.hpp), announced as "<key>, <value>".
+void ApplyBalanceFigure(Gtk::Label& value, const Glib::ustring& key, int64_t byteCount,
+                        bool snapshotLoaded, bool canCallApi) {
+  switch (account_plan::FigureFor(snapshotLoaded, canCallApi)) {
+    case account_plan::FigureView::Figure:
+      SetToned(value, kOffWhite, FormatByteCountCompact(byteCount));
+      break;
+    case account_plan::FigureView::Loading:
+      ApplyFieldState(value, AccountFieldState::Loading);
+      break;
+    case account_plan::FigureView::NoSession:
+      ApplyFieldState(value, AccountFieldState::NoSession);
+      break;
+  }
+  kit::SetAccessibleLabel(value, key + ", " + value.get_text());
 }
 
 // ---- ValidationState + supporting line (§0.5) -------------------------------
@@ -1756,26 +1776,21 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
                                 ? T_("create_an_account", "Create an account")
                                 : T_("upgrade", "Upgrade"));
 
-  // 5. the daily figure. AccountBalance::loaded is HasFetched, and this is the
-  //    one place it earns its keep: before any snapshot has landed there is no
-  //    daily balance to report, and printing "0 B" asserts a figure the server
-  //    never gave (§0.4 — an async field renders its STATE, never a fabricated
-  //    value). The plan value above deliberately still seeds "Free": the spec
-  //    says so in as many words.
-  if (balance_.loaded) {
-    const Glib::ustring daily = FormatByteCountCompact(balance_.startBalanceByteCount);
-    SetToned(*dailyValue_, kOffWhite, daily);
-    kit::SetAccessibleLabel(
-        *dailyValue_,
-        Glib::ustring(T_("daily_data_balance_label", "Daily Data Balance:")) + ", " + daily);
-  } else {
-    ApplyFieldState(*dailyValue_, CanCallApi() ? AccountFieldState::Loading
-                                               : AccountFieldState::NoSession);
-    kit::SetAccessibleLabel(
-        *dailyValue_,
-        Glib::ustring(T_("daily_data_balance_label", "Daily Data Balance:")) + ", " +
-            dailyValue_->get_text());
-  }
+  // 5. the daily figure and the bar's three. AccountBalance::loaded is
+  //    HasFetched, and this is where it earns its keep: before any snapshot has
+  //    landed there is no balance to report, and printing "0 B" asserts a
+  //    figure the server never gave (§0.4 — an async field renders its state,
+  //    never a fabricated value). The plan value above deliberately still seeds
+  //    "Free": the spec says so in as many words.
+  const bool canCallApi = CanCallApi();
+  ApplyBalanceFigure(*dailyValue_, T_("daily_data_balance", "Daily Data Balance"),
+                     balance_.startBalanceByteCount, balance_.loaded, canCallApi);
+  ApplyBalanceFigure(*usedValue_, T_("used_data_key", "Used"), balance_.usedByteCount,
+                     balance_.loaded, canCallApi);
+  ApplyBalanceFigure(*pendingValue_, T_("pending_data_key", "Pending"),
+                     balance_.pendingByteCount, balance_.loaded, canCallApi);
+  ApplyBalanceFigure(*availableValue_, T_("available_data_key", "Available"),
+                     balance_.availableByteCount, balance_.loaded, canCallApi);
 
   // 6. the referral pair (repainted whenever the referral load lands, which
   //    calls back through here): the count once the read lands. It used to
@@ -1801,6 +1816,11 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
   kit::SetAccessibleLabel(*referralBonus_,
                           referralTotals_->get_text() + ", " + referralBonus_->get_text());
   referralRetry_->set_visible(referralView == ReferralTotalsView::Unavailable);
+  // the program's rule under its numbers, from the same terms as the bonus
+  referralDetail_->set_text(Format(T_("referral_panel_detail",
+                                      "Every verified referral gives each of you {} GiB/day for "
+                                      "free, for life."),
+                                   CurrentReferralTerms().bonusGibPerDay));
 }
 
 // ---- PANE A: PLAN (360) ------------------------------------------------------
@@ -1888,11 +1908,21 @@ void AccountPage::BuildPlanPane() {
     content->append(*header.root);
   }
 
-  // 5. daily balance.
+  // 5. daily balance, then the usage bar's figures under the legend's own
+  //    words: the bar shows the shape, these carry the numbers. Neutral text:
+  //    the legend's dots own the colours.
   {
     auto row = kit::MakePaneKeyValueRow(
-        T_("daily_data_balance_label", "Daily Data Balance:"), {}, kRowKeyValue);
+        T_("daily_data_balance", "Daily Data Balance"), {}, kRowKeyValue);
     dailyValue_ = row.value;
+    content->append(*row.root);
+  }
+  for (const auto& [key, value] :
+       {std::pair{Glib::ustring(T_("used_data_key", "Used")), &usedValue_},
+        std::pair{Glib::ustring(T_("pending_data_key", "Pending")), &pendingValue_},
+        std::pair{Glib::ustring(T_("available_data_key", "Available")), &availableValue_}}) {
+    auto row = kit::MakePaneKeyValueRow(key, {}, kRowKeyValue);
+    *value = row.value;
     content->append(*row.root);
   }
 
@@ -1911,8 +1941,25 @@ void AccountPage::BuildPlanPane() {
     }
     content->append(*row.root);
   }
+  // what the bonus means, in the program's terms (ApplyBalance)
+  {
+    auto row = MakeProseRow({}, kProsePadY);
+    referralDetail_ = row.line;
+    content->append(*row.root);
+  }
 
-  // 7. Redeem Balance Code -> the existing RedeemCodeSheet.
+  // 7. the redeemed codes' count, one glance at pane C from here; Redeem below
+  //    stays the action. Hidden until a fetch answers (RenderBalanceCodes).
+  {
+    auto row = kit::MakePaneKeyValueRow(T_("balance_codes_title", "Balance Codes"), {},
+                                        kRowKeyValue);
+    codesCountRow_ = row.root;
+    codesCountValue_ = row.value;
+    codesCountRow_->set_visible(false);
+    content->append(*row.root);
+  }
+
+  // 8. Redeem Balance Code -> the existing RedeemCodeSheet.
   {
     auto row = kit::MakePaneTwoLineRowButton(
         T_("redeem_balance_code", "Redeem Balance Code"), {}, kRowSingle);
@@ -1926,7 +1973,7 @@ void AccountPage::BuildPlanPane() {
     content->append(*row.root);
   }
 
-  // 8. Manage Subscription (the Stripe customer portal).
+  // 9. Manage Subscription (the Stripe customer portal).
   {
     auto row = kit::MakePaneTwoLineRowButton(
         T_("site_app_manage_subscription", "Manage Subscription"), {}, kRowTall);
@@ -2205,6 +2252,17 @@ void AccountPage::BuildCodesPane() {
 // RenderBalanceCodes is the ONLY writer of pane C (the load, the initial paint
 // and sign-out all come through here — scattered writers used to disagree).
 void AccountPage::RenderBalanceCodes() {
+  // pane A's count row: every answered fetch has a count, zero included
+  const std::optional<std::string> count = account_plan::CodeCountText(
+      codesState_ == AccountFieldState::Loaded || codesState_ == AccountFieldState::Empty,
+      codes_.size());
+  if (codesCountRow_) {
+    codesCountRow_->set_visible(count.has_value());
+    SetToned(*codesCountValue_, kOffWhite, count.value_or(std::string()));
+    kit::SetAccessibleLabel(*codesCountValue_,
+                            Glib::ustring(T_("balance_codes_title", "Balance Codes")) + ", " +
+                                count.value_or(std::string()));
+  }
   RemoveAllChildren(*codesPanel_);
   const bool loaded = codesState_ == AccountFieldState::Loaded && !codes_.empty();
   codesEmpty_->set_visible(!loaded);
@@ -2325,8 +2383,11 @@ void AccountPage::ApplyAccountState(AccountFieldState state) {
 
 void AccountPage::ApplyNetworkName(const std::string& name) {
   acknowledgedName_ = name;  // the server-acknowledged name; the box is never truth
-  kit::SetTextOrCollapse(*nameRow_.value, name);
-  if (!name.empty()) SetToned(*nameRow_.value, kUrTextMuted, name);
+  // the row shows the name filtered for display; the editor is seeded with it
+  // as the server has it
+  const std::string shown = SanitizeExternalDisplayText(name);
+  kit::SetTextOrCollapse(*nameRow_.value, shown);
+  if (!shown.empty()) SetToned(*nameRow_.value, kUrTextMuted, shown);
 }
 
 void AccountPage::ApplyAuthLine() {

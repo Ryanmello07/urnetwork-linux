@@ -136,6 +136,13 @@ button.link:hover label { color: #8AA9FF; }
    shadow inside a pane — a row's separation is its hairline and its hover
    fill. Fills are the existing #101010/#151515/#1C1C1C ramp. */
 .ur-pane { background-color: #101010; }
+/* a pane list's bottom edge fade (windows ecf805b): 28px into the pane fill.
+   GTK draws the bottom undershoot only while content continues below the
+   viewport, which is exactly while the list overflows, so the fade needs no
+   code and dissolves at the last row. */
+scrolledwindow.ur-fade-bottom > undershoot.bottom {
+  background-image: linear-gradient(to top, #101010, alpha(#101010, 0) 28px);
+}
 .ur-pane-header {
   background-color: #151515;
   border-bottom: 1px solid alpha(#ffffff, .12);
@@ -171,7 +178,8 @@ button.link:hover label { color: #8AA9FF; }
 .ur-value.dim-label,
 .ur-row-title.dim-label { color: #989898; }
 .ur-value.ur-label-faint,
-.ur-row-title.ur-label-faint { color: #5A5A5A; }
+.ur-row-title.ur-label-faint,
+.ur-pane-meta.ur-label-faint { color: #5A5A5A; }
 /* ...and a STATE beats a tone. A lime figure (money that arrived, the payout
    wallet's total) or a danger figure carries a third class, so it outranks
    the muted default it is layered on. The same holds for a supporting line
@@ -286,6 +294,7 @@ entry.ur-pane-search, entry.ur-pane-search:focus {
 }
 .ur-status-caption { font-family: "PP Neue Montreal"; font-size: 11px; color: #5A5A5A; }
 .ur-status-value { font-family: "PP Neue Montreal"; font-size: 12px; color: #989898; }
+.ur-status-value.ur-status-mode { color: #638BFC; }
 
 /* ---- the stat tile (windows UrStatLabel/UrStatValue) ------------------- */
 .ur-stat-label { font-family: "PP Neue Montreal"; font-size: 12px; color: #989898; }
@@ -309,6 +318,8 @@ button.ur-nav-item:active { background-color: #242424; }
 button.ur-nav-item.selected { background-color: #242424; color: #F8F8F8; }
 button.ur-nav-item.selected:hover { background-color: #2A2A2A; }
 button.ur-nav-item image { color: inherit; }
+/* the compact rail (48px): the accent bar and the icon alone */
+.ur-nav.compact button.ur-nav-item { padding: 0 6px; margin: 1px 4px; }
 .ur-nav-accent { background-color: #EFF7BB; border-radius: 2px; }
 
 /* ---- the window-level mode notice + snackbar surfaces ------------------ */

@@ -291,22 +291,21 @@ UR_TEST(connectEntryPointsAskTheStartConnectGate) {
   UR_EXPECT_TRUE(
       Has(window, "connectPage_->on_connect_action = [this](bool disconnect) { ToggleConnect(disconnect); };"));
   const std::string toggle = Body(window, "void MainWindow::ToggleConnect(bool disconnect) {");
-  // a stale balance read repeats the whole press, connect included
-  const size_t gateFirst =
-      toggle.find("if (ConnectBlockedByBalance([this] { ToggleConnect(/*disconnect=*/false); })) return;");
-  UR_EXPECT_TRUE(gateFirst != std::string::npos &&
-                 gateFirst < toggle.find("StartTunnelUi(/*connectDestination=*/false)"));
-  const size_t startAt = toggle.find("StartTunnelUi(/*connectDestination=*/false)");
-  const size_t connectAt = toggle.find("host_.ConnectBestAvailable()");
-  UR_EXPECT_TRUE(startAt != std::string::npos && connectAt != std::string::npos &&
-                 startAt < connectAt);
+  UR_EXPECT_TRUE(Has(toggle, "StartTunnelUi(\"connect press\");"));
   // StartTunnelUi asks the gate before it starts anything (connect on launch
-  // and every post-sign-in connect pass through it too)
-  const std::string start = Body(window, "TunnelStartResult MainWindow::StartTunnelUi(");
+  // and every post-sign-in connect pass through it too), and a stale balance
+  // read repeats the whole start, connect included
+  const std::string start = Body(window,
+                                 "TunnelStartResult MainWindow::StartTunnelUi(const char* reason,\n"
+                                 "                                            "
+                                 "const std::optional<urnet::ConnectLocation>& target) {");
   const size_t gateAt = start.find(
-      "if (ConnectBlockedByBalance([this, connectDestination] { StartTunnelUi(connectDestination); })) {");
+      "if (ConnectBlockedByBalance([this, reason, target] { StartTunnelUi(reason, target); })) {");
   UR_EXPECT_TRUE(gateAt != std::string::npos);
-  UR_EXPECT_TRUE(gateAt < start.find("host_.StartTunnel()"));
+  const size_t startAt = start.find("host_.StartTunnel(reason)");
+  UR_EXPECT_TRUE(gateAt < startAt);
+  const size_t connectAt = start.find("host_.ConnectBestAvailable()");
+  UR_EXPECT_TRUE(connectAt != std::string::npos && startAt < connectAt);
   // the location picks connect through the host, which asks the same gate
   // before it touches the device
   UR_EXPECT_TRUE(Has(window, "return ConnectBlockedByBalance(std::move(retry)); });"));

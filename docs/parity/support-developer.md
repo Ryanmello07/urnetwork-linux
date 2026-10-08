@@ -134,7 +134,7 @@ Responsive rule (same `wide >= 1000` gate):
 ## 2.3 Builder kit (exact metrics)
 - `MakeCard(heading)`: Border `UrCardStyle`; outer StackPanel Spacing 12; heading TextBlock `UrCardLabelStyle` (PP NeueBit 22 Bold) when non-empty; body StackPanel Spacing 10.
 - `MakeSettingRow(label, detail, trailing)`: Grid, columns star + Auto. Left: StackPanel Spacing 2, Margin 0,0,16,0 with title TextBlock 14px `#F8F8F8` wrap and (optional) detail TextBlock 11px faint `#5A5A5A` wrap. Right: the trailing control. The title block is returned so toggles/number boxes can be `LabeledBy` it (a11y).
-- `MakeActionButton(text, primary)`: primary → `AccentButtonStyle` (pale-yellow pill); otherwise `UrCardRowButtonStyle` with Foreground = accent `#EFF7BB`. HorizontalAlignment Left. (The 48px URButton pills are the sign-in CTA role — never used here.)
+- `MakeActionButton(text)`: `UrCardRowButtonStyle` with Foreground = accent `#EFF7BB`, for every action. HorizontalAlignment Left. No primary variant: its `AccentButtonStyle` lime fill is kept for earnings/brand (windows 5d64131). (The 48px URButton pills are the sign-in CTA role — never used here.)
 - `MakeTableRow(widths)`: one independent Grid per row; widths spelled star (negative numbers = star weight) or fixed pixels — **never Auto** (Auto would size per-row and misalign columns across rows). Header row and data rows share the SAME width array constant.
 - `kActionPadding` = Thickness{8, 6, 8, 6} — compact padding for buttons inside table cells (vs the style's 12,8).
 - `ShortId(id)`: exits/destination client ids are ULIDs sharing leading time bytes — render the **last 8 characters** (iOS parity).
@@ -151,7 +151,7 @@ Responsive rule (same `wide >= 1000` gate):
    - connected but no override in force (settings == nullopt): `Dev("dev_nothing_in_force", "No reliability override is in force, so the settings sections are hidden rather than shown at zero. The measurements and exit readout below are live.")`
    - settings in force: hint hidden (Collapsed). Visibility rule: visible iff `!inForce`.
 4. Actions row — horizontal StackPanel Spacing 8:
-   - **Refresh** — `Dev("dev_refresh","Refresh")`, PRIMARY (accent pill). Never gated: it only re-reads, and it is how a user retries after starting the service. Click → `Poll()`.
+   - **Refresh** — `Dev("dev_refresh","Refresh")`, the same role as its siblings (it was the accent pill until windows 5d64131). Never gated: it only re-reads, and it is how a user retries after starting the service. Click → `Poll()`.
    - **Simulate network change** — `Dev("dev_simulate_network_change","Simulate network change")`. Starts **disabled**; enabled iff snapshot `haveDevice` (NOT gated on settings-in-force). Click → `RunAction(SimulateNetworkChange, DevW("dev_simulate_network_change",…))`.
    - **Sync** — `Dev("dev_sync","Sync")`, same device gating. Click → `RunAction(Sync, DevW("dev_sync","Sync"))`.
    - **Check for updates** — `Dev("dev_check_updates","Check for updates")`. NEVER gated (unauthenticated HTTP GET; needs no session/device/service; the only way to exercise the check path on a dev build where the periodic checker is disabled, kCode==0). Click → `Updates().CheckNow()`.

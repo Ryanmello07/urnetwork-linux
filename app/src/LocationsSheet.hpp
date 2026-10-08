@@ -8,7 +8,9 @@
 // Section order mirrors mobile: network peers, then "best matches" (while
 // searching) or a single "best available" row (idle), then countries, regions,
 // cities, devices. Selection is reflected with a trailing check; peers also
-// carry a green "providing" glyph. SPDX-License-Identifier: MPL-2.0
+// carry a green "providing" glyph. Every row is a button, named as the
+// Network page names its rows (LocationRowName.hpp), so the chooser works
+// from the keyboard and with a screen reader. SPDX-License-Identifier: MPL-2.0
 #pragma once
 
 #include <optional>
@@ -35,9 +37,9 @@ class LocationsSheet : public Gtk::Window {
   void AppendLocationSection(const std::string& title,
                              const std::optional<urnet::ConnectLocationList>& items,
                              const std::optional<urnet::ConnectLocation>& selected);
-  Gtk::Box* MakeLocationRow(const urnet::ConnectLocation& location, bool selected);
-  Gtk::Box* MakePeerRow(const urnet::NetworkPeer& peer, bool selected);
-  Gtk::Box* MakeBestAvailableRow(bool selected);
+  Gtk::Button* MakeLocationRow(const urnet::ConnectLocation& location, bool selected);
+  Gtk::Button* MakePeerRow(const urnet::NetworkPeer& peer, bool selected);
+  Gtk::Button* MakeBestAvailableRow(bool selected);
   void OnSearchChanged();
 
   SdkHost& host_;

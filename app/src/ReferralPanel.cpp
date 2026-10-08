@@ -53,6 +53,8 @@ void EnsureOnboardingCss() {
 .ur-onb-offer-card { background-color: #1C1C1C; border-radius: 12px; border: 1px solid #FFC400; padding: 20px; }
 .ur-onb-plan { border: 2px solid #989898; border-radius: 12px; padding: 34px 20px; background-color: #101010; color: #F8F8F8; }
 .ur-onb-plan.selected { border-color: #ED8FFF; }
+.ur-onb-gold-card { border-radius: 12px; }
+.ur-onb-gold-card:focus-visible { outline: 2px solid alpha(@accent_color, 0.5); outline-offset: -2px; }
 .ur-onb-pill-gold { background: linear-gradient(#FFE082, #FFC400); color: #101010; border-radius: 16px; padding: 4px 14px; font-family: "PP NeueBit"; font-size: 18px; font-weight: bold; border: 1px solid alpha(#FFFFFF, 0.45); }
 .ur-onb-gold { color: #FFC400; }
 .ur-onb-gold-light { color: #FFE082; }

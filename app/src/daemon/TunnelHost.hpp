@@ -65,6 +65,8 @@
 #include "LogUpload.hpp"
 #include "NetworkQuality.hpp"
 #include "Tunnel.hpp"
+#include "TunnelWatchdog.hpp"
+#include "daemon/ExitSampler.hpp"
 
 namespace urnw {
 
@@ -81,6 +83,12 @@ class TunnelHost {
   // no object owns: status reports "not blocked", the reaper does not re-install
   // it if something flushes it, and nothing tears it down.
   void AdoptArmedFloor();
+
+  // Publishes the stop a previous daemon recorded before it ended itself over
+  // an SDK that stopped answering (SelfRestart.hpp), so the app is told why its
+  // tunnel stopped by the daemon that replaced it, and deletes the record. A
+  // no-op without a fresh one. Call before the control socket serves anyone.
+  void RestoreStopRecord();
 
   TunnelHost(const TunnelHost&) = delete;
   TunnelHost& operator=(const TunnelHost&) = delete;
@@ -337,6 +345,17 @@ class TunnelHost {
   // owns what happens next": the firewall is left exactly as it is and the
   // published error is left exactly as it is, for the caller to set.
   void StopInternalLocked(const std::string& reason);
+  // The machine half of every teardown, and its first half: the session
+  // published as stopping, the failsafe's watch ended, the DNS undo while the
+  // tun still exists, the IoLoop cancelled and retired, and the tun closed with
+  // its policy rules and capture routes.
+  // No call here waits on the device (each one that does takes its state
+  // lock), so an SDK that stopped answering cannot keep the machine pointed at
+  // its tunnel. StopInternalLocked starts with it and goes on to the device; a
+  // caller that lands the floor itself calls it first, lands, and then calls
+  // StopInternalLocked(""), so the landing does not wait on the device either.
+  // Idempotent. Requires opMutex_.
+  void RevertSessionMachineLocked();
 
   // THE PROTECTIVE TEARDOWN. The session is being destroyed because it has been
   // PROVEN unsafe — the daemon's own traffic is no longer outside its own
@@ -354,8 +373,24 @@ class TunnelHost {
   // the floor at the exact instant we had four datagrams of proof that traffic
   // was leaving unprotected, and erased the explanation on the same line.
   // Requires opMutex_.
+  //
+  // The dead-tunnel failsafe lands the same way, for a session proven to carry
+  // nothing rather than proven unsafe; `why` names which in the log ("as
+  // UNSAFE", "because it carried nothing").
+  //
+  // `sdkWedged`: the SDK has stopped answering (the failsafe's
+  // SdkUnresponsive), so the device half would never return. The machine is
+  // landed as above and the process then ends itself instead
+  // (RestartForWedgedSdkLocked), and this does not return.
   void StopUnsafeSessionLocked(const std::string& reason, const std::string& message,
-                               const std::string& code);
+                               const std::string& code, const char* why = "as UNSAFE",
+                               bool sdkWedged = false);
+  // Leaves the stop record for the next daemon, detaches the egress marker and
+  // _exits with selfrestart::kExitStatus, for systemd to start a clean daemon
+  // (SelfRestart.hpp). Makes no call into the SDK. Only after the machine is
+  // given back. Requires opMutex_.
+  [[noreturn]] void RestartForWedgedSdkLocked(const std::string& reason, const std::string& error,
+                                              const std::string& code);
 
   // Re-checks the DNS override mid-session and repairs it, escalating to
   // StopUnsafeSessionLocked when it cannot be restored. This is the only caller
@@ -403,6 +438,24 @@ class TunnelHost {
   bool CheckEgressWitnessLocked();
   int egressWitnessTicks_ = 0;
   int egressWitnessFailures_ = 0;
+
+  // The dead-tunnel failsafe (TunnelWatchdog.hpp; docs/linux_agent_help.md
+  // 6.4). From the up edge to the teardown an ExitSampler asks the session's
+  // device for its proven exits and tells it of the reaper's network changes,
+  // so the reaper makes no call on that device; the reaper reads the tun's
+  // packet counters and those readings once a second and hands them to
+  // deadTunnelWatch_. On a dead verdict the session ends through
+  // StopUnsafeSessionLocked: the armed floor when the kill switch was asked
+  // for, no table otherwise, a stop_reason of ctl::kStopReasonFailsafe* and the
+  // sentence saying which. Nothing reconnects. While a countdown is close,
+  // status says failsafe_armed. All three require opMutex_.
+  void StartDeadTunnelWatchLocked();
+  void StopDeadTunnelWatchLocked();
+  // True when it ended the session.
+  bool CheckDeadTunnelLocked();
+  ExitSampler exitSampler_;
+  watchdog::DeadTunnelWatch deadTunnelWatch_;
+  bool deadTunnelWatching_ = false;
 
   // R4's primary mechanism: marks every socket this process creates with
   // kEgressMark at socket() time, from a cgroup-bpf sock_create program, so

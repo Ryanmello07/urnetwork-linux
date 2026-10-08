@@ -193,6 +193,7 @@ if build_gui
 executable('urnetwork-gui',
   sources : [
     'src/main.cpp',
+    'src/StartupFailure.cpp',
     'src/SingleInstance.cpp',
     'src/ControlClient.cpp',
     'src/RpcSessionStore.cpp',
@@ -307,9 +308,11 @@ executable('urnetworkd',
     'src/daemon/ControlServer.cpp',
     'src/daemon/TunnelHost.cpp',
     'src/daemon/DaemonLog.cpp',
+    'src/daemon/ExitSampler.cpp',
     'src/daemon/HostMemory.cpp',
     'src/daemon/NetworkCountryWatcher.cpp',
     'src/daemon/SupportDiagnostics.cpp',
+    'src/daemon/GlogFlusher.cpp',
     'src/Tunnel.cpp',
     'src/ControlClient.cpp',
     'src/LocationOverride.cpp',
@@ -530,20 +533,24 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # and connect-sheet rules, the wallet bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
-# install-kind probe, the launch throttle) and its wiring, the split-rules
+# install-kind probe, the launch throttle), when it asks GitHub again after
+# a refusal, what Settings says the last check came to, and its wiring, the
+# split-rules
 # activity row's reading of the block action reason (the safety-rule chip and
-# the route-locally offer), the VLESS editor's form, visibility rules,
-# settings mapping and messages and the stored network space values every
-# space write starts from, the per-app exclusion's slice, rules and call
-# sites, what a network peer row connects to, the provider card's idle
+# the route-locally offer) and its search and chips, the VLESS editor's form,
+# visibility rules, settings mapping and messages and the stored network space
+# values every space write starts from, the per-app exclusion's slice, rules
+# and call sites, what a network peer row connects to, the provider card's idle
 # reason, status line, demand histogram and ranking rows, the connect page's
-# provide line, the exclusion
+# provide line, fold table and second doors, the activity rows' keyed
+# reconcile and filter, the connect inspector's quick actions, the exclusion
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
 # lines and their filters, which device carries a feedback's log upload, for
 # how long, and the upload in flight off the daemon's main loop, how a launch
 # reaches the running instance and how it answers, the user's autostart entry
-# behind the startup toggle, and the daemon
+# behind the startup toggle, the Settings panes' fold and pane A's second
+# doors, and the daemon
 # control protocol: framing,
 # version
 # negotiation in both directions, SDK-build agreement, peer-credential
@@ -607,6 +614,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/GuestConversionTest.cpp',
     'tests/GuestPurchaseRefusalWiringTest.cpp',
     'tests/ReleaseSelectionTest.cpp',
+    'tests/UpdateScheduleTest.cpp',
+    'tests/UpdateStatePresentationTest.cpp',
     'tests/UpdateWiringTest.cpp',
     'tests/CatalogLookupTest.cpp',
     'tests/ReferralCodeStateTest.cpp',
@@ -641,6 +650,13 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ProvideLineTest.cpp',
     'tests/LegacyHomeRemovedTest.cpp',
     'tests/ConnectActivityRowsWiringTest.cpp',
+    'tests/ConnectFoldTest.cpp',
+    'tests/ConnectFoldDoorsWiringTest.cpp',
+    'tests/KeyedReconcileTest.cpp',
+    'tests/ConnectionFilterTest.cpp',
+    'tests/QuickActionTest.cpp',
+    'tests/QuickActionWiringTest.cpp',
+    'tests/SplitRulesSheetWiringTest.cpp',
     'tests/SignOutTest.cpp',
     'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
@@ -657,6 +673,48 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/InstanceHandoverWiringTest.cpp',
     'tests/LaunchAtStartupTest.cpp',
     'tests/LaunchAtStartupWiringTest.cpp',
+    'tests/Utf8TruncateTest.cpp',
+    'tests/ControlReplyWiringTest.cpp',
+    'tests/DaemonInstanceGuardTest.cpp',
+    'tests/DaemonCrashOutputTest.cpp',
+    'tests/TunnelHostLockWiringTest.cpp',
+    'tests/GlogFlushWiringTest.cpp',
+    'tests/TunnelWatchdogTest.cpp',
+    'tests/DeadTunnelWiringTest.cpp',
+    'tests/FailsafeNoticeTest.cpp',
+    'tests/FailsafeNoticeWiringTest.cpp',
+    'tests/TeardownOrderWiringTest.cpp',
+    'tests/SelfRestartTest.cpp',
+    'tests/SelfRestartWiringTest.cpp',
+    'tests/SettingsFoldTest.cpp',
+    'tests/SettingsFoldDoorsWiringTest.cpp',
+    'tests/StatusStripWiringTest.cpp',
+    'tests/LocationSelectionTest.cpp',
+    'tests/ConnectFunnelWiringTest.cpp',
+    'tests/RowConnectCoalescerTest.cpp',
+    'tests/ShellLayoutTest.cpp',
+    'tests/StatusStripPresentationTest.cpp',
+    'tests/ConnectionHealthWiringTest.cpp',
+    'tests/DaemonStatusPollWiringTest.cpp',
+    'tests/BrowserSignInGateTest.cpp',
+    'tests/TrayPolicyTest.cpp',
+    'tests/AccountPlanRowsTest.cpp',
+    'tests/AppPrefsTest.cpp',
+    'tests/WindowGeometryTest.cpp',
+    'tests/SeedphraseInputWiringTest.cpp',
+    'tests/StartupFailureTest.cpp',
+    'tests/LocationRowNameTest.cpp',
+    'tests/LocationsSheetWiringTest.cpp',
+    'tests/CopyTextButtonWiringTest.cpp',
+    'tests/DisplayTextTest.cpp',
+    'tests/NetworkQuickPickTest.cpp',
+    'tests/ProvideModeGlyphTest.cpp',
+    'tests/EarningsRankingWiringTest.cpp',
+    'tests/DeveloperActionsWiringTest.cpp',
+    'tests/RevealBreadcrumbsWiringTest.cpp',
+    'tests/HomeEntranceWiringTest.cpp',
+    'tests/ConnectCanvasRimWiringTest.cpp',
+    'tests/PlanPickerWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -695,7 +753,14 @@ urnetwork_tests = executable('urnetwork-tests',
               # the same way: the legacy home stays gone and every page is reachable.
               # ConnectActivityRowsWiringTest reads the connect page's ip family row
               # and extender panel, and their host feed, the same way.
-              # SignOutWiringTest reads SdkHost and the health poll the same way.
+              # QuickActionWiringTest reads the quick actions' host writers, press,
+              # row menu and toast the same way.
+              # SplitRulesSheetWiringTest reads the split rules sheet's search, chips and
+              # row buttons the same way.
+              # ConnectFoldDoorsWiringTest reads the connect page's second doors the same
+              # way.
+              # SignOutWiringTest reads SdkHost, the health poll and the pages' sign-out
+              # resets the same way.
               # ExcludeLauncherTest reads the exclusion sheet and its Settings row the same way.
               # NetworkCountryWiringTest reads the network country's watcher and its daemon and
               # GUI call sites the same way, and DiagnosticLogWiringTest the support log's.
@@ -705,6 +770,55 @@ urnetwork_tests = executable('urnetwork-tests',
               # SingleInstance.cpp, the autostart entry and the launcher the same way.
               # LaunchAtStartupWiringTest reads the startup toggle's Settings and launch call
               # sites, meson.build and ../../packaging/lib/common.sh the same way.
+              # ControlReplyWiringTest reads the daemon's reply sends and log ring the same way.
+              # DaemonInstanceGuardTest reads the daemon's start and revert paths the same way.
+              # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
+              # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
+              # GlogFlushWiringTest reads the daemon's glog flushes the same way.
+              # DeadTunnelWiringTest reads the dead-tunnel failsafe's daemon call sites the
+              # same way, and FailsafeNoticeWiringTest its health poll and connect page.
+              # TeardownOrderWiringTest reads TunnelHost's teardowns the same way.
+              # SelfRestartWiringTest reads the daemon's self-restart and the unit the same way.
+              # StatusStripWiringTest reads the status strip's writers in MainWindow.cpp
+              # and ConnectPage.cpp the same way.
+              # LocationSelectionTest reads the location rows' pages the same way.
+              # ConnectFunnelWiringTest reads the connect gestures' window and host call
+              # sites the same way.
+              # RowConnectCoalescerTest reads the row clicks' host and window call sites
+              # the same way.
+              # ShellLayoutTest reads the signed-in shell's layout the same way.
+              # StatusStripPresentationTest reads the status strip's fields and their
+              # writer the same way.
+              # ConnectionHealthWiringTest reads the degrade hold's host and page call
+              # sites the same way.
+              # DaemonStatusPollWiringTest reads the health poll's window and host halves
+              # the same way.
+              # BrowserSignInGateTest reads the browser sign-ins' window call sites the
+              # same way.
+              # TrayPolicyTest reads the tray's watcher and the window's close and
+              # reachability the same way.
+              # AccountPlanRowsTest reads the Account page's Plan pane the same way.
+              # AppPrefsTest reads AppPrefs.hpp's calls into PrefsFile.hpp the same way.
+              # WindowGeometryTest reads the window's restore and save and their
+              # callers the same way.
+              # SeedphraseInputWiringTest reads the seedphrase step the same way.
+              # StartupFailureTest reads the failed start's main.cpp branch and its
+              # dialog the same way.
+              # LocationsSheetWiringTest reads the location chooser's rows, the Network
+              # page's row name and their css the same way.
+              # CopyTextButtonWiringTest reads the click-to-copy texts' sheets and their
+              # button the same way.
+              # DisplayTextTest reads the external names' display sites the same way.
+              # NetworkQuickPickTest reads the Network page's best available detail the
+              # same way.
+              # ProvideModeGlyphTest reads the provide indicators' two pages the same way.
+              # EarningsRankingWiringTest reads the own ranking block the same way.
+              # DeveloperActionsWiringTest reads the Developer page's action buttons the
+              # same way.
+              # RevealBreadcrumbsWiringTest reads the window reveal's log lines the same way.
+              # HomeEntranceWiringTest reads the root stack's sign-in swap the same way.
+              # ConnectCanvasRimWiringTest reads the hero canvas's rim and orbits the same way.
+              # PlanPickerWiringTest reads the plan cards and their css the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

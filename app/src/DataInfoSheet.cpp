@@ -137,7 +137,7 @@ DataInfoSheet::DataInfoSheet(Gtk::Window& parent, SubscriptionBalanceStore& bala
   // the daily balance, as the Account page's row prints it
   auto* daily = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
   auto* dailyLabel =
-      Gtk::make_managed<Gtk::Label>(T_("daily_data_balance_label", "Daily Data Balance:"));
+      Gtk::make_managed<Gtk::Label>(T_("daily_data_balance", "Daily Data Balance"));
   dailyLabel->add_css_class("dim-label");
   dailyLabel->set_xalign(0);
   dailyLabel->set_hexpand(true);

@@ -85,6 +85,10 @@ class NetworkPage : public Gtk::Box {
   Gtk::Button* MakeRow(const Glib::ustring& title, const Glib::ustring& meta,
                        const Rgba& dotColor, bool selected, bool unstable,
                        bool strongPrivacy, bool providing);
+  // A location's row, the one builder the list and the detail pane's
+  // quick-pick share: its name, provider count, dot and glyphs, and a click
+  // that connects there.
+  Gtk::Button* MakeLocationRow(const urnet::ConnectLocation& location, bool selected);
   void AppendGroup(Gtk::Box& into, const Glib::ustring& title, int count);
   void AppendLocationSection(const Glib::ustring& title,
                              const std::optional<urnet::ConnectLocationList>& items,

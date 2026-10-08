@@ -786,12 +786,12 @@ Gtk::Widget* ContractsSheet::BuildRow(const PeerRowVM& row, RowWidgets& out) {
   clientId->set_halign(Gtk::Align::FILL);
   clientId->set_wrap(true);
   clientId->set_wrap_mode(Pango::WrapMode::CHAR);
-  SetPointerCursor(*clientId);
-  auto gesture = Gtk::GestureClick::create();
   const std::string cid = row.clientId;
-  gesture->signal_released().connect([this, cid](int, double, double) { CopyClientId(cid); });
-  clientId->add_controller(gesture);
-  rowBox->append(*clientId);
+  auto* copy = MakeCopyTextButton(*clientId, T_("copy_to_clipboard", "Copy to Clipboard"),
+                                  [this, cid] { CopyClientId(cid); });
+  copy->set_hexpand(true);
+  copy->set_halign(Gtk::Align::FILL);
+  rowBox->append(*copy);
 
   // the two stacks: four columns mirrored around the center. Each stack takes
   // half the width, send hugging the center from the left, receive from the right

@@ -1226,7 +1226,7 @@ user's only diagnostic).
 ### 7.4 Navigation structure
 
 Left NavigationView: auto-adaptive pane (expanded icon+label ≥1008epx, OpenPaneLength 220;
-compact rail 641–1007; overlay ≤640), item height 44, selected item = card-fill pill + 3epx
+compact rail below that, no minimal mode), item height 44, selected item = card-fill pill + 3epx
 `#EFF7BB` accent bar, pane `#151515`. Primary items (tag → store key): `connect`→"connect"
 (Home), `network`→"network", `wallet`→"earnings" (wallet+leaderboard merged),
 `account`→"account". Footer: `support`→"support", `developer` (Advanced-only, inserted/removed),

@@ -128,6 +128,7 @@ struct Pane {
   Gtk::Label* meta = nullptr;   // header right-aligned figure
   Gtk::Box* header = nullptr;   // append header actions here
   Gtk::Box* content = nullptr;  // scrolled content column (append rows/groups)
+  Gtk::ScrolledWindow* scroller = nullptr;  // the pane's own scroller, around content
 };
 Pane MakePane(const Glib::ustring& title, const Glib::ustring& meta = {});
 

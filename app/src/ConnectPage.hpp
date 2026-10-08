@@ -2,17 +2,22 @@
 //
 //   Pane A  CONNECT     330dip rail: status row, the hero canvas, the selected
 //                       provider row, the connect action, provide + connect
-//                       options, network peers.
+//                       options, the second doors to pane C's sheets while
+//                       pane C is folded, network peers.
 //   Pane B  ACTIVITY    star: live throughput header, the transport
 //                       distribution bar under it (opens the transport
-//                       settings editor) + the routing-decision list
-//                       (selectable in Advanced Mode).
+//                       settings editor) + the routing-decision list,
+//                       filtered by verdict and search and foldable by host
+//                       (selectable in Advanced Mode, each row with a menu of
+//                       the inspector's quick actions).
 //   Pane C  STATISTICS  380dip: session figures, contracts, split rules, DNS
-//                       (and the connection inspector in Advanced Mode).
+//                       (and the connection inspector, with its quick
+//                       actions, in Advanced Mode).
 //
 // Panes are floor-to-ceiling and separated by 1px rules, never gaps. The fold
-// table lives in ApplyBreakpoint: Advanced >=1000 three panes, >=640 two,
-// <640 one; Simple is ALWAYS one pane capped at 480dip and centred.
+// table is ConnectFold.hpp's, taken in ApplyFold on the panes' own width:
+// Advanced >=1042 three panes (activity keeps 330dip beside the rails), >=640
+// two, <640 one; Simple is always one pane capped at 480dip and centred.
 //
 // One writer per surface (windows discipline): ApplyConnectStatus renders the
 // aggregate health to the status row, the hero state, the button label AND
@@ -32,6 +37,7 @@
 #include <gtkmm.h>
 
 #include "ConnectCanvas.hpp"
+#include "ConnectionFilter.hpp"
 #include "ContractsSheet.hpp"
 #include "DataInfoSheet.hpp"
 #include "DnsSheet.hpp"
@@ -40,12 +46,14 @@
 #include "InsufficientBalanceNotice.hpp"
 #include "IpFamilyStatusRow.hpp"
 #include "PaneKit.hpp"
+#include "QuickAction.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
 #include "TapSequenceGate.hpp"
 #include "TransferChart.hpp"
 #include "TransportBar.hpp"
 #include "TransportSheet.hpp"
+#include "Ui.hpp"
 
 namespace urnw {
 
@@ -71,6 +79,10 @@ class ConnectPage : public Gtk::Box {
   // (connectPage_->SetDaemonNotice(text)) or a user whose urnetworkd is
   // missing/stopped/mismatched reads only "Disconnected" on the new Home.
   void SetDaemonNotice(const Glib::ustring& notice);
+  // The daemon's dead-tunnel failsafe counts down on the live tunnel
+  // (failsafe_notice::ShowsArmedWarning): the notice line warns that it will be
+  // turned off unless something gets through, when no daemon notice holds it.
+  void SetFailsafeArmed(bool armed);
   // The out-of-balance held alert under the connect action (urnetwork/android#483):
   // shown when balance_notice::HeldAlert holds, with Upgrade and Disconnect.
   void ApplyBalanceNotice(const balance_notice::Signals& signals);
@@ -86,6 +98,10 @@ class ConnectPage : public Gtk::Box {
   // Re-seed every pane B/C cache from the Current* getters (login, tab entry,
   // window re-show). Idempotent.
   void Resync();
+  // A sign-out: the activity view's filters and selection back to their
+  // defaults, its row menu and a pending Undo gone, so the next account's
+  // session starts fresh (SignOut.hpp).
+  void ResetForSignOut();
 
   void SetAdvancedMode(bool on);   // structural: Simple <-> Advanced
   // The provide mode picker, opened from the earnings page (its provide mode
@@ -121,6 +137,9 @@ class ConnectPage : public Gtk::Box {
   // relay gets the POST-press reading, a different answer to the one the user
   // gave by clicking a labelled button. Prefer this over on_toggle_connect.
   std::function<void(bool disconnect)> on_connect_action;
+  // The Failed state's press (the button reads Retry): MainWindow stops the
+  // session and connects to the same selection again.
+  std::function<void()> on_retry_connect;
   // the legacy void toggle: still used by the tray, which has no button in
   // front of the user and must therefore ask (ConnectActionIsDisconnect).
   // Only consulted when on_connect_action is unwired.
@@ -146,6 +165,14 @@ class ConnectPage : public Gtk::Box {
   std::function<void()> on_open_data_info;
   // the recovery row's Cancel: a refused start is not run by itself any more
   std::function<void()> on_cancel_balance_recovery;
+  // The window's status strip, which shows on every destination what this page
+  // says: the status row's word and dot after each render (the word the hero is
+  // named by, "Disconnecting…" included), and the provider row's text.
+  std::function<void(const Glib::ustring& text, const std::string& dotHex)> on_status_rendered;
+  std::function<void(const Glib::ustring& text)> on_location_rendered;
+  // Raises both with what the page shows now, for a listener wired after the
+  // page's first render.
+  void RepublishStatus();
 
  private:
   // one DNS status row: a state dot, the resolver name, On/Off
@@ -200,7 +227,71 @@ class ConnectPage : public Gtk::Box {
   void OnConnectionModeChanged();
 
   // ---- pane B / C writers (one per surface) --------------------------------
-  void ApplyConnectionsList();
+  // One activity row as it stands on screen, in display order and parallel to
+  // connectionsHost_'s children: the parts both row forms share, the whole
+  // selectable row in Advanced Mode, and the counters its meta line was
+  // written from, so the clock can age the line without a feed push.
+  struct ConnectionRow {
+    std::string key;       // the reconcile key (ConnectionRowKey, or "g:" + host)
+    std::string actionId;  // the selection's id; empty when the feed sent none
+    bool group = false;       // a host's group row (group by host)
+    bool selectable = false;  // root is a button (Advanced Mode)
+    Gtk::Widget* root = nullptr;
+    Gtk::Label* dot = nullptr;
+    Gtk::Label* title = nullptr;
+    Gtk::Label* meta = nullptr;
+    kit::PaneListRowButton button;  // valid only when selectable
+    // what the dot and the meta line show, so a push that changes neither
+    // writes neither
+    const char* dotColor = nullptr;
+    std::string metaText;
+    // the announcement without the selection suffix, and as last written
+    Glib::ustring name;
+    Glib::ustring announced;
+    int64_t timeMs = 0;
+    int64_t byteCount = 0;
+    int64_t packetCount = 0;
+    int64_t groupConnections = 0;  // the fold count; group rows only
+  };
+  // The reconcile's unit: one routing decision, or one host's group. Exactly
+  // one of the two is set, and it is the row's kind.
+  struct ConnectionItem {
+    const urnet::BlockAction* action = nullptr;
+    const connection_filter::Group* group = nullptr;
+  };
+  // a new row for a key, in the form the mode asks for (static or a button)
+  ConnectionRow BuildConnectionRow(const std::string& key, const ConnectionItem& item);
+  // a push's changes to a row already on screen, written in place
+  void UpdateConnectionRow(ConnectionRow& row, const ConnectionItem& item);
+  // the meta line at nowMs, written only when its text changed
+  void WriteConnectionRowMeta(ConnectionRow& row, int64_t nowMs);
+  // the row's accessible name, with ", selected" while it is the selection
+  void AnnounceConnectionRow(ConnectionRow& row);
+  // Reconciles the rows in place (KeyedReconcile.hpp); only the Advanced Mode
+  // flip, which changes the row type, still clears the list. The verdict
+  // filter and the search (ConnectionFilter.hpp) choose the rows over the
+  // cached feed; resetScroll, for a filter change, reads from the top.
+  void ApplyConnectionsList(bool resetScroll = false);
+  void OnConnectionsVerdictChanged(connection_filter::Verdict verdict);
+  // Clear: the filter, the search and the fold back to their defaults, in
+  // one pass
+  void OnConnectionsClearFilters();
+  // a group row's click: search for the host, fold off
+  void DrillIntoConnectionGroup(const std::string& host);
+  // A row's menu target, owned: the decision (or a group's aggregate as one)
+  // for Copy details, and what the quick actions rule on.
+  struct RowTarget {
+    urnet::BlockAction action;
+    quick_action::Facts facts;
+  };
+  std::optional<RowTarget> ResolveRowTarget(const std::string& key) const;
+  // the row's menu (Advanced Mode): the quick actions and Copy details
+  void OpenConnectionRowMenu(const std::string& key, Gtk::Widget& anchor, double x, double y);
+  // the meta lines' age on the 1s clock, from each row's own counters
+  void RefreshConnectionRowTimes();
+  // the verdict ratio bar under the Connections header (VerdictRatio), on the
+  // block-actions and block-stats pushes only
+  void ApplyVerdictRatioBar();
   void ApplyConnectionSelectionVisuals();
   void SelectConnection(const std::string& id);
   void ApplySessionCardsVisibility();
@@ -223,20 +314,38 @@ class ConnectPage : public Gtk::Box {
            renderedState_ == health::State::Blocked ||
            renderedState_ == health::State::Disconnecting;
   }
-  // A session is up but no provider is proven yet. The provider-count row
+  // A session is up but no provider is proven yet (or no longer is, Degraded,
+  // while the SDK reconnects). The provider-count row
   // reads "Connecting to providers" here and still opens the provider
   // locations sheet, which lists whatever providers are known so far
   // (android/apple parity: the status label is the tap target in both states).
   bool ConnectingNow() const {
     return renderedState_ == health::State::Connecting ||
-           renderedState_ == health::State::Evaluating;
+           renderedState_ == health::State::Evaluating ||
+           renderedState_ == health::State::Degraded;
   }
   void ApplyContractsList();
   void ApplySplitRuleCount();
   void ApplyDnsCard();
   void ApplyDnsRecommendationPill();
   void ApplyInspector();
+  // Reason in place: its plain value, or the link for a rule-decided one
+  void ApplyInspectorReason(const Glib::ustring& reason, bool link);
   void ApplyInspectorVisibility();
+  // the selection in the current feed, or nullptr (none, or aged out)
+  const urnet::BlockAction* SelectedConnectionAction() const;
+  // ---- the per-connection quick actions (QuickAction.hpp) ----
+  // label, sensitivity and on state of one inspector button
+  void ApplyQuickActionButton(Gtk::Button& button, const quick_action::State& state,
+                              quick_action::Kind kind, const quick_action::Facts& facts);
+  // one press, from the inspector or a row's menu, confirmed by a toast with
+  // Undo when it created a rule
+  void RunQuickAction(quick_action::Kind kind, const quick_action::State& state,
+                      const quick_action::Facts& facts);
+  void CopyConnectionDetails(const urnet::BlockAction& action);
+  // the overrides read once into the split rules and the host rules;
+  // force re-applies both
+  void ApplyOverrides(std::optional<urnet::BlockActionOverrideList> overrides, bool force);
   // The exit a destination ip routed through, and that exit's health, joined
   // out of the reliability snapshot (DestinationExit.DestinationIp ->
   // ClientId -> Exit). nullopt = "no recorded address of this action is in the
@@ -270,6 +379,9 @@ class ConnectPage : public Gtk::Box {
   // force = apply everything (build, resync, mode change).
   void RefreshFeeds(bool force);
   void RefreshAllPanes() { RefreshFeeds(true); }
+  // The provider row's selection and the dns pill's connected country, read
+  // together; true when either moved (or `force`).
+  bool ReadLocations(bool force);
   // The clock-driven fallback for the change feed (see PollFeeds' comment):
   // until MainWindow routes DrawerEvent into OnHostEvent, the page's own clock
   // is the only thing that can keep panes B and C alive.
@@ -282,6 +394,8 @@ class ConnectPage : public Gtk::Box {
   void UpdateClock();
 
   // sheets (created on first open against the page's root window)
+  // the provider locations globe, which MainWindow owns: only with a session
+  void OpenProviderLocations();
   void OpenContractsSheet();
   void OpenSplitRulesSheet();
   void OpenDnsSheet();
@@ -338,6 +452,7 @@ class ConnectPage : public Gtk::Box {
   // gets from ConnectActionIsDisconnect(). Written by ApplyConnectStatus from
   // the very expression that sets the label — one reading, one answer.
   bool actionIsDisconnect_ = false;
+  bool actionIsRetry_ = false;  // the Failed state's action
   // THE USER'S INTENT, WHICH THE SDK'S CONNECTION TOKEN DOES NOT CARRY.
   // g_get_monotonic_time() microseconds at the moment a Disconnect press was
   // relayed, or 0 for "no disconnect in flight". Until the session actually
@@ -349,6 +464,7 @@ class ConnectPage : public Gtk::Box {
   gint64 disconnectRequestedAtUs_ = 0;
   LiveStats stats_;
   Glib::ustring daemonNotice_;
+  bool failsafeArmed_ = false;
   std::string selectedConnectionId_;
 
   // ---- the feed caches (§5) --------------------------------------------------
@@ -450,6 +566,11 @@ class ConnectPage : public Gtk::Box {
   Gtk::Label* peersDot_ = nullptr;
   Gtk::Label* peersText_ = nullptr;
   Gtk::Box* peersHost_ = nullptr;
+  // the second doors to pane C's sheets, shown while pane C is folded
+  // (ApplyFold); the DNS and globe doors follow pane C's own rules for them
+  Gtk::Box* foldDoorsHost_ = nullptr;
+  Gtk::Button* foldDoorDns_ = nullptr;
+  Gtk::Button* foldDoorGlobe_ = nullptr;
   Gtk::Switch* blockerToggle_ = nullptr;
   Gtk::Switch* killSwitchToggle_ = nullptr;
   // What urnetworkd says is REALLY in force, under the switch. A dedicated
@@ -479,13 +600,30 @@ class ConnectPage : public Gtk::Box {
   Gtk::Box* connectionsArea_ = nullptr;
   Gtk::Box* connectionsHost_ = nullptr;
   Gtk::Widget* connectionsEmpty_ = nullptr;
-  // rows and ids in PARALLEL vectors: the selection is held by block-action
-  // id, never by index (the feed rebuilds and rows move).
-  std::vector<std::string> connectionIds_;
-  std::vector<kit::PaneListRowButton> connectionRows_;
-  // the row's announcement without the selection suffix, kept so selection can
-  // repaint the name without re-deriving it from the feed
-  std::vector<Glib::ustring> connectionNames_;
+  Gtk::DrawingArea* verdictRatioBar_ = nullptr;
+  connection_filter::Ratio verdictRatio_;  // what the bar last drew
+  Gtk::ScrolledWindow* connectionsScroll_ = nullptr;
+  // the rows on screen. The selection is held by block-action id, never by
+  // index: rows move as the feed moves.
+  std::vector<ConnectionRow> connectionRows_;
+  // the mode the rows on screen were built for (static or selectable)
+  bool connectionRowsSelectable_ = false;
+  // the activity filter (ConnectionFilter.hpp): the verdict segments, the
+  // search field, the group-by-host switch and the Clear in the Connections
+  // header, all echo-guarded by updatingControls_; the query is
+  // NormalizeQuery's
+  Gtk::ToggleButton* verdictAll_ = nullptr;
+  Gtk::ToggleButton* verdictBlocked_ = nullptr;
+  Gtk::ToggleButton* verdictTunnelled_ = nullptr;
+  Gtk::ToggleButton* verdictBypassed_ = nullptr;
+  Gtk::Entry* connectionsSearch_ = nullptr;
+  Gtk::Button* connectionsClear_ = nullptr;
+  Gtk::Switch* connectionsGroupToggle_ = nullptr;
+  // the rows' one menu, parented to connectionsArea_ and refilled per open
+  Gtk::Popover* rowMenu_ = nullptr;
+  connection_filter::Verdict verdictFilter_ = connection_filter::Verdict::All;
+  std::string connectionsQuery_;
+  bool connectionsGrouped_ = false;
 
   // ---- pane C: statistics / inspector ----------------------------------------
   Gtk::Box* inspectorGroup_ = nullptr;
@@ -493,7 +631,29 @@ class ConnectPage : public Gtk::Box {
   Gtk::Label* inspectorTitle_ = nullptr;
   Gtk::Label* inspectorDot_ = nullptr;
   Gtk::Label* inspectorVerdict_ = nullptr;
-  Gtk::Box* inspectorRows_ = nullptr;
+  // the quick actions' row and buttons, and the state each was last drawn
+  // in: a press acts on exactly what its button showed
+  Gtk::Widget* inspectorActions_ = nullptr;
+  Gtk::Button* inspectorBlockButton_ = nullptr;
+  Gtk::Button* inspectorRouteButton_ = nullptr;
+  Gtk::Button* inspectorCopyButton_ = nullptr;
+  quick_action::State blockQuick_;
+  quick_action::State routeQuick_;
+  // the live host rules the quick actions read (ApplyOverrides)
+  std::vector<quick_action::HostRule> hostRules_;
+  uint64_t hostRulesSig_ = ~0ull;
+  // the quick actions' confirmations, one at a time
+  ToastSlot quickToast_;
+  // the fields over Reason and under it, rebuilt on every render
+  Gtk::Box* inspectorRowsAbove_ = nullptr;
+  Gtk::Box* inspectorRowsBelow_ = nullptr;
+  // Reason, built once: its plain value or its link to the split rules
+  // sheet, and the reason they were last written with
+  Gtk::Widget* inspectorReasonRow_ = nullptr;
+  Gtk::Label* inspectorReasonValue_ = nullptr;
+  Gtk::Button* inspectorReasonLink_ = nullptr;
+  Gtk::Label* inspectorReasonLinkText_ = nullptr;
+  Glib::ustring inspectorReasonText_;
   TransferChart* blockedChart_ = nullptr;
   TransferChart* localChart_ = nullptr;
   Gtk::Box* liveStatsGroup_ = nullptr;

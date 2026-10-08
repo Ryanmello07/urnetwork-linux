@@ -32,6 +32,16 @@ window.background { background-color: #101010; color: #f8f8f8; }
 /* windows UrCardPressedBrush #2A2A2A */
 .ur-card-tappable:active {
   background-color: #2a2a2a; border-color: alpha(#ffffff, .22); }
+/* the same row as a real button (in the tab order, Enter or Space picks it,
+   a button to a screen reader): the button's own fill, padding and bold face
+   off, so it looks like the box it replaces; the focus ring stays */
+button.ur-card-tappable { background: none; box-shadow: none; padding: 0;
+  min-height: 0; min-width: 0; font-weight: normal; }
+/* click-to-copy text as a button: the text's own look and no chrome, a
+   faint fill on hover; the focus ring stays */
+button.ur-copy-text { background: none; box-shadow: none; padding: 0;
+  min-height: 0; min-width: 0; font-weight: normal; border-radius: 4px; }
+button.ur-copy-text:hover { background-color: alpha(#ffffff, .04); }
 .ur-banner { background-color: #1c1c1c; border-radius: 12px; padding: 12px; }
 /* dns recommendation pill: a small left-aligned coral-tinted capsule atop the
    Custom DNS card, nudging when the applied dns settings differ from the
@@ -48,6 +58,8 @@ window.background { background-color: #101010; color: #f8f8f8; }
 .ur-chip-gold-hi { color: #101010; background-image: linear-gradient(#FFE082, #FFC400); }
 .ur-chip-coral { color: #ff6c58; background-color: alpha(#ff6c58, .14); }
 .ur-chip-coral-hi { color: #ffffff; background-color: #ff6c58; }
+.ur-chip-amber { color: #F5C242; background-color: alpha(#F5C242, .14); }
+.ur-chip-amber-hi { color: #101010; background-color: #F5C242; }
 .ur-chip-muted { color: #989898; background-color: alpha(#989898, .16); }
 .ur-chip-muted-hi { color: #101010; background-color: #989898; }
 /* status dots + values */
@@ -214,6 +226,22 @@ void SetPointerCursor(Gtk::Widget& widget) {
   gtk_widget_set_cursor_from_name(widget.gobj(), "pointer");
 }
 
+Gtk::Button* MakeCopyTextButton(Gtk::Label& label, const Glib::ustring& hint,
+                                std::function<void()> copy) {
+  auto* button = Gtk::make_managed<Gtk::Button>();
+  button->add_css_class("ur-copy-text");
+  button->set_child(label);
+  button->set_tooltip_text(hint);
+  SetPointerCursor(*button);
+  // a button whose child is set has no name of its own: the text is the name
+  gtk_accessible_update_property(GTK_ACCESSIBLE(button->gobj()), GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                 label.get_text().c_str(), GTK_ACCESSIBLE_PROPERTY_DESCRIPTION,
+                                 hint.c_str(), -1);
+  gtk_accessible_update_state(GTK_ACCESSIBLE(label.gobj()), GTK_ACCESSIBLE_STATE_HIDDEN, TRUE, -1);
+  button->signal_clicked().connect([copy = std::move(copy)] { copy(); });
+  return button;
+}
+
 void ShowToast(Gtk::Widget& context, const std::string& message) {
   for (GtkWidget* widget = GTK_WIDGET(context.gobj()); widget;
        widget = gtk_widget_get_parent(widget)) {
@@ -222,6 +250,53 @@ void ShowToast(Gtk::Widget& context, const std::string& message) {
       return;
     }
   }
+}
+
+ToastSlot::~ToastSlot() { Forget(); }
+
+void ToastSlot::Forget() {
+  if (!toast_) return;
+  g_object_remove_weak_pointer(G_OBJECT(toast_), &toast_);
+  toast_ = nullptr;
+}
+
+void ToastSlot::Dismiss() {
+  if (!toast_) return;
+  AdwToast* toast = ADW_TOAST(toast_);
+  Forget();
+  adw_toast_dismiss(toast);
+}
+
+void ToastSlot::Show(Gtk::Widget& context, const std::string& message,
+                     const std::string& buttonLabel, std::function<void()> onButton) {
+  AdwToastOverlay* overlay = nullptr;
+  for (GtkWidget* widget = GTK_WIDGET(context.gobj()); widget;
+       widget = gtk_widget_get_parent(widget)) {
+    if (ADW_IS_TOAST_OVERLAY(widget)) {
+      overlay = ADW_TOAST_OVERLAY(widget);
+      break;
+    }
+  }
+  if (!overlay) return;
+  Dismiss();
+  AdwToast* toast = adw_toast_new(message.c_str());
+  if (!buttonLabel.empty() && onButton) {
+    adw_toast_set_button_label(toast, buttonLabel.c_str());
+    // the closure owns the callback; "button-clicked" fires once, as the
+    // button also dismisses the toast
+    auto* callback = new std::function<void()>(std::move(onButton));
+    g_signal_connect_data(
+        toast, "button-clicked",
+        G_CALLBACK(+[](AdwToast*, gpointer data) {
+          (*static_cast<std::function<void()>*>(data))();
+        }),
+        callback,
+        +[](gpointer data, GClosure*) { delete static_cast<std::function<void()>*>(data); },
+        GConnectFlags(0));
+  }
+  toast_ = toast;
+  g_object_add_weak_pointer(G_OBJECT(toast), &toast_);
+  adw_toast_overlay_add_toast(overlay, toast);  // takes the toast
 }
 
 void AddEscapeToClose(Gtk::Window& window) {

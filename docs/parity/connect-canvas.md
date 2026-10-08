@@ -93,11 +93,12 @@ M30 8C28.8955 8 28 7.10453 28 6C28 4.89547 27.1045 4 26 4C24.8955 4 24 3.10453 2
    c. **meridian** — centered ellipse **outline**, width `103·s` (rx 51.5), height `254·s` (ry 127) — SVG "Ellipse 54" — stroke #101010, stroke width `2·s`, no fill.
    d. **pointCanvas** — a side×side absolute-position canvas holding the live provider dots (§7).
 3. **blobLayer** — the five connected-state circles (§8). Initially all hidden.
-4. **idleLayer** — the disconnected core (§6). Children in order: pulse, coreRing, coreGap, core.
+4. **idleLayer** — the disconnected core (§6). Children in order: orbit1, orbit2, coreHalo, pulse, coreRing, coreGap, core.
 5. **glyph** — error/processing icon (§9). Initial: opacity 0, hidden.
 6. **mask** — the square-minus-globe overlay (§3), sized side×side. (Skip if using a real clip.)
 
 Outside the clip, appended to the host:
+6a. **rim** (windows cac798d) — the globe path, **no fill**, stroke white @ 12% (the border token #1FFFFFFF), thickness **1 (unscaled)**, sized side×side, drawn after the clip so its outer half survives; shown in every state (the connected circles end on a clean edge).
 7. **focusRing** — the globe path again, **no fill**, stroke `kOffWhite` #F8F8F8, thickness **2 (unscaled)**, sized `side + 8` square, centered. Hidden by default; shown only for keyboard focus (§10).
 
 Everything is hit-test invisible.
@@ -154,6 +155,8 @@ All diameters in 256-space (×`s`), all centered:
 | `core` | **48** (`kCoreD`) | filled #0039DE |
 
 Three separate ring/disc elements because iOS draws three.
+
+Behind them, static and all **1px (unscaled)** hairlines, no fill (windows cac798d — zero animation, zero idle cost): `orbit1` **128** and `orbit2` **192**, stroke white @ 8%; `coreHalo` **64**, stroke #0039DE @ ~35%. They live in idleLayer, so they show only while Disconnected.
 
 **The pulse burst** (`StartIdle`) — iOS `ConnectCanvasDisconnectedStateView`: a 56pt disc scales to **1.5** while its opacity runs **1.5 − scale**, ease-out, 1.5 s, `.repeatForever`. The desktop version is **bounded** (tray app; measured cost of the always-on version: settled 0.42–0.62% of a core, animating +0.8 to +3.3 points):
 - Preconditions: presenting AND OS animations enabled AND state == Disconnected; otherwise pulse opacity stays 0.

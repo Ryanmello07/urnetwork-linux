@@ -153,6 +153,12 @@ class EarningsPage : public Gtk::Box {
   // session is dropped before it touches a widget.
   void Load();
 
+  // Sign-out: forgets the own-account facts of the network that left, then
+  // Loads, whose no-session path empties the boards, the history and the
+  // points board. Those facts survive a Load, and the points header and both
+  // public switches read them until the next account's answers land.
+  void ResetForSignOut();
+
   // The provide-mode row (the connect page's indicator + label with the
   // current mode) and the providing gate: with providing off the reliability
   // chart hides and the group says so, the same gate and message as the stats
@@ -542,7 +548,7 @@ class EarningsPage : public Gtk::Box {
 
   // pane C widgets
   Gtk::Label* netProvidedValue_ = nullptr;
-  Gtk::Label* rankValue_ = nullptr;
+  Gtk::Label* rankValue_ = nullptr;  // the Current Ranking header's meta
   Gtk::Switch* publicToggle_ = nullptr;
   kit::Snackbar leaderboardInfo_;
   // the data board's own-ranking block, hidden while the Points board shows

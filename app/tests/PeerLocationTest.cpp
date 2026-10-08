@@ -106,6 +106,11 @@ UR_TEST(peerDisplayNameIsTheDeviceNameThenSpecThenClientId) {
   Peer anonymous = MakePeer("", "");
   anonymous.ClientId.reset();
   UR_EXPECT_TRUE(urnw::PeerDisplayName(anonymous).empty());
+  // a name made only of characters the display filter drops would show as
+  // nothing, so it falls through to the next
+  const std::string zeroWidth = "\xE2\x80\x8B";  // U+200B
+  UR_EXPECT_TRUE(urnw::PeerDisplayName(MakePeer(zeroWidth, "Ubuntu 24.04")) == "Ubuntu 24.04");
+  UR_EXPECT_TRUE(urnw::PeerDisplayName(MakePeer(zeroWidth, zeroWidth)) == kPeerClientId);
   // the location takes the same name the row shows
   UR_EXPECT_TRUE(urnw::PeerConnectLocation<Location>(MakePeer("", "Ubuntu 24.04")).name ==
                  std::optional<std::string>("Ubuntu 24.04"));
@@ -114,10 +119,10 @@ UR_TEST(peerDisplayNameIsTheDeviceNameThenSpecThenClientId) {
 UR_TEST(locationsSheetPeerRowConnectsThroughPeerConnectLocation) {
   const std::string source = ReadSource("LocationsSheet.cpp");
   UR_EXPECT_TRUE(!source.empty());
-  const std::string body = DefinitionBody(source, "Gtk::Box* LocationsSheet::MakePeerRow(");
+  const std::string body = DefinitionBody(source, "Gtk::Button* LocationsSheet::MakePeerRow(");
   UR_EXPECT_TRUE(!body.empty());
   UR_EXPECT_TRUE(
-      body.find("host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));") !=
+      body.find("host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));") !=
       std::string::npos);
 }
 
@@ -126,8 +131,9 @@ UR_TEST(networkPagePeerRowsConnectThroughPeerConnectLocation) {
   UR_EXPECT_TRUE(!source.empty());
   const std::string body = DefinitionBody(source, "void NetworkPage::Render(");
   UR_EXPECT_TRUE(!body.empty());
-  UR_EXPECT_TRUE(body.find("host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(copy));") !=
-                 std::string::npos);
+  UR_EXPECT_TRUE(
+      body.find("host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(copy));") !=
+      std::string::npos);
 }
 
 // a hand-built client id location is how the rows lost the flag

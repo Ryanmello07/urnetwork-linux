@@ -50,6 +50,74 @@ UR_TEST(controlFrameRejectsGarbageAndNonObjects) {
   UR_EXPECT_TRUE(ctl::DecodeFrame("{}\n").has_value());
 }
 
+// The daemon replies with strings it did not write (SDK errors, tool output,
+// SDK log lines). A byte that is not UTF-8 must cost one U+FFFD, never the
+// frame: a plain dump() throws, and the daemon sends from glib callbacks.
+UR_TEST(controlFrameInvalidUtf8BecomesReplacementCharacter) {
+  const std::string invalid = "x\xe2\x82";  // a three-byte sequence cut after two
+  const nlohmann::json reply = ctl::MakeErrorReply(9, invalid, ctl::kCodeTunOpenFailed);
+  bool plainDumpThrew = false;
+  try {
+    (void)reply.dump();
+  } catch (const nlohmann::json::type_error&) {
+    plainDumpThrew = true;
+  }
+  UR_EXPECT_TRUE(plainDumpThrew);  // why EncodeFrame does not use the plain dump
+
+  std::string frame;
+  bool threw = false;
+  try {
+    frame = ctl::EncodeFrame(reply);
+  } catch (const std::exception&) {
+    threw = true;
+  }
+  UR_EXPECT_FALSE(threw);
+  UR_EXPECT_TRUE(frame.find('\n') == frame.size() - 1);
+  UR_EXPECT_TRUE(frame.find("\xef\xbf\xbd") != std::string::npos);
+  const auto decoded = ctl::DecodeFrame(frame);
+  UR_EXPECT_TRUE(decoded.has_value());
+  if (decoded) {
+    UR_EXPECT_TRUE(ctl::FrameId(*decoded) == 9);
+    UR_EXPECT_FALSE(ctl::ReplyOk(*decoded));
+    UR_EXPECT_TRUE(ctl::ReplyCode(*decoded) == ctl::kCodeTunOpenFailed);
+    UR_EXPECT_TRUE(ctl::ReplyError(*decoded) == "x\xef\xbf\xbd");
+  }
+}
+
+UR_TEST(controlFrameStatusWithInvalidUtf8KeepsItsFields) {
+  ctl::StatusReply status;
+  status.tunnel_state = ctl::TunnelState::Up;
+  status.kill_switch = ctl::KillSwitchState::Armed;
+  status.dns_detail = "resolvectl: \xff";
+  status.kill_switch_detail = "nft: \xc3";
+  nlohmann::json payload = status;
+  std::string frame;
+  bool threw = false;
+  try {
+    frame = ctl::EncodeFrame(ctl::MakeReply(4, true, payload));
+  } catch (const std::exception&) {
+    threw = true;
+  }
+  UR_EXPECT_FALSE(threw);
+  const auto decoded = ctl::DecodeFrame(frame);
+  UR_EXPECT_TRUE(decoded.has_value());
+  if (decoded) {
+    const auto parsed = decoded->get<ctl::StatusReply>();
+    UR_EXPECT_TRUE(parsed.tunnel_state == ctl::TunnelState::Up);
+    UR_EXPECT_TRUE(parsed.kill_switch == ctl::KillSwitchState::Armed);
+    UR_EXPECT_TRUE(parsed.dns_detail == "resolvectl: \xef\xbf\xbd");
+    UR_EXPECT_TRUE(parsed.kill_switch_detail == "nft: \xef\xbf\xbd");
+  }
+}
+
+// Valid text, multibyte included, goes out byte for byte.
+UR_TEST(controlFrameValidUtf8IsUnchanged) {
+  const std::string text = "caf\xc3\xa9 \xe2\x82\xac \xf0\x9f\x90\xb8";
+  const auto decoded = ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeErrorReply(1, text)));
+  UR_EXPECT_TRUE(decoded.has_value());
+  if (decoded) UR_EXPECT_TRUE(ctl::ReplyError(*decoded) == text);
+}
+
 UR_TEST(controlFrameUnknownVerbAndMissingIdAreExplicit) {
   auto j = ctl::DecodeFrame("{\"verb\":\"frobnicate\",\"id\":3}");
   UR_EXPECT_TRUE(j.has_value());
@@ -615,6 +683,42 @@ UR_TEST(controlStatusCarriesTheNetworkCountry) {
   UR_EXPECT_TRUE(fromOlder.network_country_code.empty());
 
   UR_EXPECT_TRUE(ctl::RedactStatusForForeignUid(status).network_country_code.empty());
+}
+
+// The dead-tunnel failsafe's countdown and its stop reasons reach the GUI; a
+// daemon without the failsafe reports no countdown, and another user's view
+// carries none.
+UR_TEST(controlStatusCarriesTheFailsafe) {
+  ctl::StatusReply status;
+  status.tunnel_state = ctl::TunnelState::Up;
+  status.failsafe_armed = true;
+  const nlohmann::json wire = nlohmann::json(status);
+  UR_EXPECT_TRUE(wire.contains("failsafe_armed"));
+  auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(10, true, wire)))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(back.failsafe_armed);
+
+  nlohmann::json older = wire;
+  older.erase("failsafe_armed");
+  const auto fromOlder = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(11, true, older)))->get<ctl::StatusReply>();
+  UR_EXPECT_FALSE(fromOlder.failsafe_armed);
+  UR_EXPECT_FALSE(ctl::RedactStatusForForeignUid(status).failsafe_armed);
+
+  ctl::StatusReply stopped;
+  stopped.tunnel_state = ctl::TunnelState::Error;
+  stopped.stop_reason = ctl::kStopReasonFailsafeNoInbound;
+  stopped.error_code = ctl::kCodeTunnelDead;
+  back = ctl::DecodeFrame(ctl::EncodeFrame(
+      ctl::MakeReply(12, true, nlohmann::json(stopped))))->get<ctl::StatusReply>();
+  UR_EXPECT_TRUE(ctl::IsFailsafeStop(back.stop_reason));
+  UR_EXPECT_TRUE(back.error_code == "tunnel_dead");
+  for (const char* reason : {ctl::kStopReasonFailsafeNoExit, ctl::kStopReasonFailsafeNoInbound,
+                             ctl::kStopReasonFailsafeSdkUnresponsive}) {
+    UR_EXPECT_TRUE(ctl::IsFailsafeStop(reason));
+  }
+  UR_EXPECT_FALSE(ctl::IsFailsafeStop("io_loop"));
+  UR_EXPECT_FALSE(ctl::IsFailsafeStop(""));
 }
 
 // A stopped or failed tunnel is no session; starting, up and stopping are.

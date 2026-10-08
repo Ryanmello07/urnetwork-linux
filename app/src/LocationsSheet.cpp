@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "LocationsSheet.hpp"
 
+#include "DisplayText.hpp"
 #include "I18n.hpp"
+#include "LocationRowName.hpp"
+#include "LocationSelection.hpp"
+#include "PaneKit.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -37,52 +41,44 @@ Rgba LocationColor(const urnet::ConnectLocation& loc) {
   return ParseHexColor(urnet::getColorHex(code), fallback);
 }
 
-bool SameId(const std::optional<std::string>& a, const std::optional<std::string>& b) {
-  return a && b && !a->empty() && *a == *b;
-}
-
-bool IsBestAvailableSelected(const std::optional<urnet::ConnectLocation>& selected) {
-  return !selected || (selected->connect_location_id &&
-                       selected->connect_location_id->best_available.value_or(false));
-}
-
-bool IsPeerSelected(const std::optional<urnet::ConnectLocation>& selected,
-                    const urnet::NetworkPeer& peer) {
-  if (!selected || !selected->connect_location_id) return false;
-  return SameId(selected->connect_location_id->client_id, peer.ClientId);
-}
-
-bool IsLocationSelected(const std::optional<urnet::ConnectLocation>& selected,
-                        const urnet::ConnectLocation& loc) {
-  if (!selected || !selected->connect_location_id || !loc.connect_location_id) return false;
-  const auto& a = *selected->connect_location_id;
-  const auto& b = *loc.connect_location_id;
-  return SameId(a.location_id, b.location_id) || SameId(a.client_id, b.client_id) ||
-         SameId(a.location_group_id, b.location_group_id);
-}
-
-// A trailing symbolic icon (glyphs on the right of a row).
+// A trailing symbolic icon (glyphs on the right of a row). Decorative: the
+// row's name says the state it shows.
 Gtk::Image* MakeTrailingIcon(const std::string& iconName, const char* cssClass) {
   auto* icon = Gtk::make_managed<Gtk::Image>();
   icon->set_from_icon_name(iconName);
   icon->set_valign(Gtk::Align::CENTER);
   if (cssClass) icon->add_css_class(cssClass);
+  kit::MarkDecorative(*icon);
   return icon;
 }
 
-// A row shell: leading color dot + a two-line text column (primary + optional
-// caption), hoverable and pointer-cursored. Callers append trailing glyphs and a
-// click gesture.
-Gtk::Box* MakeRowShell(Gtk::Label* dot, const std::string& primary, const std::string& caption) {
-  auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
-  row->set_margin_top(2);
-  row->set_margin_bottom(2);
-  row->add_css_class("ur-card-tappable");
-  SetPointerCursor(*row);
-  row->append(*dot);
+// A row shell: a button holding a leading color dot and a two-line text
+// column (primary + optional caption), hoverable and pointer-cursored. A
+// button, so a row is in the tab order, Enter or Space picks it and a screen
+// reader hears a button. Its content is a box, which GTK names from nothing,
+// so the caller names the button; the dot, the text and the trailing glyphs
+// it says are hidden, so nothing is read twice. Callers append trailing
+// glyphs to `content` and connect the click.
+struct RowShell {
+  Gtk::Button* button = nullptr;
+  Gtk::Box* content = nullptr;
+};
+
+RowShell MakeRowShell(Gtk::Label* dot, const std::string& primary, const std::string& caption) {
+  RowShell shell;
+  shell.button = Gtk::make_managed<Gtk::Button>();
+  shell.button->add_css_class("ur-card-tappable");
+  shell.button->set_margin_top(2);
+  shell.button->set_margin_bottom(2);
+  SetPointerCursor(*shell.button);
+  shell.content = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+  shell.button->set_child(*shell.content);
+  kit::MarkDecorative(*dot);
+  shell.content->append(*dot);
 
   auto* column = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
   column->set_hexpand(true);
+  kit::MarkDecorative(*column);
   auto* name = Gtk::make_managed<Gtk::Label>(primary);
   name->set_xalign(0);
   name->set_ellipsize(Pango::EllipsizeMode::END);
@@ -94,8 +90,18 @@ Gtk::Box* MakeRowShell(Gtk::Label* dot, const std::string& primary, const std::s
     captionLabel->set_xalign(0);
     column->append(*captionLabel);
   }
-  row->append(*column);
-  return row;
+  shell.content->append(*column);
+  return shell;
+}
+
+// The words a row's name reads for its glyphs: the Network page's.
+LocationRowWords RowWords() {
+  return LocationRowWords{
+      T_("unstable_providers_warning", "* (may be unstable)"),
+      T_("strong_anonymization", "Strong Anonymization"),
+      T_("network_peers", "Network peers"),
+      T_("selected_provider", "Selected provider"),
+  };
 }
 
 }  // namespace
@@ -159,67 +165,76 @@ void LocationsSheet::AppendLocationSection(
   sectionsBox_.append(*box);
 }
 
-Gtk::Box* LocationsSheet::MakeLocationRow(const urnet::ConnectLocation& location, bool selected) {
+Gtk::Button* LocationsSheet::MakeLocationRow(const urnet::ConnectLocation& location,
+                                             bool selected) {
   const int providerCount = location.provider_count.value_or(0);
   const std::string caption =
       0 < providerCount ? Format(TN_("provider_count", "{} provider", "{} providers",
                                      static_cast<unsigned long>(providerCount)),
                                  providerCount)
                         : std::string();
-  auto* row = MakeRowShell(MakeColorDot(LocationColor(location)),
-                           location.name.value_or(std::string()), caption);
+  const std::string name = SanitizeExternalDisplayText(location.name.value_or(std::string()));
+  auto row = MakeRowShell(MakeColorDot(LocationColor(location)), name, caption);
 
-  if (!location.stable) row->append(*MakeTrailingIcon("dialog-warning-symbolic", nullptr));
+  if (!location.stable) row.content->append(*MakeTrailingIcon("dialog-warning-symbolic", nullptr));
   if (location.strong_privacy) {
-    row->append(*MakeTrailingIcon("security-high-symbolic", "ur-value-on"));
+    row.content->append(*MakeTrailingIcon("security-high-symbolic", "ur-value-on"));
   }
-  if (selected) row->append(*MakeTrailingIcon("object-select-symbolic", nullptr));
+  if (selected) row.content->append(*MakeTrailingIcon("object-select-symbolic", nullptr));
+  LocationRowStates states;
+  states.unstable = !location.stable;
+  states.strongPrivacy = location.strong_privacy;
+  states.selected = selected;
+  kit::SetAccessibleLabel(*row.button, LocationRowName(name, caption, states, RowWords()));
 
-  auto gesture = Gtk::GestureClick::create();
   const urnet::ConnectLocation locationCopy = location;
-  gesture->signal_released().connect([this, locationCopy](int, double, double) {
-    host_.Connect(locationCopy);
+  row.button->signal_clicked().connect([this, locationCopy] {
+    host_.ConnectFromRow(locationCopy);
     set_visible(false);  // dismiss on connect (iOS/Android parity)
   });
-  row->add_controller(gesture);
-  return row;
+  return row.button;
 }
 
-Gtk::Box* LocationsSheet::MakePeerRow(const urnet::NetworkPeer& peer, bool selected) {
+Gtk::Button* LocationsSheet::MakePeerRow(const urnet::NetworkPeer& peer, bool selected) {
   const Rgba fallback{0.5, 0.5, 0.5, 1.0};
   auto* dot = MakeColorDot(ParseHexColor(urnet::getColorHex(peer.ClientId.value_or("")), fallback));
   // secondary line = the device spec, but only when a distinct name is shown too
-  const std::string caption =
-      (!peer.DeviceName.empty() && !peer.DeviceSpec.empty()) ? peer.DeviceSpec : std::string();
-  auto* row = MakeRowShell(dot, PeerDisplayName(peer), caption);
+  const std::string caption = (!peer.DeviceName.empty() && !peer.DeviceSpec.empty())
+                                  ? SanitizeExternalDisplayText(peer.DeviceSpec)
+                                  : std::string();
+  const std::string name = PeerDisplayName(peer);
+  auto row = MakeRowShell(dot, name, caption);
 
   // the green "providing to network" glyph, always present on a peer row
-  row->append(*MakeTrailingIcon("network-transmit-receive-symbolic", "ur-value-on"));
-  if (selected) row->append(*MakeTrailingIcon("object-select-symbolic", nullptr));
+  row.content->append(*MakeTrailingIcon("network-transmit-receive-symbolic", "ur-value-on"));
+  if (selected) row.content->append(*MakeTrailingIcon("object-select-symbolic", nullptr));
+  LocationRowStates states;
+  states.providing = true;
+  states.selected = selected;
+  kit::SetAccessibleLabel(*row.button, LocationRowName(name, caption, states, RowWords()));
 
-  auto gesture = Gtk::GestureClick::create();
   const urnet::NetworkPeer peerCopy = peer;
-  gesture->signal_released().connect([this, peerCopy](int, double, double) {
+  row.button->signal_clicked().connect([this, peerCopy] {
     // one of the user's own devices, reached as a network peer (PeerLocation.hpp)
-    host_.Connect(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));
+    host_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));
     set_visible(false);
   });
-  row->add_controller(gesture);
-  return row;
+  return row.button;
 }
 
-Gtk::Box* LocationsSheet::MakeBestAvailableRow(bool selected) {
-  auto* row = MakeRowShell(MakeColorDot(kUrCoral),
-                           T_("best_available_provider", "Best available provider"), std::string());
-  if (selected) row->append(*MakeTrailingIcon("object-select-symbolic", nullptr));
+Gtk::Button* LocationsSheet::MakeBestAvailableRow(bool selected) {
+  const std::string name = T_("best_available_provider", "Best available provider");
+  auto row = MakeRowShell(MakeColorDot(kUrCoral), name, std::string());
+  if (selected) row.content->append(*MakeTrailingIcon("object-select-symbolic", nullptr));
+  LocationRowStates states;
+  states.selected = selected;
+  kit::SetAccessibleLabel(*row.button, LocationRowName(name, {}, states, RowWords()));
 
-  auto gesture = Gtk::GestureClick::create();
-  gesture->signal_released().connect([this](int, double, double) {
-    host_.ConnectBestAvailable();
+  row.button->signal_clicked().connect([this] {
+    host_.ConnectFromRow(std::nullopt);
     set_visible(false);
   });
-  row->add_controller(gesture);
-  return row;
+  return row.button;
 }
 
 void LocationsSheet::RebuildSections() {

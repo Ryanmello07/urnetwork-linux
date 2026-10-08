@@ -277,12 +277,12 @@ UR_TEST(ProviderOnlyStatus_TheDaemonReportsTheExtenderRole) {
                                              "ctl::ProviderStatsReply TunnelHost::ProviderStats(");
   UR_EXPECT_TRUE(Precedes(stats, "reply.running = true;",
                           "providerDevice_->getExtenderProvideStatus()"));
-  UR_EXPECT_TRUE(
-      Contains(stats, "reply.extender_provide_status_json = nlohmann::json(*status).dump();"));
+  UR_EXPECT_TRUE(Contains(
+      stats, "reply.extender_provide_status_json = ctl::DumpForWire(nlohmann::json(*status));"));
   UR_EXPECT_TRUE(Precedes(stats, "if (providerContractVc_) {",
                           "providerContractVc_->getExtenderThroughputPoints()"));
-  UR_EXPECT_TRUE(
-      Contains(stats, "reply.extender_throughput_points_json = nlohmann::json(*points).dump();"));
+  UR_EXPECT_TRUE(Contains(
+      stats, "reply.extender_throughput_points_json = ctl::DumpForWire(nlohmann::json(*points));"));
   UR_EXPECT_TRUE(Contains(stats, "noteReadFailure(\"extender status\", e);"));
   UR_EXPECT_TRUE(Contains(stats, "noteReadFailure(\"extender series\", e);"));
   // the extender series' failure is its own: it never clears the provider series

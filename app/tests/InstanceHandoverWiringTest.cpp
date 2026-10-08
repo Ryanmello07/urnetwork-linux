@@ -117,7 +117,7 @@ UR_TEST(InstanceHandoverWiring_ALaunchIsDecidedBeforeGApplicationAndAHandoverExi
              "case urnw::instance::Outcome::GaveUp:", "return 1;",
              "auto host = std::make_shared<urnw::SdkHost>();",
              "EnsureDir(Glib::get_user_data_dir(), \"urnetwork\");",
-             "app->signal_startup().connect(", "return app->run(argc, argv);"}));
+             "app->signal_startup().connect(", "const int status = app->run(argc, argv);"}));
   const std::string beforeStartup = main.substr(0, main.find("app->signal_startup().connect("));
   UR_EXPECT_TRUE(!HandoverHas(beforeStartup, "app->hold();"));
   UR_EXPECT_TRUE(!HandoverHas(beforeStartup, "host->Initialize("));

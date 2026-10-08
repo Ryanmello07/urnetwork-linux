@@ -197,52 +197,74 @@ void ExcludeAppsSheet::Scan() {
   });
 }
 
+// The apps already excluded are pinned on top under Excluded, the rest follow
+// under Apps, each in name order; a group's header shows only while the
+// group has a row to head. The grouping is read off each app's copy as it
+// stands, so a switch turned on moves its row at the next search or open,
+// never under the pointer. The search matches the name the menu shows or the
+// desktop id.
 void ExcludeAppsSheet::Render() {
   RemoveAllChildren(*rows_);
   const Glib::ustring query = search_->get_text().casefold();
+  auto matches = [&query](const App& app) {
+    return query.empty() ||
+           Glib::ustring(app.name).casefold().find(query) != Glib::ustring::npos ||
+           Glib::ustring(app.id).casefold().find(query) != Glib::ustring::npos;
+  };
   int shown = 0;
-  for (size_t index = 0; index < apps_.size(); ++index) {
-    const App& app = apps_[index];
-    if (!query.empty() &&
-        Glib::ustring(app.name).casefold().find(query) == Glib::ustring::npos) {
-      continue;
-    }
-    auto row = kit::MakePaneTwoLineRow(app.name, {}, kRowTall);
-    if (auto* inner = dynamic_cast<Gtk::Box*>(row.root->get_first_child())) {
-      auto* icon = Gtk::make_managed<Gtk::Image>();
-      icon->set_pixel_size(kIconSize);
-      icon->set_valign(Gtk::Align::CENTER);
-      GIcon* gicon = app.icon.empty() ? nullptr : g_icon_new_for_string(app.icon.c_str(), nullptr);
-      if (gicon != nullptr) {
-        gtk_image_set_from_gicon(icon->gobj(), gicon);
-        g_object_unref(gicon);
-      } else {
-        icon->set_from_icon_name("application-x-executable");
+  for (const bool excludedGroup : {true, false}) {
+    bool headed = false;
+    for (size_t index = 0; index < apps_.size(); ++index) {
+      const App& app = apps_[index];
+      if (app.copyPath.empty() == excludedGroup || !matches(app)) continue;
+      if (!headed) {
+        rows_->append(*kit::MakePaneGroupHeader(excludedGroup ? T_("excluded", "Excluded")
+                                                              : T_("apps", "Apps"))
+                           .root);
+        headed = true;
       }
-      kit::MarkDecorative(*icon);
-      inner->prepend(*icon);
+      RenderRow(index);
+      ++shown;
     }
-
-    auto* toggle = Gtk::make_managed<Gtk::Switch>();
-    toggle->set_valign(Gtk::Align::CENTER);
-    toggle->set_active(!app.copyPath.empty());
-    kit::SetAccessibleLabel(*toggle, app.name);
-    toggle->property_active().signal_changed().connect([this, index, toggle] {
-      App& changed = apps_[index];
-      const bool excluded = toggle->get_active();
-      if (excluded == !changed.copyPath.empty()) return;  // the switch put back below
-      if (!SetExcluded(changed, excluded)) {
-        toggle->set_active(!excluded);  // the switch says where the file is
-        return;
-      }
-      // a removed orphan copy cannot be written again: its app is gone
-      if (changed.sourcePath.empty()) toggle->set_sensitive(false);
-    });
-    row.trailing->append(*toggle);
-    rows_->append(*row.root);
-    ++shown;
   }
   if (shown == 0) rows_->append(*kit::MakePaneEmptyLine(T_("no_apps_found", "No apps found")));
+}
+
+void ExcludeAppsSheet::RenderRow(size_t index) {
+  const App& app = apps_[index];
+  auto row = kit::MakePaneTwoLineRow(app.name, {}, kRowTall);
+  if (auto* inner = dynamic_cast<Gtk::Box*>(row.root->get_first_child())) {
+    auto* icon = Gtk::make_managed<Gtk::Image>();
+    icon->set_pixel_size(kIconSize);
+    icon->set_valign(Gtk::Align::CENTER);
+    GIcon* gicon = app.icon.empty() ? nullptr : g_icon_new_for_string(app.icon.c_str(), nullptr);
+    if (gicon != nullptr) {
+      gtk_image_set_from_gicon(icon->gobj(), gicon);
+      g_object_unref(gicon);
+    } else {
+      icon->set_from_icon_name("application-x-executable");
+    }
+    kit::MarkDecorative(*icon);
+    inner->prepend(*icon);
+  }
+
+  auto* toggle = Gtk::make_managed<Gtk::Switch>();
+  toggle->set_valign(Gtk::Align::CENTER);
+  toggle->set_active(!app.copyPath.empty());
+  kit::SetAccessibleLabel(*toggle, app.name);
+  toggle->property_active().signal_changed().connect([this, index, toggle] {
+    App& changed = apps_[index];
+    const bool excluded = toggle->get_active();
+    if (excluded == !changed.copyPath.empty()) return;  // the switch put back below
+    if (!SetExcluded(changed, excluded)) {
+      toggle->set_active(!excluded);  // the switch says where the file is
+      return;
+    }
+    // a removed orphan copy cannot be written again: its app is gone
+    if (changed.sourcePath.empty()) toggle->set_sensitive(false);
+  });
+  row.trailing->append(*toggle);
+  rows_->append(*row.root);
 }
 
 bool ExcludeAppsSheet::SetExcluded(App& app, bool excluded) {

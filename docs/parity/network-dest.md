@@ -200,6 +200,8 @@ Key/value rows are `kit::MakePaneKeyValueRow(key, value, height=34)`: Border fix
 *Branch A — best-available or nothing selected:*
 - Row: key `Loc("name_label")` **"Name"** / value `Loc("best_available_provider")` **"Best available provider"**.
 - `NetworkPaneBMeta` = "Best available provider".
+- Two standing notes (windows 56a63f6 `AddDetailNote`): a row with the pane inset and bottom hairline, padding 12,8, holding a **12px #989898** line that wraps — `adv_best_available_note` **"URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."**, then `adv_pick_location_note` **"Pick a country, region, city or device in the list to connect there instead."** Deliberately no "currently connected: X" line: the SDK does not expose the location best-available resolved to.
+- Quick-pick, only when `Countries` is non-empty: `MakePaneGroupHeader(Loc("countries"), shown)` with `shown = min(5, Countries.size())`, then the first `shown` countries in the SDK's order as the list's own rows (the one `MakeLocationRow` builder: dot, `provider_count` meta, glyphs, `selected = false`); a click is the list row's click (`ConnectFromRow`, then `Render()`). Linux: `NetworkQuickPick.hpp`; the header carries no `shown` meta, since the Available providers block's Countries row below counts every country and a "Countries 5" header would contradict it.
 
 *Branch B — a concrete location selected* (fields come from `urnet::ConnectLocation` ONLY — the SDK carries **no latency and no load anywhere**, so there are no such rows; do not invent them):
 1. `name_label` **"Name"** → `location.name` (skipped if empty). `NetworkPaneBMeta` = that name.
@@ -341,6 +343,8 @@ Store keys (`Loc`, from `Strings/en/Resources.resw`; ~1200 keys × 28 locales; a
 | `cities` | Cities |
 | `devices` | Devices |
 | `best_available_provider` | Best available provider |
+| `adv_best_available_note` | URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes. |
+| `adv_pick_location_note` | Pick a country, region, city or device in the list to connect there instead. |
 | `provider_count.one` / `.other` | {} provider / {} providers (via `Plural("provider_count", n)`) |
 | `loading` | Loading... |
 | `no_locations_found` | No locations found |

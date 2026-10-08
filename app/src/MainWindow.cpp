@@ -17,10 +17,16 @@
 #include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
 #include "DaemonUnreachableCopy.hpp"
+#include "DisplayText.hpp"
+#include "FailsafeNotice.hpp"
 #include "Formatters.hpp"
 #include "UrTheme.hpp"
 #include "I18n.hpp"
+#include "LocationSelection.hpp"
+#include "StatusStripPresentation.hpp"
+#include "TrayPolicy.hpp"
 #include "Ui.hpp"
+#include "WindowGeometry.hpp"
 
 namespace urnw {
 
@@ -120,10 +126,33 @@ Glib::ustring DaemonAuthRefusalCopy(DaemonAuthOutcome outcome, const std::string
 
 MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   set_title("URnetwork");
-  // The desktop default (windows shell parity): 1120x820dip opens wide of the
-  // 1000dip breakpoint so the brand art shows on first launch; min 400x480.
-  set_default_size(1120, 820);
-  set_size_request(400, 480);
+  // The size the last run left, or the desktop default (windows shell parity:
+  // 1120x820dip, min 400x480). The preview harness always opens at the default.
+  window_geometry::Size size;
+  const bool restore = g_getenv("URNETWORK_PREVIEW_UI") == nullptr;
+  if (restore) {
+    size = window_geometry::SizeToOpenAt(prefs::Get<int64_t>(window_geometry::kWidthKey, 0),
+                                         prefs::Get<int64_t>(window_geometry::kHeightKey, 0));
+  }
+  set_default_size(size.width, size.height);
+  set_size_request(window_geometry::kMinWidth, window_geometry::kMinHeight);
+  if (restore && prefs::Get<bool>(window_geometry::kMaximizedKey, false)) maximize();
+  // Saved again shortly after every resize and maximize as well, not only at
+  // close and Quit: a logout or a SIGTERM ends the app with neither.
+  if (restore) {
+    const auto saveSoon = [this] {
+      geometrySave_.disconnect();
+      geometrySave_ = Glib::signal_timeout().connect(
+          [this] {
+            SaveGeometry();
+            return false;
+          },
+          window_geometry::kSaveDebounceMillis);
+    };
+    property_default_width().signal_changed().connect(saveSoon);
+    property_default_height().signal_changed().connect(saveSoon);
+    property_maximized().signal_changed().connect(saveSoon);
+  }
 
   BuildChrome();
   BuildLogin();
@@ -172,6 +201,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // overlays; see Ui.hpp ShowToast).
   GtkWidget* toastOverlay = adw_toast_overlay_new();
   adw_toast_overlay_set_child(ADW_TOAST_OVERLAY(toastOverlay), GTK_WIDGET(stack_.gobj()));
+  // Home's first entrance runs on the page crossfade's duration (ApplyAuthState);
+  // every other swap of this stack passes no transition.
+  stack_.set_transition_duration(motion::kBaseMs);
   // The Pro celebration wraps everything: the page stack (with its toasts)
   // sits in the mosaic container, and the confetti overlay floats above it.
   // Both are inert until a flight starts (ProCelebration.hpp).
@@ -236,6 +268,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (upgradeSheet_) upgradeSheet_->OnBalanceChanged();
     // a converted guest's purchase continues once the server stops reporting a guest
     guestUpgrade_.Poll(balance_.IsGuest());
+    ApplyStatusStripDetails();  // the strip's Network field names a guest
     UpdateBalanceNotice();  // a Pro upgrade or a settled poll moves the gate
     // Earnings gates its upgrade door and its plan-flavoured copy on the
     // plan's two bits.
@@ -390,6 +423,12 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // host directly; the host asks the same gate.
   host_.SetConnectGate(
       [this](std::function<void()> retry) { return ConnectBlockedByBalance(std::move(retry)); });
+  // ...and a pick starts the tunnel when there is none, through the same start
+  // path as the Connect button (its notices, its gate), to the row's location.
+  host_.SetRowConnect([this](const std::optional<urnet::ConnectLocation>& location) {
+    if (connectPage_) connectPage_->ClearDisconnectIntent();
+    StartTunnelUi("location row", location);
+  });
 
   if (host_.IsLoggedIn()) {
     // AUTO-CONNECT IS OPT IN, DEFAULT OFF. Being signed in is not a request to
@@ -402,7 +441,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     // Nothing about StartTunnelUi changes, and no other path to it moves. The
     // post-login handlers still connect on a fresh sign-in — that is a user
     // action with an obvious intent, not a launch.
-    if (prefs::Get<bool>(prefs::kConnectOnLaunchKey, false)) StartTunnelUi();
+    if (prefs::Get<bool>(prefs::kConnectOnLaunchKey, false)) StartTunnelUi("connect on launch");
     ApplyAuthState(true);
   } else {
     ApplyAuthState(false);
@@ -488,11 +527,17 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
 // through TunnelStartResult::Failed with an authorization verdict on the
 // control client (DaemonAuthOutcome). It is rendered from its own copy table
 // below and never through the DaemonUnreachable arm.
-TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
+TunnelStartResult MainWindow::StartTunnelUi(const char* reason) {
+  return StartTunnelUi(reason, host_.SelectedLocation());
+}
+
+TunnelStartResult MainWindow::StartTunnelUi(const char* reason,
+                                            const std::optional<urnet::ConnectLocation>& target) {
   // Out of balance, a new connection is not started at all: no tunnel, no
   // routes, the upgrade path instead. Every caller (the Connect press, connect
-  // on launch, the post-sign-in connect) passes through here.
-  if (ConnectBlockedByBalance([this, connectDestination] { StartTunnelUi(connectDestination); })) {
+  // on launch, the post-sign-in connect) passes through here, and a stale
+  // balance read repeats the whole start, connect included, once it lands.
+  if (ConnectBlockedByBalance([this, reason, target] { StartTunnelUi(reason, target); })) {
     return TunnelStartResult::Failed;
   }
   // Snapshot the reply counter BEFORE the attempt. LastAuthOutcome() describes
@@ -502,7 +547,9 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   // rendered under an unrelated failure — a confidently wrong sentence, which
   // is worse than the generic one. Only a verdict this attempt produced counts.
   const uint64_t replySerialBefore = host_.Control().ReplySerial();
-  const TunnelStartResult result = host_.StartTunnel();
+  // what the daemon said about the last session does not describe this one
+  ForgetDaemonStatus();
+  const TunnelStartResult result = host_.StartTunnel(reason);
   const DaemonAuthOutcome authOutcome = host_.Control().ReplySerial() != replySerialBefore
                                             ? host_.Control().LastAuthOutcome()
                                             : DaemonAuthOutcome::None;
@@ -588,19 +635,17 @@ TunnelStartResult MainWindow::StartTunnelUi(bool connectDestination) {
   // the point: a rule that has to be remembered ten times is a rule that will
   // be missed again.
   //
-  // SelectedLocation() is respected: a user who has chosen a specific provider
-  // must not be silently moved to "best available". Only an empty selection
-  // asks the SDK to pick.
-  if (result == TunnelStartResult::Started && connectDestination) {
-    // Honour an explicit choice. ConnectBestAvailable() always asks the SDK to
-    // pick, so using it unconditionally would silently move a user off the
-    // provider they selected.
-    if (const auto selected = host_.SelectedLocation(); selected.has_value()) {
-      g_message("connect: routing to the selected provider");
-      host_.Connect(selected);
-    } else {
+  // The target is respected: a user who has chosen a specific provider must
+  // not be silently moved to "best available", which the Connect button did
+  // while the provider row above it named their choice. Only no choice, or a
+  // choice of best available, asks the SDK to pick.
+  if (result == TunnelStartResult::Started) {
+    if (IsBestAvailableSelected(target)) {
       g_message("connect: no destination selected, choosing the best available");
       host_.ConnectBestAvailable();
+    } else {
+      g_message("connect: routing to the selected provider");
+      host_.Connect(target);
     }
   }
   return result;
@@ -951,29 +996,88 @@ void MainWindow::size_allocate_vfunc(int width, int height, int baseline) {
 // A user sitting idle would keep a green "Connected" while the daemon had
 // already stopped the session and possibly armed the kill switch.
 bool MainWindow::PollDaemonHealth() {
-  if (!connected_) {
-    // The network country the daemon reads (P052), for this process's own
-    // dials: from the sign-in screen on, signed in or not.
-    host_.FollowDaemonNetworkCountry();
-    // The outcome of a feedback's log upload, while one is pending.
-    host_.FollowDaemonLogUpload();
-    // A Reset extenders the daemon refused during a tunnel bring-up, sent again
-    // once the bring-up settled.
-    host_.FollowDaemonExtenderReset();
-    // Disconnected is when the provider-only device is the provider: start it
-    // after a launch without auto-connect, bring it back after a service
-    // restart or an unexpected drop, and stop one the mode no longer wants.
-    host_.ReconcileProvider("health poll");
-    return true;
+  // On a worker (SdkHost::RequestDaemonStatus): a daemon that accepts the
+  // socket but no longer answers used to hold this window for the control
+  // client's 30 s timeout on every tick. A read still in flight skips the
+  // tick. The one reply serves every follow-up in ApplyDaemonHealth, which
+  // while disconnected used to read the status once each.
+  const uint64_t epoch = daemonStatusEpoch_;
+  // `this` outlives the reply: main.cpp holds the window until main returns,
+  // past app->run() and with it the last main-loop dispatch
+  host_.RequestDaemonStatus([this, epoch](std::optional<ctl::StatusReply> status) {
+    // a start, a Disconnect or a sign-in or -out since the read: its reply
+    // describes a session that is not this one (a "stopped" read before a
+    // start is no stop of the session it started)
+    if (epoch != daemonStatusEpoch_) return;
+    ApplyDaemonHealth(status);
+  });
+  return true;
+}
+
+void MainWindow::ForgetDaemonStatus() {
+  daemonStatus_.reset();
+  ++daemonStatusEpoch_;
+  ApplyStatusStripDetails();
+}
+
+void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status) {
+  // the strip's Routes, with a session or without one, when the kill
+  // switch's floor can be armed with no tunnel
+  if (status) {
+    daemonStatus_ = status;
+    ApplyStatusStripDetails();
   }
-  const auto status = host_.Control().Status();
-  if (!status) return true;      // unreachable is StartTunnelUi's business
+  if (!connected_) {
+    // A countdown belongs to a live tunnel, and there is none.
+    if (connectPage_) connectPage_->SetFailsafeArmed(false);
+    // A daemon that did not answer the worker is asked again next tick: a
+    // read here would hold the window for as long as the worker's took.
+    if (status) {
+      // The network country the daemon reads (P052), for this process's own
+      // dials: from the sign-in screen on, signed in or not.
+      host_.FollowDaemonNetworkCountry(*status);
+      // The outcome of a feedback's log upload, while one is pending.
+      host_.FollowDaemonLogUpload(*status);
+      // A Reset extenders the daemon refused during a tunnel bring-up, sent
+      // again once the bring-up settled.
+      host_.FollowDaemonExtenderReset(*status);
+      // Disconnected is when the provider-only device is the provider: start
+      // it after a launch without auto-connect, bring it back after a service
+      // restart or an unexpected drop, and stop one the mode no longer wants.
+      // Served by this reply, so a steady tick reads nothing on the main loop.
+      host_.ReconcileProvider("health poll", *status);
+    }
+    // What the daemon holds while this window holds no session: the tray's
+    // recovery items, and the stop of a session this window saw end, which
+    // Windows explains in exactly this state. The connect feed can report the
+    // disconnect before any poll reads the stop, or the daemon can be
+    // restarting, so the explanation waits until a status is read.
+    PushTrayRecovery(status ? failsafe_notice::TrayRecoveryFor(/*windowConnected=*/false, *status)
+                            : failsafe_notice::TrayRecovery{});
+    if (status && stopExplanationOwed_) {
+      stopExplanationOwed_ = false;
+      if (const auto failsafe =
+              failsafe_notice::StoppedCopy(status->stop_reason, status->kill_switch)) {
+        if (connectPage_) connectPage_->SetDaemonNotice(T_(failsafe->key, failsafe->english));
+      }
+    }
+    return;
+  }
+  if (!status) return;  // unreachable is StartTunnelUi's business
+  // The window holds the session, so its own Disconnect is the recovery.
+  PushTrayRecovery(failsafe_notice::TrayRecoveryFor(/*windowConnected=*/true, *status));
   host_.FollowDaemonNetworkCountry(*status);
   host_.FollowDaemonExtenderReset(*status);
   host_.FollowDaemonLogUpload(*status);
+  // The dead-tunnel failsafe's countdown on the live tunnel, warned about
+  // before the daemon turns it off, never after.
+  if (connectPage_) {
+    connectPage_->SetFailsafeArmed(
+        failsafe_notice::ShowsArmedWarning(status->failsafe_armed, status->tunnel_state));
+  }
   if (status->tunnel_state != ctl::TunnelState::Error &&
       status->tunnel_state != ctl::TunnelState::Stopped) {
-    return true;
+    return;
   }
   // …UNLESS WE ARE THE ONES WHO ASKED. A user disconnect ends with
   // SdkHost::Disconnect -> control_.StopTunnel(), so the daemon's very next
@@ -985,25 +1089,70 @@ bool MainWindow::PollDaemonHealth() {
   // window's own state and say nothing.
   if (connectPage_ && connectPage_->DisconnectPending()) {
     ApplyConnectReading(DaemonTunnelGoneReading());
-    return true;
+    stopExplanationOwed_ = false;
+    return;
   }
   // The daemon stopped carrying traffic without us asking. Say so, verbatim —
   // the daemon composes the plain-language reason (including whether the machine
   // is now blocked and how to lift it), and inventing our own wording here would
   // be a third place that can disagree about what happened.
-  const Glib::ustring detail =
+  //
+  // The dead-tunnel failsafe is the exception, as on Windows: its two outcomes
+  // have store strings in the user's language, chosen by the kill switch the
+  // daemon reports now. A kill switch that could not be armed keeps the
+  // daemon's sentence, which says what is left behind.
+  Glib::ustring detail =
       status->error.empty()
           ? Glib::ustring(T_("tunnel_stopped_unexpectedly", "The connection stopped."))
           : Glib::ustring(status->error);
+  if (const auto failsafe =
+          failsafe_notice::StoppedCopy(status->stop_reason, status->kill_switch)) {
+    detail = T_(failsafe->key, failsafe->english);
+  }
   g_warning("connect: the daemon stopped the session (%s): %s",
             status->error_code.empty() ? "no code" : status->error_code.c_str(),
             status->error.c_str());
   ApplyConnectReading(DaemonTunnelGoneReading());
+  // Explained here: the disconnected poll owes nothing more for this stop.
+  stopExplanationOwed_ = false;
   if (connectPage_) connectPage_->SetDaemonNotice(detail);
-  return true;
+}
+
+void MainWindow::PushTrayRecovery(const failsafe_notice::TrayRecovery& recovery) {
+  if (trayRecoveryPushed_ && recovery == trayRecovery_) return;
+  trayRecoveryPushed_ = true;
+  trayRecovery_ = recovery;
+  if (on_tray_recovery_change) on_tray_recovery_change(recovery);
+}
+
+// The tray's recovery items act on the daemon directly: the window holds no
+// session for its own Disconnect to end. Neither does anything once the window
+// holds one again, since the item is withdrawn then.
+void MainWindow::ForceTunnelOff() {
+  if (connected_ || !trayRecovery_.forceTunnelOff) return;
+  g_message("tray: forcing the daemon's tunnel off (recovery)");
+  std::string error;
+  if (!host_.Control().StopTunnel(&error)) {
+    g_warning("tray: stop_tunnel failed: %s", error.empty() ? "no detail" : error.c_str());
+  }
+  // A status read that started before the stop describes the tunnel it
+  // stopped, and would offer this item again for a tick: drop its reply.
+  ++daemonStatusEpoch_;
+  PollDaemonHealth();
+}
+
+void MainWindow::LiftKillSwitch() {
+  if (connected_ || !trayRecovery_.liftKillSwitch) return;
+  g_message("tray: turning the kill switch off (unblock this machine)");
+  // All three legs, as the Settings switch turns it off, so the next connect
+  // does not arm it again. The daemon's write runs on a worker; the next poll
+  // reads its outcome and withdraws the item.
+  host_.SetKillSwitch(false);
 }
 
 void MainWindow::ApplyPageBreakpoint(int widthDip) {
+  // the shell first: its rail takes its width out of the room the pages get
+  if (shell_) shell_->ApplyBreakpoint(widthDip);
   if (connectPage_) connectPage_->ApplyBreakpoint(widthDip);
   if (networkPage_) networkPage_->ApplyBreakpoint(widthDip);
   if (settingsPage_) settingsPage_->ApplyBreakpoint(widthDip);
@@ -1017,8 +1166,10 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 // screen — a tray app spends most of its life hidden, and a slideshow nobody
 // can see is pure wakeups.
 MainWindow::~MainWindow() {
+  geometrySave_.disconnect();
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
+  host_.SetRowConnect(nullptr);   // and so does the row's start path
 }
 
 void MainWindow::TrackAppFocus() {
@@ -1076,8 +1227,23 @@ void MainWindow::ScheduleAppFocusSync() {
       g_object_unref(window);
     }
     balance_.SetAppFocused(focused);
+    if (const auto away = appFocusAway_.Read(focused, g_get_monotonic_time() / 1000)) {
+      OnAppReturned(*away);
+    }
     return false;
   });
+}
+
+// The browser sign-ins answer only through their deep link, and a browser the
+// user closed sends nothing: coming back enables the affordances again. The
+// attempt stays armed, so a late return still lands in OnWalletAuth and a new
+// click supersedes it (BrowserSignInGate.hpp).
+void MainWindow::OnAppReturned(int64_t awayMillis) {
+  const bool manualSheetOpen = bittensorManualSheet_ && bittensorManualSheet_->get_visible();
+  if (!browserSignIn_.TakeOnReturn(awayMillis, manualSheetOpen)) return;
+  SetLoginBusy(false);
+  // the "Opening your wallet" progress notice is stale now; an error stays
+  if (loginError_.has_css_class("dim-label")) loginError_.set_text("");
 }
 
 void MainWindow::UpdateCarouselRunning() {
@@ -1088,13 +1254,22 @@ void MainWindow::UpdateCarouselRunning() {
 // The signed-out Hero Bloom (motion-overhaul spec §2.1): the hero springs
 // 0.92 -> 1 under a 500ms fade while the rings unfold around it on the 40ms
 // stagger grid. Delays and directions are the spec's signed-out table.
+//
+// The reveal fails silently by design (a wrong choreography is still a
+// working window), so it leaves breadcrumbs in the log, in the Windows
+// client's words: a "no animations" report is diagnosable from the log alone.
 void MainWindow::RunSignedOutReveal() {
   using namespace motion;
-  if (!ShouldAnimate()) return;
+  if (!ShouldAnimate()) {
+    g_message("reveal: not armed (animations off in GTK)");
+    return;
+  }
   if (!heroBin_) return;
   SettleReveal();  // a reveal still running from a previous show settles first
+  g_message("reveal: armed (signed-out table)");
   ArmHeroBloom(*heroBin_);
   StartHeroBloom(*heroBin_);
+  revealStartedUs_ = g_get_monotonic_time();
   // the brand beat: the wordmark joins mid-hero-settle — the signed-out table's
   // AppTitleBar row (+8 -> rises up, delay 120)
   if (brandBin_) RiseIn(*brandBin_, Rise::Up, kDist8, kBrandBeatMs);
@@ -1103,11 +1278,18 @@ void MainWindow::RunSignedOutReveal() {
   RiseIn(*orBin_, Rise::Down, kDist8, 300);
   RiseIn(*emailGroupBin_, Rise::Down, kDist8, 320);
   RiseIn(*getStartedBin_, Rise::Down, kDist8, 360);
+  g_message("reveal: started");
 }
 
 // CancelToFinal: every pose the reveal ever writes is either animated back to
 // settled or restored right here — never left stranded (the settle invariant).
 void MainWindow::SettleReveal() {
+  // the last rise lands at 360 + kSlowMs; a settle before then cuts one short
+  const int64_t revealMs = 360 + motion::kSlowMs;
+  if (revealStartedUs_ != 0 && g_get_monotonic_time() - revealStartedUs_ < revealMs * 1000) {
+    g_message("reveal: cancel-to-final while armed (hidden or superseded mid-bloom)");
+  }
+  revealStartedUs_ = 0;
   for (motion::MotionBin* bin : {heroBin_, brandBin_, emailGroupBin_, getStartedBin_,
                                  orBin_, walletBin_, secondaryBin_}) {
     if (bin) bin->settle();
@@ -1275,6 +1457,11 @@ void MainWindow::BuildSeedphraseStep() {
   seedphraseView_ = Gtk::make_managed<Gtk::TextView>();
   seedphraseView_->add_css_class("ur-input-multi");
   seedphraseView_->set_wrap_mode(Gtk::WrapMode::WORD);
+  // The phrase is the account's credential: an input method's spellcheck
+  // would rewrite BIP-39 words, and one that learns what is typed would keep
+  // it. The words stay visible, so the purpose stays free form.
+  seedphraseView_->set_input_hints(Gtk::InputHints::NO_SPELLCHECK | Gtk::InputHints::PRIVATE |
+                                   Gtk::InputHints::NO_EMOJI);
   seedphraseView_->set_size_request(-1, 120);
   seedphraseView_->get_buffer()->signal_changed().connect(
       sigc::mem_fun(*this, &MainWindow::OnSeedphraseChanged));
@@ -1348,7 +1535,7 @@ void MainWindow::OnSeedphraseSubmit() {
                             : r.error.c_str());
         return;
       }
-      StartTunnelUi();  // auth handler flips the view
+      StartTunnelUi("seedphrase sign-in");  // auth handler flips the view
     });
   });
 }
@@ -1470,7 +1657,7 @@ void MainWindow::OnInstantSubmit() {
               return;
             }
             prefs::Set(kOnboardingPendingKey, true);  // an instant account is a new network
-            StartTunnelUi();  // auth handler flips the view
+            StartTunnelUi("instant account");  // auth handler flips the view
           });
         });
       };
@@ -1494,6 +1681,7 @@ void MainWindow::BuildHome() {
   // what left the window re-deriving the action from a stricter reading, and a
   // button reading "Disconnect" starting a tunnel.
   connectPage_->on_connect_action = [this](bool disconnect) { ToggleConnect(disconnect); };
+  connectPage_->on_retry_connect = [this] { RetryConnect(); };
   connectPage_->on_open_locations = [this] { OpenLocationChooser(); };
   // "Connected to N providers" -> the provider sheet. MainWindow owns it
   // because the GeoClue location override must keep following the window
@@ -1507,6 +1695,15 @@ void MainWindow::BuildHome() {
   connectPage_->on_balance_disconnect = [this] { DisconnectFromBalanceNotice(); };
   connectPage_->on_open_data_info = [this] { OpenDataInfo(); };
   connectPage_->on_cancel_balance_recovery = [this] { ClearBalanceRecovery(); };
+  // The strip's state and provider are the page's own render, as on Windows,
+  // so the strip and the Connect page cannot disagree.
+  connectPage_->on_status_rendered = [this](const Glib::ustring& text, const std::string& dot) {
+    if (shell_) shell_->SetStatusState(text, dot);
+  };
+  connectPage_->on_location_rendered = [this](const Glib::ustring& text) {
+    if (shell_) shell_->SetStatusProvider(text);
+  };
+  connectPage_->RepublishStatus();
   shell_->SetPage("connect", *connectPage_);
   auto placeholder = [this](const char* tag, const Glib::ustring& title) {
     auto* page = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
@@ -1687,7 +1884,7 @@ void MainWindow::BuildAuthPages() {
   createPage_->on_success = [this] {
     // a network was just created: the onboarding flow follows the sign-in
     prefs::Set(kOnboardingPendingKey, true);
-    StartTunnelUi();  // auth handler flips the view
+    StartTunnelUi("network created");  // auth handler flips the view
   };
   createPage_->on_verify = [this](std::string userAuth, VerifySendNotice notice) {
     NavigateVerify(userAuth);
@@ -1702,7 +1899,7 @@ void MainWindow::BuildAuthPages() {
   verifyPage_ = Gtk::make_managed<VerifyPage>(host_);
   verifyPage_->on_success = [this] {
     prefs::Set(kOnboardingPendingKey, true);  // a verified sign-up is a new network
-    StartTunnelUi();  // auth handler flips the view
+    StartTunnelUi("sign-up verified");  // auth handler flips the view
   };
   verifyPage_->on_back = [this] { stack_.set_visible_child("login"); };
   stack_.add(*wrapInScroller(*verifyPage_), "verify");
@@ -1743,7 +1940,7 @@ void MainWindow::OnGetStarted() {
       SetLoginBusy(false);
       switch (routing.route) {
         case LoginRoute::Login:
-          StartTunnelUi();  // auth handler flips the view
+          StartTunnelUi("sign-in");  // auth handler flips the view
           break;
         case LoginRoute::Password:
           loginUserAuth_ = routing.userAuth;
@@ -1799,7 +1996,7 @@ void MainWindow::OnSignIn() {
         passwordError_.set_text(r.error.empty() ? T_("sign_in_failed", "Sign in failed")
                                                 : r.error);
       } else {
-        StartTunnelUi();  // auth handler flips the view
+        StartTunnelUi("password sign-in");  // auth handler flips the view
       }
     });
   });
@@ -1880,7 +2077,7 @@ void MainWindow::OnUseCode() {
                   r.error.empty() ? T_("code_sign_in_failed", "Code sign in failed")
                                   : r.error.c_str());
             } else {
-              self->StartTunnelUi();
+              self->StartTunnelUi("code sign-in");
             }
           });
         });
@@ -1921,6 +2118,7 @@ void MainWindow::OnSolanaChooser() {
 void MainWindow::OnSolana(WalletConnect::Provider provider) {
   SetLoginNotice(T_("opening_wallet_in_browser", "Opening your wallet in the browser…"));
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithSolana(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -1934,6 +2132,7 @@ void MainWindow::OnApple() { OnSso(sso::kProviderApple); }
 void MainWindow::OnSso(const std::string& provider) {
   loginError_.set_text("");
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithSso(provider, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -1969,6 +2168,7 @@ void MainWindow::OnBittensorWallet(const std::string& walletId) {
                        : std::string(localized));
   }
   SetLoginBusy(true);
+  browserSignIn_.Begin();
   host_.SignInWithBittensor(walletId, [this](AuthResult r) { OnWalletAuth(r); });
 }
 
@@ -1984,6 +2184,7 @@ void MainWindow::ShowBittensorManualSheet(const SdkHost::BittensorManualRequest&
 // Shared tail of both wallet sign-ins (the SDK callback thread lands here).
 void MainWindow::OnWalletAuth(const AuthResult& result) {
   PostToMain([this, result] {
+    browserSignIn_.Settle();
     SetLoginBusy(false);
     if (!result.ok && bittensor::IsCancelled(result.error)) {
       // the user closed the Bittensor manual sheet: nothing failed
@@ -2016,7 +2217,7 @@ void MainWindow::OnWalletAuth(const AuthResult& result) {
       }
     } else {
       loginError_.set_text("");
-      StartTunnelUi();  // auth handler flips the view
+      StartTunnelUi("wallet or sso sign-in");  // auth handler flips the view
     }
   });
 }
@@ -2107,9 +2308,21 @@ void MainWindow::OpenOnboardingIfPending() {
 }
 
 void MainWindow::ApplyAuthState(bool loggedIn) {
-  stack_.set_visible_child(loggedIn ? "home" : "login");
+  // Home's first entrance (windows homeRevealed_): the first time Home shows
+  // in this window, a sign-in made in it crossfades the login flow into Home,
+  // as the shell crossfades its destinations. Every other swap is instant: a
+  // launch already signed in, a hidden window, animations off, a later
+  // sign-in, and a sign-out (exits stay quiet).
+  const bool firstEntrance = loggedIn && !homeRevealed_ && windowVisible_ &&
+                             motion::ShouldAnimate() &&
+                             stack_.get_visible_child_name() != "home";
+  if (loggedIn) homeRevealed_ = true;
+  stack_.set_visible_child(loggedIn ? "home" : "login",
+                           firstEntrance ? Gtk::StackTransitionType::CROSSFADE
+                                         : Gtk::StackTransitionType::NONE);
   // a known out-of-balance state belongs to the session that observed it
   outOfBalance_.Reset();
+  ForgetDaemonStatus();
   if (loggedIn) {
     ApplyConnectReading(host_.CurrentConnectReading());
     // (re)seed the balance/plan store from the (possibly new) jwt: login and
@@ -2137,12 +2350,16 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // that started it
     guestUpgrade_.Clear();
     if (guestConversionSheet_) guestConversionSheet_->set_visible(false);
-    if (earningsPage_) earningsPage_->Load();  // settles every panel on empty
+    // Earnings forgets the departed network's own row, emoji and public
+    // switches, then its reload settles every panel on empty
+    if (earningsPage_) earningsPage_->ResetForSignOut();
     if (settingsPage_) settingsPage_->Load();
     // Account carries account-SUBJECT state (name, login methods, referral
     // code, the departed plan): a sign-out must wipe it, not merely reload it.
     if (accountPage_) accountPage_->ResetForSignOut();
     if (referralsPage_) referralsPage_->ResetForSignOut();
+    // Home's activity view starts fresh too: its filters, search and selection
+    if (connectPage_) connectPage_->ResetForSignOut();
     // The post-sign-up onboarding belongs to the network just created here: a
     // sign-out before it finished must not show it to the next account signed
     // in (each network starts fresh).
@@ -2160,7 +2377,7 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
 // page yet (the login view), connected_ is the only answer there is.
 void MainWindow::ToggleConnect() {
   // THE TRAY'S ENTRY POINT, and it must decide from what the TRAY IS SHOWING.
-  // The tray's label is set from on_connected_change, i.e. from connected_
+  // The tray's label is set from on_tray_state, i.e. from connected_
   // alone (main.cpp). ConnectPage's button uses a wider predicate — connected
   // OR connecting — so routing the tray through the page's predicate made the
   // two disagree for the whole connecting window: the menu said "Connect"
@@ -2191,6 +2408,7 @@ void MainWindow::ToggleConnect(bool disconnect) {
     CancelBalanceCheck();
     ClearBalanceRecovery();
     host_.Disconnect();
+    ForgetDaemonStatus();
     // Re-read every window surface once, now. The page is already showing
     // "Disconnecting…" from its own intent; this keeps the tray, the legacy
     // headline and the status strip from holding "Connected" until whatever the
@@ -2210,15 +2428,25 @@ void MainWindow::ToggleConnect(bool disconnect) {
   // the press into a device with nothing behind it. StartTunnel is cheap when
   // the session is genuinely live (one status read) and self-heals when it is
   // not; the caller is not the right place to guess.
-  // false: this path issues its own connect immediately below, deliberately
-  // unconditional so a Connect press also self-heals a stale session.
-  // Out of balance, nothing starts (ConnectBlockedByBalance) and this press
-  // opens the upgrade path instead. Asked here first so that a stale balance
-  // read repeats the whole press, connect included, once it lands.
-  if (ConnectBlockedByBalance([this] { ToggleConnect(/*disconnect=*/false); })) return;
-  if (StartTunnelUi(/*connectDestination=*/false) != TunnelStartResult::Started) return;
-  host_.ConnectBestAvailable();
+  // The press goes where the provider row says: the selected location, or the
+  // best available with none. Out of balance, nothing starts
+  // (ConnectBlockedByBalance) and this press opens the upgrade path instead.
+  // It is immediate, and supersedes a location row click still settling.
+  host_.CancelRowConnect("connect press");
+  StartTunnelUi("connect press");
   // the connect-reading feed reflects the real state as it changes
+}
+
+// Retry, the Failed state's one action, as Windows has it: stop the failed
+// session and connect to the same selection again, the manual sequence that
+// recovers a window the SDK has given up on. The selection is read before the
+// disconnect, which clears the device's.
+void MainWindow::RetryConnect() {
+  const auto target = host_.SelectedLocation();
+  g_message("connect: retry pressed");
+  host_.Disconnect();
+  ForgetDaemonStatus();
+  StartTunnelUi("retry", target);
 }
 
 // THE DAEMON'S OWN VERDICT, WRITTEN INTO THE READING. The status poll has just
@@ -2244,6 +2472,12 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // unchanged reading must not re-emit the tray's NewIcon/LayoutUpdated DBus
   // pair or rebuild the page's panes underneath the user.
   if (reading == reading_ && readingApplied_) return;
+  // The strip's session fields move with the session, not with each grid
+  // step. A Disconnect keeps the DeviceRemote, so tunnelBound outlives it.
+  const auto sessionUp = [](const ConnectReading& r) {
+    return health::SessionUp(r.ToSignals(/*disconnectRequested=*/false));
+  };
+  const bool sessionChanged = !readingApplied_ || sessionUp(reading) != sessionUp(reading_);
   readingApplied_ = true;
   const bool wasConnected = connected_;
   reading_ = reading;
@@ -2253,39 +2487,86 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // used to be asked for, now asked once: the tray's label, the tray's action
   // and this window's press logging all read this one bit, so the menu can no
   // longer say "Connect" over a press that disconnects.
-  connected_ = view.action == health::Action::Disconnect;
+  connected_ = view.action != health::Action::Connect;
+  // A session this window held has ended: the next disconnected poll reads why.
+  if (connected_ != wasConnected) stopExplanationOwed_ = wasConnected;
   if (view.state == health::State::Connected) NoteConnected();
-  // The strip's raw status field carries the controller's OWN token now
-  // (CONNECTING/CONNECTED/CONNECT_FAILED), not the two-word destination
-  // vocabulary the old push could produce.
-  const std::string rawStatus =
-      reading.rawStatus.empty() ? std::string("DISCONNECTED") : reading.rawStatus;
-  // the status strip's state field: dot color per state (§8.1 connect dots).
-  // Green only for the state the hero calls Connected — the strip used to go
-  // green the moment a destination was picked.
-  if (shell_) {
-    shell_->SetStatusState(
-        rawStatus, view.state == health::State::Connected ? "#87FB67" : "#2A60FF");
-  }
+  // The page renders the status strip's state field with its own status row
+  // (on_status_rendered).
   if (connectPage_) connectPage_->ApplyConnectReading(reading);
+  if (sessionChanged) ApplyStatusStripDetails();
   UpdateBalanceNotice();
-  if (on_connected_change && (connected_ != wasConnected || !trayConnectedPushed_)) {
-    trayConnectedPushed_ = true;
-    on_connected_change(connected_);
+  // The tray: its item follows the session, its connected icon means proven
+  // (a session still building, held or degraded is not), and its tooltip
+  // names the state, all from this one reading. A session the window has not
+  // seen a status for keeps its own claim (health::TrayReading).
+  const health::Reading tray = health::TrayReading(view, signals, reading.statusObserved);
+  const bool proven = health::Proven(tray);
+  const std::string status = T_(tray.textKey, tray.textEnglish);
+  if (on_tray_state && (connected_ != wasConnected || proven != trayProven_ ||
+                        status != trayStatus_ || !trayStatePushed_)) {
+    trayStatePushed_ = true;
+    trayProven_ = proven;
+    trayStatus_ = status;
+    on_tray_state(connected_, proven, status);
   }
 }
 
 // One fixed notification id, so a post replaces and a withdraw always finds it.
 constexpr const char* kBalanceNoticeId = "insufficient-balance";
 
+namespace {
+// The application the desktop notifications go through. Never the window's
+// get_application(): gtkmm's Gtk::Window removes itself from its application
+// when it is hidden (its constructor connects the hide signal to
+// Application::remove_window) and nothing adds it back when it shows again,
+// so after the first hide to the tray every post and withdraw through it went
+// nowhere.
+Glib::RefPtr<Gio::Application> NotifyingApp() { return Gio::Application::get_default(); }
+}  // namespace
+
+constexpr const char* kHideNoticeId = "hidden-to-tray";
+
+// The default size follows the window's size while it is not maximized, so a
+// maximized window keeps the size it returns to.
+void MainWindow::SaveGeometry() {
+  if (g_getenv("URNETWORK_PREVIEW_UI")) return;  // a review's size is not the user's
+  // never shown this run (an autostart quit from the tray): nothing was sized,
+  // and a maximize asked for at startup is not yet the window's state
+  if (!get_realized()) return;
+  int width = 0;
+  int height = 0;
+  get_default_size(width, height);
+  nlohmann::json values = {{window_geometry::kMaximizedKey, is_maximized()}};
+  if (window_geometry::Plausible(width, height)) {
+    values[window_geometry::kWidthKey] = width;
+    values[window_geometry::kHeightKey] = height;
+  }
+  prefs::SetAll(values);
+}
+
+// With no default action, a click on the notice activates the app, which
+// shows the window.
+void MainWindow::NoteHiddenToTray() {
+  if (prefs::Get<bool>(tray_policy::kHideNoticeSeenKey, false)) return;
+  auto app = NotifyingApp();
+  if (!app) return;
+  prefs::Set(tray_policy::kHideNoticeSeenKey, true);  // before the send: once ever
+  // the product name, never translated, as the tray's own title
+  auto notification = Gio::Notification::create("URnetwork");
+  notification->set_body(T_("onb_tray_balloon_hide",
+                            "Still running — URnetwork closed to the tray. Click its icon there "
+                            "to open it again."));
+  app->send_notification(kHideNoticeId, notification);
+}
+
 // Out of balance with a connection requested, the tunnel holds traffic with no
 // provider behind it. Tell the user once per episode, with a Disconnect button;
 // the tracker decides, this only talks to GApplication. It never disconnects.
 void MainWindow::UpdateBalanceNotice() {
   struct Sink {
-    MainWindow& window;
     void Post() {
-      auto app = window.get_application();
+      auto app = NotifyingApp();
       if (!app) return;
       auto notification =
           Gio::Notification::create(T_("insufficient_balance", "Insufficient balance"));
@@ -2297,7 +2578,7 @@ void MainWindow::UpdateBalanceNotice() {
       app->send_notification(kBalanceNoticeId, notification);
     }
     void Withdraw() {
-      if (auto app = window.get_application()) app->withdraw_notification(kBalanceNoticeId);
+      if (auto app = NotifyingApp()) app->withdraw_notification(kBalanceNoticeId);
     }
   };
   balance_notice::Signals signals;
@@ -2306,7 +2587,7 @@ void MainWindow::UpdateBalanceNotice() {
   signals.polling = balance_.IsPolling();
   signals.connectRequested = reading_.destinationSelected;
   if (connectPage_) connectPage_->ApplyBalanceNotice(signals);
-  Sink sink{*this};
+  Sink sink;
   balanceNotice_.Observe(signals, sink);
 
   balance_notice::OutOfBalanceLatch::Observation observation;
@@ -2536,18 +2817,65 @@ void MainWindow::ApplyStats(const LiveStats& stats) {
   };
   if (connectPage_) connectPage_->ApplyStats(stats);
   if (earningsPage_) earningsPage_->ApplyProvideState(stats);  // the provide row + gate
-  // the status strip: provider + traffic (+ the Advanced raw field)
+  // the status strip: traffic (+ the Advanced raw field); the provider is the
+  // Connect page's row (on_location_rendered)
   if (shell_) {
-    shell_->SetStatusProvider(T_("best_available_provider", "Best available provider"));
     if (stats.connected) {
       shell_->SetStatusTraffic("↓ " + rate(stats.downBitsPerSecond) +
                                "  ↑ " + rate(stats.upBitsPerSecond));
     } else {
       shell_->SetStatusTraffic(T_("site_app_no_traffic", "No traffic yet"));
     }
-    shell_->SetStatusRaw(stats.connectionStatus);
-    shell_->SetStatusSession(host_.hasDevice() ? "tunnel" : "none");
+    shell_->SetStatusRaw(stats.connectionStatus.empty() ? Glib::ustring(T_("adv_none", "none"))
+                                                        : Glib::ustring(stats.connectionStatus));
   }
+}
+
+void MainWindow::ApplyStatusStripDetails() {
+  if (!shell_) return;
+  // signed out there is no jwt to read, and the read would say so on stderr
+  auto byJwt = host_.IsLoggedIn() ? host_.ParseByJwt() : std::nullopt;
+  // the jwt's network name is filtered for display (DisplayText.hpp)
+  const std::string networkName =
+      byJwt ? SanitizeExternalDisplayText(byJwt->NetworkName) : std::string();
+  shell_->SetStatusNetwork(balance_.IsGuest() || networkName.empty()
+                               ? Glib::ustring(T_("guest", "Guest"))
+                               : Glib::ustring(networkName));
+  // a session to disconnect from: a DeviceRemote still bound over the current
+  // control session outlives a Disconnect, and is not one
+  const bool haveSession = health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
+  switch (status_strip::SessionWordFor(haveSession)) {
+    case status_strip::SessionWord::Tunnel:
+      shell_->SetStatusSession(T_("adv_mode_tunnel", "tunnel"));
+      break;
+    case status_strip::SessionWord::None:
+      shell_->SetStatusSession(T_("adv_none", "none"));
+      break;
+  }
+  std::optional<status_strip::RouteFacts> facts;
+  if (daemonStatus_) {
+    facts = status_strip::RouteFacts{daemonStatus_->routes_installed, daemonStatus_->dns_applied,
+                                     daemonStatus_->kill_switch == ctl::KillSwitchState::Armed};
+  }
+  switch (status_strip::RoutesWordFor(haveSession, facts)) {
+    case status_strip::RoutesWord::Unknown:
+      shell_->SetStatusRoutes(T_("adv_none", "none"));
+      break;
+    case status_strip::RoutesWord::Off:
+      shell_->SetStatusRoutes(T_("off", "Off"));
+      break;
+    case status_strip::RoutesWord::KillSwitchArmed:
+      shell_->SetStatusRoutes(T_("adv_routes_kill_switch_armed", "off, kill switch armed"));
+      break;
+    case status_strip::RoutesWord::DnsNotApplied:
+      shell_->SetStatusRoutes(T_("adv_routes_dns_degraded", "on, dns not applied"));
+      break;
+    case status_strip::RoutesWord::On:
+      shell_->SetStatusRoutes(T_("on", "On"));
+      break;
+  }
+  const std::string rpc = status_strip::RpcText(haveSession, host_.RpcHostPort());
+  shell_->SetStatusRpc(rpc.empty() ? Glib::ustring(T_("adv_none", "none")) : Glib::ustring(rpc));
 }
 
 // ---- the Pro celebration ----------------------------------------------------

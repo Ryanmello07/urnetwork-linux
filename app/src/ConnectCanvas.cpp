@@ -21,6 +21,10 @@ constexpr double kSidePad = 4.0;
 constexpr double kBandPad = 12.0;
 
 constexpr double kPulseD = 56.0, kCoreRingD = 52.0, kCoreGapD = 50.0, kCoreD = 48.0;
+// the resting hero's static structure (windows cac798d): two orbits and a
+// halo around the core, 1px hairlines; no animation
+constexpr double kOrbit1D = 128.0, kOrbit2D = 192.0, kHaloD = 64.0;
+constexpr double kOrbitAlpha = 0.08, kHaloAlpha = 0.35, kRimAlpha = 0.12;
 constexpr double kPulseScaleTo = 1.5, kPulseOpacityFrom = 0.5;
 constexpr int kPulseMs = 1500, kIdlePulseBursts = 3;
 constexpr int kStateFadeMs = 500;
@@ -692,9 +696,21 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
     }
   }
 
-  // 4) idleLayer — pulse, coreRing, coreGap, core
+  // 4) idleLayer — orbits, halo, pulse, coreRing, coreGap, core
   if (idleOpacity_ > 0.01) {
     cr->push_group();
+    // the two orbits (white @ 8%) and the core's halo (electric blue @ 35%):
+    // static hairlines that fade with the layer, so only Disconnected shows
+    // them. They speak the pulse's sonar language while it rests.
+    cr->set_line_width(1.0);  // unscaled hairline
+    cr->set_source_rgba(1, 1, 1, kOrbitAlpha);
+    cr->arc(cx, cy, kOrbit1D * s / 2.0, 0, 2 * G_PI);
+    cr->stroke();
+    cr->arc(cx, cy, kOrbit2D * s / 2.0, 0, 2 * G_PI);
+    cr->stroke();
+    cr->set_source_rgba(kElectric.r, kElectric.g, kElectric.b, kHaloAlpha);
+    cr->arc(cx, cy, kHaloD * s / 2.0, 0, 2 * G_PI);
+    cr->stroke();
     if (pulseOpacity_ > 0.001) {
       cr->set_source_rgba(kElectric.r, kElectric.g, kElectric.b, pulseOpacity_);
       cr->arc(cx, cy, (kPulseD * s / 2.0) * pulseScale_, 0, 2 * G_PI);
@@ -745,6 +761,21 @@ void ConnectCanvas::DrawCanvas(const Cairo::RefPtr<Cairo::Context>& cr, double w
     }
   }
 
+  cr->restore();
+
+  // 6) rim — the silhouette as a hairline (white @ 12%, the border token) in
+  // every state, so the connected circles end on a clean edge. Drawn after
+  // the clip, which would cut its outer half; the hover lift still applies.
+  cr->save();
+  if (hoverScale_ != 1.0) {
+    cr->translate(cx, cy);
+    cr->scale(hoverScale_, hoverScale_);
+    cr->translate(-cx, -cy);
+  }
+  AddGlobePath(cr, ox, oy, side);
+  cr->set_source_rgba(1, 1, 1, kRimAlpha);
+  cr->set_line_width(1.0);  // unscaled hairline
+  cr->stroke();
   cr->restore();
 }
 

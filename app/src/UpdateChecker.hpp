@@ -5,9 +5,11 @@
 // names the repo; nothing else does), decides with the pure SelectRelease,
 // and publishes a Snapshot to ONE handler on the GTK main loop. Checks run
 // thirty seconds after launch when the persisted six-hour throttle says so,
-// every six hours while the app lives, and on the developer screen's button.
-// The "check automatically" preference (Settings) gates the timed checks
-// only; a manual check always runs and reports.
+// every six hours while the app lives, and on Settings' Check now and the
+// developer screen's button. The "check automatically" preference (Settings)
+// gates the timed checks only; a manual check always runs and reports. No
+// check, manual or timed, is sent while GitHub has asked this network to wait
+// (UpdateSchedule.hpp).
 //
 // WHAT AN APPLY DOES depends on how the GUI is installed (DetectInstallKind):
 //
@@ -31,6 +33,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -41,6 +44,7 @@
 #include <gio/gio.h>
 
 #include "ReleaseSelection.hpp"
+#include "UpdateSchedule.hpp"
 
 namespace urnw {
 
@@ -57,14 +61,9 @@ class UpdateChecker {
     Failed,       // see failure
   };
   enum class Failure { None, Download, Checksum, Install };
-  enum class CheckOutcome {
-    NeverRan,
-    InFlight,
-    NoUpdate,     // nothing newer, or no stable release published yet
-    UpdateFound,
-    DevBuild,     // a release exists but this is a dev build (code 0): never offered
-    Failed,       // the fetch or the parse failed; details in the log
-  };
+  // GTK-free, so Settings' line under Check for updates is decided in a
+  // header the tests build (UpdateSchedule.hpp, UpdateStatePresentation.hpp).
+  using CheckOutcome = update::CheckOutcome;
 
   struct Snapshot {
     Phase phase = Phase::None;
@@ -82,6 +81,21 @@ class UpdateChecker {
     // The newest stable release the last completed check parsed, whether or
     // not it outranks this build -- the developer line names it either way.
     std::string newestVersion;
+    // Its release code, 0 when none: Settings says "up to date" only when it
+    // does not outrank this build.
+    std::uint64_t newestCode = 0;
+    // Unix seconds of the last check that reached GitHub (the release list
+    // came back), persisted; before any has, the first launch that tried.
+    std::int64_t lastSuccessUnix = 0;
+    // Automatic checks are on and none has reached GitHub for more than 72
+    // hours (update::CheckIsStale): Settings says since when.
+    bool checkStale = false;
+    // When GitHub asked for no request before: holdUntilUnix in Unix
+    // seconds, the time Settings names (0 when none), and holdUntil the same
+    // moment on the steady clock, which says whether it has come, so a
+    // system clock set back cannot stretch it (its epoch when none).
+    std::int64_t holdUntilUnix = 0;
+    std::chrono::steady_clock::time_point holdUntil{};
   };
 
   // Invoked ON THE GTK MAIN LOOP (PostToMain), never with a lock held.
@@ -103,7 +117,8 @@ class UpdateChecker {
   // Store only -- never invokes. Bind, then replay Current() yourself.
   void SetHandler(Handler h);
 
-  // Queue a check now (the developer screen's button). Coalesces.
+  // Queue a check now (Settings' Check now, the developer screen's button).
+  // Coalesces.
   void CheckNow();
   // Queue the download/verify/swap of the offered AppImage. Ignored unless
   // the snapshot is Available, Failed or Downloaded (a retry), or when the
@@ -124,6 +139,11 @@ class UpdateChecker {
   // Settings notice can be built before the first check.
   static update::InstallKind DetectInstallKind();
 
+  // A Unix second in this machine's zone: the locale's short date, and that
+  // date with the time, for the stale and held lines.
+  static std::string LocalDate(std::int64_t unixSeconds);
+  static std::string LocalDateTime(std::int64_t unixSeconds);
+
  private:
   // Everything an apply needs, captured at check time so a release list that
   // changes mid-flight cannot redirect an apply the user already clicked.
@@ -139,6 +159,9 @@ class UpdateChecker {
   void RunCheck();
   void RunApply();
   void CleanupStaleFiles();
+  // A check that did not reach GitHub: Failed, and stale once none has for
+  // three days.
+  void CheckFailed();
   // Copy under the lock, mutate, publish outside it.
   void Mutate(const std::function<void(Snapshot&)>& fn);
   void Publish(const Snapshot& copy);
@@ -154,6 +177,11 @@ class UpdateChecker {
   bool applyRequested_ = false;
   bool autoCheck_ = true;
   std::int64_t nextAutoUnix_ = 0;  // unix seconds; seeded from the persisted throttle
+  // When GitHub said it may be asked again (a refused list's Retry-After or
+  // rate-limit reset, at most a day out), on the steady clock, so a system
+  // clock set back cannot stretch it; the clock's epoch when there is no
+  // hold. No check is sent before it, manual or automatic.
+  std::chrono::steady_clock::time_point holdUntil_{};
   Snapshot snapshot_;
   Offer offer_;
 

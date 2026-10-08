@@ -143,6 +143,31 @@ msgctxt "adv_advanced_mode_note"
 msgid "Show raw values, identifiers, the connection inspector and the reliability tuning surface across the app."
 msgstr "Zeigt Rohwerte, Kennungen, den Verbindungsinspektor und die Zuverlässigkeitseinstellungen in der ganzen App an."
 
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that allows the connection's host. It adds an allowing rule for a host that was blocked, or removes the rule blocking it while one is in force, so the label always names what the press leaves behind.
+msgctxt "adv_allow_host"
+msgid "Allow this host"
+msgstr "Diesen Host zulassen"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that keeps the connection's host inside the VPN tunnel. It adds a rule for a host that bypassed the tunnel, or removes the bypass rule while one is in force.
+msgctxt "adv_always_tunnel"
+msgid "Always tunnel"
+msgstr "Immer durch den Tunnel"
+
+#. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
+msgctxt "adv_best_available_note"
+msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
+msgstr "URnetwork wählt für dich die schnellsten funktionierenden Anbieter ohne Standortvorgabe aus und wählt neu, wenn sich das Netzwerk ändert."
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.
+msgctxt "adv_block_host"
+msgid "Block this host"
+msgstr "Diesen Host blockieren"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that sends the connection's host directly from this device, outside the VPN. It adds a split rule, or removes the rule keeping the host in the tunnel while one is in force.
+msgctxt "adv_bypass_tunnel"
+msgid "Bypass the tunnel"
+msgstr "Am Tunnel vorbei leiten"
+
 #. Connection inspector: label of the total bytes row.
 msgctxt "adv_bytes_total"
 msgid "Bytes (total)"
@@ -152,6 +177,23 @@ msgstr "Bytes (gesamt)"
 msgctxt "adv_clear_selection"
 msgid "Clear selection"
 msgstr "Auswahl aufheben"
+
+#. Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.
+msgctxt "adv_connection_count"
+msgid "{} connection"
+msgid_plural "{} connections"
+msgstr[0] "{} Verbindung"
+msgstr[1] "{} Verbindungen"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that copies the connection's details (host, addresses, verdict, reason, totals) to the clipboard.
+msgctxt "adv_copy_details"
+msgid "Copy details"
+msgstr "Details kopieren"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after Copy details put the connection's details on the clipboard.
+msgctxt "adv_details_copied"
+msgid "Connection details copied"
+msgstr "Verbindungsdetails kopiert"
 
 #. Connection inspector: label of the exit dial failures row.
 msgctxt "adv_exit_dial_failures"
@@ -208,10 +250,50 @@ msgctxt "adv_exits"
 msgid "Exits"
 msgstr "Exits"
 
+#. Connect page, Activity pane: the first choice of the verdict filter above the list of connections (routing decisions). Shows every connection, whatever its verdict. Short: it shares one row with Blocked, Tunnelled and Bypassed.
+msgctxt "adv_filter_all"
+msgid "All"
+msgstr "Alle"
+
+#. Connect page, Activity pane: the verdict filter choice that shows only the connections that bypassed the tunnel (allowed, but sent directly from this device outside the VPN, for example by a split rule, so not protected). Short: it shares one row with All, Blocked and Tunnelled.
+msgctxt "adv_filter_bypassed"
+msgid "Bypassed"
+msgstr "Am Tunnel vorbei"
+
+#. Connect page, Activity pane: the verdict filter choice that shows only the connections sent through the URnetwork tunnel (allowed and protected). Short: it shares one row with All, Blocked and Bypassed.
+msgctxt "adv_filter_tunnelled"
+msgid "Tunnelled"
+msgstr "Getunnelt"
+
+#. Connect page, Activity pane: label of the switch beside the search field that folds the list of connections into one row per host (with the count, the summed traffic and the latest decision). Clicking a host's row turns the switch off and searches for that host.
+msgctxt "adv_group_by_host"
+msgid "Group by host"
+msgstr "Nach Host gruppieren"
+
 #. Connection inspector: label of the host row.
 msgctxt "adv_host"
 msgid "Host"
 msgstr "Host"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule allowing the connection's host from now on.
+msgctxt "adv_host_allowed"
+msgid "This host will be allowed"
+msgstr "Dieser Host wird zugelassen"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule blocking the connection's host from now on.
+msgctxt "adv_host_blocked"
+msgid "This host will be blocked"
+msgstr "Dieser Host wird blockiert"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a split rule sending the connection's host outside the VPN tunnel from now on.
+msgctxt "adv_host_bypassed"
+msgid "This host will bypass the tunnel"
+msgstr "Dieser Host wird am Tunnel vorbei geleitet"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule keeping the connection's host inside the VPN tunnel from now on.
+msgctxt "adv_host_tunnelled"
+msgid "This host will use the tunnel"
+msgstr "Dieser Host nutzt den Tunnel"
 
 #. Connection inspector: heading of the inspector pane.
 msgctxt "adv_inspector"
@@ -303,7 +385,7 @@ msgctxt "adv_mode_rpc_only"
 msgid "rpc-only"
 msgstr "nur RPC"
 
-#. Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.
 msgctxt "adv_mode_tunnel"
 msgid "tunnel"
 msgstr "Tunnel"
@@ -312,6 +394,11 @@ msgstr "Tunnel"
 msgctxt "adv_na"
 msgid "—"
 msgstr "—"
+
+#. Split rules sheet: the line in the Activity list when the search matches none of the connections it holds.
+msgctxt "adv_no_activity_matches"
+msgid "No activity matches this search."
+msgstr "Keine Aktivität entspricht dieser Suche."
 
 #. Connection inspector: shown when no connection is selected.
 msgctxt "adv_no_selection"
@@ -323,6 +410,11 @@ msgctxt "adv_none"
 msgid "none"
 msgstr "keine"
 
+#. Connect page, Advanced Mode, the connection inspector: the end of the Reason value's name for screen readers when a rule decided the connection, because pressing the value opens the Split rules sheet. Lowercase: it follows a comma.
+msgctxt "adv_open_split_rules"
+msgid "open split rules"
+msgstr "Split-Regeln öffnen"
+
 #. Connection inspector: label of the override id row.
 msgctxt "adv_override_id"
 msgid "Override"
@@ -332,6 +424,11 @@ msgstr "Override"
 msgctxt "adv_packets_total"
 msgid "Packets (total)"
 msgstr "Pakete (gesamt)"
+
+#. Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.
+msgctxt "adv_pick_location_note"
+msgid "Pick a country, region, city or device in the list to connect there instead."
+msgstr "Wähle in der Liste ein Land, eine Region, eine Stadt oder ein Gerät, um dich stattdessen dorthin zu verbinden."
 
 #. Connection inspector: label of the probe age row.
 msgctxt "adv_probe_age"
@@ -378,17 +475,17 @@ msgctxt "adv_reason_route"
 msgid "Route override"
 msgstr "Routen-Override"
 
-#. Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.
 msgctxt "adv_routes"
 msgid "Routes"
 msgstr "Routen"
 
-#. Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.
 msgctxt "adv_routes_dns_degraded"
 msgid "on, dns not applied"
 msgstr "an, DNS nicht angewendet"
 
-#. Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
+#. Windows and Linux status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.
 msgctxt "adv_routes_kill_switch_armed"
 msgid "off, kill switch armed"
 msgstr "aus, Kill switch aktiv"
@@ -398,10 +495,30 @@ msgctxt "adv_routes_no_firewall"
 msgid "on, no leak guard"
 msgstr "an, kein Leckschutz"
 
-#. Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.
 msgctxt "adv_rpc"
 msgid "RPC"
 msgstr "RPC"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: added to a rule button's name for screen readers, after its label, while the button's rule is in force: pressing it removes the rule. Lowercase: it follows a comma.
+msgctxt "adv_rule_active"
+msgid "rule active, click to remove"
+msgstr "Regel aktiv, zum Entfernen klicken"
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press removed the rule that was in force for the connection's host.
+msgctxt "adv_rule_removed"
+msgid "Rule removed"
+msgstr "Regel entfernt"
+
+#. Split rules sheet: placeholder and accessible name of the search field above the Activity list. Typing filters the list to the connections whose host name or IP address contains the text; the rules above are not filtered.
+msgctxt "adv_search_activity_placeholder"
+msgid "Search activity"
+msgstr "Aktivität durchsuchen"
+
+#. Connect page, Activity pane: placeholder and accessible name of the search field above the list of connections. Typing filters the list to the connections whose host name or IP address contains the text.
+msgctxt "adv_search_connections"
+msgid "Search hosts or IPs"
+msgstr "Hosts oder IPs suchen"
 
 #. Connection inspector: hint to select a row in the Activity list.
 msgctxt "adv_select_a_row"
@@ -423,15 +540,30 @@ msgctxt "adv_session_exit_country"
 msgid "Session exit country"
 msgstr "Exit-Land der Sitzung"
 
-#. Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
+#. Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).
 msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "Sitzung"
+
+#. Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.
+msgctxt "adv_split_rules_note"
+msgid "Split rules let the sites you choose connect directly, outside the VPN, and the activity below shows how each connection was routed."
+msgstr "Mit Split-Regeln verbinden sich die Websites, die du auswählst, direkt außerhalb des VPN, und die Aktivität unten zeigt, wie jede Verbindung geleitet wurde."
+
+#. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.
+msgctxt "adv_undo"
+msgid "Undo"
+msgstr "Rückgängig"
 
 #. Connection inspector: exit value when the destination is not in the routing table.
 msgctxt "adv_unknown_exit"
 msgid "Not in the routing table"
 msgstr "Nicht in der Routing-Tabelle"
+
+#. Connect page, Advanced Mode: the label of the verdict line (blocked, tunnelled, or bypassed the tunnel) in the connection details Copy details puts on the clipboard.
+msgctxt "adv_verdict"
+msgid "Verdict"
+msgstr "Entscheidung"
 
 #. Connection inspector: verdict, the connection was blocked and no packets were sent.
 msgctxt "adv_verdict_blocked"
@@ -565,6 +697,11 @@ msgctxt "app_split_starter"
 msgid "0 split apps"
 msgstr "0 Apps im App-Split"
 
+#. Linux: the body of the dialog shown when the app cannot start (its SDK host failed to initialize, so there is no window and no tray), under the heading something_went_wrong. The argument is the folder that holds the app's log files. The raw error follows on its own lines, untranslated.
+msgctxt "app_start_failed_detail"
+msgid "URnetwork could not start. Its logs are in {}."
+msgstr "URnetwork konnte nicht gestartet werden. Die Protokolle liegen in {}."
+
 #. Shown on the linux home screen when the urnetworkd system service rejected this app for speaking an older control protocol than the service supports. The fix is updating the app, not the service.
 msgctxt "app_too_old_for_daemon"
 msgid "This app is older than the installed URnetwork system service. Update the app to connect."
@@ -585,7 +722,7 @@ msgctxt "apple_sign_in_method_added"
 msgid "Apple sign-in method added"
 msgstr "Apple-Anmeldemethode hinzugefügt"
 
-#. transfer stats and split rules
+#. transfer stats and split rules; Linux: the header over the apps not yet excluded in Settings > Exclude apps from the VPN.
 msgctxt "apps"
 msgid "Apps"
 msgstr "Apps"
@@ -1323,7 +1460,7 @@ msgctxt "conn_connect_on_launch_note"
 msgid "Off by default. When on, URnetwork connects to your selected provider as soon as you open the app. This changes the next launch - it does not connect now."
 msgstr "Standardmäßig aus. Wenn aktiv, verbindet sich URnetwork mit dem gewählten Anbieter, sobald du die App öffnest. Das gilt ab dem nächsten Start - jetzt wird nicht verbunden."
 
-#. Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
+#. Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.
 msgctxt "conn_degraded"
 msgid "Connection degraded — reconnecting"
 msgstr "Verbindung beeinträchtigt – wird neu verbunden"
@@ -1338,22 +1475,22 @@ msgctxt "conn_failed"
 msgid "Couldn't connect"
 msgstr "Verbindung fehlgeschlagen"
 
-#. Windows Connect page reason line when connecting failed.
+#. Windows and Linux Connect page reason line when connecting failed.
 msgctxt "conn_failed_detail"
 msgid "No providers could be reached. Retry rebuilds the connection from scratch."
 msgstr "Kein Anbieter war erreichbar. Ein neuer Versuch baut die Verbindung von Grund auf neu auf."
 
-#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.
+#. Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing. Linux Connect page: shown on its own on the notice line under the connect controls while no other notice is there.
 msgctxt "conn_failsafe_armed"
 msgid "If nothing gets through shortly, URnetwork will turn the tunnel off automatically so you keep your internet."
 msgstr "Wenn in Kürze nichts durchkommt, schaltet URnetwork den Tunnel automatisch ab, damit deine Internetverbindung erhalten bleibt."
 
-#. Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
+#. Windows and Linux Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.
 msgctxt "conn_failsafe_blocked"
 msgid "The tunnel could not carry traffic, so URnetwork shut it down. The kill switch is on, so nothing leaves this machine until you connect again or turn the kill switch off — nothing is leaking."
 msgstr "Der Tunnel konnte keinen Datenverkehr übertragen, deshalb hat URnetwork ihn beendet. Der Kill switch ist an, daher verlässt nichts diesen Computer, bis du dich wieder verbindest oder den Kill switch ausschaltest – es dringt nichts nach außen."
 
-#. Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
+#. Windows and Linux Connect page line, and Windows tray notification, after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.
 msgctxt "conn_failsafe_restored"
 msgid "URnetwork disconnected you to keep you online: the tunnel was up but nothing was getting through. Your traffic is going out normally now and is NOT protected. Press Connect to try again."
 msgstr "URnetwork hat die Verbindung getrennt, damit du online bleibst: Der Tunnel war aktiv, aber nichts kam durch. Dein Datenverkehr läuft jetzt wieder normal und ist NICHT geschützt. Drücke auf Verbinden, um es erneut zu versuchen."
@@ -1368,32 +1505,32 @@ msgctxt "conn_not_protected"
 msgid "Your internet traffic is not protected."
 msgstr "Dein Internetverkehr ist nicht geschützt."
 
-#. Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
+#. Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.
 msgctxt "conn_reason_auth"
 msgid "Signing in to the platform is failing…"
 msgstr "Die Anmeldung bei der Plattform schlägt fehl…"
 
-#. Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
+#. Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).
 msgctxt "conn_reason_platform"
 msgid "Contacting the platform…"
 msgstr "Plattform wird kontaktiert…"
 
-#. Windows Connect page reason line while the selected providers do not answer.
+#. Windows and Linux Connect page reason line while the selected providers do not answer.
 msgctxt "conn_reason_providers"
 msgid "Providers not responding — retrying…"
 msgstr "Anbieter antworten nicht – neuer Versuch…"
 
-#. Windows Connect page reason line while the platform asks the app to slow down.
+#. Windows and Linux Connect page reason line while the platform asks the app to slow down.
 msgctxt "conn_reason_rate_limited"
 msgid "Rate limited — waiting…"
 msgstr "Anfragelimit erreicht – warten…"
 
-#. Windows Connect page line while connected but no provider carries traffic, with leak protection in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).
 msgctxt "conn_traffic_blocked"
 msgid "No working provider right now — your traffic is blocked, not exposed. Disconnect to go back to your normal connection."
 msgstr "Gerade kein funktionierender Anbieter – dein Datenverkehr ist blockiert, nicht offengelegt. Trenne die Verbindung, um zu deiner normalen Verbindung zurückzukehren."
 
-#. Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.
+#. Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.
 msgctxt "conn_traffic_blocked_unprotected"
 msgid "No working provider right now — traffic sent into the tunnel is going nowhere, and leak protection is off, so some traffic may bypass it. Disconnect to go back to your normal connection."
 msgstr "Gerade kein funktionierender Anbieter – Datenverkehr, der in den Tunnel geht, kommt nirgends an, und der Leckschutz ist aus, sodass ein Teil des Datenverkehrs ihn umgehen kann. Trenne die Verbindung, um zu deiner normalen Verbindung zurückzukehren."
@@ -1423,12 +1560,12 @@ msgctxt "conn_tray_failsafe_stopped"
 msgid "Disconnected (the tunnel failed)"
 msgstr "Getrennt (der Tunnel ist ausgefallen)"
 
-#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.
+#. Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck. Linux tray menu item that stops the service's tunnel while the app holds no session of its own.
 msgctxt "conn_tray_force_tunnel_off"
 msgid "Force the tunnel off (recovery)"
 msgstr "Tunnel zwangsweise ausschalten (Wiederherstellung)"
 
-#. Windows tray menu item that lifts the kill switch's block on this computer.
+#. Windows and Linux tray menu item that lifts the kill switch's block on this computer.
 msgctxt "conn_tray_lift_kill_switch"
 msgid "Turn off the kill switch (unblock this machine)"
 msgstr "Kill switch ausschalten (diesen Computer entsperren)"
@@ -1862,6 +1999,11 @@ msgctxt "daemon_unreachable"
 msgid "The URnetwork system service is not running. Install or start it, then try again."
 msgstr "Der URnetwork-Systemdienst läuft nicht. Installiere oder starte ihn und versuche es erneut."
 
+#. Key of the daily data balance row on the Account page, in the data info sheet and under the usage bar: a label beside its right-aligned value, so it carries no colon.
+msgctxt "daily_data_balance"
+msgid "Daily Data Balance"
+msgstr "Tägliches Datenvolumen"
+
 #. Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.
 msgctxt "daily_data_balance_label"
 msgid "Daily Data Balance:"
@@ -2072,7 +2214,7 @@ msgctxt "dev_busy_probes_value"
 msgid "{0} sent / {1} acquitted"
 msgstr "{0} gesendet / {1} freigesprochen"
 
-#. Developer page: button that checks for a new release now.
+#. Developer page: button that checks for a new release now. Linux Settings > General: the title of the row whose button does the same.
 msgctxt "dev_check_updates"
 msgid "Check for updates"
 msgstr "Nach Updates suchen"
@@ -3349,17 +3491,17 @@ msgctxt "dev_unstalled_exit"
 msgid "Cleared stall on exit"
 msgstr "Hänger gelöst bei Exit"
 
-#. Developer page: report line when the update check failed.
+#. Developer page, and the line under Linux Settings > Check for updates: report line when the update check failed.
 msgctxt "dev_update_check_failed"
 msgid "The update check failed — see the app log."
 msgstr "Die Suche nach Updates ist fehlgeschlagen – siehe App-Protokoll."
 
-#. Developer page: update check status while checking.
+#. Developer page, and the line under Linux Settings > Check for updates: update check status while checking.
 msgctxt "dev_update_checking"
 msgid "Checking for updates…"
 msgstr "Suche nach Updates…"
 
-#. Developer page: update check result on a development build. {version} is the newest release version.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result on a development build. {version} is the newest release version.
 msgctxt "dev_update_dev_build"
 msgid "Development build: the newest release is v{}, and a development build is never updated automatically."
 msgstr "Entwicklungs-Build: Die neueste Version ist v{}, und ein Entwicklungs-Build wird nie automatisch aktualisiert."
@@ -3389,7 +3531,7 @@ msgctxt "dev_update_newest_seen"
 msgid "newest release seen:"
 msgstr "neueste gesehene Version:"
 
-#. Developer page: update check result when there is no stable release.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result when there is no stable release.
 msgctxt "dev_update_no_releases"
 msgid "No stable release has been published yet."
 msgstr "Es wurde noch keine stabile Version veröffentlicht."
@@ -3399,7 +3541,7 @@ msgctxt "dev_update_none"
 msgid "No update: this build is current"
 msgstr "Kein Update: Dieser Build ist aktuell"
 
-#. Developer page: update check result on the newest release. {version} is the release version.
+#. Developer page, and the line under Linux Settings > Check for updates: update check result on the newest release. {version} is the release version.
 msgctxt "dev_update_up_to_date"
 msgid "Up to date. Newest release: v{}"
 msgstr "Aktuell. Neueste Version: v{}"
@@ -4178,7 +4320,7 @@ msgctxt "exclude_apps_launcher_note"
 msgid "Each app you turn on gets a second launcher in your app menu, with (outside VPN) after its name. An app opened from that launcher bypasses the VPN and the kill switch. An app that is already running stays in the VPN until you quit it, and Flatpak and Snap apps are not listed."
 msgstr "Jede App, die du einschaltest, erhält im App-Menü einen zweiten Starter mit (außerhalb des VPN) hinter ihrem Namen. Eine über diesen Starter geöffnete App umgeht das VPN und den Kill switch. Eine bereits laufende App bleibt im VPN, bis du sie beendest, und Flatpak- und Snap-Apps werden nicht aufgeführt."
 
-#. transfer stats and split rules
+#. transfer stats and split rules; Linux: the header over the apps already excluded in Settings > Exclude apps from the VPN.
 msgctxt "excluded"
 msgid "Excluded"
 msgstr "Ausgeschlossen"
@@ -5760,6 +5902,11 @@ msgstr "Kostenlose Testphase beginnt"
 msgctxt "on"
 msgid "On"
 msgstr "An"
+
+#. Linux desktop notification, shown once ever, the first time closing the window hides it to the system tray (only while a tray has the app's icon). Its title is the product name. Windows shows a tray balloon at the same moment under this key.
+msgctxt "onb_tray_balloon_hide"
+msgid "Still running — URnetwork closed to the tray. Click its icon there to open it again."
+msgstr "Läuft weiter — URnetwork wurde in den Infobereich geschlossen. Klicke dort auf das Symbol, um es wieder zu öffnen."
 
 #. Accessibility description of the onboarding step bubbles: the current step and the total.
 msgctxt "onboarding_step_of"
@@ -9998,6 +10145,26 @@ msgctxt "upd_available_title_version"
 msgid "Update available: v{}"
 msgstr "Update verfügbar: v{}"
 
+#. Linux Settings > General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.
+msgctxt "upd_check_held_message"
+msgid "GitHub asked this network to wait until {} before it is asked again, and the app waits until then."
+msgstr "GitHub hat dieses Netzwerk gebeten, bis {} mit der nächsten Anfrage zu warten, und die App wartet bis dahin."
+
+#. Linux Settings > General: the button on the "Check for updates" row that checks for a new release now. The last check's outcome shows on the line under the row.
+msgctxt "upd_check_now"
+msgid "Check now"
+msgstr "Jetzt suchen"
+
+#. Linux Settings > General: the sentence under upd_check_stale_title ("Couldn't check for updates since {date}"). The app checks again every six hours while automatic checks are on; "the button" is the row's Check now button.
+msgctxt "upd_check_stale_message"
+msgid "A newer release may be out. The app keeps trying every six hours, and the button tries now."
+msgstr "Möglicherweise ist eine neuere Version erschienen. Die App versucht es weiter alle sechs Stunden, die Schaltfläche sofort."
+
+#. Linux Settings > General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).
+msgctxt "upd_check_stale_title"
+msgid "Couldn't check for updates since {}"
+msgstr "Seit {} konnte nicht nach Updates gesucht werden"
+
 #. Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.
 msgctxt "upd_downloaded_message"
 msgid "This AppImage's folder is not writable, so the verified download was saved below. Replace the AppImage with it by hand."
@@ -10128,7 +10295,7 @@ msgctxt "urnetwork_referral_code"
 msgid "URnetwork Referral Code"
 msgstr "URnetwork Empfehlungscode"
 
-#. Used in NetworkApp.swift.
+#. Used in NetworkApp.swift. Also the Windows and Linux status strip's name for its connection state field, read by screen readers.
 msgctxt "urnetwork_status"
 msgid "URnetwork Status"
 msgstr "URnetwork Status"

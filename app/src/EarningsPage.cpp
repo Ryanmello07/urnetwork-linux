@@ -14,6 +14,7 @@
 
 #include "BittensorManualSheet.hpp"
 #include "BittensorWalletFlow.hpp"
+#include "DisplayText.hpp"
 #include "EmojiKeyboard.hpp"
 #include "EmojiTagSheet.hpp"
 #include "ExtenderProvideRowPaint.hpp"
@@ -1615,6 +1616,35 @@ void EarningsPage::Load() {
   }
 }
 
+void EarningsPage::ResetForSignOut() {
+  // what marks the own row on the boards; the next load reads it from the jwt
+  ownNetworkId_.clear();
+  // A switch's set still in flight was the departed account's. Load's epoch
+  // drops its answer, so it is abandoned here: its watchdog would otherwise
+  // report it failed to whoever signs in next, and the switch would stay
+  // insensitive until then.
+  ++pointsPublicFlow_.generation;
+  pointsPublicFlow_.timer.disconnect();
+  settingPointsPublic_ = false;
+  if (pointsPublicToggle_ != nullptr) pointsPublicToggle_->set_sensitive(true);
+  ++rankingFlow_.generation;
+  rankingFlow_.timer.disconnect();
+  settingRankingPublic_ = false;
+  publicToggle_->set_sensitive(true);
+  // the points header's emoji and switch; with the edit markers, or the old
+  // account's last edit would keep the next one's first `me` from applying
+  pointsPublic_ = false;
+  emojiTag_.clear();
+  ownFlagsClock_ = 0;
+  ownFlagsEditedAt_ = 0;
+  ownFlagsAppliedAt_ = 0;
+  SetPointsToggle(false);
+  // the public leaderboard switch: ApplyRanking writes it only with a ranking
+  rankingPublic_ = false;
+  SetRankingToggle(false);
+  Load();
+}
+
 void EarningsPage::ApplyBreakpoint(int widthDip) {
   const int lanes = widthDip >= kThreePaneDip ? 3 : (widthDip >= kTwoPaneDip ? 2 : 1);
   if (lanes_ == lanes) return;
@@ -1997,12 +2027,15 @@ void EarningsPage::BuildNetworkPane() {
   kit::SetAccessibleLabel(*paneC_.root, T_("network_earnings", "Network earnings"));
   Gtk::Box* content = paneC_.content;
 
-  // 1 + 2. own ranking
+  // 1 + 2. own ranking. The rank rides the group header as its meta
+  // ("Current Ranking … #42"), so the Net Provided row under it is one label
+  // and one figure, not two figures merging on one baseline.
   {
-    Gtk::Widget* header =
-        kit::MakePaneGroupHeader(T_("current_ranking", "Current Ranking")).root;
-    content->append(*header);
-    dataRankingWidgets_.push_back(header);
+    auto header = kit::MakePaneGroupHeader(T_("current_ranking", "Current Ranking"));
+    rankValue_ = header.meta;
+    rankValue_->set_visible(true);  // always a rank or the faint dash
+    content->append(*header.root);
+    dataRankingWidgets_.push_back(header.root);
   }
   {
     auto row = MakePaddedRow(12);
@@ -2011,15 +2044,11 @@ void EarningsPage::BuildNetworkPane() {
     key->add_css_class("ur-key");
     key->set_xalign(0);
     key->set_hexpand(true);
-    key->set_valign(Gtk::Align::END);
+    key->set_valign(Gtk::Align::CENTER);
     kit::MarkDecorative(*key);
     grid->append(*key);
-    auto* figures = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
     netProvidedValue_ = MakeStrongValue(18);
-    figures->append(*netProvidedValue_);
-    rankValue_ = MakeStrongValue(22);
-    figures->append(*rankValue_);
-    grid->append(*figures);
+    grid->append(*netProvidedValue_);
     row.content->append(*grid);
     content->append(*row.root);
     dataRankingWidgets_.push_back(row.root);
@@ -2937,7 +2966,7 @@ void EarningsPage::RebuildLeaderboard() {
     const bool masked = !isOwn && (!earner.is_public || earner.contains_profanity);
     row.cells[0]->set_text("#" + std::to_string(rank));
     row.cells[1]->set_text(masked ? Glib::ustring(T_("private_network", "Private Network"))
-                                  : Glib::ustring(earner.network_name));
+                                  : Glib::ustring(SanitizeExternalDisplayText(earner.network_name)));
     row.cells[2]->set_text(FormatMiB(earner.net_mib_count));
     if (masked) {
       for (Gtk::Label* cell : row.cells) cell->add_css_class("dim-label");
@@ -4735,7 +4764,7 @@ Gtk::Widget* EarningsPage::MakePointsRow(const PointsRowUi& r, const std::string
                                   : (byStreak ? r.rankStreakText : r.rankPointsText));
   // the emoji tag shows either way; the name only when the network is not anonymous
   const bool anon = r.anonymous || r.displayName.empty();
-  Glib::ustring name = anon ? anonymous : Glib::ustring(r.displayName);
+  Glib::ustring name = anon ? anonymous : Glib::ustring(SanitizeExternalDisplayText(r.displayName));
   row.cells[1]->set_text(name);
   identity.bottom->set_text(r.emojiTag);
   identity.bottom->set_visible(!r.emojiTag.empty());
@@ -4760,10 +4789,14 @@ Gtk::Widget* EarningsPage::MakePointsRow(const PointsRowUi& r, const std::string
 }
 
 // The network's own name for the points board: the me row's, or the jwt's
-// until me lands; empty only when signed out.
+// until me lands, filtered for display; empty only when signed out.
 std::string EarningsPage::OwnPointsName() {
-  if (pointsMe_ && !pointsMe_->displayName.empty()) return pointsMe_->displayName;
-  if (auto jwt = host_.ParseByJwt(); jwt && !jwt->NetworkName.empty()) return jwt->NetworkName;
+  if (pointsMe_ && !pointsMe_->displayName.empty()) {
+    return SanitizeExternalDisplayText(pointsMe_->displayName);
+  }
+  if (auto jwt = host_.ParseByJwt(); jwt && !jwt->NetworkName.empty()) {
+    return SanitizeExternalDisplayText(jwt->NetworkName);
+  }
   return std::string();
 }
 
@@ -5522,7 +5555,7 @@ void EarningsPage::SettlePointsBoardPreview() {
 
 void EarningsPage::ApplyProvideState(const LiveStats& stats) {
   const auto visual = ProvideModeGlyphFor(stats.provideMode, stats.providePaused);
-  provideModeDot_.set_markup("<span foreground='" + HexForMarkup(visual.color) + "'>" +
+  provideModeDot_.set_markup(std::string("<span foreground='") + visual.colorHex + "'>" +
                              visual.glyph + "</span>");
   controlMode_ = host_.GetProvideControlMode();
   if (provideModeValue_) provideModeValue_->set_text(ProvideModeValueText(controlMode_));
