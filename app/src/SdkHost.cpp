@@ -1477,8 +1477,9 @@ void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
   }
   // opens the browser; the key comes back on the urnetwork://<provider>-connect
   // callback (on_public_key) and a failure on on_error -- a browser that cannot
-  // be opened is answered before this returns
-  wallet_.Connect(provider);
+  // be opened is answered before this returns. The payout sheet also takes a
+  // typed address, so a missing extension points at it.
+  wallet_.Connect(provider, /*offersManualEntry=*/true);
 }
 
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,

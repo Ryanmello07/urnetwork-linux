@@ -5802,6 +5802,11 @@ msgctxt "no_wallets_found_alert_content"
 msgid "No Solana wallets were found installed on this device. Please install a wallet and try again."
 msgstr "Aucun portefeuille Solana n'a été trouvé installé sur cet appareil. Veuillez installer un portefeuille et réessayer."
 
+#. Body of the no-wallet alert (android) and note (iOS) of the Solana payout wallet's connect sheet, when no wallet app on the device can connect (android: no wallet app answers the Mobile Wallet Adapter request, as reported with Brave Wallet installed; iOS: neither Phantom nor Solflare is installed). A typed address works with any wallet, so the line points at the sheet's manual entry, naming its Enter address manually control in that control's own words (enter_address_manually); the android alert also offers that control as its action. Signing in needs a wallet app and keeps no_wallets_found_alert_content.
+msgctxt "no_wallets_found_enter_address_manually"
+msgid "No compatible Solana wallet app was found on this device. Choose “Enter address manually” to paste your wallet address instead."
+msgstr "Aucune application de portefeuille Solana compatible n’a été trouvée sur cet appareil. Choisissez « Saisir l’adresse manuellement » pour coller l’adresse de votre portefeuille à la place."
+
 #. Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.
 msgctxt "none"
 msgid "None"
@@ -8119,6 +8124,11 @@ msgstr "Se connecter avec Solana"
 msgctxt "solana_wallet"
 msgid "Solana wallet"
 msgstr "Portefeuille Solana"
+
+#. Error in the Solana payout wallet's connect sheet of the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns extension_not_found: the chosen wallet's browser extension is not in this browser. The argument is the wallet product name (Phantom or Solflare). The sheet also takes a typed address, which works with any wallet, so the line points at its Enter address manually control, named in that control's own words (enter_address_manually). Signing in has no manual entry and keeps bittensor_error_extension_not_found.
+msgctxt "solana_wallet_error_extension_not_found"
+msgid "The {} extension was not found in this browser. Install it and try again, or choose “Enter address manually” to paste your wallet address."
+msgstr "L’extension {} est introuvable dans ce navigateur. Installez-la et réessayez, ou choisissez « Saisir l’adresse manuellement » pour coller l’adresse de votre portefeuille."
 
 #. Solana wallet error in the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns session_not_found: the browser no longer has the wallet connection made in the connect step (another browser or a private window, or its site data was cleared), so nothing was signed. Starting again reconnects the wallet (Phantom or Solflare).
 msgctxt "solana_wallet_error_session_not_found"
