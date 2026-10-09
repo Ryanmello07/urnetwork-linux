@@ -402,6 +402,16 @@ void SdkHost::ReleaseDeviceRpcDefaultPort() {
   deviceRpcDefaultPortFd_ = -1;
 }
 
+// Every Api the GUI takes from its space comes through here, right after the
+// assignment (Initialize, ApplyNetworkServer, SetPrivateExtender): a freshly
+// derived Api reports the unknown client until it is told what it is, and
+// the account's Sessions list would then show this machine's uses as
+// "Unknown device".
+void SdkHost::AdoptSpaceApiLocked() {
+  // requires mutex_
+  ReportClientInfo(*api_, kAppVersion);
+}
+
 bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDir) {
   std::scoped_lock lock(mutex_);
   initializeError_.clear();
@@ -435,6 +445,7 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
                 hostName.c_str());
     }
     api_ = networkSpace_->getApi();
+    AdoptSpaceApiLocked();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
     // the SDK's client event queue over this network space: it persists,
@@ -793,6 +804,7 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       // everything derived from the space re-derives: the Api talks to the
       // new host, the LocalState holds the new host's jwt
       api_ = networkSpace_->getApi();
+      AdoptSpaceApiLocked();
       asyncLocalState_ = networkSpace_->getAsyncLocalState();
       localState_ = asyncLocalState_->getLocalState();
       // ...INCLUDING the Api's authorization. Same defect as Initialize(): a
@@ -4318,6 +4330,7 @@ bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secre
     // ...and re-derive what hangs off the space, exactly as ApplyNetworkServer
     // does: the handle is new, and a freshly derived Api carries no token.
     api_ = networkSpace_->getApi();
+    AdoptSpaceApiLocked();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
     if (const std::string byJwt = localState_->getByJwt(); !byJwt.empty()) {

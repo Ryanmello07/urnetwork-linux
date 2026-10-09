@@ -1271,6 +1271,10 @@ class SdkHost {
   ControlClient& Control() { return control_; }
 
  private:
+  // Requires mutex_. Run right after every `api_ =`: the Api just taken from
+  // the space reports this app's client info (NetworkSpaceConfig.hpp
+  // ReportClientInfo).
+  void AdoptSpaceApiLocked();
   void RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done);
   // Shared routing for NetworkCreateResult (sign-up + wallet sign-up).
   // `bittensorWalletId` is the Bittensor wallet that signed ("" for none).
