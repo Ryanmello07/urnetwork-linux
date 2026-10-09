@@ -419,7 +419,7 @@ UR_TEST(LogUploadWiring_TheUploadCarriesTheGuisFilesAndClosesThem) {
   const std::string thread = UploadFunctionBody(host, "void UploadLogsOnDevice(");
   UR_EXPECT_TRUE(Contains(thread, "uploadLogsFile.Source = logupload::kGuiLogFilesSource;"));
   UR_EXPECT_TRUE(Contains(thread, "uploadLogsFile.FileDescriptor = file.fd;"));
-  UR_EXPECT_TRUE(Ahead(thread, "nlohmann::json(uploadLogsFiles).dump()",
+  UR_EXPECT_TRUE(Ahead(thread, "ctl::DumpForWire(nlohmann::json(uploadLogsFiles))",
                        "urnet_device_local_upload_logs_with_files("));
   UR_EXPECT_TRUE(
       Contains(thread, "deviceHandle, feedbackId.c_str(), uploadLogsFilesJson.c_str(),"));

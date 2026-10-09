@@ -157,7 +157,9 @@ void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_
     uploadLogsFile.FileDescriptor = file.fd;
     uploadLogsFiles.push_back(std::move(uploadLogsFile));
   }
-  const std::string uploadLogsFilesJson = nlohmann::json(uploadLogsFiles).dump();
+  // The names come from the GUI: a byte that is not UTF-8 becomes U+FFFD
+  // instead of throwing on this thread (ControlProtocol.hpp DumpForWire).
+  const std::string uploadLogsFilesJson = ctl::DumpForWire(nlohmann::json(uploadLogsFiles));
   auto report = std::make_unique<LogUploadReport>();
   report->flight = flight;
   report->uploadId = uploadId;
