@@ -410,6 +410,21 @@ void SdkHost::ReleaseDeviceRpcDefaultPort() {
 void SdkHost::AdoptSpaceApiLocked() {
   // requires mutex_
   ReportClientInfo(*api_, kAppVersion);
+  // ...and the Api's own sign-out is followed. The sdk clears the account
+  // credential the server rejects (a confirmed 401), or the one this app
+  // signed out from the account's Sessions list, and says so on the Api it
+  // was rejected on. That is the sign-out the device's listener reports for
+  // the client credential (BindRemoteDeviceLocked), so it goes to the same
+  // handler, which marshals and runs Logout(). The device listener alone
+  // missed it: this Api carries its own credential, and without a tunnel
+  // there is no device to report anything. Logout's own setByJwt("") does not
+  // fire it. A new subscription goes with every new Api, so a rejection on a
+  // replaced one cannot sign the next account out.
+  apiLogoutSub_.reset();
+  apiLogoutSub_.emplace(api_->addAuthLogoutListener([this] {
+    // an sdk thread: marshal only (MainWindow's handler posts Logout)
+    if (onAuthInvalid_) onAuthInvalid_();
+  }));
 }
 
 bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDir) {

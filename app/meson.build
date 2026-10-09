@@ -719,6 +719,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ConnectCanvasRimWiringTest.cpp',
     'tests/PlanPickerWiringTest.cpp',
     'tests/ClientInfoWiringTest.cpp',
+    'tests/ApiSignOutWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -824,7 +825,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # ConnectCanvasRimWiringTest reads the hero canvas's rim and orbits the same way.
               # PlanPickerWiringTest reads the plan cards and their css the same way.
               # ClientInfoWiringTest reads the GUI's and the daemon's Api adoption
-              # the same way.
+              # the same way, and ApiSignOutWiringTest the Api's sign-out.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
