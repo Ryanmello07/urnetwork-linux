@@ -120,20 +120,35 @@ void OnLogUploadReport(void* userData, const char* resultJson, const char* error
 
 // The upload's own thread (logupload::Flight::Run). The line naming the carrier
 // goes into the files the zip takes, before it; then the sdk zips this
-// process's log files and starts the post to /log/{feedback_id}/upload. The
-// call goes through the c abi by the device's handle, which the flight keeps
-// valid until it returns, so that nothing of TunnelHost is touched here.
+// process's log files, with the GUI's under gui/, and starts the post to
+// /log/{feedback_id}/upload. The call goes through the c abi by the device's
+// handle, which the flight keeps valid until it returns, so that nothing of
+// TunnelHost is touched here. The sdk reads the GUI's files through its own
+// duplicates of their descriptors before the call returns
+// (DeviceLocal.UploadLogsWithFiles), so they are closed right after it.
 void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_t uploadId,
                         uint64_t deviceHandle, const std::string& feedbackId,
-                        const char* carrierName) {
-  urnet::logAppInfo("log-upload", std::string("carrier=") + carrierName);
+                        const char* carrierName, logupload::PassedLogFiles& guiLogFiles) {
+  urnet::logAppInfo("log-upload", std::string("carrier=") + carrierName +
+                                      " gui_log_files=" + std::to_string(guiLogFiles.Size()));
+  urnet::UploadLogsFileList uploadLogsFiles;
+  for (const logupload::PassedLogFiles::File& file : guiLogFiles.Files()) {
+    urnet::UploadLogsFile uploadLogsFile;
+    uploadLogsFile.Source = logupload::kGuiLogFilesSource;
+    uploadLogsFile.Name = file.name;
+    uploadLogsFile.FileDescriptor = file.fd;
+    uploadLogsFiles.push_back(std::move(uploadLogsFile));
+  }
+  const std::string uploadLogsFilesJson = nlohmann::json(uploadLogsFiles).dump();
   auto report = std::make_unique<LogUploadReport>();
   report->flight = flight;
   report->uploadId = uploadId;
   report->carrierName = carrierName;
   char* error = nullptr;
-  const bool started = urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),
-                                                &OnLogUploadReport, report.get(), &error);
+  const bool started = urnet_device_local_upload_logs_with_files(
+      deviceHandle, feedbackId.c_str(), uploadLogsFilesJson.c_str(), &OnLogUploadReport,
+      report.get(), &error);
+  guiLogFiles.CloseAll();
   if (started) {
     // the callback owns it now
     report.release();
@@ -1810,6 +1825,7 @@ bool TunnelHost::Logout(const std::string& networkSpaceJson, std::string* error,
   if (queuedUpload_) {
     logUploadFlight_->Finish(queuedUploadId_, logupload::FlightState::Failed);
     queuedUpload_.reset();
+    queuedGuiLogFiles_.CloseAll();
     queuedUploadId_ = 0;
   }
   // What the account asked for: the next start brings its own.
@@ -1946,7 +1962,8 @@ void TunnelHost::RefreshProviderStatusLocked() {
 // upload's own thread (logupload::Flight), never on the main loop that serves
 // every control request, the reaper and the kill switch.
 
-TunnelHost::LogUploadResult TunnelHost::UploadLogs(const ctl::UploadLogsRequest& request) {
+TunnelHost::LogUploadResult TunnelHost::UploadLogs(const ctl::UploadLogsRequest& request,
+                                                   logupload::PassedLogFiles guiLogFiles) {
   LogUploadResult result;
   // Re-validated here as start_provider is: this process is root, and the
   // feedback id becomes part of the url its device posts to.
@@ -1969,6 +1986,7 @@ TunnelHost::LogUploadResult TunnelHost::UploadLogs(const ctl::UploadLogsRequest&
       return result;
     }
     queuedUpload_ = request;
+    queuedGuiLogFiles_ = std::move(guiLogFiles);
     queuedUploadMillis_ = nowMillis;
     queuedUploadId_ = uploadId;
     DaemonLogf("[support] a log upload waits for the tunnel start in progress\n");
@@ -1977,11 +1995,12 @@ TunnelHost::LogUploadResult TunnelHost::UploadLogs(const ctl::UploadLogsRequest&
     result.uploadId = uploadId;
     return result;
   }
-  return StartLogUploadLocked(request, /*queuedUploadId=*/0);
+  return StartLogUploadLocked(request, /*queuedUploadId=*/0, std::move(guiLogFiles));
 }
 
 TunnelHost::LogUploadResult TunnelHost::StartLogUploadLocked(
-    const ctl::UploadLogsRequest& request, int64_t queuedUploadId) {
+    const ctl::UploadLogsRequest& request, int64_t queuedUploadId,
+    logupload::PassedLogFiles guiLogFiles) {
   LogUploadResult result;
   const int64_t nowMillis = MonotonicMillis();
   const logupload::Carrier carrier =
@@ -2026,18 +2045,23 @@ TunnelHost::LogUploadResult TunnelHost::StartLogUploadLocked(
     DaemonLogf("[support] %s\n", result.error.c_str());
     return result;
   }
-  // The zip and the post, on the upload's own thread. It holds the flight and
-  // the device's handle and nothing else of this object; the flight keeps the
-  // device alive until the call returns (ReleaseDeviceLocked), and the call's
-  // callback ends the upload in it, which status reports.
+  // The zip and the post, on the upload's own thread. It holds the flight, the
+  // device's handle and the GUI's log files, and nothing else of this object;
+  // the flight keeps the device alive until the call returns
+  // (ReleaseDeviceLocked), and the call's callback ends the upload in it,
+  // which status reports.
+  const size_t guiLogFileCount = guiLogFiles.Size();
   logUploadFlight_->Run(uploadId, deviceHandle,
                         [flight = logUploadFlight_, uploadId, deviceHandle,
-                         feedbackId = request.feedback_id, carrierName] {
+                         feedbackId = request.feedback_id, carrierName,
+                         guiLogFiles = std::make_shared<logupload::PassedLogFiles>(
+                             std::move(guiLogFiles))] {
                           UploadLogsOnDevice(flight, uploadId, deviceHandle, feedbackId,
-                                             carrierName);
+                                             carrierName, *guiLogFiles);
                         });
-  DaemonLogf("[support] uploading this daemon's logs for a feedback (%s device)\n",
-             carrierName);
+  DaemonLogf("[support] uploading this daemon's logs for a feedback (%s device), with %zu of "
+             "the GUI's log files\n",
+             carrierName, guiLogFileCount);
   result.ok = true;
   result.carrier = carrierName;
   result.uploadId = uploadId;
@@ -2080,6 +2104,7 @@ void TunnelHost::MaintainLogUploadLocked() {
   }
   if (!queuedUpload_) return;
   const ctl::UploadLogsRequest request = std::move(*queuedUpload_);
+  logupload::PassedLogFiles guiLogFiles = std::move(queuedGuiLogFiles_);
   const int64_t uploadId = queuedUploadId_;
   queuedUpload_.reset();
   queuedUploadId_ = 0;
@@ -2088,7 +2113,7 @@ void TunnelHost::MaintainLogUploadLocked() {
     DaemonLogf("[support] a log upload waited too long for a tunnel start and was dropped\n");
     return;
   }
-  StartLogUploadLocked(request, uploadId);
+  StartLogUploadLocked(request, uploadId, std::move(guiLogFiles));
 }
 
 bool TunnelHost::SetKillSwitch(bool enabled, std::string* error) {

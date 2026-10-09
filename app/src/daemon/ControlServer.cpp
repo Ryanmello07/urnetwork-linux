@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "daemon/ControlServer.hpp"
 
+#include "FdPassing.hpp"
+#include "PassedLogFiles.hpp"
 #include "daemon/DaemonLog.hpp"
 
 #include <fcntl.h>
@@ -92,6 +94,12 @@ constexpr unsigned kPolkitQueuedGuardMillis = 20000;
 constexpr int kPolkitPidfdMinBackend = 124;
 
 int64_t NowMillis() { return static_cast<int64_t>(g_get_monotonic_time() / 1000); }
+
+// Closes the descriptors a connection holds unclaimed (Connection::passedFds).
+void ClosePassedFds(std::vector<int>& passedFds) {
+  for (const int fd : passedFds) ::close(fd);
+  passedFds.clear();
+}
 
 // --- peer credential resolution ---------------------------------------------
 
@@ -1124,15 +1132,32 @@ gboolean ControlServer::OnConnectionReadable(gint fd, GIOCondition, gpointer dat
 bool ControlServer::ReadIntoBuffer(Connection* conn) {
   char buf[4096];
   for (;;) {
-    const ssize_t n = ::recv(conn->fd, buf, sizeof(buf), 0);
+    // Descriptors come only with upload_logs (the GUI's own log files), and are
+    // held until that request claims them (HandleUploadLogs) or, unclaimed,
+    // until no frame is pending (PumpConnection).
+    std::vector<int> fds;
+    bool truncated = false;
+    const ssize_t n = fdpass::ReceiveWithFds(conn->fd, buf, sizeof(buf), &fds, &truncated);
+    const int receiveErrno = errno;
+    conn->passedFds.insert(conn->passedFds.end(), fds.begin(), fds.end());
+    if (truncated) {
+      // more than one message holds, or ones a security policy (SELinux) would
+      // not let this process receive: the kernel closed those
+      DaemonLogf("[control] uid=%lld pid=%lld passed descriptors the kernel dropped (more than "
+                 "%zu, or refused by policy)\n",
+                 static_cast<long long>(conn->peer.uid), static_cast<long long>(conn->peer.pid),
+                 fdpass::kMaxFds);
+    }
+    // a client may not park descriptors in this process beyond one request's
+    if (conn->passedFds.size() > fdpass::kMaxFds) return false;
     if (n > 0) {
       conn->inBuf.append(buf, static_cast<size_t>(n));
       if (conn->inBuf.size() > kMaxFrameBytes) return false;
       continue;
     }
     if (n == 0) return false;  // peer closed
-    if (errno == EINTR) continue;
-    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+    if (receiveErrno == EINTR) continue;
+    if (receiveErrno == EAGAIN || receiveErrno == EWOULDBLOCK) break;
     return false;
   }
   return true;
@@ -1168,7 +1193,12 @@ bool ControlServer::PumpConnection(uint64_t connId) {
     // password dialogs.
     if (conn->authPending) return true;
     const size_t pos = conn->inBuf.find('\n');
-    if (pos == std::string::npos) return true;
+    if (pos == std::string::npos) {
+      // Descriptors arrive with the first bytes of their frame. With no frame
+      // pending, what no request claimed is closed, so none outlives its frame.
+      if (conn->inBuf.empty()) ClosePassedFds(conn->passedFds);
+      return true;
+    }
     const std::string line = conn->inBuf.substr(0, pos);
     conn->inBuf.erase(0, pos + 1);
 
@@ -1315,6 +1345,7 @@ void ControlServer::CloseConnection(Connection* conn) {
     ::close(conn->peer.pidfd);
     conn->peer.pidfd = -1;
   }
+  ClosePassedFds(conn->passedFds);
   const auto uidIt = connectionsPerUid_.find(uid);
   if (uidIt != connectionsPerUid_.end() && --uidIt->second <= 0) {
     connectionsPerUid_.erase(uidIt);
@@ -2130,6 +2161,11 @@ nlohmann::json ControlServer::HandleStartProvider(Connection* conn, int64_t id,
 // log_tail asks: read-log (checked in Dispatch) and a log that is this caller's
 // (or root). Another uid's log is refused, not escalated, and nothing is
 // claimed: sending logs owns no session.
+//
+// The GUI's own log files ride with the frame as descriptors it opened with its
+// own rights (gui_log_files, PassedLogFiles.hpp): only regular files under glog
+// names are taken, and the upload closes them once the sdk has read them. This
+// daemon never opens a path a client names.
 nlohmann::json ControlServer::HandleUploadLogs(Connection* conn, int64_t id,
                                                const nlohmann::json& request) {
   if (conn->peer.uid != 0 && LogBelongsToOtherUid(conn)) {
@@ -2144,7 +2180,9 @@ nlohmann::json ControlServer::HandleUploadLogs(Connection* conn, int64_t id,
         ctl::kCodeAuthNotTunnelOwner);
   }
   const auto req = request.get<ctl::UploadLogsRequest>();
-  const TunnelHost::LogUploadResult result = tunnel_.UploadLogs(req);
+  logupload::PassedLogFiles guiLogFiles =
+      logupload::TakePassedLogFiles(conn->passedFds, req.gui_log_files);
+  const TunnelHost::LogUploadResult result = tunnel_.UploadLogs(req, std::move(guiLogFiles));
   if (!result.ok) {
     return ctl::MakeErrorReply(id, result.error.empty() ? "the logs could not be uploaded"
                                                         : result.error,

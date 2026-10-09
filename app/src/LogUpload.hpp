@@ -18,6 +18,9 @@
 //   queued      a tunnel start is in progress: the device it leaves behind (the
 //               session's, or a standalone one after a failure) carries it
 //
+// The GUI's own glog files ride in the same zip, under gui/: the GUI passes
+// them by descriptor with the request (PassedLogFiles.hpp).
+//
 // The upload runs off the daemon's main loop (Flight): the sdk zips the log
 // directory inside its UploadLogs call, up to the upload's cap read from disk,
 // and the main loop serves every control request, the reaper and the kill

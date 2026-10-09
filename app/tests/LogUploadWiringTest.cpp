@@ -51,6 +51,8 @@ bool Ahead(const std::string& text, const std::string& first, const std::string&
 // Dispatch (ActionIdForVerb), and the log must be this caller's, as for
 // log_tail. Sending logs owns nothing, so it claims nothing and passes no
 // tunnel-owner gate a disconnected user could fail. The reply names the upload.
+// Past the gate it takes the GUI's log files that came with the frame, by the
+// names the request gave them, and hands them to the upload.
 UR_TEST(LogUploadWiring_TheDaemonServesItBehindTheLogsGate) {
   const std::string server = ReadUploadSource("daemon/ControlServer.cpp");
   const std::string dispatch =
@@ -61,7 +63,11 @@ UR_TEST(LogUploadWiring_TheDaemonServesItBehindTheLogsGate) {
       UploadFunctionBody(server, "nlohmann::json ControlServer::HandleUploadLogs(");
   UR_EXPECT_TRUE(!handle.empty());
   UR_EXPECT_TRUE(Ahead(handle, "conn->peer.uid != 0 && LogBelongsToOtherUid(conn)",
-                       "tunnel_.UploadLogs(req)"));
+                       "tunnel_.UploadLogs(req, std::move(guiLogFiles))"));
+  UR_EXPECT_TRUE(Ahead(handle, "LogBelongsToOtherUid(conn)",
+                       "logupload::TakePassedLogFiles(conn->passedFds, req.gui_log_files)"));
+  UR_EXPECT_TRUE(Ahead(handle, "logupload::TakePassedLogFiles(conn->passedFds, req.gui_log_files)",
+                       "tunnel_.UploadLogs(req, std::move(guiLogFiles))"));
   UR_EXPECT_TRUE(Ahead(handle, "LogBelongsToOtherUid(conn)", "ctl::kCodeAuthNotTunnelOwner"));
   UR_EXPECT_TRUE(Contains(handle, "request.get<ctl::UploadLogsRequest>()"));
   UR_EXPECT_TRUE(Contains(handle, "payload.carrier = result.carrier;"));
@@ -86,11 +92,15 @@ UR_TEST(LogUploadWiring_TheDaemonValidatesThenQueuesBehindABringUp) {
   UR_EXPECT_TRUE(Ahead(upload, "logUploadFlight_->Begin(/*queued=*/true", "if (uploadId == 0) {"));
   UR_EXPECT_TRUE(Ahead(upload, "if (uploadId == 0) {", "ctl::kCodeLogUploadBusy"));
   UR_EXPECT_TRUE(Ahead(upload, "ctl::kCodeLogUploadBusy", "queuedUpload_ = request;"));
+  // a queued request keeps the GUI's log files that came with it
+  UR_EXPECT_TRUE(Ahead(upload, "queuedUpload_ = request;",
+                       "queuedGuiLogFiles_ = std::move(guiLogFiles);"));
   UR_EXPECT_TRUE(Contains(upload, "queuedUploadId_ = uploadId;"));
   UR_EXPECT_TRUE(Contains(upload, "result.uploadId = uploadId;"));
   UR_EXPECT_TRUE(Contains(upload, "logupload::Carrier::Queued"));
   UR_EXPECT_TRUE(Ahead(upload, "queuedUpload_ = request;",
-                       "return StartLogUploadLocked(request, /*queuedUploadId=*/0);"));
+                       "return StartLogUploadLocked(request, /*queuedUploadId=*/0, "
+                       "std::move(guiLogFiles));"));
   UR_EXPECT_FALSE(Contains(upload, "NewDeviceLocked("));
 }
 
@@ -128,7 +138,8 @@ UR_TEST(LogUploadWiring_TheUploadRunsOffTheMainLoopOnTheLiveDeviceOrAStandaloneO
         "setRpcServer(", "newIoLoop(", "setTunnelStarted(", " device_ = ", "providerDevice_ = ",
         "ClaimTunnelOwnership(", "OpenProviderViewControllersLocked(",
         // the sdk's call (the zip) and the line before it belong to the thread
-        "->uploadLogs(", "urnet_device_upload_logs(", "urnet::logAppInfo("}) {
+        "->uploadLogs(", "urnet_device_upload_logs(", "urnet_device_local_upload_logs_with_files(",
+        "urnet::logAppInfo("}) {
     UR_EXPECT_TRUE_MSG(forbidden, !Contains(start, forbidden));
   }
   UR_EXPECT_TRUE(Ahead(start, "logUploadFlight_->Run(uploadId, deviceHandle,", "result.ok = true;"));
@@ -139,6 +150,9 @@ UR_TEST(LogUploadWiring_TheUploadRunsOffTheMainLoopOnTheLiveDeviceOrAStandaloneO
                               : start.substr(runAt, runEnd - runAt);
   UR_EXPECT_TRUE(Contains(run, "[flight = logUploadFlight_, uploadId, deviceHandle,"));
   UR_EXPECT_TRUE(Contains(run, "UploadLogsOnDevice(flight, uploadId, deviceHandle, feedbackId,"));
+  // the GUI's log files go with the call, owned by the thread from here
+  UR_EXPECT_TRUE(Contains(run, "guiLogFiles = std::make_shared<logupload::PassedLogFiles>("));
+  UR_EXPECT_TRUE(Contains(run, "carrierName, *guiLogFiles);"));
   UR_EXPECT_FALSE(Contains(run, "this"));
   UR_EXPECT_TRUE(Contains(start, "result.uploadId = uploadId;"));
   UR_EXPECT_TRUE(Ahead(start, "catch (const std::exception& e)",
@@ -154,8 +168,8 @@ UR_TEST(LogUploadWiring_TheUploadsThreadAndCallbackTouchOnlyTheFlight) {
   const std::string thread = UploadFunctionBody(host, "void UploadLogsOnDevice(");
   UR_EXPECT_TRUE(!thread.empty());
   UR_EXPECT_TRUE(Ahead(thread, "urnet::logAppInfo(\"log-upload\"",
-                       "urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),"));
-  UR_EXPECT_TRUE(Contains(thread, "&OnLogUploadReport, report.get(), &error);"));
+                       "urnet_device_local_upload_logs_with_files("));
+  UR_EXPECT_TRUE(Contains(thread, "&OnLogUploadReport,\n      report.get(), &error);"));
   UR_EXPECT_TRUE(Ahead(thread, "if (started) {", "report.release();"));
   UR_EXPECT_TRUE(Contains(thread, "flight->Finish(uploadId, logupload::FlightState::Failed);"));
   UR_EXPECT_TRUE(Contains(thread, "urnet_free_string(error);"));
@@ -230,8 +244,11 @@ UR_TEST(LogUploadWiring_TheReaperRetiresAndStartsQueuedUploads) {
   UR_EXPECT_TRUE(Contains(maintain, "logupload::IsFinished(upload.state)"));
   UR_EXPECT_TRUE(
       Ahead(maintain, "logupload::RetireStandaloneDevice(", "RetireUploadDeviceLocked();"));
-  UR_EXPECT_TRUE(
-      Ahead(maintain, "logupload::QueuedUploadExpired(", "StartLogUploadLocked(request, uploadId);"));
+  UR_EXPECT_TRUE(Ahead(maintain, "logupload::QueuedUploadExpired(",
+                       "StartLogUploadLocked(request, uploadId, std::move(guiLogFiles));"));
+  UR_EXPECT_TRUE(Ahead(maintain,
+                       "logupload::PassedLogFiles guiLogFiles = std::move(queuedGuiLogFiles_);",
+                       "logupload::QueuedUploadExpired("));
   UR_EXPECT_TRUE(Ahead(maintain, "logupload::QueuedUploadExpired(",
                        "logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);"));
 }
@@ -280,7 +297,8 @@ UR_TEST(LogUploadWiring_TheGuiAsksTheDaemonFirstAndFallsBack) {
   // the lock is scoped to reading the session, and the call comes after it
   UR_EXPECT_TRUE(Contains(daemon, "{\n    std::scoped_lock lock(mutex_);"));
   UR_EXPECT_TRUE(Ahead(daemon, "request.network_space_json = networkSpace_->toJson();\n",
-                       "control_.UploadLogs(request, &carrier, &error, &code, &uploadId)"));
+                       "control_.UploadLogs(request, guiLogFiles, &carrier, &error, &code, "
+                       "&uploadId)"));
   const size_t lockAt = daemon.find("std::scoped_lock lock(mutex_);");
   const size_t scopeEnd = daemon.find("\n  }\n", lockAt == std::string::npos ? 0 : lockAt);
   const size_t callAt = daemon.find("control_.UploadLogs(");
@@ -290,7 +308,9 @@ UR_TEST(LogUploadWiring_TheGuiAsksTheDaemonFirstAndFallsBack) {
   UR_EXPECT_TRUE(scopeEnd != std::string::npos &&
                  daemon.find("mutex_", scopeEnd) == std::string::npos);
   // the upload it waits on, and an answer that one is in flight already
-  UR_EXPECT_TRUE(Ahead(daemon, "control_.UploadLogs(request, &carrier, &error, &code, &uploadId)",
+  UR_EXPECT_TRUE(Ahead(daemon,
+                       "control_.UploadLogs(request, guiLogFiles, &carrier, &error, &code, "
+                       "&uploadId)",
                        "pendingLogUploadId_ = uploadId;"));
   UR_EXPECT_TRUE(Ahead(daemon, "code == ctl::kCodeLogUploadBusy",
                        "return logupload::DaemonAnswer::Busy;"));
@@ -324,8 +344,86 @@ UR_TEST(LogUploadWiring_TheClientValidatesAndDoesNotResend) {
   const std::string upload = UploadFunctionBody(client, "bool ControlClient::UploadLogs(");
   UR_EXPECT_TRUE(!upload.empty());
   UR_EXPECT_TRUE(Ahead(upload, "ctl::ValidateUploadLogsRequest(request)",
-                       "CallLocked(ctl::Verb::UploadLogs, nlohmann::json(request), error,"));
+                       "CallLocked(ctl::Verb::UploadLogs, nlohmann::json(withGuiLogFiles), error,"));
   UR_EXPECT_TRUE(Contains(upload, "/*allowRetry=*/false"));
   UR_EXPECT_TRUE(Contains(upload, "reply->get<ctl::UploadLogsReply>()"));
   UR_EXPECT_TRUE(Contains(upload, "if (uploadId) *uploadId = payload.upload_id;"));
+}
+
+// The GUI's own log files ride in the daemon's zip (PassedLogFiles.hpp): the
+// GUI flushes its glog, takes the newest files its own upload would send (the
+// sdk's inventory), opens each itself without following a link, keeps only
+// regular files, and hands the descriptors over with the request's frame. The
+// daemon never opens a path the GUI names.
+UR_TEST(LogUploadWiring_TheGuiHandsOverItsOwnLogFilesByDescriptor) {
+  const std::string sdk = ReadUploadSource("SdkHost.cpp");
+  const std::string open = UploadFunctionBody(sdk, "logupload::PassedLogFiles OpenGuiLogFiles()");
+  UR_EXPECT_TRUE(!open.empty());
+  UR_EXPECT_TRUE(Ahead(open, "urnet::flushGlog();", "urnet::uploadLogsInventory()"));
+  UR_EXPECT_TRUE(Contains(open, "files.Size() >= logupload::kMaxGuiLogFiles"));
+  UR_EXPECT_TRUE(Contains(open, "logupload::LooksLikeGlogFileName(info.Name)"));
+  UR_EXPECT_TRUE(Contains(open, "O_RDONLY | O_CLOEXEC | O_NOFOLLOW"));
+  UR_EXPECT_TRUE(Ahead(open, "S_ISREG(fileStat.st_mode)", "files.Add(info.Name, fd);"));
+  const std::string daemon = UploadFunctionBody(
+      sdk, "logupload::DaemonAnswer SdkHost::UploadDaemonLogs(const std::string& feedbackId)");
+  UR_EXPECT_TRUE(Ahead(daemon, "const logupload::PassedLogFiles guiLogFiles = OpenGuiLogFiles();",
+                       "control_.UploadLogs(request, guiLogFiles,"));
+
+  const std::string client = ReadUploadSource("ControlClient.cpp");
+  const std::string upload = UploadFunctionBody(client, "bool ControlClient::UploadLogs(");
+  UR_EXPECT_TRUE(Ahead(upload, "withGuiLogFiles.gui_log_files = guiLogFiles.Names();",
+                       "CallLocked(ctl::Verb::UploadLogs, nlohmann::json(withGuiLogFiles), error,"));
+  UR_EXPECT_TRUE(Contains(upload, "const std::vector<int> guiLogFds = guiLogFiles.Fds();"));
+  UR_EXPECT_TRUE(Contains(upload, "/*receiveTimeoutSeconds=*/0, &guiLogFds);"));
+  const std::string call =
+      UploadFunctionBody(client, "std::optional<nlohmann::json> ControlClient::CallLocked(");
+  UR_EXPECT_TRUE(Contains(call, "&frameDelivered,\n                                     passFds)"));
+  const std::string roundTrip =
+      UploadFunctionBody(client, "std::optional<nlohmann::json> ControlClient::RoundTripLocked(");
+  UR_EXPECT_TRUE(Contains(roundTrip, "SendAllLocked(frame, &sent, passFds);"));
+  const std::string send = UploadFunctionBody(client, "bool ControlClient::SendAllLocked(");
+  UR_EXPECT_TRUE(
+      Contains(send, "fdpass::SendWithFds(fd_, data.data() + sent, data.size() - sent,"));
+  UR_EXPECT_TRUE(Contains(send, "sent == 0 ? *fds : noFds"));
+  UR_EXPECT_FALSE(Contains(send, "::send("));
+}
+
+// The daemon receives descriptors only with a frame's bytes, holds no more
+// than one request's worth, closes what no request claimed once no frame is
+// pending, and closes the rest with the connection.
+UR_TEST(LogUploadWiring_TheDaemonHoldsPassedDescriptorsOnlyForTheirRequest) {
+  const std::string server = ReadUploadSource("daemon/ControlServer.cpp");
+  const std::string read =
+      UploadFunctionBody(server, "bool ControlServer::ReadIntoBuffer(Connection* conn)");
+  UR_EXPECT_TRUE(
+      Contains(read, "fdpass::ReceiveWithFds(conn->fd, buf, sizeof(buf), &fds, &truncated)"));
+  UR_EXPECT_FALSE(Contains(read, "::recv("));
+  UR_EXPECT_TRUE(Ahead(read, "conn->passedFds.insert(",
+                       "if (conn->passedFds.size() > fdpass::kMaxFds) return false;"));
+  const std::string pump =
+      UploadFunctionBody(server, "bool ControlServer::PumpConnection(uint64_t connId)");
+  UR_EXPECT_TRUE(Ahead(pump, "if (conn->authPending) return true;",
+                       "if (conn->inBuf.empty()) ClosePassedFds(conn->passedFds);"));
+  const std::string close =
+      UploadFunctionBody(server, "void ControlServer::CloseConnection(Connection* conn)");
+  UR_EXPECT_TRUE(Ahead(close, "ClosePassedFds(conn->passedFds);", "::close(fd);"));
+}
+
+// The upload's thread hands the GUI's files to the sdk under the GUI's folder,
+// by descriptor, and closes them once the call returned: the sdk read them in
+// it. A queued request dropped by a sign-out closes them too.
+UR_TEST(LogUploadWiring_TheUploadCarriesTheGuisFilesAndClosesThem) {
+  const std::string host = ReadUploadSource("daemon/TunnelHost.cpp");
+  const std::string thread = UploadFunctionBody(host, "void UploadLogsOnDevice(");
+  UR_EXPECT_TRUE(Contains(thread, "uploadLogsFile.Source = logupload::kGuiLogFilesSource;"));
+  UR_EXPECT_TRUE(Contains(thread, "uploadLogsFile.FileDescriptor = file.fd;"));
+  UR_EXPECT_TRUE(Ahead(thread, "nlohmann::json(uploadLogsFiles).dump()",
+                       "urnet_device_local_upload_logs_with_files("));
+  UR_EXPECT_TRUE(
+      Contains(thread, "deviceHandle, feedbackId.c_str(), uploadLogsFilesJson.c_str(),"));
+  UR_EXPECT_TRUE(
+      Ahead(thread, "urnet_device_local_upload_logs_with_files(", "guiLogFiles.CloseAll();"));
+  UR_EXPECT_TRUE(Ahead(thread, "guiLogFiles.CloseAll();", "if (started) {"));
+  const std::string logout = UploadFunctionBody(host, "bool TunnelHost::Logout(");
+  UR_EXPECT_TRUE(Ahead(logout, "queuedUpload_.reset();", "queuedGuiLogFiles_.CloseAll();"));
 }

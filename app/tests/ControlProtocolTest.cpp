@@ -837,6 +837,26 @@ UR_TEST(controlUploadLogsRoundTrip) {
                         nlohmann::json::object().get<ctl::UploadLogsReply>().upload_id));
 }
 
+// The GUI's own log files ride with the request: their names in it, in the
+// order their descriptors ride with the frame. Additive: a request that hands
+// over none sends no field, as an older GUI did, and an older GUI's request
+// names none.
+UR_TEST(controlUploadLogsCarriesTheGuisLogFileNames) {
+  ctl::UploadLogsRequest req = SampleUploadLogs();
+  req.gui_log_files = {"urnetwork-gui.host.user.log.INFO.20260901-000000.101",
+                       "urnetwork-gui.host.user.log.ERROR.20260901-000000.101"};
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeRequest(
+                                         ctl::Verb::UploadLogs, 17, nlohmann::json(req))))
+                        ->get<ctl::UploadLogsRequest>();
+  UR_EXPECT_TRUE(back.gui_log_files == req.gui_log_files);
+
+  const ctl::UploadLogsRequest none = SampleUploadLogs();
+  UR_EXPECT_FALSE(nlohmann::json(none).contains("gui_log_files"));
+  UR_EXPECT_TRUE(nlohmann::json(none).get<ctl::UploadLogsRequest>().gui_log_files.empty());
+  // a request is still valid with or without them
+  UR_EXPECT_FALSE(ctl::ValidateUploadLogsRequest(req).has_value());
+}
+
 // The outcome of an upload reaches the GUI through status: the upload's id
 // and where it is, additive within v1 (an older daemon's status names no
 // upload), and never in a status cut down for another uid, whose feedback it
