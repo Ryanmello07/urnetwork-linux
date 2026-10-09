@@ -1638,13 +1638,14 @@ inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
 // needs the logs most — carried none. This verb asks the daemon to upload its
 // own logs for a feedback the server has accepted, connected or not.
 //
-// The daemon calls the sdk's UploadLogs on the device that runs, or on a
-// standalone device built from this request's credentials when none does
+// The daemon calls the sdk's UploadLogsWithFiles on the device that runs, or on
+// a standalone device built from this request's credentials when none does
 // (LogUpload.hpp carries the lifecycle). Everything about the upload itself is
-// the sdk's, unchanged: the zip of this process's glog files (flushed first),
-// POST /log/{feedback_id}/upload on the space's API with the device's client
-// credentials, the server's 100 MB cap and its rate limit of one upload per
-// network per 5 minutes. Nothing goes anywhere it did not go before.
+// the sdk's: the zip of this process's glog files (flushed first) and of the
+// GUI's (gui_log_files, below), POST /log/{feedback_id}/upload on the space's
+// API with the device's client credentials, the server's 100 MB cap and its
+// rate limit of one upload per network per 5 minutes. Nothing goes anywhere it
+// did not go before.
 //
 // The reply comes once the upload is admitted, running or queued behind a
 // tunnel start in progress: the zip and the post run on a thread of their own
@@ -1660,8 +1661,11 @@ inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
 // DeviceRemote's UploadLogs while a tunnel session is bound, nothing otherwise.
 //
 // One set of logs: the server keeps one file per feedback and admits one upload
-// per network per 5 minutes, and the sdk zips one process's log directory, so
-// the GUI's own glog files cannot ride along: this carries the daemon's.
+// per network per 5 minutes, so the GUI's own glog files ride in this daemon's
+// zip, under gui/ (gui_log_files). The GUI opens them and passes the
+// descriptors with this frame (SCM_RIGHTS, FdPassing.hpp): this daemon never
+// opens a path a client names, and may not read a user's home at all
+// (PassedLogFiles.hpp).
 struct UploadLogsRequest {
   // The server-issued feedback id the logs attach to.
   std::string feedback_id;
@@ -1671,6 +1675,10 @@ struct UploadLogsRequest {
   std::string instance_id;
   std::string app_version;
   std::string network_space_json;
+  // The glog names of the GUI's own log files, in the order their descriptors
+  // ride with this frame. Additive: a daemon that predates it ignores the
+  // names, and the kernel closes descriptors that are never received.
+  std::vector<std::string> gui_log_files;
 };
 inline void to_json(nlohmann::json& j, const UploadLogsRequest& v) {
   j["feedback_id"] = v.feedback_id;
@@ -1678,6 +1686,7 @@ inline void to_json(nlohmann::json& j, const UploadLogsRequest& v) {
   j["instance_id"] = v.instance_id;
   j["app_version"] = v.app_version;
   if (!v.network_space_json.empty()) j["network_space_json"] = v.network_space_json;
+  if (!v.gui_log_files.empty()) j["gui_log_files"] = v.gui_log_files;
 }
 inline void from_json(const nlohmann::json& j, UploadLogsRequest& v) {
   detail::Get(j, "feedback_id", v.feedback_id);
@@ -1685,6 +1694,7 @@ inline void from_json(const nlohmann::json& j, UploadLogsRequest& v) {
   detail::Get(j, "instance_id", v.instance_id);
   detail::Get(j, "app_version", v.app_version);
   detail::Get(j, "network_space_json", v.network_space_json);
+  detail::Get(j, "gui_log_files", v.gui_log_files);
 }
 
 // The device that carries it (logupload::ToString: "tunnel", "provider",

@@ -188,6 +188,11 @@ class ControlServer {
     // Dropped when hello has not arrived in time.
     guint helloDeadlineId = 0;
     std::string inBuf;
+    // Descriptors that came with this connection's frames (SCM_RIGHTS), in
+    // order, until a request claims them: only upload_logs does, for the GUI's
+    // own log files. Owned: closed when no frame is pending (PumpConnection)
+    // and with the connection; more than fdpass::kMaxFds drops it.
+    std::vector<int> passedFds;
   };
 
   using ReplyFn = std::function<void(nlohmann::json)>;

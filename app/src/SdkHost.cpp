@@ -281,6 +281,39 @@ std::string SignOutOwedPath() {
   return dir + "/sign_out_owed";
 }
 
+// This process's own glog files for the daemon's log upload (PassedLogFiles.hpp):
+// the newest the sdk's upload would take from this process (its inventory,
+// within the upload's cap), at most logupload::kMaxGuiLogFiles, each opened
+// here with this process's rights. glog is flushed first, so the lines written
+// up to the feedback are on disk. A file that cannot be opened is left out.
+logupload::PassedLogFiles OpenGuiLogFiles() {
+  logupload::PassedLogFiles files;
+  try {
+    urnet::flushGlog();
+    const std::optional<urnet::LogFileInfoList> inventory = urnet::uploadLogsInventory();
+    if (!inventory) return files;
+    for (const urnet::LogFileInfo& info : *inventory) {
+      if (files.Size() >= logupload::kMaxGuiLogFiles) break;
+      if (!logupload::LooksLikeGlogFileName(info.Name)) continue;
+      // non-blocking for the open only, so that nothing but a regular file can
+      // hold this thread, and blocking again for the reads
+      const int fd = ::open(info.Path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+      if (fd < 0) continue;
+      struct stat fileStat{};
+      if (::fstat(fd, &fileStat) != 0 || !S_ISREG(fileStat.st_mode)) {
+        ::close(fd);
+        continue;
+      }
+      const int flags = ::fcntl(fd, F_GETFL);
+      if (flags >= 0) ::fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+      files.Add(info.Name, fd);
+    }
+  } catch (const std::exception& e) {
+    g_warning("support: listing this app's log files failed: %s", e.what());
+  }
+  return files;
+}
+
 }  // namespace
 
 SdkHost::~SdkHost() {
@@ -4869,6 +4902,10 @@ void SdkHost::FollowDaemonNetworkCountry(const ctl::StatusReply& status) {
 }
 
 logupload::DaemonAnswer SdkHost::UploadDaemonLogs(const std::string& feedbackId) {
+  // This process's own log files ride with the request, by descriptor: the
+  // daemon may not read this user's home, and opens no path a client names.
+  // Closed when this returns; the daemon holds its own once the frame is sent.
+  const logupload::PassedLogFiles guiLogFiles = OpenGuiLogFiles();
   // The request start_provider sends, so a daemon with no device builds the
   // same one (client jwt, instance id, app version, the active network space).
   ctl::UploadLogsRequest request;
@@ -4889,10 +4926,12 @@ logupload::DaemonAnswer SdkHost::UploadDaemonLogs(const std::string& feedbackId)
   std::string error;
   std::string code;
   int64_t uploadId = 0;
-  if (control_.UploadLogs(request, &carrier, &error, &code, &uploadId)) {
+  if (control_.UploadLogs(request, guiLogFiles, &carrier, &error, &code, &uploadId)) {
     // its outcome comes through status (FollowDaemonLogUpload)
     pendingLogUploadId_ = uploadId;
-    g_message("support: urnetworkd took the log upload (%s device)", carrier.c_str());
+    g_message("support: urnetworkd took the log upload (%s device), with %zu of this app's log "
+              "files",
+              carrier.c_str(), guiLogFiles.Size());
     return logupload::DaemonAnswer::Accepted;
   }
   if (code == ctl::kCodeLogUploadBusy) {

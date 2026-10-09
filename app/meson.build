@@ -547,7 +547,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # sheet's .desktop parsing, Exec wrapping and launcher copies, the network
 # country's operator-code table and default-route rule, the support log's
 # lines and their filters, which device carries a feedback's log upload, for
-# how long, and the upload in flight off the daemon's main loop, how a launch
+# how long, and the upload in flight off the daemon's main loop, the GUI's own
+# log files that ride in it by descriptor over a socketpair, how a launch
 # reaches the running instance and how it answers, the user's autostart entry
 # behind the startup toggle, the Settings panes' fold and pane A's second
 # doors, and the daemon
@@ -668,6 +669,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/DiagnosticLogWiringTest.cpp',
     'tests/LogUploadTest.cpp',
     'tests/LogUploadWiringTest.cpp',
+    'tests/PassedLogFilesTest.cpp',
     'tests/DeveloperExitPresentationTest.cpp',
     'tests/InstanceHandoverTest.cpp',
     'tests/InstanceHandoverWiringTest.cpp',

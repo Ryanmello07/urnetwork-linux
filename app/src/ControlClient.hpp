@@ -23,10 +23,12 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "ControlProtocol.hpp"
+#include "PassedLogFiles.hpp"
 
 namespace urnw {
 
@@ -428,7 +430,13 @@ class ControlClient {
   // failure, a refusal (`code`, ctl::kCodeLogUploadBusy while one is in
   // flight) or a daemon that predates the verb (`error` is
   // ctl::kErrorUnknownVerb).
-  bool UploadLogs(const ctl::UploadLogsRequest& request, std::string* carrier = nullptr,
+  //
+  // `guiLogFiles` are this process's own log files: their names go in the
+  // request (gui_log_files) and their descriptors ride with its frame
+  // (FdPassing.hpp), for the daemon's zip. They stay the caller's to close; the
+  // daemon holds its own once the frame is sent.
+  bool UploadLogs(const ctl::UploadLogsRequest& request,
+                  const logupload::PassedLogFiles& guiLogFiles, std::string* carrier = nullptr,
                   std::string* error = nullptr, std::string* code = nullptr,
                   int64_t* uploadId = nullptr);
   // Hands the daemon a reset of the extenders this process made in its own
@@ -487,9 +495,10 @@ class ControlClient {
   // short write cannot have been decoded, let alone acted on. That is the
   // difference between "the daemon may have acted on this" and "this request
   // never happened", which is what decides whether a non-idempotent verb may
-  // be sent again.
+  // be sent again. `passFds` (optional) ride with the frame (SendAllLocked).
   std::optional<nlohmann::json> RoundTripLocked(const nlohmann::json& request, int64_t id,
-                                                bool* frameDelivered = nullptr);
+                                                bool* frameDelivered = nullptr,
+                                                const std::vector<int>* passFds = nullptr);
   // EnsureSession + round-trip.
   //
   // allowRetry: re-SEND once on a dead socket. FALSE for start_tunnel. The
@@ -506,9 +515,13 @@ class ControlClient {
   //
   // receiveTimeoutSeconds: per-verb. A synchronous start_tunnel legitimately
   // outlives the bound that fits every other verb.
+  //
+  // passFds: descriptors that ride with the request's frame (upload_logs'
+  // gui_log_files), attached again to a frame sent again.
   std::optional<nlohmann::json> CallLocked(ctl::Verb verb, nlohmann::json payload,
                                            std::string* error, bool allowRetry = true,
-                                           long receiveTimeoutSeconds = 0);
+                                           long receiveTimeoutSeconds = 0,
+                                           const std::vector<int>* passFds = nullptr);
   // The body of StopTunnel(), so the pinning-refusal path inside
   // StartTunnelEx can tear the daemon's session down without re-entering
   // mutex_ (std::mutex is not recursive: calling StopTunnel() there would
@@ -525,8 +538,10 @@ class ControlClient {
   void SetReceiveTimeoutLocked(long seconds);
   // `sent` (optional) receives the number of bytes that reached the peer,
   // valid on the failure path too, where it is the difference between "the
-  // socket was already dead" and "it died mid-frame".
-  bool SendAllLocked(const std::string& data, size_t* sent = nullptr);
+  // socket was already dead" and "it died mid-frame". `passFds` (optional)
+  // are attached to the first bytes sent (SCM_RIGHTS).
+  bool SendAllLocked(const std::string& data, size_t* sent = nullptr,
+                     const std::vector<int>* passFds = nullptr);
   // Reads one full line (frame) into `line`, false on EOF/error/timeout.
   bool ReadLineLocked(std::string& line);
 

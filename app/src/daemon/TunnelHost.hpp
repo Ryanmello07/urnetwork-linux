@@ -64,6 +64,7 @@
 #include "ControlProtocol.hpp"
 #include "LogUpload.hpp"
 #include "NetworkQuality.hpp"
+#include "PassedLogFiles.hpp"
 #include "Tunnel.hpp"
 #include "TunnelWatchdog.hpp"
 #include "daemon/ExitSampler.hpp"
@@ -230,6 +231,10 @@ class TunnelHost {
   // is admitted: the zip and the post run on their own thread, and status
   // reports the outcome under `uploadId`. `carrier` is logupload::ToString of
   // the device. Main loop only.
+  //
+  // `guiLogFiles` are the GUI's own log files, passed by descriptor
+  // (PassedLogFiles.hpp): the zip carries them under gui/, and they are closed
+  // once the sdk's call has read them, or when the request ends without one.
   struct LogUploadResult {
     bool ok = false;
     const char* carrier = "";
@@ -237,7 +242,8 @@ class TunnelHost {
     std::string error;
     const char* code = nullptr;  // a ctl::kCode* when !ok
   };
-  LogUploadResult UploadLogs(const ctl::UploadLogsRequest& request);
+  LogUploadResult UploadLogs(const ctl::UploadLogsRequest& request,
+                             logupload::PassedLogFiles guiLogFiles);
 
   // The account signed out (logout; SignOut.hpp, owner decision 2026-10-05:
   // each network starts fresh). Ends what runs as an explicit stop does (the
@@ -325,11 +331,12 @@ class TunnelHost {
   // count into status_. Requires opMutex_.
   void RefreshProviderStatusLocked();
   // UploadLogs' body once no bring-up owns the session: admits the upload
-  // (or starts the queued one, `queuedUploadId`), then hands it to its thread
-  // on the device that runs, or on a standalone one built for it. Requires
-  // opMutex_.
+  // (or starts the queued one, `queuedUploadId`), then hands it to its thread,
+  // with the GUI's log files, on the device that runs, or on a standalone one
+  // built for it. Requires opMutex_.
   LogUploadResult StartLogUploadLocked(const ctl::UploadLogsRequest& request,
-                                       int64_t queuedUploadId);
+                                       int64_t queuedUploadId,
+                                       logupload::PassedLogFiles guiLogFiles);
   // Closes the standalone upload device, waiting a bounded time as the
   // provider-only device's retire does. A no-op without one. Requires opMutex_.
   void RetireUploadDeviceLocked();
@@ -534,10 +541,11 @@ class TunnelHost {
   // The log upload in flight, shared with its thread and its callback, which
   // hold nothing else of this object (logupload::Flight: its own lock).
   std::shared_ptr<logupload::Flight> logUploadFlight_;
-  // A request that arrived while a bring-up owned the session, when, and the
-  // id the flight admitted it under. Main loop only (UploadLogs and the
-  // reaper), so it needs no lock.
+  // A request that arrived while a bring-up owned the session, when, the id
+  // the flight admitted it under, and the GUI's log files that came with it.
+  // Main loop only (UploadLogs and the reaper), so it needs no lock.
   std::optional<ctl::UploadLogsRequest> queuedUpload_;
+  logupload::PassedLogFiles queuedGuiLogFiles_;
   int64_t queuedUploadMillis_ = 0;
   int64_t queuedUploadId_ = 0;
   std::optional<urnet::IoLoop> ioLoop_;

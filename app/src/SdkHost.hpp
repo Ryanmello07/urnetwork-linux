@@ -798,7 +798,8 @@ class SdkHost {
   // predates the verb or refused, and the caller then falls back to the
   // DeviceRemote as before (logupload::GuiStepAfterDaemon). Blocking, bounded by
   // the control client's receive timeout, and never holding mutex_ across the
-  // call. Main loop.
+  // call. Main loop. This process's own newest glog files ride with the
+  // request, by descriptor, into the daemon's zip (PassedLogFiles.hpp).
   logupload::DaemonAnswer UploadDaemonLogs(const std::string& feedbackId);
   // The outcome of the upload UploadDaemonLogs left pending, once the daemon's
   // status names it finished (logupload::CompletionFor): logged, and the wait

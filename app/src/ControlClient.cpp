@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ControlClient.hpp"
 
+#include "FdPassing.hpp"
+
 #include <fstream>
 #include <sstream>
 
@@ -198,14 +200,20 @@ void ControlClient::SetReceiveTimeoutLocked(long seconds) {
   receiveTimeoutSeconds_ = seconds;
 }
 
-bool ControlClient::SendAllLocked(const std::string& data, size_t* sentOut) {
+bool ControlClient::SendAllLocked(const std::string& data, size_t* sentOut,
+                                  const std::vector<int>* passFds) {
   size_t sent = 0;
   if (sentOut) *sentOut = 0;
+  // The descriptors go with the first bytes that leave, and only with those.
+  const std::vector<int> noFds;
+  const std::vector<int>* fds = passFds != nullptr ? passFds : &noFds;
   while (sent < data.size()) {
 #ifdef MSG_NOSIGNAL
-    const ssize_t n = ::send(fd_, data.data() + sent, data.size() - sent, MSG_NOSIGNAL);
+    const ssize_t n = fdpass::SendWithFds(fd_, data.data() + sent, data.size() - sent,
+                                          sent == 0 ? *fds : noFds, MSG_NOSIGNAL);
 #else
-    const ssize_t n = ::send(fd_, data.data() + sent, data.size() - sent, 0);
+    const ssize_t n = fdpass::SendWithFds(fd_, data.data() + sent, data.size() - sent,
+                                          sent == 0 ? *fds : noFds, 0);
 #endif
     if (n <= 0) {
       if (n < 0 && errno == EINTR) continue;
@@ -266,12 +274,13 @@ bool ControlClient::ReadLineLocked(std::string& line) {
 }
 
 std::optional<nlohmann::json> ControlClient::RoundTripLocked(const nlohmann::json& request,
-                                                             int64_t id, bool* frameDelivered) {
+                                                             int64_t id, bool* frameDelivered,
+                                                             const std::vector<int>* passFds) {
   if (frameDelivered) *frameDelivered = false;
   if (fd_ < 0) return std::nullopt;
   size_t sent = 0;
   const std::string frame = ctl::EncodeFrame(request);
-  const bool ok = SendAllLocked(frame, &sent);
+  const bool ok = SendAllLocked(frame, &sent, passFds);
   // A frame is one LINE (EncodeFrame ends in '\n'), so a short write cannot
   // have produced anything the daemon will decode, let alone act on. Only a
   // complete write puts the request in the daemon's hands.
@@ -479,7 +488,8 @@ long ControlClient::PolkitAwareTimeoutLocked() const {
 
 std::optional<nlohmann::json> ControlClient::CallLocked(ctl::Verb verb, nlohmann::json payload,
                                                         std::string* error, bool allowRetry,
-                                                        long receiveTimeoutSeconds) {
+                                                        long receiveTimeoutSeconds,
+                                                        const std::vector<int>* passFds) {
   constexpr int kMaxAttempts = 2;
   // The previous request's verdict describes the previous request. Clearing it
   // here — before EnsureSession, so it is gone even when we never get a socket —
@@ -491,8 +501,8 @@ std::optional<nlohmann::json> ControlClient::CallLocked(ctl::Verb verb, nlohmann
     SetReceiveTimeoutLocked(receiveTimeoutSeconds);
     const int64_t id = nextId_++;
     bool frameDelivered = false;
-    if (auto reply =
-            RoundTripLocked(ctl::MakeRequest(verb, id, payload), id, &frameDelivered)) {
+    if (auto reply = RoundTripLocked(ctl::MakeRequest(verb, id, payload), id, &frameDelivered,
+                                     passFds)) {
       NoteReplyLocked(verb, *reply);
       return reply;
     }
@@ -846,7 +856,8 @@ std::optional<ctl::ProviderStatsReply> ControlClient::ProviderStats(
   return reply->get<ctl::ProviderStatsReply>();
 }
 
-bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request, std::string* carrier,
+bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request,
+                               const logupload::PassedLogFiles& guiLogFiles, std::string* carrier,
                                std::string* error, std::string* code, int64_t* uploadId) {
   std::scoped_lock lock(mutex_);
   if (const auto invalid = ctl::ValidateUploadLogsRequest(request)) {
@@ -855,11 +866,16 @@ bool ControlClient::UploadLogs(const ctl::UploadLogsRequest& request, std::strin
     if (code) *code = invalid->code == nullptr ? std::string() : std::string(invalid->code);
     return false;
   }
+  // This process's own log files ride with the frame: their names in the
+  // request, their descriptors attached to its bytes, in the same order.
+  ctl::UploadLogsRequest withGuiLogFiles = request;
+  withGuiLogFiles.gui_log_files = guiLogFiles.Names();
+  const std::vector<int> guiLogFds = guiLogFiles.Fds();
   // Not re-sent once delivered: a second frame would start a second upload,
   // which the server refuses (one per network per 5 minutes). The caller falls
   // back to its own path instead.
-  const auto reply = CallLocked(ctl::Verb::UploadLogs, nlohmann::json(request), error,
-                                /*allowRetry=*/false);
+  const auto reply = CallLocked(ctl::Verb::UploadLogs, nlohmann::json(withGuiLogFiles), error,
+                                /*allowRetry=*/false, /*receiveTimeoutSeconds=*/0, &guiLogFds);
   if (!reply) return false;
   if (!ctl::ReplyOk(*reply)) {
     if (error) *error = ctl::ReplyError(*reply);
