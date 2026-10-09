@@ -555,4 +555,19 @@ constexpr BridgeErrorText BridgeErrorTextFor(std::string_view code) noexcept {
   }
   return {nullptr, nullptr, false};
 }
+
+// The payout wallet's connect sheet (SolanaWalletSheet) reads the page's codes
+// as BridgeErrorTextFor does, except a missing extension: the sheet also takes
+// a typed address, which works with any wallet, so that line points at its
+// Enter address manually control in the control's own words. Signing in has no
+// manual entry and keeps BridgeErrorTextFor's words.
+constexpr BridgeErrorText PayoutBridgeErrorTextFor(std::string_view code) noexcept {
+  if (code == "extension_not_found") {
+    return {"solana_wallet_error_extension_not_found",
+            "The {} extension was not found in this browser. Install it and try again, or "
+            "choose “Enter address manually” to paste your wallet address.",
+            true};
+  }
+  return BridgeErrorTextFor(code);
+}
 }  // namespace urnw::solana
