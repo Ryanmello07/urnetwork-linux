@@ -206,6 +206,7 @@ executable('urnetwork-gui',
     'src/ReferralRoyalty.cpp',
     'src/ReferralPanel.cpp',
     'src/ReferralsPage.cpp',
+    'src/SessionsPage.cpp',
     'src/HomeShell.cpp',
     'src/UrMotion.cpp',
     'src/LoginCarousel.cpp',
@@ -718,6 +719,14 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/HomeEntranceWiringTest.cpp',
     'tests/ConnectCanvasRimWiringTest.cpp',
     'tests/PlanPickerWiringTest.cpp',
+    'tests/ClientInfoWiringTest.cpp',
+    'tests/ApiSignOutWiringTest.cpp',
+    'tests/GlyphPathTest.cpp',
+    'tests/AccountRowIconsTest.cpp',
+    'tests/RelativeTimeSpanTest.cpp',
+    'tests/SessionsPresentationTest.cpp',
+    'tests/SessionsBindingTest.cpp',
+    'tests/SessionsWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -822,6 +831,13 @@ urnetwork_tests = executable('urnetwork-tests',
               # HomeEntranceWiringTest reads the root stack's sign-in swap the same way.
               # ConnectCanvasRimWiringTest reads the hero canvas's rim and orbits the same way.
               # PlanPickerWiringTest reads the plan cards and their css the same way.
+              # ClientInfoWiringTest reads the GUI's and the daemon's Api adoption
+              # the same way, and ApiSignOutWiringTest the Api's sign-out.
+              # AccountRowIconsTest reads the Account pane's rows, the kit's
+              # leading icon and its css the same way.
+              # RelativeTimeSpanTest reads RelativeTime's words the same way, and
+              # SessionsWiringTest the Sessions page, its Account row, the window's
+              # navigation and the rail; SessionsPresentationTest reads po/en.po.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

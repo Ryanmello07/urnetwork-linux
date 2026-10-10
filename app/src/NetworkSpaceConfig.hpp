@@ -49,6 +49,20 @@ inline std::string UrDeviceSpec() {
 #endif
 }
 
+// The client info this app reports with every api request and connect auth
+// (sdk Api.SetClientInfo; REVOKE-UI-FINAL.md §1.13): the device type and the
+// app's build version, nothing more (the SDK adds its own version). The server
+// records it with each observed use of a session, which is what the account's
+// Sessions list shows ("Linux · 2026.10.8"). Both processes report it: the GUI
+// on every Api it takes from its space (SdkHost), the daemon on the space's
+// Api its DeviceLocal is built from (TunnelHost), whose connect auth and
+// requests are uses of the same session.
+inline constexpr const char* kClientInfoDeviceType = "linux";
+
+inline void ReportClientInfo(const urnet::Api& api, const std::string& appVersion) {
+  api.setClientInfo(urnet::newClientInfo(kClientInfoDeviceType, appVersion));
+}
+
 // Moves a space stored under the retired ur.network/main key to the current
 // key (NetworkSpaceBootstrap.hpp). Every manager owner calls this right after
 // newNetworkSpaceManager, before it takes any NetworkSpace from the manager.

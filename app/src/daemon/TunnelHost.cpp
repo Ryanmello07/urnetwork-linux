@@ -714,6 +714,12 @@ urnet::DeviceLocal TunnelHost::NewDeviceLocked(const std::string& byJwt,
                                                const std::string& instanceId,
                                                const std::string& appVersionIn) {
   const std::string appVersion = appVersionIn.empty() ? kUrAppVersionFallback : appVersionIn;
+  // The device's connect auth and its requests carry the client info of the
+  // space's Api (the sdk reads it as the DeviceLocal is built and on every
+  // token change), and the server records it with each use of the session:
+  // without it the account's Sessions list showed this machine's tunnel as
+  // "Unknown device". The version is the one the device reports beside it.
+  ReportClientInfo(networkSpace_->getApi(), appVersion);
   const bool hadStoredMaterial = HasStoredKeyMaterial();
   bool restoreFailed = false;
   // Both constructions size the device at the measured host's memory tier

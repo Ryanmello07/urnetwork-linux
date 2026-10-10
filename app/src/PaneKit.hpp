@@ -179,8 +179,20 @@ struct PaneListRowButton {
 PaneListRowButton MakePaneListRowButton(int height = 36);
 void SetPaneListRowSelected(PaneListRowButton& row, bool selected);
 
+// The leading icon a two-line row may carry (`leading` below; the Account
+// pane gives every row one): 16px, then the 10px the row button's grid keeps
+// between its parts, so icon rows of either species put their titles in one
+// column. A line under them with no icon of its own (the Profile group's auth
+// and status lines) insets by kRowIconInset to stay in that column.
+inline constexpr int kRowIconPx = 16;
+inline constexpr int kRowIconGap = 10;
+inline constexpr int kRowIconInset = kRowIconPx + kRowIconGap;
+
 // The two-line row: title + one TRIMMED explanation line, trailing control
 // slot (44px — a list of explained rows picks the tall height throughout).
+// `leading`, when given, is the row's icon in front of the title: muted
+// (.ur-row-icon) and hidden from the accessibility tree, the title naming the
+// row.
 struct PaneTwoLineRow {
   Gtk::Widget* root = nullptr;
   Gtk::Label* title = nullptr;
@@ -188,10 +200,11 @@ struct PaneTwoLineRow {
   Gtk::Box* trailing = nullptr;
 };
 PaneTwoLineRow MakePaneTwoLineRow(const Glib::ustring& title,
-                                  const Glib::ustring& note = {}, int height = 44);
+                                  const Glib::ustring& note = {}, int height = 44,
+                                  Gtk::Widget* leading = nullptr);
 
 // The same two-line row as a button (opens something): trailing muted value +
-// chevron, same metrics, same hairline.
+// chevron, same metrics, same hairline, the same optional leading icon.
 struct PaneTwoLineRowButton {
   Gtk::Button* root = nullptr;
   Gtk::Label* title = nullptr;
@@ -200,7 +213,8 @@ struct PaneTwoLineRowButton {
 };
 PaneTwoLineRowButton MakePaneTwoLineRowButton(const Glib::ustring& title,
                                               const Glib::ustring& note = {},
-                                              int height = 44);
+                                              int height = 44,
+                                              Gtk::Widget* leading = nullptr);
 
 // A table row: N star-weighted cells, one fixed height, bottom hairline. The
 // leading `textColumns` cells read left as text; the rest read right as

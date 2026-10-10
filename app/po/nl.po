@@ -2064,6 +2064,11 @@ msgctxt "date_payout"
 msgid "{} Payout"
 msgstr "{} Uitbetaling"
 
+#. Compact relative-time label with an abbreviated days unit ("3d ago"), shown by the windows and linux relative-time formatters (the Sessions screen's Last used) for events a day to 7 days old; older events show a date. The argument is the elapsed days. Not a plural: the abbreviated unit does not inflect, but the word order and the unit abbreviation localize.
+msgctxt "days_ago_abbrev"
+msgid "{}d ago"
+msgstr "{} d geleden"
+
 #. Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).
 msgctxt "default_daily_data"
 msgid "By default, you get {} every day."
@@ -7434,6 +7439,226 @@ msgstr "Verstuurd!"
 msgctxt "sent_thanks_for_your_feedback"
 msgid "Sent! Thanks for your feedback."
 msgstr "Verzonden! Bedankt voor je feedback."
+
+#. Sessions screen (Account > Sessions): shown on a row when signing its session out failed.
+msgctxt "sessions_action_failed"
+msgid "Couldn't sign out this session. Try again."
+msgstr "Kan deze sessie niet uitloggen. Probeer het opnieuw."
+
+#. Sessions screen (Account > Sessions): body of the confirmation before signing another session out. {device} is the row's device label ("Android") and {place} its approximate location ("Chicago, Illinois, United States"), both inserted as they are, so no case ending or article can attach to them.
+msgctxt "sessions_confirm_body"
+msgid "{0} in {1} will be signed out."
+msgstr "{0} ({1}) wordt uitgelogd."
+
+#. Sessions screen (Account > Sessions): body of the confirmation before signing another session out, when its location is unknown. {device} is the row's device label ("Android"), inserted as it is.
+msgctxt "sessions_confirm_body_no_place"
+msgid "{} will be signed out."
+msgstr "{} wordt uitgelogd."
+
+#. Sessions screen (Account > Sessions): body of the confirmation before Sign out all other sessions. Must not say that every device is signed out: anyone who has the sign-in details can sign in again.
+msgctxt "sessions_confirm_others_body"
+msgid "Every other session in this list will be signed out. This session stays signed in. Anyone who knows your sign-in details can still sign in again."
+msgstr "Alle andere sessies in deze lijst worden uitgelogd. Deze sessie blijft ingelogd. Iedereen die je inloggegevens kent, kan nog steeds opnieuw inloggen."
+
+#. Sessions screen (Account > Sessions): title of the confirmation before Sign out all other sessions. Cancel is the default.
+msgctxt "sessions_confirm_others_title"
+msgid "Sign out all other sessions?"
+msgstr "Alle andere sessies uitloggen?"
+
+#. Sessions screen (Account > Sessions): body of the confirmation before signing out the session this app is using. Confirming signs this app out.
+msgctxt "sessions_confirm_self_body"
+msgid "This is the session you're using. This app will be signed out."
+msgstr "Dit is de sessie die je nu gebruikt. Deze app wordt uitgelogd."
+
+#. Sessions screen (Account > Sessions): title of the confirmation before signing one session out, this app's own included. Cancel is the default.
+msgctxt "sessions_confirm_title"
+msgid "Sign out this session?"
+msgstr "Deze sessie uitloggen?"
+
+#. Sessions screen (Account > Sessions): the row's copy action (long-press or context menu item, or a copy button) that puts the full session ID on the clipboard.
+msgctxt "sessions_copy_id"
+msgid "Copy session ID"
+msgstr "Sessie-ID kopiëren"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session signed in from the Android app, before its app version ("Android · 2026.10.8-1067"). The operating system's name, unchanged in every language.
+msgctxt "sessions_device_android"
+msgid "Android"
+msgstr "Android"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session signed in from the command-line tools.
+msgctxt "sessions_device_cli"
+msgid "Command line"
+msgstr "Opdrachtregel"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session signed in from the iOS app, before its app version. The operating system's name, unchanged in every language.
+msgctxt "sessions_device_ios"
+msgid "iOS"
+msgstr "iOS"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session signed in from the Linux app, before its app version. The operating system's name, unchanged in every language.
+msgctxt "sessions_device_linux"
+msgid "Linux"
+msgstr "Linux"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session signed in from the macOS app, before its app version. The operating system's name, unchanged in every language.
+msgctxt "sessions_device_macos"
+msgid "macOS"
+msgstr "macOS"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session that a server signed in with.
+msgctxt "sessions_device_server"
+msgid "Server"
+msgstr "Server"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session that reported no device type, or one the app does not know.
+msgctxt "sessions_device_unknown"
+msgid "Unknown device"
+msgstr "Onbekend apparaat"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session signed in from the ur.io web app in a browser. Not tagged apple: Apple's catalog is keyed by the English source, and window_type_quality already carries "Web" there, so the apple screen reads that entry. Translated as window_type_quality is, so every platform shows the same words. The exception is Hebrew: window_type_quality's גלישה ("browsing") names the connect drawer's Web mode, so this key says ווב.
+msgctxt "sessions_device_web"
+msgid "Web"
+msgstr "Web"
+
+#. Sessions screen (Account > Sessions), row line 1: the device type of a session signed in from the Windows app, before its app version. The operating system's name, unchanged in every language.
+msgctxt "sessions_device_windows"
+msgid "Windows"
+msgstr "Windows"
+
+#. Sessions screen (Account > Sessions): shown in place of the list when it loaded with no sessions.
+msgctxt "sessions_empty"
+msgid "No active sessions"
+msgstr "Geen actieve sessies"
+
+#. Sessions screen (Account > Sessions), end of row line 3: the first 8 characters of the session ID, which the user can copy. {id} is that hex text, e.g. "01a1f3c2".
+msgctxt "sessions_id"
+msgid "ID {}"
+msgstr "ID {}"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session of a client that authenticated with an API key.
+msgctxt "sessions_kind_api_key_client"
+msgid "API key"
+msgstr "API-sleutel"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created with Sign in with Apple. Not tagged apple: Apple's catalog is keyed by the English source, and apple already carries "Apple" there, so the apple screen reads that entry. Translated as apple is, so every platform shows the same words.
+msgctxt "sessions_kind_apple"
+msgid "Apple"
+msgstr "Apple"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created with an auth code made on another signed-in device or with the command-line tools. Not tagged apple: Apple's catalog is keyed by the English source, and auth_code already carries "Auth code" there, so the apple screen reads that entry. Translated as auth_code is, so every platform shows the same words.
+msgctxt "sessions_kind_auth_code"
+msgid "Auth code"
+msgstr "Auth-code"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created when a signed-in device adopted (paired with) a discoverable device.
+msgctxt "sessions_kind_device_adopt"
+msgid "Device pairing"
+msgstr "Apparaat koppelen"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created with Sign in with Google. Not tagged apple: Apple's catalog is keyed by the English source, and google already carries "Google" there, so the apple screen reads that entry. Translated as google is, so every platform shows the same words.
+msgctxt "sessions_kind_google"
+msgid "Google"
+msgstr "Google"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with a password. Not tagged apple: Apple's catalog is keyed by the English source, and password_label already carries "Password" there, so the apple screen reads that entry. Translated as password_label is, so every platform shows the same words.
+msgctxt "sessions_kind_password"
+msgid "Password"
+msgstr "Wachtwoord"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with the recovery phrase (an instant account's seedphrase). Each language says it as the store's seedphrase key does, the words its sign-in screen used.
+msgctxt "sessions_kind_seedphrase"
+msgid "Recovery phrase"
+msgstr "Seedphrase"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created when the account itself was created.
+msgctxt "sessions_kind_signup"
+msgid "New account"
+msgstr "Nieuw account"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created through single sign-on with another identity provider.
+msgctxt "sessions_kind_sso"
+msgid "Single sign-on"
+msgstr "Eenmalige aanmelding"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with a verification code sent by email or SMS. Worded as verify_input_label, except where that reads the same as auth_code (cs, he, ja, ko, th, zh): the list can show both methods, so they must differ in every language.
+msgctxt "sessions_kind_verify"
+msgid "Verification code"
+msgstr "Verificatiecode"
+
+#. Sessions screen (Account > Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with a wallet's signature. Not tagged apple: Apple's catalog is keyed by the English source, and wallet already carries "Wallet" there, so the apple screen reads that entry. Translated as wallet is, so every platform shows the same words.
+msgctxt "sessions_kind_wallet"
+msgid "Wallet"
+msgstr "Wallet"
+
+#. Sessions screen (Account > Sessions), row line 2: shown instead of the Last used time when the server has no record of the session being used.
+msgctxt "sessions_last_use_unavailable"
+msgid "Last use unavailable"
+msgstr "Laatste gebruik niet beschikbaar"
+
+#. Sessions screen (Account > Sessions), row line 2, after the location: when the server last saw the session used. {time} is a relative time up to 7 days (the now, seconds_ago_abbrev ... days_ago_abbrev forms, e.g. "5m ago" or "now"), then a date ("Oct 3"), so the wording must read with either.
+msgctxt "sessions_last_used"
+msgid "Last used {}"
+msgstr "Laatst gebruikt: {}"
+
+#. Sessions screen (Account > Sessions): footer note under the list explaining the Last used time. "Last used" is the label of sessions_last_used; say it with that key's words.
+msgctxt "sessions_last_used_help"
+msgid "Last used is the most recent sign-in activity the server saw. It can lag a few minutes, and the location is approximate."
+msgstr "“Laatst gebruikt” is de meest recente inlogactiviteit die de server heeft gezien. Dit kan een paar minuten achterlopen en de locatie is bij benadering."
+
+#. Sessions screen (Account > Sessions): footer note shown when sign-ins from older app versions are not all listed yet; each appears once its sign-in renews. Must not claim that signing sessions out here ends every sign-in.
+msgctxt "sessions_legacy_note"
+msgid "Sign-ins from older app versions appear here once they renew. To end every sign-in, change your sign-in details."
+msgstr "Inlogsessies van oudere appversies verschijnen hier zodra ze worden vernieuwd. Wijzig je inloggegevens om alle inlogsessies te beëindigen."
+
+#. Sessions screen (Account > Sessions): shown when the list failed to load the first time, above the try_again button.
+msgctxt "sessions_load_failed"
+msgid "Couldn't load sessions."
+msgstr "Kan sessies niet laden."
+
+#. Sessions screen (Account > Sessions): non-blocking notice when a refresh failed. The screen keeps showing the list it had.
+msgctxt "sessions_refresh_failed"
+msgid "Couldn't refresh. Showing the last list."
+msgstr "Kan niet vernieuwen. De laatste lijst wordt getoond."
+
+#. Sessions screen (Account > Sessions): the screen-reader action on a row that signs its session out (the row's visible control is the sign_out key). {device} is the row's device label, e.g. "Android" or "Unknown device".
+msgctxt "sessions_sign_out_accessibility"
+msgid "Sign out {}"
+msgstr "{} uitloggen"
+
+#. Sessions screen (Account > Sessions): the button at the bottom of the list that signs out every session except this one. Shown only when the list has this app's session and at least one other.
+msgctxt "sessions_sign_out_all_others"
+msgid "Sign out all other sessions"
+msgstr "Alle andere sessies uitloggen"
+
+#. Sessions screen (Account > Sessions), row line 3: when the session was created, i.e. signed in. {date} is a localized date, e.g. "Oct 3". The sign-in method and the short ID follow: "Signed in Oct 3 · Google · ID 01a1f3c2".
+msgctxt "sessions_signed_in"
+msgid "Signed in {}"
+msgstr "Ingelogd op {}"
+
+#. Shown when this app was signed out because another device signed its session out on the Sessions screen (Account > Sessions). Only when the app knows that was the cause; otherwise the generic sign-in-required wording applies.
+msgctxt "sessions_signed_out_remotely"
+msgid "This session was signed out from another device."
+msgstr "Deze sessie is uitgelogd vanaf een ander apparaat."
+
+#. Sessions screen (Account > Sessions): shown on a row, or on the Sign out all other sessions button, while its sign-out is pending. The control stays disabled meanwhile.
+msgctxt "sessions_signing_out"
+msgid "Signing out…"
+msgstr "Uitloggen…"
+
+#. Sessions screen (Account > Sessions): the tag on the row of the session this app is signed in with (always the first row).
+msgctxt "sessions_this_session"
+msgid "This session"
+msgstr "Deze sessie"
+
+#. Sessions screen (Account > Sessions): the screen's title, and the label of the Account row after Profile that opens it. The screen lists the account's signed-in sessions, one per signed-in app or device, and signs them out.
+msgctxt "sessions_title"
+msgid "Sessions"
+msgstr "Sessies"
+
+#. Sessions screen (Account > Sessions): shown in place of the list when the server does not support session management yet.
+msgctxt "sessions_unsupported"
+msgid "Sessions aren't available yet."
+msgstr "Sessies zijn nog niet beschikbaar."
 
 #. Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).
 msgctxt "set_coldkey"

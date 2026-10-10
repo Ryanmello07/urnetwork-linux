@@ -1271,6 +1271,10 @@ class SdkHost {
   ControlClient& Control() { return control_; }
 
  private:
+  // Requires mutex_. Run right after every `api_ =`: the Api just taken from
+  // the space reports this app's client info (NetworkSpaceConfig.hpp
+  // ReportClientInfo), and its own sign-out reaches the auth-invalid handler.
+  void AdoptSpaceApiLocked();
   void RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done);
   // Shared routing for NetworkCreateResult (sign-up + wallet sign-up).
   // `bittensorWalletId` is the Bittensor wallet that signed ("" for none).
@@ -1750,6 +1754,10 @@ class SdkHost {
   std::atomic<bool> daemonTunnelGone_{false};
   StatsHandler onStats_;
   DrawerEventHandler onDrawerEvent_;
+  // The Api's own sign-out (AdoptSpaceApiLocked), subscribed on the current
+  // api_ and replaced with it. Declared last so it closes before the handler
+  // it calls and before the Api it listens to.
+  std::optional<urnet::Sub> apiLogoutSub_;
 };
 
 }  // namespace urnw

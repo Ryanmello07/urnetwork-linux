@@ -233,6 +233,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     UpdateCarouselRunning();
     if (connectPage_) connectPage_->SetPresentationActive(windowVisible_);
     if (earningsPage_) earningsPage_->SetPresentationActive(windowVisible_);
+    // the Sessions controller's foreground (its visibility is the page's map)
+    if (sessionsPage_) sessionsPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
     if (windowVisible_) {
       // RE-READ, never replay: SetPresentationActive(true) above has just
@@ -479,6 +481,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (earningsPage_) earningsPage_->SetPreviewMode(true);
     if (accountPage_) accountPage_->SetPreviewMode(true);
     if (referralsPage_) referralsPage_->SetPreviewMode(true);
+    if (sessionsPage_) sessionsPage_->SetPreviewMode(true);
     // DEFERRED to idle, and guarded: a destination's Load() runs API/SDK
     // reads, and in preview there is no session — an exception escaping the
     // WINDOW CONSTRUCTOR would take the process down before anything renders
@@ -494,6 +497,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
         if (shell_ && !tag.empty() && tag != "1") shell_->Navigate(tag);
         if (tag == "account" && accountPage_) accountPage_->ShowPreviewState();
         if (tag == "referrals" && referralsPage_) referralsPage_->ShowPreviewState();
+        if (tag == "sessions" && sessionsPage_) sessionsPage_->ShowPreviewState();
         if (tag == "wallet" && earningsPage_) shell_->Navigate("earnings");
         if ((tag == "earnings" || tag == "wallet") && earningsPage_) {
           // ORDER MATTERS: the empty settle is what a no-session preview looks
@@ -1779,6 +1783,26 @@ void MainWindow::BuildHome() {
     if (shell_) shell_->Navigate("referrals");
   };
   shell_->SetPage("referrals", *referralsPage_);
+  // Account -> Sessions: a destination without a rail item too, reached from
+  // Account's Sessions row and left through its own "‹ Account".
+  sessionsPage_ = Gtk::make_managed<SessionsPage>(host_);
+  sessionsPage_->on_snackbar = [this](const Glib::ustring& message, bool error) {
+    if (shell_) {
+      shell_->snackbar().Show(message, error ? kit::Snackbar::Severity::Error
+                                             : kit::Snackbar::Severity::Success);
+    }
+  };
+  sessionsPage_->sheet_open = [this] { return sheetOpen_; };
+  sessionsPage_->on_sheet_open_changed = [this](bool open) { sheetOpen_ = open; };
+  sessionsPage_->on_back = [this] {
+    if (shell_) shell_->Navigate("account");
+  };
+  accountPage_->on_open_sessions = [this] {
+    if (shell_) shell_->Navigate("sessions");
+  };
+  shell_->SetPage("sessions", *sessionsPage_);
+  // the window may already be presenting: the page's foreground starts there
+  sessionsPage_->SetPresentationActive(windowVisible_);
   supportPage_ = Gtk::make_managed<SupportPage>(host_);
   supportPage_->on_snackbar = [this](const Glib::ustring& message, bool error) {
     if (shell_) {
@@ -1820,6 +1844,7 @@ void MainWindow::BuildHome() {
       referralsPage_->Load();
       balance_.FetchNow();  // the card is painted from the store's referral figures
     }
+    if (tag == "sessions" && sessionsPage_) sessionsPage_->Load();
     // Settings owns the account-subject sheets too, so it loads for both tags.
     if ((tag == "settings" || tag == "account") && settingsPage_) settingsPage_->Load();
     if (developerPage_) {
@@ -2358,6 +2383,8 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // code, the departed plan): a sign-out must wipe it, not merely reload it.
     if (accountPage_) accountPage_->ResetForSignOut();
     if (referralsPage_) referralsPage_->ResetForSignOut();
+    // the departed account's sessions and their controller
+    if (sessionsPage_) sessionsPage_->ResetForSignOut();
     // Home's activity view starts fresh too: its filters, search and selection
     if (connectPage_) connectPage_->ResetForSignOut();
     // The post-sign-up onboarding belongs to the network just created here: a

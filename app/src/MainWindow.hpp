@@ -38,6 +38,7 @@
 #include "ReferralsPage.hpp"
 #include "SdkHost.hpp"
 #include "SeedphraseSheet.hpp"
+#include "SessionsPage.hpp"
 #include "ProCelebration.hpp"
 #include "GuestConversionSheet.hpp"
 #include "SubscriptionBalance.hpp"
@@ -291,6 +292,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   EarningsPage* earningsPage_ = nullptr;
   AccountPage* accountPage_ = nullptr;
   ReferralsPage* referralsPage_ = nullptr;  // reached from Account's Referrals row
+  SessionsPage* sessionsPage_ = nullptr;    // reached from Account's Sessions row
   // The in-app updater (UpdateChecker.hpp): built after the pages, bound to
   // Settings (the notice + the auto-check toggle) and Developer (the manual
   // check), then started. Its worker is joined when the window goes.

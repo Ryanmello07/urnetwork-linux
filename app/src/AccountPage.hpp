@@ -8,7 +8,9 @@
 //     bar and its legend, the upgrade/create-account action, the daily balance
 //     and referral figures, Redeem Balance Code, Manage Subscription.
 //   Pane B "Account" (*) — who the network IS: the profile group (network-name
-//     view row + edit panel, the auth line, the status line, update password),
+//     view row + edit panel, the auth line, the status line, update password,
+//     and the Sessions row that opens the Sessions page; every row of this
+//     pane leads with an icon),
 //     the security group (login methods + add + auth code + client id), the
 //     referral group (bonus code, referral network, summary, royalty badge)
 //     and the danger group (sign out, delete account).
@@ -188,6 +190,8 @@ class AccountPage : public Gtk::Box {
   std::function<void()> on_open_redeem;
   // the Referrals row: the window navigates to the Refer and earn page
   std::function<void()> on_open_referrals;
+  // the Sessions row: the window navigates to the Sessions page
+  std::function<void()> on_open_sessions;
   // The window's one-modal-at-a-time gate (§0.8): every sheet path asks first
   // and reports both edges.
   std::function<bool()> sheet_open;
