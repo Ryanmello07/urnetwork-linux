@@ -17,6 +17,7 @@
 #include "AddSignInFlow.hpp"
 #include "AuthViews.hpp"
 #include "BittensorManualSheet.hpp"
+#include "BrandIcons.hpp"
 #include "BittensorWalletFlow.hpp"
 #include "WalletBridgeRoute.hpp"
 #include "DeleteAccountOutcome.hpp"
@@ -201,11 +202,20 @@ PaddedRow MakePaddedRow(int padY) {
   return out;
 }
 
+// The leading icon of an Account pane row (REVOKE-UI-FINAL.md §1.2: every row
+// of the Account list has one, the Sessions row's face profile among them).
+// Drawn from Material Design Icons path data (MdiGlyphs.hpp), never themed:
+// a themed icon a theme lacks renders as a blank.
+Gtk::Widget* RowIcon(MdiGlyph glyph) {
+  return Gtk::make_managed<GlyphIcon>(glyph, kit::kRowIconPx);
+}
+
 // The two-line row with an action verb on the right. GTK carries no separate
 // FullDescription channel, so the button announces as "verb. row label".
 Gtk::Button* AddButtonRow(Gtk::Box& host, const Glib::ustring& label,
-                          const Glib::ustring& note, const Glib::ustring& action) {
-  auto row = kit::MakePaneTwoLineRow(label, note, kRowTall);
+                          const Glib::ustring& note, const Glib::ustring& action,
+                          MdiGlyph glyph) {
+  auto row = kit::MakePaneTwoLineRow(label, note, kRowTall, RowIcon(glyph));
   auto* button = Gtk::make_managed<Gtk::Button>(action);
   button->set_valign(Gtk::Align::CENTER);
   kit::SetAccessibleLabel(*button, action + ". " + label);
@@ -222,9 +232,9 @@ struct ValueActionRow {
 };
 
 ValueActionRow AddValueActionRow(Gtk::Box& host, const Glib::ustring& label,
-                                 const Glib::ustring& action) {
+                                 const Glib::ustring& action, MdiGlyph glyph) {
   ValueActionRow out;
-  auto row = kit::MakePaneTwoLineRow(label, {}, kRowTall);
+  auto row = kit::MakePaneTwoLineRow(label, {}, kRowTall, RowIcon(glyph));
   out.value = Gtk::make_managed<Gtk::Label>();
   out.value->add_css_class("ur-value");  // family + size; the tone is a markup run
   out.value->set_xalign(1.f);
@@ -2087,9 +2097,11 @@ void AccountPage::BuildExtendersGroup(Gtk::Box& host) {
 void AccountPage::BuildProfileGroup(Gtk::Box& host) {
   host.append(*kit::MakePaneGroupHeader(T_("profile", "Profile")).root);
 
-  // 1. the network-name VIEW row. Exactly one of {row, edit panel} shows.
+  // 1. the network-name VIEW row. Exactly one of {row, edit panel} shows. Its
+  //    icon is the profile's (android nav_list_item_user, apple
+  //    ur.symbols.user.circle: a user in a circle).
   nameRow_ = kit::MakePaneTwoLineRowButton(T_("network_name_label", "Network name"), {},
-                                           kRowTall);
+                                           kRowTall, RowIcon(MdiGlyph::AccountCircle));
   // §3.1.2 + the spec's glyph map: U+E70F pencil, NOT the chevron every other
   // row on this pane carries. This row is the only one that edits in place.
   RetargetRowGlyph(*nameRow_.root, "document-edit-symbolic");
@@ -2130,7 +2142,8 @@ void AccountPage::BuildProfileGroup(Gtk::Box& host) {
   }
 
   // 3. the auth line — COLLAPSED whenever its text is empty (an empty
-  //    fixed-height row is a 38px hole).
+  //    fixed-height row is a 38px hole). It says more about the row above
+  //    and has no icon of its own, so it sits in the titles' column.
   {
     auto* row = kit::MakePaneRow(kRowAuthLine);
     authText_ = Gtk::make_managed<Gtk::Label>();
@@ -2138,6 +2151,7 @@ void AccountPage::BuildProfileGroup(Gtk::Box& host) {
     authText_->set_xalign(0);
     authText_->set_hexpand(true);
     authText_->set_ellipsize(Pango::EllipsizeMode::END);
+    authText_->set_margin_start(kit::kRowIconInset);
     if (auto* inner = dynamic_cast<Gtk::Box*>(row->get_first_child())) {
       inner->append(*authText_);
     }
@@ -2147,16 +2161,18 @@ void AccountPage::BuildProfileGroup(Gtk::Box& host) {
   }
 
   // 4. the status line: the account load state, the save verdict, or the
-  //    password-reset outcome — one line, three writers, one voice.
+  //    password-reset outcome — one line, three writers, one voice. In the
+  //    titles' column, like the auth line.
   {
     auto prose = MakeProseRow({}, kStatePadY);
     statusLine_ = prose.line;
+    statusLine_->set_margin_start(kit::kRowIconInset);
     host.append(*prose.root);
   }
 
-  // 5. update password.
-  sendResetButton_ =
-      AddButtonRow(host, T_("update_password", "Update password"), {}, T_("send", "Send"));
+  // 5. update password: the action resets it by mail.
+  sendResetButton_ = AddButtonRow(host, T_("update_password", "Update password"), {},
+                                  T_("send", "Send"), MdiGlyph::LockReset);
   sendResetButton_->set_sensitive(false);
   sendResetButton_->signal_clicked().connect([this] { SendPasswordReset(); });
 }
@@ -2172,20 +2188,22 @@ void AccountPage::BuildSecurityGroup(Gtk::Box& host) {
 
   // 2. add a method.
   auto* add = AddButtonRow(host, T_("site_app_login_methods", "Login methods"), {},
-                           T_("add", "Add"));
+                           T_("add", "Add"), MdiGlyph::Login);
   add->signal_clicked().connect([this] { ShowAddAuthSheet(); });
 
-  // 3. auth code.
+  // 3. auth code: the barcode, the glyph the login stack's auth-code button
+  //    wears.
   auto* create = AddButtonRow(
       host, T_("auth_code", "Auth code"),
       T_("created_auth_codes_expire_after_5_minutes",
          "Created auth codes expire after 5 minutes"),
-      T_("site_app_create_auth_code", "Create auth code"));
+      T_("site_app_create_auth_code", "Create auth code"), MdiGlyph::Barcode);
   create->signal_clicked().connect([this] { ShowAuthCodeSheet(); });
 
   // 4. client id — off the DEVICE, not the api.
   {
-    auto row = AddValueActionRow(host, T_("client_id", "Client ID"), T_("copy", "Copy"));
+    auto row = AddValueActionRow(host, T_("client_id", "Client ID"), T_("copy", "Copy"),
+                                 MdiGlyph::Identifier);
     clientIdValue_ = row.value;
     clientIdCopy_ = row.action;
     clientIdCopy_->signal_clicked().connect([this] {
@@ -2200,7 +2218,10 @@ void AccountPage::BuildReferralsRow(Gtk::Box& host) {
   // destination keeps one row that opens it, with the count on its second
   // line. The row is live signed out too — the page settles on no-session.
   host.append(*kit::MakePaneGroupHeader(T_("refer_and_earn", "Refer and earn")).root);
-  referralsRow_ = kit::MakePaneTwoLineRowButton(T_("referrals", "Referrals"), {}, kRowTall);
+  // the heart android (nav_list_item_refer) and apple (ur.symbols.heart) give
+  // their Referrals row
+  referralsRow_ = kit::MakePaneTwoLineRowButton(T_("referrals", "Referrals"), {}, kRowTall,
+                                                RowIcon(MdiGlyph::Heart));
   referralsRow_.root->signal_clicked().connect([this] {
     if (on_open_referrals) on_open_referrals();
   });
@@ -2214,7 +2235,8 @@ void AccountPage::BuildDangerGroup(Gtk::Box& host) {
 
   // Whole-row buttons with chevrons — never "Sign out [Sign out]".
   {
-    auto row = kit::MakePaneTwoLineRowButton(T_("sign_out", "Sign out"), {}, kRowTall);
+    auto row = kit::MakePaneTwoLineRowButton(T_("sign_out", "Sign out"), {}, kRowTall,
+                                             RowIcon(MdiGlyph::Logout));
     row.root->signal_clicked().connect([this] {
       // no confirm: signing out costs nothing and is instantly reversible
       host_.Logout();
@@ -2222,9 +2244,10 @@ void AccountPage::BuildDangerGroup(Gtk::Box& host) {
     host.append(*row.root);
   }
   {
-    // NOT red here: red belongs to the confirmation context.
-    auto row =
-        kit::MakePaneTwoLineRowButton(T_("delete_account_2", "Delete account"), {}, kRowTall);
+    // NOT red here: red belongs to the confirmation context (the icon is the
+    // muted tint of every row).
+    auto row = kit::MakePaneTwoLineRowButton(T_("delete_account_2", "Delete account"), {},
+                                             kRowTall, RowIcon(MdiGlyph::Delete));
     row.root->signal_clicked().connect([this] { ShowDeleteAccountSheet(); });
     host.append(*row.root);
   }
@@ -2660,8 +2683,10 @@ void AccountPage::RenderAuthMethods() {
   RemoveAllChildren(*authMethodsPanel_);
   if (methodsState_ != AccountFieldState::Loaded || authMethods_.empty()) {
     // ONE state line instead of rows, on the pane grid (12,8 + hairline) —
-    // each of Loading / NoSession / Empty / Failed says WHICH it is.
+    // each of Loading / NoSession / Empty / Failed says WHICH it is — in the
+    // column the method rows' titles take.
     auto prose = MakeProseRow({}, kStatePadY);
+    prose.line->set_margin_start(kit::kRowIconInset);
     ApplyFieldState(*prose.line, methodsState_ == AccountFieldState::Loaded
                                      ? AccountFieldState::Empty
                                      : methodsState_);
@@ -2670,7 +2695,9 @@ void AccountPage::RenderAuthMethods() {
   }
   for (const std::string& method : authMethods_) {
     const Glib::ustring label = UpperFirst(method);
-    auto* remove = AddButtonRow(*authMethodsPanel_, label, {}, T_("remove", "Remove"));
+    // a key: one of the ways in
+    auto* remove = AddButtonRow(*authMethodsPanel_, label, {}, T_("remove", "Remove"),
+                                MdiGlyph::Key);
     // NOT red in pane mode: red belongs to the confirmation context.
     remove->signal_clicked().connect(
         [this, method, label] { ConfirmRemoveAuth(method, label); });

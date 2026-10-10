@@ -168,6 +168,10 @@ scrolledwindow.ur-fade-bottom > undershoot.bottom {
 .ur-value { font-family: "PP Neue Montreal"; font-size: 13px; color: #F8F8F8; }
 .ur-row-title { font-family: "PP Neue Montreal"; font-size: 13px; color: #F8F8F8; }
 .ur-row-note { font-family: "PP Neue Montreal"; font-size: 11px; color: #989898; }
+/* a pane row's leading icon (the kit's two-line rows): the muted tint android
+   and apple give their Account rows' icons; a disabled row dims it with the
+   rest of the row */
+.ur-row-icon { color: #989898; }
 /* the "Learn more" link inside a note: the pink accent, no underline */
 .ur-learn-more link { color: #ED8FFF; text-decoration-line: none; }
 /* TONE ON TOP OF A ROW CLASS. This provider outranks the one Ui.cpp installs

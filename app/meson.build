@@ -721,6 +721,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ClientInfoWiringTest.cpp',
     'tests/ApiSignOutWiringTest.cpp',
     'tests/GlyphPathTest.cpp',
+    'tests/AccountRowIconsTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -827,6 +828,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # PlanPickerWiringTest reads the plan cards and their css the same way.
               # ClientInfoWiringTest reads the GUI's and the daemon's Api adoption
               # the same way, and ApiSignOutWiringTest the Api's sign-out.
+              # AccountRowIconsTest reads the Account pane's rows, the kit's
+              # leading icon and its css the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

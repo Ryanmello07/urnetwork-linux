@@ -503,6 +503,22 @@ void SetPaneListRowSelected(PaneListRowButton& row, bool selected) {
 }
 
 namespace {
+// The row button's grid spacing between title, value and chevron.
+constexpr int kRowButtonGridSpacing = 10;
+static_assert(kRowButtonGridSpacing <= kRowIconGap, "the icon gap includes the grid's spacing");
+
+// A two-line row's leading icon, in front of everything else in `row`:
+// muted, centred, decorative. `gapAfter` is what the row's own spacing does
+// not already put between it and the title.
+void PrependLeadingIcon(Gtk::Box& row, Gtk::Widget* leading, int gapAfter) {
+  if (leading == nullptr) return;
+  leading->add_css_class("ur-row-icon");
+  leading->set_valign(Gtk::Align::CENTER);
+  leading->set_margin_end(gapAfter);
+  MarkDecorative(*leading);
+  row.prepend(*leading);
+}
+
 Gtk::Box* MakeTwoLineText(Gtk::Label*& title, Gtk::Label*& note,
                           const Glib::ustring& titleText, const Glib::ustring& noteText) {
   auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 1);
@@ -518,7 +534,7 @@ Gtk::Box* MakeTwoLineText(Gtk::Label*& title, Gtk::Label*& note,
 }  // namespace
 
 PaneTwoLineRow MakePaneTwoLineRow(const Glib::ustring& title, const Glib::ustring& note,
-                                  int height) {
+                                  int height, Gtk::Widget* leading) {
   PaneTwoLineRow out;
   auto* host = MakeRowHost(height);
   auto* inner = RowHostInner(host);
@@ -527,19 +543,24 @@ PaneTwoLineRow MakePaneTwoLineRow(const Glib::ustring& title, const Glib::ustrin
   out.trailing->set_halign(Gtk::Align::END);
   out.trailing->set_valign(Gtk::Align::CENTER);
   inner->append(*out.trailing);
+  // the inner row has no spacing of its own: the icon brings the gap
+  PrependLeadingIcon(*inner, leading, kRowIconGap);
   out.root = host;
   return out;
 }
 
 PaneTwoLineRowButton MakePaneTwoLineRowButton(const Glib::ustring& title,
-                                              const Glib::ustring& note, int height) {
+                                              const Glib::ustring& note, int height,
+                                              Gtk::Widget* leading) {
   PaneTwoLineRowButton out;
   out.root = Gtk::make_managed<Gtk::Button>();
   out.root->add_css_class("ur-pane-row");
   out.root->set_size_request(-1, height);
-  auto* grid = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10);
+  auto* grid = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, kRowButtonGridSpacing);
   grid->set_hexpand(true);
   grid->append(*MakeTwoLineText(out.title, out.note, title, note));
+  // the grid's own spacing is most (today all) of the icon's gap
+  PrependLeadingIcon(*grid, leading, kRowIconGap - kRowButtonGridSpacing);
   out.value = MakeStyledLabel({}, "ur-value", 1.f);
   out.value->add_css_class("dim-label");
   out.value->set_max_width_chars(28);
