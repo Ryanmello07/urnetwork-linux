@@ -4,7 +4,12 @@
 #include <gtk/gtk.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <optional>
+#include <vector>
+
+#include "GlyphPath.hpp"
 
 namespace urnw {
 namespace {
@@ -293,6 +298,150 @@ void NavIcon::snapshot_vfunc(const Glib::RefPtr<Gtk::Snapshot>& snapshot) {
       break;
     }
   }
+  cairo_destroy(raw);
+}
+
+// ---- the Material Design Icons glyphs ------------------------------------------
+
+namespace {
+
+// MDI draws on a 24x24 viewBox.
+constexpr double kGlyphBox = 24.0;
+// REVOKE-UI-FINAL.md §3: the device logo sits at about half the circle.
+constexpr double kDotGlyphRatio = 0.5;
+
+// A glyph's segments, read from its path data once, on first use (GTK draws on
+// the main loop only). A path that does not read stays empty and draws nothing.
+const std::vector<glyph::Segment>& GlyphSegments(MdiGlyph glyph) {
+  static std::array<std::optional<std::vector<glyph::Segment>>, kMdiGlyphCount> cache;
+  static const std::vector<glyph::Segment> kNone;
+  const size_t index = static_cast<size_t>(glyph);
+  if (index >= cache.size()) return kNone;
+  std::optional<std::vector<glyph::Segment>>& slot = cache[index];
+  if (!slot) {
+    std::optional<std::vector<glyph::Segment>> parsed = glyph::ParsePath(MdiGlyphPath(glyph));
+    if (!parsed) g_warning("glyph %zu: its path data does not read; it draws nothing", index);
+    slot = parsed ? std::move(*parsed) : std::vector<glyph::Segment>();
+  }
+  return *slot;
+}
+
+// gtk_snapshot_append_cairo over the widget's own box, as NavIcon draws.
+Cairo::RefPtr<Cairo::Context> AppendCairo(const Glib::RefPtr<Gtk::Snapshot>& snapshot, double w,
+                                          double h, cairo_t*& raw) {
+  const graphene_rect_t bounds{{0, 0}, {static_cast<float>(w), static_cast<float>(h)}};
+  raw = gtk_snapshot_append_cairo(snapshot->gobj(), &bounds);
+  return Cairo::RefPtr<Cairo::Context>(new Cairo::Context(raw, /*has_reference=*/false));
+}
+
+void MarkGlyphDecorative(Gtk::Widget& widget) {
+  gtk_accessible_update_state(GTK_ACCESSIBLE(widget.gobj()), GTK_ACCESSIBLE_STATE_HIDDEN, TRUE,
+                              -1);
+}
+
+}  // namespace
+
+void FillGlyph(const Cairo::RefPtr<Cairo::Context>& cr, MdiGlyph glyph, double x, double y,
+               double size) {
+  const std::vector<glyph::Segment>& segments = GlyphSegments(glyph);
+  if (segments.empty() || size <= 0) return;
+  cr->save();
+  cr->translate(x, y);
+  cr->scale(size / kGlyphBox, size / kGlyphBox);
+  cr->begin_new_path();
+  for (const glyph::Segment& segment : segments) {
+    switch (segment.kind) {
+      case glyph::Segment::Kind::Move:
+        cr->move_to(segment.x, segment.y);
+        break;
+      case glyph::Segment::Kind::Line:
+        cr->line_to(segment.x, segment.y);
+        break;
+      case glyph::Segment::Kind::Curve:
+        cr->curve_to(segment.x1, segment.y1, segment.x2, segment.y2, segment.x, segment.y);
+        break;
+      case glyph::Segment::Kind::Close:
+        cr->close_path();
+        break;
+    }
+  }
+  // SVG's default fill rule: the glyphs' holes are drawn the other way round
+  cr->set_fill_rule(Cairo::Context::FillRule::WINDING);
+  cr->fill();
+  cr->restore();
+}
+
+GlyphIcon::GlyphIcon(MdiGlyph glyph, int sizePx) : glyph_(glyph), size_(sizePx) {
+  set_valign(Gtk::Align::CENTER);
+  set_halign(Gtk::Align::CENTER);
+  MarkGlyphDecorative(*this);
+}
+
+void GlyphIcon::SetGlyph(MdiGlyph glyph) {
+  if (glyph_ == glyph) return;
+  glyph_ = glyph;
+  queue_draw();
+}
+
+void GlyphIcon::measure_vfunc(Gtk::Orientation, int, int& minimum, int& natural,
+                              int& minimum_baseline, int& natural_baseline) const {
+  minimum = natural = size_;
+  minimum_baseline = natural_baseline = -1;
+}
+
+void GlyphIcon::snapshot_vfunc(const Glib::RefPtr<Gtk::Snapshot>& snapshot) {
+  const double w = get_width();
+  const double h = get_height();
+  if (w <= 0 || h <= 0) return;
+  cairo_t* raw = nullptr;
+  auto cr = AppendCairo(snapshot, w, h, raw);
+  // the CSS colour, so the row's tint and a disabled row's dimming are free
+  GdkRGBA color;
+  gtk_widget_get_color(GTK_WIDGET(gobj()), &color);
+  cr->set_source_rgba(color.red, color.green, color.blue, color.alpha);
+  const double side = std::min(w, h);
+  FillGlyph(cr, glyph_, (w - side) / 2.0, (h - side) / 2.0, side);
+  cairo_destroy(raw);
+}
+
+GlyphDot::GlyphDot(MdiGlyph glyph, int diameterPx) : glyph_(glyph), diameter_(diameterPx) {
+  set_valign(Gtk::Align::CENTER);
+  set_halign(Gtk::Align::CENTER);
+  MarkGlyphDecorative(*this);
+}
+
+void GlyphDot::SetGlyph(MdiGlyph glyph) {
+  if (glyph_ == glyph) return;
+  glyph_ = glyph;
+  queue_draw();
+}
+
+void GlyphDot::SetColor(const GdkRGBA& color) {
+  if (gdk_rgba_equal(&color_, &color)) return;
+  color_ = color;
+  queue_draw();
+}
+
+void GlyphDot::measure_vfunc(Gtk::Orientation, int, int& minimum, int& natural,
+                             int& minimum_baseline, int& natural_baseline) const {
+  minimum = natural = diameter_;
+  minimum_baseline = natural_baseline = -1;
+}
+
+void GlyphDot::snapshot_vfunc(const Glib::RefPtr<Gtk::Snapshot>& snapshot) {
+  const double w = get_width();
+  const double h = get_height();
+  if (w <= 0 || h <= 0) return;
+  cairo_t* raw = nullptr;
+  auto cr = AppendCairo(snapshot, w, h, raw);
+  const double side = std::min(w, h);
+  cr->set_source_rgba(color_.red, color_.green, color_.blue, color_.alpha);
+  cr->arc(w / 2.0, h / 2.0, side / 2.0, 0, 2 * G_PI);
+  cr->fill();
+  // the device logo in white, centred at half the circle
+  const double glyphSide = side * kDotGlyphRatio;
+  cr->set_source_rgba(1, 1, 1, 1);
+  FillGlyph(cr, glyph_, (w - glyphSide) / 2.0, (h - glyphSide) / 2.0, glyphSide);
   cairo_destroy(raw);
 }
 
