@@ -2,6 +2,7 @@
 #include "Formatters.hpp"
 
 #include "I18n.hpp"
+#include "RelativeTimeSpan.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -63,12 +64,44 @@ std::string FormatBitRate(int64_t bitsPerSecond) {
 }
 
 std::string RelativeTime(int64_t secondsAgo) {
-  const int64_t seconds = std::max<int64_t>(0, secondsAgo);
-  if (seconds < 5) return T_("now", "now");
-  if (seconds < 60) return Format(T_("seconds_ago_abbrev", "{}s ago"), seconds);
-  if (seconds < 3600) return Format(T_("minutes_ago_abbrev", "{}m ago"), seconds / 60);
-  return Format(T_("hours_ago_abbrev", "{}h ago"), seconds / 3600);
+  const relative_time::Span span = relative_time::SpanFor(secondsAgo);
+  switch (span.unit) {
+    case relative_time::Unit::Now:
+      return T_("now", "now");
+    case relative_time::Unit::Seconds:
+      return Format(T_("seconds_ago_abbrev", "{}s ago"), span.count);
+    case relative_time::Unit::Minutes:
+      return Format(T_("minutes_ago_abbrev", "{}m ago"), span.count);
+    case relative_time::Unit::Hours:
+      return Format(T_("hours_ago_abbrev", "{}h ago"), span.count);
+    case relative_time::Unit::Days:
+      return Format(T_("days_ago_abbrev", "{}d ago"), span.count);
+    case relative_time::Unit::Date:
+      // a week or more: the day it happened, not "12d ago"
+      return LocalDate(g_get_real_time() / G_USEC_PER_SEC - secondsAgo);
+  }
+  return T_("now", "now");
 }
+
+namespace {
+
+// A Unix second in this machine's zone, in a g_date_time_format pattern; ""
+// when it cannot be represented.
+std::string FormatLocal(int64_t unixSeconds, const char* pattern) {
+  GDateTime* moment = g_date_time_new_from_unix_local(unixSeconds);
+  if (!moment) return {};
+  gchar* text = g_date_time_format(moment, pattern);
+  g_date_time_unref(moment);
+  std::string out = text ? text : "";
+  g_free(text);
+  return out;
+}
+
+}  // namespace
+
+std::string LocalDate(int64_t unixSeconds) { return FormatLocal(unixSeconds, "%x"); }
+
+std::string LocalDateTime(int64_t unixSeconds) { return FormatLocal(unixSeconds, "%x, %R"); }
 
 bool IsIpAddressValue(const std::string& value) {
   unsigned char buf[sizeof(struct in6_addr)];

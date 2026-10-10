@@ -65,5 +65,6 @@ src/Onboarding.cpp
 src/PlanPicker.cpp
 src/ReferralPanel.cpp
 src/ReferralsPage.cpp
+src/SessionsPage.cpp
 src/TransferChart.cpp
 src/WalletConnect.cpp

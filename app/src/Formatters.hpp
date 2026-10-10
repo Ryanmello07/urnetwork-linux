@@ -21,8 +21,15 @@ std::string FormatPacketRate(int64_t packetsPerSecond);
 // "1.2 Mbps"
 std::string FormatBitRate(int64_t bitsPerSecond);
 
-// "now", "42s ago", "3m ago", "2h ago"
+// "now", "42s ago", "3m ago", "2h ago", "4d ago", and from 7 days on the
+// event's date in this machine's locale and zone (RelativeTimeSpan.hpp).
 std::string RelativeTime(int64_t secondsAgo);
+
+// A Unix second in this machine's zone: the locale's date ("%x"), and that
+// date with the time ("%x, %R"), which a time's accessible description and
+// tooltip carry. "" when the second cannot be represented.
+std::string LocalDate(int64_t unixSeconds);
+std::string LocalDateTime(int64_t unixSeconds);
 
 // Valid IPv4 or IPv6 literal.
 bool IsIpAddressValue(const std::string& value);

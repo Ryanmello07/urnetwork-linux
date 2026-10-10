@@ -36,8 +36,18 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <string>
+
 namespace urnw {
 namespace shell {
+
+// The rail item a page lights. A page reached FROM a destination has no item
+// of its own and keeps that destination's lit: "referrals" (Refer and earn)
+// and "sessions" (Account -> Sessions) belong to Account.
+inline std::string RailTagFor(const std::string& pageTag) {
+  if (pageTag == "referrals" || pageTag == "sessions") return "account";
+  return pageTag;
+}
 
 // WinUI's default ExpandedModeThresholdWidth, not the pages' 1000 dip fold.
 inline constexpr int kNavExpandedMinDip = 1008;

@@ -2175,6 +2175,23 @@ void AccountPage::BuildProfileGroup(Gtk::Box& host) {
                                   T_("send", "Send"), MdiGlyph::LockReset);
   sendResetButton_->set_sensitive(false);
   sendResetButton_->signal_clicked().connect([this] { SendPasswordReset(); });
+
+  // 6. Sessions (REVOKE-UI-FINAL.md §1): the account's signed-in sessions, on
+  //    a page of their own, one row directly after the profile with the face
+  //    profile glyph. It always shows and asks the server nothing: the page
+  //    says when sessions are not available yet.
+  {
+    auto row = kit::MakePaneTwoLineRowButton(T_("sessions_title", "Sessions"), {}, kRowTall,
+                                             RowIcon(MdiGlyph::SessionFace));
+    row.root->signal_clicked().connect([this] {
+      if (on_open_sessions) {
+        on_open_sessions();
+        return;
+      }
+      g_warning("account: sessions route unbound; the row opened nothing");
+    });
+    host.append(*row.root);
+  }
 }
 
 void AccountPage::BuildSecurityGroup(Gtk::Box& host) {
