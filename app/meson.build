@@ -531,7 +531,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # and the statistics sections' visibility, the compact count and count-rate
 # labels, the extender share/import decisions, the reset's owed re-send and its
 # call sites, the Solana payout wallet's card
-# and connect-sheet rules, the wallet bridge's return routing, the dual-stack
+# and connect-sheet rules, the Settlement v2 tile and its claim sheet's
+# progress, the wallet bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
 # install-kind probe, the launch throttle), when it asks GitHub again after
@@ -608,6 +609,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/PayoutNoExtensionTest.cpp',
     'tests/PayoutPromotionWiringTest.cpp',
     'tests/SnPayoutPresentationTest.cpp',
+    'tests/SnLedgerPresentationTest.cpp',
     'tests/WalletBridgeRouteTest.cpp',
     'tests/BittensorWalletFlowTest.cpp',
     'tests/ManageSubscriptionTest.cpp',
