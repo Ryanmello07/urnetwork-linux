@@ -8310,6 +8310,41 @@ msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
 
+#. Settlement v2 tile: label of the SN25α the user can claim now.
+msgctxt "sn_ledger_claimable"
+msgid "Claimable"
+msgstr "À réclamer"
+
+#. Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).
+msgctxt "sn_ledger_earned"
+msgid "Earned"
+msgstr "Gagné"
+
+#. Settlement v2 tile: label of the SN25α already paid to the user's coldkey.
+msgctxt "sn_ledger_paid"
+msgid "Paid"
+msgstr "Versé"
+
+#. Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".
+msgctxt "sn_ledger_pending"
+msgid "Pending: +{}, awaiting finalization"
+msgstr "En attente : +{}, finalisation en cours"
+
+#. Settlement v2 tile and claim dialog: names an operator pool. {} is its number.
+msgctxt "sn_ledger_pool"
+msgid "Pool {}"
+msgstr "Pool {}"
+
+#. Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".
+msgctxt "sn_ledger_title"
+msgid "Settlement v2"
+msgstr "Règlement v2"
+
+#. Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.
+msgctxt "sn_ledger_unavailable"
+msgid "Unavailable"
+msgstr "Indisponible"
+
 #. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
 msgctxt "sn_payout_schedule"
 msgid "Earnings settle every epoch and are paid in SN25α to your Bittensor coldkey when you claim them."
