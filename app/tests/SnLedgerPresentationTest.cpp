@@ -4,15 +4,23 @@
 // not and with or without a coldkey; its figures (Claimable, Paid, Earned and
 // what a pending root adds); and the claim sheet's rows through a claim (sent,
 // claimed with the vault's amount, needs gas, already claimed, another
-// failure, a failure about no account, Done).
+// failure, a failure about no account, Done). The page and the sheet need GTK
+// and the SDK, so their wiring and their English fallbacks (which must be the
+// catalog's msgids) are read from the sources and po/en.po.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
 #include <cstdint>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "SnLedgerPresentation.hpp"
+
+#ifndef UR_SRC_DIR
+#define UR_SRC_DIR ""
+#endif
 
 using urnw::snledger::Account;
 using urnw::snledger::AccountView;
@@ -338,6 +346,157 @@ UR_TEST(SnLedgerFailureCodes) {
   UR_EXPECT_TRUE(FailureFor("not_claimable: below the transfer floor") == Failure::Other);
   UR_EXPECT_TRUE(FailureFor("the gas ran out") == Failure::Other);
   UR_EXPECT_TRUE(FailureFor("") == Failure::Other);
+}
+
+// ---- the page's wiring and English, read from the sources ----------------------
+
+std::string ReadLedgerSource(const std::string& relative) {
+  std::ifstream in(std::string(UR_SRC_DIR) + "/" + relative, std::ios::binary);
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+  return buffer.str();
+}
+
+// The body of the function whose definition starts with `signature`, or ""
+// (braces balanced from the first '{' after the signature).
+std::string LedgerFunctionBody(const std::string& source, const std::string& signature) {
+  const size_t at = source.find(signature);
+  if (at == std::string::npos) return std::string();
+  const size_t open = source.find('{', at);
+  if (open == std::string::npos) return std::string();
+  int depth = 0;
+  for (size_t i = open; i < source.size(); ++i) {
+    if (source[i] == '{') ++depth;
+    if (source[i] == '}' && --depth == 0) return source.substr(open, i - open + 1);
+  }
+  return std::string();
+}
+
+// Every English fallback passed to T_("key", ...) in `source`: the adjacent
+// string literals after the key, joined.
+std::vector<std::string> LedgerFallbacks(const std::string& source, const std::string& key) {
+  std::vector<std::string> out;
+  const std::string open = "T_(\"" + key + "\",";
+  for (size_t at = source.find(open); at != std::string::npos; at = source.find(open, at + 1)) {
+    std::string text;
+    size_t p = at + open.size();
+    while (p < source.size()) {
+      while (p < source.size() && (source[p] == ' ' || source[p] == '\n')) ++p;
+      if (p >= source.size() || source[p] != '"') break;
+      for (++p; p < source.size() && source[p] != '"'; ++p) {
+        if (source[p] == '\\' && p + 1 < source.size()) ++p;
+        text += source[p];
+      }
+      ++p;
+    }
+    out.push_back(text);
+  }
+  return out;
+}
+
+// CL-2: the tile draws SectionFor's decision, and its Claim opens the v2 sheet
+UR_TEST(SnLedgerPageDrawsTheDecision) {
+  const std::string page = ReadLedgerSource("EarningsPage.cpp");
+  UR_EXPECT_TRUE(!page.empty());
+  const std::string tile = LedgerFunctionBody(page, "void EarningsPage::RebuildLedgerTile()");
+  UR_EXPECT_TRUE(tile.find("snledger::SectionFor(") != std::string::npos);
+  UR_EXPECT_TRUE(page.find("ledgerClaimButton_->signal_clicked().connect(\n"
+                           "        sigc::mem_fun(*this, &EarningsPage::OnLedgerClaim));") !=
+                 std::string::npos);
+  // the v1 tile keeps its own Claim
+  UR_EXPECT_TRUE(page.find("claimButton_->signal_clicked().connect(sigc::mem_fun(*this, "
+                           "&EarningsPage::OnClaim));") != std::string::npos);
+}
+
+// APPS-SPEC.md (CL-2): the GUI is unprivileged, so the v2 read and the v2
+// claim go through the daemon's DeviceRemote like the v1 claim does, and
+// "configured" is the chain settings' v2 vault
+UR_TEST(SnLedgerReadsAndClaimsThroughTheDeviceRemote) {
+  const std::string page = ReadLedgerSource("EarningsPage.cpp");
+  const std::string read =
+      LedgerFunctionBody(page, "void FetchLedger(SdkHost& host, LedgerDone done)");
+  UR_EXPECT_TRUE(read.find("urnet::DeviceRemote& device = host.device();") != std::string::npos);
+  UR_EXPECT_TRUE(read.find("device.syncSnWallet(") != std::string::npos);
+  UR_EXPECT_TRUE(read.find("device.snLedgerAccounts(") != std::string::npos);
+  UR_EXPECT_TRUE(read.find("!settings->vault2_address.empty()") != std::string::npos);
+  const std::string claim = LedgerFunctionBody(
+      page, "void LedgerClaim(SdkHost& host, urnet::SnLedgerClaimCallback callback)");
+  UR_EXPECT_TRUE(claim.find("host.device().snLedgerClaim(") != std::string::npos);
+  UR_EXPECT_TRUE(LedgerFunctionBody(page, "void EarningsPage::StartLedgerClaim()")
+                     .find("sn::LedgerClaim(host_, std::move(callback));") != std::string::npos);
+}
+
+// APPS-SPEC.md (CL-2): Sent links the explorer, needs_gas uses the v1 top-up,
+// and Done reads the accounts again
+UR_TEST(SnLedgerClaimSheetWiring) {
+  const std::string page = ReadLedgerSource("EarningsPage.cpp");
+  const std::string open = LedgerFunctionBody(page, "void EarningsPage::OnLedgerClaim()");
+  UR_EXPECT_TRUE(open.find("return sn::ExplorerTxUrl(host_, txHash);") != std::string::npos);
+  UR_EXPECT_TRUE(open.find("sheet->on_claim = [this] { StartLedgerClaim(); };") !=
+                 std::string::npos);
+  const std::string rebuild = LedgerFunctionBody(page, "void LedgerClaimSheet::Rebuild()");
+  UR_EXPECT_TRUE(rebuild.find("MakeLinkLabel(ShortHex(row.txHash), url, on_open_link)") !=
+                 std::string::npos);
+  UR_EXPECT_TRUE(rebuild.find("BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), "
+                              "kSuggestedLedgerGasTao, copiedReset_);") != std::string::npos);
+  UR_EXPECT_TRUE(page.find("BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), kSuggestedGasTao, "
+                           "copiedReset_);") != std::string::npos);
+  const std::string start = LedgerFunctionBody(page, "void EarningsPage::StartLedgerClaim()");
+  const size_t settle =
+      start.find("if (!SettleFlow(ledgerClaimFlow_, generation, \"v2 claim\")) return;");
+  UR_EXPECT_TRUE(settle != std::string::npos);
+  UR_EXPECT_TRUE(start.find("LoadWalletLayer();", settle) != std::string::npos);
+  // the watchdog outlasts the SDK's own bounds (2 min to read, 6 to send and
+  // confirm), and the top-up covers a v2 claim's gas limit
+  UR_EXPECT_TRUE(start.find("BeginFlow(ledgerClaimFlow_, kLedgerClaimTimeoutMs,") !=
+                 std::string::npos);
+  UR_EXPECT_TRUE(page.find("constexpr int kLedgerClaimTimeoutMs = 9 * 60 * 1000;") !=
+                 std::string::npos);
+  UR_EXPECT_TRUE(page.find("constexpr double kSuggestedLedgerGasTao = 0.02;") != std::string::npos);
+  UR_EXPECT_TRUE(LedgerFunctionBody(page, "void EarningsPage::LoadWalletLayer()")
+                     .find("sn::FetchLedger(") != std::string::npos);
+}
+
+// CL-2: one gas key sends one claim at a time: v1 and v2 refuse to start
+// while either is in flight, and each redraws both tiles when it starts and ends
+UR_TEST(SnLedgerOneClaimAtATime) {
+  const std::string page = ReadLedgerSource("EarningsPage.cpp");
+  const std::string v1 = LedgerFunctionBody(page, "void EarningsPage::StartClaim(");
+  const std::string v2 = LedgerFunctionBody(page, "void EarningsPage::StartLedgerClaim()");
+  UR_EXPECT_TRUE(v1.find("if (epochs.empty() || claiming_) return;") != std::string::npos);
+  UR_EXPECT_TRUE(v2.find("if (claiming_) return;") != std::string::npos);
+  for (const std::string* body : {&v1, &v2}) {
+    size_t count = 0;
+    for (size_t at = body->find("RebuildLedgerTile();"); at != std::string::npos;
+         at = body->find("RebuildLedgerTile();", at + 1)) {
+      ++count;
+    }
+    UR_EXPECT_EQ(3u, count);  // start, watchdog, done
+  }
+}
+
+// CL-2: the new strings are localized: their English is the catalog's msgid,
+// or every locale would show the stale English
+UR_TEST(SnLedgerEnglishMatchesTheCatalogMsgids) {
+  const std::string page = ReadLedgerSource("EarningsPage.cpp");
+  const std::string catalog = ReadLedgerSource("../po/en.po");
+  UR_EXPECT_TRUE(!catalog.empty());
+  for (const char* key : {"settlement_v2", "settlement_v2_claimable", "settlement_v2_paid",
+                          "settlement_v2_earned", "settlement_v2_pending",
+                          "settlement_v2_unavailable", "settlement_v2_pool"}) {
+    const std::vector<std::string> fallbacks = LedgerFallbacks(page, key);
+    if (fallbacks.empty()) UR_FAIL(std::string("EarningsPage.cpp does not show ") + key);
+    for (const std::string& english : fallbacks) {
+      const std::string entry =
+          std::string("msgctxt \"") + key + "\"\nmsgid \"" + english + "\"\n";
+      if (catalog.find(entry) == std::string::npos) {
+        UR_FAIL(std::string(key) + ": \"" + english + "\" is not the catalog's msgid");
+      }
+    }
+  }
+  // the spec's words for a pending root
+  UR_EXPECT_TRUE(catalog.find("msgid \"Pending: +{}, awaiting finalization\"") !=
+                 std::string::npos);
 }
 
 }  // namespace

@@ -7705,6 +7705,41 @@ msgctxt "settings_add_widgets_description"
 msgid "Quick connect, transfer balance, providers on the globe and your top contracts."
 msgstr "Connessione rapida, saldo dati, provider sul globo e i tuoi contratti principali."
 
+#. Earnings page: the title of the tile with the settlement v2 balances, under the v1 Unclaimed tile, and the caption under the total on the settlement v2 claim dialog. Settlement v2 is the second version of the UR subnet's settlement; keep "v2".
+msgctxt "settlement_v2"
+msgid "Settlement v2"
+msgstr "Liquidazione v2"
+
+#. Earnings page, Settlement v2 tile: the caption over the SN25α amount the user can claim now.
+msgctxt "settlement_v2_claimable"
+msgid "Claimable"
+msgstr "Riscattabile"
+
+#. Earnings page, Settlement v2 tile: the caption over the SN25α the user has earned in settlement v2 so far, finalized (paid plus claimable).
+msgctxt "settlement_v2_earned"
+msgid "Earned"
+msgstr "Guadagnato"
+
+#. Earnings page, Settlement v2 tile: the caption over the SN25α already paid to the user's Bittensor coldkey.
+msgctxt "settlement_v2_paid"
+msgid "Paid"
+msgstr "Pagato"
+
+#. Earnings page, Settlement v2 tile: the line under the figures while new earnings are committed but not final yet. {amount} is an SN25α amount, e.g. "0.7500 SN25α".
+msgctxt "settlement_v2_pending"
+msgid "Pending: +{}, awaiting finalization"
+msgstr "In sospeso: +{}, in attesa di finalizzazione"
+
+#. Earnings page, Settlement v2 tile and claim dialog: names the operator pool a balance is in. {number} is the pool's number, e.g. "Pool 1".
+msgctxt "settlement_v2_pool"
+msgid "Pool {}"
+msgstr "Pool {}"
+
+#. Earnings page, Settlement v2 tile: shown instead of the balances when they cannot be read. The tile never shows a zero balance in its place.
+msgctxt "settlement_v2_unavailable"
+msgid "Unavailable"
+msgstr "Non disponibile"
+
 #. Call to action
 msgctxt "share"
 msgid "Share"

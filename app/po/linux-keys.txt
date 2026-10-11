@@ -1005,6 +1005,13 @@ sessions_unsupported
 set_coldkey
 set_coldkey_to_get_paid
 settings
+settlement_v2
+settlement_v2_claimable
+settlement_v2_earned
+settlement_v2_paid
+settlement_v2_pending
+settlement_v2_pool
+settlement_v2_unavailable
 share
 share_extenders
 share_extenders_count

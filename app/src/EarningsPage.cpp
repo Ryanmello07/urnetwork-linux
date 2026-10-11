@@ -35,6 +35,10 @@ constexpr int kThreePaneDip = 1500;  // earnings | history | network
 constexpr int kTwoPaneDip = 900;     // earnings | history
 constexpr int kApiTimeoutMs = 20000;      // plain api calls
 constexpr int kChainTimeoutMs = 180000;   // a claim waits for a receipt
+// A v2 claim (normally one pool) waits out the SDK's own bounds: 2 minutes to
+// read the ledger and the v2 vault, then 6 to send and confirm each claim. A
+// watchdog inside them would offer Claim again while the SDK is still sending.
+constexpr int kLedgerClaimTimeoutMs = 9 * 60 * 1000;
 constexpr int kValidateDebounceMs = 300;
 constexpr int kSheetMinWidth = 480;
 constexpr int kClaimSheetMaxHeight = 560;
@@ -47,6 +51,10 @@ constexpr int kCopiedResetMs = 1800;
 constexpr double kMultiplierHighlight = 2.0;   // a country multiplier goes lime at >= 2.0
 constexpr double kMinGasTao = 0.001;           // below this the gas key cannot pay a claim
 constexpr double kSuggestedGasTao = 0.005;     // the top-up the dialog suggests
+// The v2 dialog's: the SDK sends a v2 claim only when the gas key covers its
+// whole gas limit (about 2.5M gas, plus a quarter) at the price it signs with,
+// about 0.017 TAO at a 5 gwei gas price.
+constexpr double kSuggestedLedgerGasTao = 0.02;
 constexpr double kHeadDemotionMargin = 1.10;   // a score within 10% of the floor is warned
 // The one untranslatable string on this surface (store key sn_alpha_symbol,
 // translatable: false, so it is not in the catalog).
@@ -1008,7 +1016,118 @@ void Claim(SdkHost& host, const std::vector<int64_t>& epochs, ClaimEvents events
   host.device().snClaim(urnet::Int64List(epochs.begin(), epochs.end()), callback);
 }
 
+// Settlement v2: the coldkey's accounts, read by the SDK in this process from
+// the operator's ledger (GET /sn/ledger/account) once the wallet cache is
+// synced, as for the v1 claims: the read is the cached coldkey's. The chain
+// settings say whether the release configures v2 claims: the v2 vault's
+// address, which the release pins and no server sets. Any failure is the
+// ledger unavailable: the page shows no balance rather than a zero.
+using LedgerDone = std::function<void(std::optional<std::vector<snledger::Account>> accounts,
+                                      bool claimConfigured, std::string err)>;
+void FetchLedger(SdkHost& host, LedgerDone done) {
+  if (!host.hasDevice()) {
+    done(std::nullopt, false, kNoDevice);
+    return;
+  }
+  urnet::DeviceRemote& device = host.device();
+  device.syncSnWallet([&device, done](std::optional<urnet::SnGetWalletResult> synced,
+                                      std::optional<std::string> syncErr) {
+    (void)synced;
+    (void)syncErr;  // a stale cache still reads
+    device.snLedgerAccounts([&device, done](std::optional<urnet::SnLedgerAccountsResult> result,
+                                            std::optional<std::string> err) {
+      const std::optional<urnet::SnChainSettings> settings = device.getSnChainSettings();
+      const bool configured = settings && !settings->vault2_address.empty();
+      // a result without its list is as unreadable as an error: never a zero
+      if (err || !result || result->error || !result->accounts) {
+        done(std::nullopt, configured,
+             ErrorText(result ? result->error : std::nullopt, err, "no accounts"));
+        return;
+      }
+      std::vector<snledger::Account> accounts;
+      for (const auto& account : *result->accounts) {
+        snledger::Account row;
+        row.vault = account.vault;
+        row.noId = account.no_id;
+        row.index = account.index;
+        row.finalizedRao = account.finalized_rao;
+        row.claimableRao = account.claimable_rao;
+        row.paidRao = account.paid_rao;
+        row.pending = account.pending;
+        row.pendingRao = account.pending_rao;
+        accounts.push_back(row);
+      }
+      done(std::move(accounts), configured, std::string());
+    });
+  });
+}
+
+// The v2 claim: the SDK claims every finalized v2 account of the coldkey whose
+// claimable it verified against the v2 vault, one transaction each, signed with
+// the gas key, and reports each as the receipts arrive, then Done.
+void LedgerClaim(SdkHost& host, urnet::SnLedgerClaimCallback callback) {
+  if (!host.hasDevice()) {
+    if (callback.done) callback.done();
+    return;
+  }
+  host.device().snLedgerClaim(std::move(callback));
+}
+
 }  // namespace sn
+
+// The claim dialogs' gas key and, when it cannot pay a claim, the top-up: the
+// address to send about `suggestedTao` TAO to, with Copy. The panel is rebuilt
+// with its button, so a pending "Copied!" reset goes with the old one.
+void BuildGasPanel(Gtk::Box& panel, Gtk::Window& sheet, const std::optional<SnGasInfo>& gas,
+                   bool needsGas, double suggestedTao, sigc::connection& copiedReset) {
+  copiedReset.disconnect();
+  RemoveAllChildren(panel);
+  auto* keyLine = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  auto* key = MakeSizedLabel(T_("gas_key", "Gas key"), 12, "ur-caption");
+  key->set_hexpand(true);
+  keyLine->append(*key);
+  Glib::ustring value = "-";
+  if (gas) {
+    value = ShortHex(gas->address);
+    if (gas->balanceKnown) {
+      value += Glib::ustring(" · ") +
+               Format(T_("tao_amount_linux", "{} TAO"), FormatTao(gas->tao));
+    }
+  }
+  auto* valueLabel = MakeSizedLabel(value, 13, "ur-value");
+  valueLabel->set_wrap(false);
+  if (gas) valueLabel->set_tooltip_text(gas->address);
+  keyLine->append(*valueLabel);
+  panel.append(*keyLine);
+
+  if (!needsGas) return;
+  // the needs-gas state: the mirror address is what the user must fund
+  auto* box = MakeGoldTile();
+  box->append(*MakeGoldLabel(T_("add_tao_for_gas", "Add TAO for gas"), 14));
+  const std::string mirror = gas ? gas->mirrorSs58 : std::string();
+  box->append(*MakeWrappedNote(
+      Format(T_("send_tao_to_mirror", "Send about {0} TAO to {1} to cover gas."),
+             FormatTao(suggestedTao), mirror.empty() ? std::string("-") : mirror),
+      "ur-key"));
+  if (!mirror.empty()) {
+    auto* copy = Gtk::make_managed<Gtk::Button>(T_("copy", "Copy"));
+    copy->add_css_class("flat");
+    copy->set_halign(Gtk::Align::START);
+    copy->signal_clicked().connect([&sheet, &copiedReset, copy, mirror] {
+      sheet.get_clipboard()->set_text(mirror);
+      copy->set_label(T_("copied", "Copied!"));
+      copiedReset.disconnect();
+      copiedReset = Glib::signal_timeout().connect(
+          [copy]() -> bool {
+            copy->set_label(T_("copy", "Copy"));
+            return false;
+          },
+          kCopiedResetMs);
+    });
+    box->append(*copy);
+  }
+  panel.append(*box);
+}
 
 }  // namespace
 
@@ -1279,52 +1398,7 @@ void ClaimAlphaSheet::RebuildRows() {
 }
 
 void ClaimAlphaSheet::RebuildGas() {
-  RemoveAllChildren(*gasPanel_);
-  auto* keyLine = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  auto* key = MakeSizedLabel(T_("gas_key", "Gas key"), 12, "ur-caption");
-  key->set_hexpand(true);
-  keyLine->append(*key);
-  Glib::ustring value = "-";
-  if (gas_) {
-    value = ShortHex(gas_->address);
-    if (gas_->balanceKnown) {
-      value += Glib::ustring(" · ") +
-               Format(T_("tao_amount_linux", "{} TAO"), FormatTao(gas_->tao));
-    }
-  }
-  auto* valueLabel = MakeSizedLabel(value, 13, "ur-value");
-  valueLabel->set_wrap(false);
-  if (gas_) valueLabel->set_tooltip_text(gas_->address);
-  keyLine->append(*valueLabel);
-  gasPanel_->append(*keyLine);
-
-  if (!NeedsGas()) return;
-  // the needs-gas state: the mirror address is what the user must fund
-  auto* box = MakeGoldTile();
-  box->append(*MakeGoldLabel(T_("add_tao_for_gas", "Add TAO for gas"), 14));
-  const std::string mirror = gas_ ? gas_->mirrorSs58 : std::string();
-  box->append(*MakeWrappedNote(
-      Format(T_("send_tao_to_mirror", "Send about {0} TAO to {1} to cover gas."),
-             FormatTao(kSuggestedGasTao), mirror.empty() ? std::string("-") : mirror),
-      "ur-key"));
-  if (!mirror.empty()) {
-    auto* copy = Gtk::make_managed<Gtk::Button>(T_("copy", "Copy"));
-    copy->add_css_class("flat");
-    copy->set_halign(Gtk::Align::START);
-    copy->signal_clicked().connect([this, copy, mirror] {
-      get_clipboard()->set_text(mirror);
-      copy->set_label(T_("copied", "Copied!"));
-      copiedReset_.disconnect();
-      copiedReset_ = Glib::signal_timeout().connect(
-          [copy]() -> bool {
-            copy->set_label(T_("copy", "Copy"));
-            return false;
-          },
-          kCopiedResetMs);
-    });
-    box->append(*copy);
-  }
-  gasPanel_->append(*box);
+  BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), kSuggestedGasTao, copiedReset_);
 }
 
 void ClaimAlphaSheet::RebuildAction() {
@@ -1432,6 +1506,246 @@ void ClaimAlphaSheet::ShowError(const Glib::ustring& message) {
   kit::SetTextOrCollapse(*errorText_, message);
 }
 
+// ---- LedgerClaimSheet --------------------------------------------------------
+// The settlement v2 claim dialog, drawn like the v1 one: the total in gold, one
+// row per account (its pool, the amount, the progress and, once sent, the
+// transaction's explorer link), where the alpha lands, the gas key with the
+// needs-gas top-up, and the one action, which claims every claimable account
+// (SnLedgerClaim). What the rows say is snledger::ClaimProgress's. Like the v1
+// dialog it opens and reads with no session, and every failure renders ON THE
+// SHEET.
+class LedgerClaimSheet : public Gtk::Window {
+ public:
+  LedgerClaimSheet(Gtk::Window& parent, std::string coldkey,
+                   const std::vector<snledger::Account>& accounts, std::optional<SnGasInfo> gas,
+                   bool claimsAvailable);
+  ~LedgerClaimSheet() override;
+
+  std::function<void()> on_claim;  // page: StartLedgerClaim
+  std::function<void(const std::string& url)> on_open_link;
+  std::function<std::string(const std::string& txHash)> explorer_url;  // page: the chain settings
+
+  void SetGas(std::optional<SnGasInfo> gas);
+  void OnSending();
+  void OnSent(int64_t noId, int64_t index, const std::string& txHash);
+  void OnConfirmed(int64_t noId, int64_t index, const std::string& txHash, int64_t amountRao);
+  void OnFailed(int64_t noId, int64_t index, const std::string& message);
+  void OnDone();
+  void ShowError(const Glib::ustring& message);
+
+ private:
+  bool NeedsGas() const;
+  void Rebuild();
+
+  std::string coldkey_;
+  snledger::ClaimProgress progress_;
+  std::optional<SnGasInfo> gas_;
+  bool claimsAvailable_ = false;
+  sigc::connection copiedReset_;
+  Gtk::Label* totalValue_ = nullptr;
+  Gtk::Box* rowsPanel_ = nullptr;
+  Gtk::Box* gasPanel_ = nullptr;
+  Gtk::Label* errorText_ = nullptr;
+  Gtk::Button* claimButton_ = nullptr;
+  Gtk::Button* closeButton_ = nullptr;
+};
+
+LedgerClaimSheet::LedgerClaimSheet(Gtk::Window& parent, std::string coldkey,
+                                   const std::vector<snledger::Account>& accounts,
+                                   std::optional<SnGasInfo> gas, bool claimsAvailable)
+    : coldkey_(std::move(coldkey)),
+      progress_(accounts),
+      gas_(std::move(gas)),
+      claimsAvailable_(claimsAvailable) {
+  set_transient_for(parent);
+  set_modal(true);
+  set_title(T_("claim_alpha_title", "Claim SN25α"));
+  set_default_size(kSheetMinWidth, -1);
+  add_css_class("ur-sheet");
+
+  auto* column = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 10);
+  column->set_margin(24);
+  column->set_size_request(kSheetMinWidth, -1);
+
+  // 1. the total, in gold, over which settlement pays it
+  totalValue_ = MakeGoldLabel({}, 36, /*condensed=*/true);
+  column->append(*totalValue_);
+  column->append(*MakeSizedLabel(T_("settlement_v2", "Settlement v2"), 12, "ur-caption"));
+
+  // 2. one row per account
+  rowsPanel_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  rowsPanel_->set_margin_top(6);
+  column->append(*rowsPanel_);
+
+  column->append(*kit::MakeDivider());
+
+  // 3. where it lands and what pays for it
+  auto* to = MakeSizedLabel(Format(T_("claim_to_address_linux", "To {}"), ShortSs58(coldkey_)),
+                            13, "ur-value");
+  to->set_tooltip_text(coldkey_);
+  column->append(*to);
+  gasPanel_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 6);
+  column->append(*gasPanel_);
+
+  errorText_ = MakeSizedLabel({}, 12, "ur-danger-text");
+  errorText_->set_visible(false);
+  column->append(*errorText_);
+
+  column->append(*kit::MakeDivider());
+
+  // 4. the action and the plain statement of what it does
+  claimButton_ = MakeGoldButton({});
+  claimButton_->signal_clicked().connect([this] {
+    if (progress_.Busy() || progress_.ClaimableRao() <= 0) return;
+    ShowError({});
+    if (!on_claim) {
+      ShowError(T_("something_went_wrong", "Something went wrong."));
+      return;
+    }
+    on_claim();
+  });
+  column->append(*claimButton_);
+  column->append(*MakeSizedLabel(
+      T_("claim_sends_from_device",
+         "Your device sends the claim to the vault contract. Gas is paid in TAO from your "
+         "gas key. Alpha lands on your coldkey."),
+      12, "ur-caption"));
+
+  auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
+  scroller->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+  scroller->set_propagate_natural_height(true);
+  scroller->set_max_content_height(kClaimSheetMaxHeight);
+  scroller->set_child(*column);
+
+  auto* root = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  root->append(*scroller);
+  closeButton_ = Gtk::make_managed<Gtk::Button>(T_("close", "Close"));
+  closeButton_->set_halign(Gtk::Align::END);
+  closeButton_->set_margin(16);
+  closeButton_->signal_clicked().connect([this] { set_visible(false); });
+  root->append(*closeButton_);
+  set_child(*root);
+
+  Rebuild();
+  if (!claimsAvailable_) {
+    ShowError(T_("claim_unavailable_linux", "Claiming is not available on this device yet."));
+  }
+}
+
+LedgerClaimSheet::~LedgerClaimSheet() { copiedReset_.disconnect(); }
+
+bool LedgerClaimSheet::NeedsGas() const {
+  if (progress_.NeedsGas()) return true;
+  return gas_ && gas_->balanceKnown && gas_->tao < kMinGasTao;
+}
+
+void LedgerClaimSheet::Rebuild() {
+  RemoveAllChildren(*rowsPanel_);
+  for (const snledger::ClaimRow& row : progress_.Rows()) {
+    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+    line->set_margin_top(6);
+    line->set_margin_bottom(6);
+    auto* left = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+    left->set_hexpand(true);
+    left->append(*MakeSizedLabel(Format(T_("settlement_v2_pool", "Pool {}"), row.noId), 13,
+                                 "ur-value"));
+    if (row.phase == snledger::Phase::Failed) {
+      // needs_gas reads "Add TAO for gas", with the top-up below
+      left->append(*MakeSizedLabel(SnErrorMessage(row.message, T_("claim_failed", "Failed")), 12,
+                                   "ur-danger-text"));
+    }
+    if (!row.txHash.empty()) {
+      const std::string url = explorer_url ? explorer_url(row.txHash) : std::string();
+      if (!url.empty() && g_uri_is_valid(url.c_str(), G_URI_FLAGS_NONE, nullptr)) {
+        auto* link = MakeLinkLabel(ShortHex(row.txHash), url, on_open_link);
+        link->add_css_class("ur-caption");
+        left->append(*link);
+      } else {
+        auto* hash = MakeSizedLabel(ShortHex(row.txHash), 12, "ur-caption");
+        hash->set_tooltip_text(row.txHash);
+        left->append(*hash);
+      }
+    }
+    line->append(*left);
+    auto* amount = MakeSizedLabel(FormatAlphaRao(row.amountRao), 13, "ur-value");
+    amount->set_valign(Gtk::Align::CENTER);
+    amount->set_wrap(false);
+    line->append(*amount);
+    Glib::ustring chipText;
+    const char* chipClass = nullptr;
+    switch (row.phase) {
+      case snledger::Phase::Claimable:
+        chipText = T_("unclaimed", "Unclaimed");
+        break;
+      case snledger::Phase::Sending:
+        chipText = T_("claim_sending_linux", "Sending…");
+        break;
+      case snledger::Phase::Sent:
+        chipText = T_("claim_sent", "Sent");
+        break;
+      case snledger::Phase::Claimed:
+        chipText = T_("claim_confirmed", "Claimed");
+        chipClass = "ur-value-on";
+        break;
+      case snledger::Phase::Failed:
+        chipText = T_("claim_failed", "Failed");
+        chipClass = "ur-danger-text";
+        break;
+    }
+    auto* chip = MakeStatusChip(chipText);
+    if (chipClass != nullptr) chip->add_css_class(chipClass);
+    line->append(*chip);
+    rowsPanel_->append(*line);
+  }
+  const int64_t rao = progress_.ClaimableRao();
+  totalValue_->set_markup("<span foreground='" + HexForMarkup(kReferralGoldLight) + "' size='" +
+                          std::to_string(36 * PANGO_SCALE) + "'>" +
+                          Glib::Markup::escape_text(FormatAlphaRao(rao)) + "</span>");
+  BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), kSuggestedLedgerGasTao, copiedReset_);
+  claimButton_->set_label(Format(T_("claim_amount_button", "Claim {}"), FormatAlphaRao(rao)));
+  claimButton_->set_sensitive(claimsAvailable_ && !progress_.Busy() && rao > 0 && !NeedsGas());
+  closeButton_->set_label(progress_.AnyClaimed() && !progress_.Busy() ? T_("done", "Done")
+                                                                       : T_("close", "Close"));
+}
+
+void LedgerClaimSheet::SetGas(std::optional<SnGasInfo> gas) {
+  gas_ = std::move(gas);
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnSending() {
+  progress_.Start();
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnSent(int64_t noId, int64_t index, const std::string& txHash) {
+  progress_.Sent(noId, index, txHash);
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnConfirmed(int64_t noId, int64_t index, const std::string& txHash,
+                                   int64_t amountRao) {
+  progress_.Confirmed(noId, index, txHash, amountRao);
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnFailed(int64_t noId, int64_t index, const std::string& message) {
+  if (!progress_.Failed(noId, index, message)) {
+    ShowError(SnErrorMessage(message, T_("something_went_wrong", "Something went wrong.")));
+  }
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnDone() {
+  progress_.Done();
+  Rebuild();
+}
+
+void LedgerClaimSheet::ShowError(const Glib::ustring& message) {
+  if (!errorText_) return;
+  kit::SetTextOrCollapse(*errorText_, message);
+}
+
 // ---- EarningsPage ------------------------------------------------------------
 
 EarningsPage::EarningsPage(SdkHost& host)
@@ -1486,6 +1800,7 @@ EarningsPage::EarningsPage(SdkHost& host)
   SetStatValue(rankValue_, T_("current_ranking", "Current Ranking"), {}, false);
   RebuildWalletBlock();
   RebuildUnclaimedTile();
+  RebuildLedgerTile();
   RebuildTop200();
   RenderPointsHeader();
   RenderPointsFooter();
@@ -1498,6 +1813,7 @@ EarningsPage::~EarningsPage() {
   connectFlow_.timer.disconnect();
   setWalletFlow_.timer.disconnect();
   claimFlow_.timer.disconnect();
+  ledgerClaimFlow_.timer.disconnect();
   pointsPublicFlow_.timer.disconnect();
   pointsScrollConn_.disconnect();
   // controller only: by now the window's teardown may have disposed the
@@ -1765,6 +2081,29 @@ void EarningsPage::BuildEarningsPane() {
     tile->append(*claimButton_);
     row.content->append(*tile);
     unclaimedCard_->set_visible(false);
+    content->append(*row.root);
+  }
+
+  // 3b. settlement v2 — the coldkey's v2 accounts, apart from the v1 claims
+  //     above (snledger::SectionFor decides what shows)
+  {
+    auto row = MakePaddedRow(10);
+    ledgerCard_ = row.root;
+    auto* tile = MakeGoldTile();
+    tile->append(*MakeGoldLabel(T_("settlement_v2", "Settlement v2"), 12));
+    ledgerRows_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 10);
+    tile->append(*ledgerRows_);
+    ledgerStatus_ = MakeWrappedNote({}, "ur-row-note");
+    ledgerStatus_->set_visible(false);
+    tile->append(*ledgerStatus_);
+    ledgerClaimButton_ = MakeGoldButton(T_("claim", "Claim"));
+    ledgerClaimButton_->set_margin_top(4);
+    ledgerClaimButton_->set_sensitive(false);
+    ledgerClaimButton_->signal_clicked().connect(
+        sigc::mem_fun(*this, &EarningsPage::OnLedgerClaim));
+    tile->append(*ledgerClaimButton_);
+    row.content->append(*tile);
+    ledgerCard_->set_visible(false);
     content->append(*row.root);
   }
 
@@ -2402,11 +2741,13 @@ void EarningsPage::LoadEarnings() {
       });
 }
 
-// The subnet layer: the vault's view of this network's epochs and the gas
-// key. Only with an attached wallet — without one there is nothing to read.
+// The subnet layer: the vault's view of this network's epochs, the coldkey's
+// v2 accounts and the gas key. Only with an attached wallet — without one
+// there is nothing to read.
 void EarningsPage::LoadWalletLayer() {
   if (!wallet_ || !CanCallApi()) return;
   ApplyClaims(std::nullopt, 0, Fetch::Loading);
+  ApplyLedger(snledger::Load::Loading, {}, ledgerConfigured_);
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   sn::FetchClaims(host_, [this, epoch, seen](std::optional<std::vector<SnClaimRow>> claims,
@@ -2438,14 +2779,29 @@ void EarningsPage::LoadWalletLayer() {
       ApplyClaims(std::move(claims), total, Fetch::Ready, {}, schedule);
     });
   });
+  sn::FetchLedger(host_, [this, epoch, seen](std::optional<std::vector<snledger::Account>> accounts,
+                                              bool configured, std::string err) {
+    PostToMain([this, epoch, seen, accounts = std::move(accounts), configured,
+                err = std::move(err)] {
+      if (*epoch != seen) return;
+      if (!accounts) {
+        g_warning("earnings: sn ledger accounts failed: %s", err.c_str());
+        ApplyLedger(snledger::Load::Unavailable, {}, configured);
+        return;
+      }
+      ApplyLedger(snledger::Load::Ready, *accounts, configured);
+    });
+  });
+  LoadGas();
+}
+
+void EarningsPage::LoadGas() {
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
   sn::FetchGas(host_, [this, epoch, seen](std::optional<SnGasInfo> gas, std::string err) {
     PostToMain([this, epoch, seen, gas = std::move(gas), err = std::move(err)] {
       if (*epoch != seen) return;
-      if (!gas) {
-        g_message("earnings: sn gas key unavailable: %s", err.c_str());
-        ApplyGas(std::nullopt);
-        return;
-      }
+      if (!gas) g_message("earnings: sn gas key unavailable: %s", err.c_str());
       ApplyGas(std::move(gas));
     });
   });
@@ -2573,10 +2929,13 @@ void EarningsPage::ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state
     claimsState_ = Fetch::Ready;
     claimsFailure_.clear();
     schedule_.reset();
+    ledgerAccounts_.clear();
+    ledgerLoad_ = snledger::Load::Ready;
   }
   RebuildWalletBlock();
   RebuildPayoutLine();
   RebuildUnclaimedTile();
+  RebuildLedgerTile();
   RebuildHistory();  // the alpha column follows the wallet
 }
 
@@ -2603,6 +2962,15 @@ void EarningsPage::ApplyClaims(std::optional<std::vector<SnClaimRow>> claims,
 void EarningsPage::ApplyGas(std::optional<SnGasInfo> gas) {
   gas_ = std::move(gas);
   if (auto sheet = claimSheet_.lock()) sheet->SetGas(gas_);
+  if (auto sheet = ledgerClaimSheet_.lock()) sheet->SetGas(gas_);
+}
+
+void EarningsPage::ApplyLedger(snledger::Load load, std::vector<snledger::Account> accounts,
+                               bool claimConfigured) {
+  ledgerLoad_ = load;
+  ledgerAccounts_ = std::move(accounts);
+  ledgerConfigured_ = claimConfigured;
+  RebuildLedgerTile();
 }
 
 void EarningsPage::ApplyHead(std::optional<SnHeadInfo> head, Fetch state) {
@@ -2773,6 +3141,61 @@ void EarningsPage::RebuildUnclaimedTile() {
   }
   kit::SetTextOrCollapse(*unclaimedStatus_, status);
   claimButton_->set_sensitive(ready && totalClaimableRao_ > 0 && !claiming_);
+}
+
+// The Settlement v2 tile under the unclaimed one: snledger::SectionFor's
+// decision, with the alpha in the app's formatting. Claim opens the v2 claim
+// dialog.
+void EarningsPage::RebuildLedgerTile() {
+  if (ledgerCard_ == nullptr) return;
+  const bool connected = wallet_.has_value() && walletState_ == Fetch::Ready;
+  const snledger::SectionView view =
+      snledger::SectionFor(connected, ledgerLoad_, ledgerAccounts_, ledgerConfigured_, claiming_,
+                           FormatAlphaRao);
+  ledgerCard_->set_visible(view.visible);
+  if (!view.visible) return;
+  RemoveAllChildren(*ledgerRows_);
+  for (const snledger::AccountView& account : view.accounts) {
+    auto* block = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+    if (view.showPools) {
+      block->append(*MakeSizedLabel(Format(T_("settlement_v2_pool", "Pool {}"), account.noId), 12,
+                                    "ur-caption"));
+    }
+    const Glib::ustring claimableLabel = T_("settlement_v2_claimable", "Claimable");
+    block->append(*MakeSizedLabel(claimableLabel, 12, "ur-caption"));
+    auto* claimable = MakeGoldLabel(account.claimable, 34, /*condensed=*/true);
+    kit::SetAccessibleLabel(*claimable, claimableLabel + ", " + account.claimable);
+    block->append(*claimable);
+    auto* cells = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+    cells->append(*MakeStatCell(T_("settlement_v2_paid", "Paid"), account.paid));
+    cells->append(*MakeStatCell(T_("settlement_v2_earned", "Earned"), account.earned));
+    block->append(*cells);
+    if (!account.pendingIncrease.empty()) {
+      block->append(*MakeWrappedNote(
+          Format(T_("settlement_v2_pending", "Pending: +{}, awaiting finalization"),
+                 account.pendingIncrease),
+          "ur-row-note"));
+    }
+    ledgerRows_->append(*block);
+  }
+  Glib::ustring status;
+  switch (view.status) {
+    case snledger::Status::None:
+      break;
+    case snledger::Status::Loading:
+      status = T_("loading", "Loading...");
+      break;
+    case snledger::Status::Unavailable:
+      status = T_("settlement_v2_unavailable", "Unavailable");
+      break;
+    case snledger::Status::NothingYet:
+      status = T_("no_claims_yet_linux",
+                  "Nothing to claim yet. Alpha accrues from the next finalized epoch.");
+      break;
+  }
+  kit::SetTextOrCollapse(*ledgerStatus_, status);
+  ledgerClaimButton_->set_visible(view.showClaim);
+  ledgerClaimButton_->set_sensitive(view.claimEnabled);
 }
 
 void EarningsPage::RebuildWalletBlock() {
@@ -3901,17 +4324,7 @@ void EarningsPage::OpenClaimSheet(bool allowActions) {
   sheet->SetGas(gas_);  // re-renders the rows with the explorer resolver in place
   claimSheet_ = sheet;
   PresentSheet(sheet);
-  if (allowActions && !gas_) {
-    auto epoch = epoch_;
-    const uint64_t seen = *epoch_;
-    sn::FetchGas(host_, [this, epoch, seen](std::optional<SnGasInfo> gas, std::string err) {
-      PostToMain([this, epoch, seen, gas = std::move(gas), err = std::move(err)] {
-        if (*epoch != seen) return;
-        if (!gas) g_message("earnings: sn gas key unavailable: %s", err.c_str());
-        ApplyGas(std::move(gas));
-      });
-    });
-  }
+  if (allowActions && !gas_) LoadGas();
 }
 
 void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
@@ -3933,6 +4346,7 @@ void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
   claiming_ = true;
   if (sheet) sheet->OnSending(epochs);
   RebuildUnclaimedTile();
+  RebuildLedgerTile();
   const uint32_t generation = BeginFlow(claimFlow_, kChainTimeoutMs, [this] {
     claiming_ = false;
     if (auto open = claimSheet_.lock()) {
@@ -3940,6 +4354,7 @@ void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
       open->OnDone();
     }
     RebuildUnclaimedTile();
+    RebuildLedgerTile();
   });
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
@@ -3986,10 +4401,104 @@ void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
       claiming_ = false;
       if (auto open = claimSheet_.lock()) open->OnDone();
       RebuildUnclaimedTile();
+      RebuildLedgerTile();
       LoadWalletLayer();  // the chain's answer replaces the optimistic rows
     });
   };
   sn::Claim(host_, epochs, std::move(events));
+}
+
+// ---- the settlement v2 claim -----------------------------------------------------
+
+void EarningsPage::OnLedgerClaim() {
+  auto* root = dynamic_cast<Gtk::Window*>(get_root());
+  if (root == nullptr || !wallet_) {
+    g_warning("earnings: no window root or wallet; the v2 claim dialog was not opened");
+    return;
+  }
+  if (sheet_ || (sheet_open && sheet_open())) {
+    g_message("earnings: v2 claim dialog suppressed — a modal is already open");
+    return;
+  }
+  // the preview shows the dialog as it would be with a device that can claim;
+  // the action itself is gated in StartLedgerClaim
+  auto sheet = std::make_shared<LedgerClaimSheet>(*root, wallet_->coldkeySs58, ledgerAccounts_,
+                                                  gas_, sn::ClaimsAvailable(host_) || previewMode_);
+  sheet->on_claim = [this] { StartLedgerClaim(); };
+  sheet->on_open_link = [this](const std::string& url) { OpenLink(url); };
+  sheet->explorer_url = [this](const std::string& txHash) {
+    return sn::ExplorerTxUrl(host_, txHash);
+  };
+  ledgerClaimSheet_ = sheet;
+  PresentSheet(sheet);
+  if (CanCallApi() && !gas_) LoadGas();
+}
+
+void EarningsPage::StartLedgerClaim() {
+  auto sheet = ledgerClaimSheet_.lock();
+  if (claiming_) return;
+  if (!CanCallApi()) {
+    // the sheet is modal: the refusal renders ON it
+    g_warning("earnings: refusing a v2 claim with no session");
+    if (sheet) sheet->ShowError(T_("please_login_to_urnetwork", "Please login to URnetwork"));
+    return;
+  }
+  if (!sn::ClaimsAvailable(host_)) {
+    if (sheet) {
+      sheet->ShowError(
+          T_("claim_unavailable_linux", "Claiming is not available on this device yet."));
+    }
+    return;
+  }
+  claiming_ = true;
+  if (sheet) sheet->OnSending();
+  RebuildUnclaimedTile();
+  RebuildLedgerTile();
+  const uint32_t generation = BeginFlow(ledgerClaimFlow_, kLedgerClaimTimeoutMs, [this] {
+    claiming_ = false;
+    if (auto open = ledgerClaimSheet_.lock()) {
+      open->ShowError(T_("chain_rpc_unreachable", "The chain RPC is unreachable. Try again."));
+      open->OnDone();
+    }
+    RebuildUnclaimedTile();
+    RebuildLedgerTile();
+  });
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
+  urnet::SnLedgerClaimCallback callback;
+  callback.sent = [this, epoch, seen](int64_t noId, int64_t index, std::string txHash) {
+    PostToMain([this, epoch, seen, noId, index, txHash = std::move(txHash)] {
+      if (*epoch != seen) return;
+      if (auto open = ledgerClaimSheet_.lock()) open->OnSent(noId, index, txHash);
+    });
+  };
+  callback.confirmed = [this, epoch, seen](int64_t noId, int64_t index, std::string txHash,
+                                           int64_t amountRao) {
+    PostToMain([this, epoch, seen, noId, index, txHash = std::move(txHash), amountRao] {
+      if (*epoch != seen) return;
+      if (auto open = ledgerClaimSheet_.lock()) open->OnConfirmed(noId, index, txHash, amountRao);
+    });
+  };
+  callback.failed = [this, epoch, seen](int64_t noId, int64_t index, std::string message) {
+    PostToMain([this, epoch, seen, noId, index, message = std::move(message)] {
+      if (*epoch != seen) return;
+      g_warning("earnings: v2 claim for pool %lld account %lld failed: %s",
+                static_cast<long long>(noId), static_cast<long long>(index), message.c_str());
+      if (auto open = ledgerClaimSheet_.lock()) open->OnFailed(noId, index, message);
+    });
+  };
+  callback.done = [this, epoch, seen, generation] {
+    PostToMain([this, epoch, seen, generation] {
+      if (*epoch != seen) return;
+      if (!SettleFlow(ledgerClaimFlow_, generation, "v2 claim")) return;
+      claiming_ = false;
+      if (auto open = ledgerClaimSheet_.lock()) open->OnDone();
+      RebuildUnclaimedTile();
+      RebuildLedgerTile();
+      LoadWalletLayer();  // the accounts again, as the chain now has them
+    });
+  };
+  sn::LedgerClaim(host_, std::move(callback));
 }
 
 // ---- the public-leaderboard switch -------------------------------------------
@@ -4087,6 +4596,7 @@ void EarningsPage::CloseSheet() {
   if (!sheet_) return;
   sheet_.reset();
   claimSheet_.reset();
+  ledgerClaimSheet_.reset();
   if (on_sheet_open_changed) on_sheet_open_changed(false);
 }
 
@@ -4280,6 +4790,17 @@ void EarningsPage::ApplyPreviewSample() {
   const char* gasPreview = g_getenv("URNETWORK_PREVIEW_GAS");
   gas.tao = (gasPreview && std::string(gasPreview) == "low") ? 0.0002 : 0.0021;
   ApplyGas(gas);
+  // the settlement v2 tile: one pool account, partly paid, that a pending root raises
+  snledger::Account ledger;
+  ledger.vault = "0x5a3e0000000000000000000000000000000000a2";
+  ledger.noId = 1;
+  ledger.index = 42;
+  ledger.finalizedRao = 5120000000;
+  ledger.paidRao = 1879000000;
+  ledger.claimableRao = 3241000000;
+  ledger.pending = true;
+  ledger.pendingRao = 5870000000;
+  ApplyLedger(snledger::Load::Ready, {ledger}, /*claimConfigured=*/true);
 }
 
 void EarningsPage::ShowPreviewClaimDialog() {
