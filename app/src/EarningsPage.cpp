@@ -1570,7 +1570,7 @@ LedgerClaimSheet::LedgerClaimSheet(Gtk::Window& parent, std::string coldkey,
   // 1. the total, in gold, over which settlement pays it
   totalValue_ = MakeGoldLabel({}, 36, /*condensed=*/true);
   column->append(*totalValue_);
-  column->append(*MakeSizedLabel(T_("settlement_v2", "Settlement v2"), 12, "ur-caption"));
+  column->append(*MakeSizedLabel(T_("sn_ledger_title", "Settlement v2"), 12, "ur-caption"));
 
   // 2. one row per account
   rowsPanel_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
@@ -1647,7 +1647,7 @@ void LedgerClaimSheet::Rebuild() {
     line->set_margin_bottom(6);
     auto* left = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     left->set_hexpand(true);
-    left->append(*MakeSizedLabel(Format(T_("settlement_v2_pool", "Pool {}"), row.noId), 13,
+    left->append(*MakeSizedLabel(Format(T_("sn_ledger_pool", "Pool {}"), row.noId), 13,
                                  "ur-value"));
     if (row.phase == snledger::Phase::Failed) {
       // needs_gas reads "Add TAO for gas", with the top-up below
@@ -2090,7 +2090,7 @@ void EarningsPage::BuildEarningsPane() {
     auto row = MakePaddedRow(10);
     ledgerCard_ = row.root;
     auto* tile = MakeGoldTile();
-    tile->append(*MakeGoldLabel(T_("settlement_v2", "Settlement v2"), 12));
+    tile->append(*MakeGoldLabel(T_("sn_ledger_title", "Settlement v2"), 12));
     ledgerRows_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 10);
     tile->append(*ledgerRows_);
     ledgerStatus_ = MakeWrappedNote({}, "ur-row-note");
@@ -3158,21 +3158,21 @@ void EarningsPage::RebuildLedgerTile() {
   for (const snledger::AccountView& account : view.accounts) {
     auto* block = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
     if (view.showPools) {
-      block->append(*MakeSizedLabel(Format(T_("settlement_v2_pool", "Pool {}"), account.noId), 12,
+      block->append(*MakeSizedLabel(Format(T_("sn_ledger_pool", "Pool {}"), account.noId), 12,
                                     "ur-caption"));
     }
-    const Glib::ustring claimableLabel = T_("settlement_v2_claimable", "Claimable");
+    const Glib::ustring claimableLabel = T_("sn_ledger_claimable", "Claimable");
     block->append(*MakeSizedLabel(claimableLabel, 12, "ur-caption"));
     auto* claimable = MakeGoldLabel(account.claimable, 34, /*condensed=*/true);
     kit::SetAccessibleLabel(*claimable, claimableLabel + ", " + account.claimable);
     block->append(*claimable);
     auto* cells = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
-    cells->append(*MakeStatCell(T_("settlement_v2_paid", "Paid"), account.paid));
-    cells->append(*MakeStatCell(T_("settlement_v2_earned", "Earned"), account.earned));
+    cells->append(*MakeStatCell(T_("sn_ledger_paid", "Paid"), account.paid));
+    cells->append(*MakeStatCell(T_("sn_ledger_earned", "Earned"), account.earned));
     block->append(*cells);
     if (!account.pendingIncrease.empty()) {
       block->append(*MakeWrappedNote(
-          Format(T_("settlement_v2_pending", "Pending: +{}, awaiting finalization"),
+          Format(T_("sn_ledger_pending", "Pending: +{}, awaiting finalization"),
                  account.pendingIncrease),
           "ur-row-note"));
     }
@@ -3186,7 +3186,7 @@ void EarningsPage::RebuildLedgerTile() {
       status = T_("loading", "Loading...");
       break;
     case snledger::Status::Unavailable:
-      status = T_("settlement_v2_unavailable", "Unavailable");
+      status = T_("sn_ledger_unavailable", "Unavailable");
       break;
     case snledger::Status::NothingYet:
       status = T_("no_claims_yet_linux",

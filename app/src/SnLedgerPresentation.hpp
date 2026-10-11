@@ -64,7 +64,7 @@ struct AccountView {
   std::string claimable;
   std::string paid;
   std::string earned;
-  std::string pendingIncrease;  // settlement_v2_pending's figure; empty: no pending line
+  std::string pendingIncrease;  // sn_ledger_pending's figure; empty: no pending line
 
   bool operator==(const AccountView& other) const {
     return noId == other.noId && claimable == other.claimable && paid == other.paid &&
@@ -76,7 +76,7 @@ struct AccountView {
 enum class Status {
   None,         // the accounts' figures alone
   Loading,      // loading
-  Unavailable,  // settlement_v2_unavailable, and no figure: never a zero
+  Unavailable,  // sn_ledger_unavailable, and no figure: never a zero
   NothingYet,   // no_claims_yet_linux: the ledger holds no account for the coldkey
 };
 
@@ -85,7 +85,7 @@ struct SectionView {
   bool visible = false;
   Status status = Status::None;
   std::vector<AccountView> accounts;
-  bool showPools = false;     // settlement_v2_pool over each account: there is more than one
+  bool showPools = false;     // sn_ledger_pool over each account: there is more than one
   bool showClaim = false;     // Claim, which opens the v2 claim sheet
   bool claimEnabled = false;
 

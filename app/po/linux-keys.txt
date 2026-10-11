@@ -1005,13 +1005,6 @@ sessions_unsupported
 set_coldkey
 set_coldkey_to_get_paid
 settings
-settlement_v2
-settlement_v2_claimable
-settlement_v2_earned
-settlement_v2_paid
-settlement_v2_pending
-settlement_v2_pool
-settlement_v2_unavailable
 share
 share_extenders
 share_extenders_count
@@ -1050,6 +1043,13 @@ site_payment_error_plan_unavailable
 site_subscription_error_no_customer
 site_subscription_error_store_unavailable
 skip
+sn_ledger_claimable
+sn_ledger_earned
+sn_ledger_paid
+sn_ledger_pending
+sn_ledger_pool
+sn_ledger_title
+sn_ledger_unavailable
 sn_payout_schedule
 sn_payout_schedule_times
 solana

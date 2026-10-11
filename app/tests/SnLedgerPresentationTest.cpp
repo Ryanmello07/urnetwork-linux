@@ -475,15 +475,16 @@ UR_TEST(SnLedgerOneClaimAtATime) {
   }
 }
 
-// CL-2: the new strings are localized: their English is the catalog's msgid,
-// or every locale would show the stale English
+// CL-2: the new strings are localized under the store keys the Android app
+// shows them with: their English is the catalog's msgid, or every locale would
+// show the stale English
 UR_TEST(SnLedgerEnglishMatchesTheCatalogMsgids) {
   const std::string page = ReadLedgerSource("EarningsPage.cpp");
   const std::string catalog = ReadLedgerSource("../po/en.po");
   UR_EXPECT_TRUE(!catalog.empty());
-  for (const char* key : {"settlement_v2", "settlement_v2_claimable", "settlement_v2_paid",
-                          "settlement_v2_earned", "settlement_v2_pending",
-                          "settlement_v2_unavailable", "settlement_v2_pool"}) {
+  for (const char* key : {"sn_ledger_title", "sn_ledger_claimable", "sn_ledger_paid",
+                          "sn_ledger_earned", "sn_ledger_pending", "sn_ledger_unavailable",
+                          "sn_ledger_pool"}) {
     const std::vector<std::string> fallbacks = LedgerFallbacks(page, key);
     if (fallbacks.empty()) UR_FAIL(std::string("EarningsPage.cpp does not show ") + key);
     for (const std::string& english : fallbacks) {
