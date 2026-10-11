@@ -740,7 +740,7 @@ class EarningsPage : public Gtk::Box {
   Flow setWalletFlow_; // 20s: POST /sn/wallet
   Flow pointsPublicFlow_;  // 20s: POST /network/points-ranking-visibility
   Flow claimFlow_;     // 180s: chain round trips
-  Flow ledgerClaimFlow_;  // 9 min: the v2 claim, past the SDK's own bounds
+  Flow ledgerClaimFlow_;  // 3 min + 6 per account: the v2 claim, past the SDK's bounds
   Flow rankingFlow_;   // 20s
   Flow legacyFlow_;    // 20s: the payout read and POST /account/payout-wallet after a link
   Flow removeSolanaFlow_;  // 20s: POST /account/wallets/remove

@@ -4,14 +4,16 @@
 // not and with or without a coldkey; its figures (Claimable, Paid, Earned and
 // what a pending root adds); and the claim sheet's rows through a claim (sent,
 // claimed with the vault's amount, needs gas, already claimed, another
-// failure, a failure about no account, Done). The page and the sheet need GTK
-// and the SDK, so their wiring and their English fallbacks (which must be the
-// catalog's msgids) are read from the sources and po/en.po.
+// failure, a failure about no account, Done), the gas a v2 claim needs and how
+// long the page waits for one. The page and the sheet need GTK and the SDK, so
+// their wiring and their English fallbacks (which must be the catalog's msgids)
+// are read from the sources and po/en.po.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -71,7 +73,7 @@ UR_TEST(SnLedgerNothingShowsWithoutAColdkey) {
   }
 }
 
-// CL-2: before the release configures v2 claims, only balances the ledger
+// CL-2, CL-4: before the release configures v2 claims, only balances the ledger
 // returned show, and never a Claim
 UR_TEST(SnLedgerBeforeActivationOnlyReturnedBalancesShow) {
   UR_EXPECT_TRUE(Tile(true, Load::Loading, {}, false) == SectionView{});
@@ -166,7 +168,7 @@ UR_TEST(SnLedgerAnAccountOnlyInThePendingRoot) {
   UR_EXPECT_FALSE(view.claimEnabled);
 }
 
-// CL-2: Claim waits while any claim is in flight (one gas key, one claim at a
+// CL-4: Claim waits while any claim is in flight (one gas key, one claim at a
 // time) and needs something claimable
 UR_TEST(SnLedgerClaimWaitsForAClaimInFlight) {
   UR_EXPECT_TRUE(Tile(true, Load::Ready, {OnePool()}, true, false).claimEnabled);
@@ -206,7 +208,7 @@ const ClaimRow* RowOf(const ClaimProgress& progress, int64_t noId, int64_t index
   return nullptr;
 }
 
-// APPS-SPEC.md claim (CL-2): the sheet lists every account with something to claim
+// APPS-SPEC.md claim (CL-4): the sheet lists every account with something to claim
 UR_TEST(SnLedgerClaimSheetListsWhatCanBeClaimed) {
   const ClaimProgress progress = TwoPoolSheet();
   UR_EXPECT_EQ(2u, progress.Rows().size());
@@ -219,7 +221,7 @@ UR_TEST(SnLedgerClaimSheetListsWhatCanBeClaimed) {
   UR_EXPECT_FALSE(progress.AnyClaimed());
 }
 
-// APPS-SPEC.md claim (CL-2): a press sends every row; Sent carries the
+// APPS-SPEC.md claim (CL-4): a press sends every row; Sent carries the
 // transaction, Confirmed the amount the vault's Claimed event paid
 UR_TEST(SnLedgerClaimSentThenConfirmedWithTheAmount) {
   ClaimProgress progress = TwoPoolSheet();
@@ -239,7 +241,7 @@ UR_TEST(SnLedgerClaimSentThenConfirmedWithTheAmount) {
   UR_EXPECT_FALSE(progress.Busy());
 }
 
-// APPS-SPEC.md claim (CL-2): a Confirmed without an amount keeps what was
+// APPS-SPEC.md claim (CL-4): a Confirmed without an amount keeps what was
 // claimable, and a Confirmed without a transaction keeps the one Sent gave
 UR_TEST(SnLedgerConfirmedWithoutAnAmountKeepsTheClaimable) {
   ClaimProgress progress = TwoPoolSheet();
@@ -250,7 +252,7 @@ UR_TEST(SnLedgerConfirmedWithoutAnAmountKeepsTheClaimable) {
   UR_EXPECT_TRUE(RowOf(progress, 3, 5)->txHash == "0xdef2");
 }
 
-// APPS-SPEC.md claim (CL-2): needs_gas fails the row, keeps it claimable and
+// APPS-SPEC.md claim (CL-4): needs_gas fails the row, keeps it claimable and
 // turns on the top-up until the next press
 UR_TEST(SnLedgerNeedsGasTurnsOnTheTopUp) {
   ClaimProgress progress = TwoPoolSheet();
@@ -267,7 +269,7 @@ UR_TEST(SnLedgerNeedsGasTurnsOnTheTopUp) {
   UR_EXPECT_TRUE(RowOf(progress, 1, 42)->message.empty());
 }
 
-// APPS-SPEC.md claim rule 4 (CL-2): another claim paid the account first,
+// APPS-SPEC.md claim rule 4 (CL-4): another claim paid the account first,
 // which is success: claimed, nothing to retry
 UR_TEST(SnLedgerAlreadyClaimedIsPaid) {
   ClaimProgress progress = TwoPoolSheet();
@@ -280,7 +282,7 @@ UR_TEST(SnLedgerAlreadyClaimedIsPaid) {
   UR_EXPECT_EQ(int64_t{3'241'000'000}, progress.ClaimableRao());
 }
 
-// APPS-SPEC.md claim (CL-2): any other failure keeps its message for the
+// APPS-SPEC.md claim (CL-4): any other failure keeps its message for the
 // app's words and the row claimable
 UR_TEST(SnLedgerOtherFailuresKeepTheMessage) {
   ClaimProgress progress = TwoPoolSheet();
@@ -293,7 +295,7 @@ UR_TEST(SnLedgerOtherFailuresKeepTheMessage) {
   UR_EXPECT_EQ(int64_t{3'941'000'000}, progress.ClaimableRao());
 }
 
-// APPS-SPEC.md claim (CL-2): a failure about no account (noId 0) is the
+// APPS-SPEC.md claim (CL-4): a failure about no account (noId 0) is the
 // sheet's message and leaves every row as it was; needs_gas still turns on
 // the top-up
 UR_TEST(SnLedgerAFailureAboutNoAccountIsTheSheets) {
@@ -311,7 +313,7 @@ UR_TEST(SnLedgerAFailureAboutNoAccountIsTheSheets) {
   UR_EXPECT_TRUE(RowOf(progress, 3, 5)->phase == Phase::Claimable);
 }
 
-// APPS-SPEC.md claim (CL-2): after Done a row the SDK did not claim (nothing it
+// APPS-SPEC.md claim (CL-4): after Done a row the SDK did not claim (nothing it
 // verified was claimable) is claimable again, and a claimed one stays claimed
 UR_TEST(SnLedgerDoneRestoresRowsTheSdkDidNotClaim) {
   ClaimProgress progress = TwoPoolSheet();
@@ -325,7 +327,7 @@ UR_TEST(SnLedgerDoneRestoresRowsTheSdkDidNotClaim) {
   UR_EXPECT_EQ(int64_t{700'000'000}, progress.ClaimableRao());
 }
 
-// APPS-SPEC.md claim (CL-2): an account the SDK claims that the sheet did not
+// APPS-SPEC.md claim (CL-4): an account the SDK claims that the sheet did not
 // list (the ledger moved since the read) gets its own row
 UR_TEST(SnLedgerAnAccountTheSheetDidNotListGetsARow) {
   ClaimProgress progress = TwoPoolSheet();
@@ -337,7 +339,7 @@ UR_TEST(SnLedgerAnAccountTheSheetDidNotListGetsARow) {
   UR_EXPECT_EQ(int64_t{12'000'000}, RowOf(progress, 4, 7)->amountRao);
 }
 
-// APPS-SPEC.md claim (CL-2): the SDK's stable codes, with or without detail
+// APPS-SPEC.md claim (CL-4): the SDK's stable codes, with or without detail
 UR_TEST(SnLedgerFailureCodes) {
   UR_EXPECT_TRUE(FailureFor("needs_gas: the gas key holds 0 TAO") == Failure::NeedsGas);
   UR_EXPECT_TRUE(FailureFor("needs_gas") == Failure::NeedsGas);
@@ -346,6 +348,40 @@ UR_TEST(SnLedgerFailureCodes) {
   UR_EXPECT_TRUE(FailureFor("not_claimable: below the transfer floor") == Failure::Other);
   UR_EXPECT_TRUE(FailureFor("the gas ran out") == Failure::Other);
   UR_EXPECT_TRUE(FailureFor("") == Failure::Other);
+}
+
+// APPS-SPEC.md claim rule 3 (CL-4): a v2 claim needs about 0.02 TAO in the gas
+// key, so below that the sheet shows the top-up and holds Claim; so does a
+// claim that came back needs_gas; an unknown balance holds nothing
+UR_TEST(SnLedgerAV2ClaimNeedsItsGasLimitInTheGasKey) {
+  using urnw::snledger::kClaimGasTao;
+  using urnw::snledger::NeedsGas;
+  UR_EXPECT_TRUE(kClaimGasTao == 0.02);
+  UR_EXPECT_TRUE(NeedsGas(false, true, 0.0));
+  UR_EXPECT_TRUE(NeedsGas(false, true, 0.005));  // a v1 top-up is not enough
+  UR_EXPECT_TRUE(NeedsGas(false, true, 0.0199));
+  UR_EXPECT_FALSE(NeedsGas(false, true, 0.02));
+  UR_EXPECT_FALSE(NeedsGas(false, true, 0.5));
+  UR_EXPECT_FALSE(NeedsGas(false, false, 0.0));
+  UR_EXPECT_TRUE(NeedsGas(true, true, 0.5));
+  UR_EXPECT_TRUE(NeedsGas(true, false, 0.0));
+}
+
+// APPS-SPEC.md claim (CL-4): the page gives up on a claim only past the SDK's
+// bounds, 2 minutes to read and 6 per account sent in turn, plus a minute, so
+// it never offers Claim again while the SDK still sends
+UR_TEST(SnLedgerTheWatchdogOutlastsEveryClaimTheSdkSends) {
+  using urnw::snledger::ClaimWatchdogMs;
+  constexpr int kMinute = 60'000;
+  UR_EXPECT_EQ(9 * kMinute, ClaimWatchdogMs({}));
+  UR_EXPECT_EQ(9 * kMinute, ClaimWatchdogMs({OnePool()}));
+  // the paid-out pool sends nothing
+  UR_EXPECT_EQ(15 * kMinute, ClaimWatchdogMs({LedgerAccount(1, 42, 5'120'000'000, 1'879'000'000),
+                                              LedgerAccount(2, 9, 1'000'000'000, 1'000'000'000),
+                                              LedgerAccount(3, 5, 700'000'000, 0)}));
+  // an absurd answer saturates instead of overflowing the timer
+  const std::vector<Account> many(10'000, OnePool());
+  UR_EXPECT_EQ(std::numeric_limits<int>::max(), ClaimWatchdogMs(many));
 }
 
 // ---- the page's wiring and English, read from the sources ----------------------
@@ -408,7 +444,7 @@ UR_TEST(SnLedgerPageDrawsTheDecision) {
                            "&EarningsPage::OnClaim));") != std::string::npos);
 }
 
-// APPS-SPEC.md (CL-2): the GUI is unprivileged, so the v2 read and the v2
+// APPS-SPEC.md (CL-4): the GUI is unprivileged, so the v2 read and the v2
 // claim go through the daemon's DeviceRemote like the v1 claim does, and
 // "configured" is the chain settings' v2 vault
 UR_TEST(SnLedgerReadsAndClaimsThroughTheDeviceRemote) {
@@ -426,8 +462,8 @@ UR_TEST(SnLedgerReadsAndClaimsThroughTheDeviceRemote) {
                      .find("sn::LedgerClaim(host_, std::move(callback));") != std::string::npos);
 }
 
-// APPS-SPEC.md (CL-2): Sent links the explorer, needs_gas uses the v1 top-up,
-// and Done reads the accounts again
+// APPS-SPEC.md (CL-4): Sent links the explorer, needs_gas uses the v1 top-up
+// at a v2 claim's gas, and Done reads the accounts again
 UR_TEST(SnLedgerClaimSheetWiring) {
   const std::string page = ReadLedgerSource("EarningsPage.cpp");
   const std::string open = LedgerFunctionBody(page, "void EarningsPage::OnLedgerClaim()");
@@ -437,27 +473,29 @@ UR_TEST(SnLedgerClaimSheetWiring) {
   const std::string rebuild = LedgerFunctionBody(page, "void LedgerClaimSheet::Rebuild()");
   UR_EXPECT_TRUE(rebuild.find("MakeLinkLabel(ShortHex(row.txHash), url, on_open_link)") !=
                  std::string::npos);
+  // the v1 sheet's gas panel, at what a v2 claim needs
   UR_EXPECT_TRUE(rebuild.find("BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), "
-                              "kSuggestedLedgerGasTao, copiedReset_);") != std::string::npos);
+                              "snledger::kClaimGasTao, copiedReset_);") != std::string::npos);
   UR_EXPECT_TRUE(page.find("BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), kSuggestedGasTao, "
                            "copiedReset_);") != std::string::npos);
+  const std::string needsGas = LedgerFunctionBody(page, "bool LedgerClaimSheet::NeedsGas() const");
+  UR_EXPECT_TRUE(needsGas.find("return snledger::NeedsGas(progress_.NeedsGas(), gas_ &&") !=
+                 std::string::npos);
   const std::string start = LedgerFunctionBody(page, "void EarningsPage::StartLedgerClaim()");
   const size_t settle =
       start.find("if (!SettleFlow(ledgerClaimFlow_, generation, \"v2 claim\")) return;");
   UR_EXPECT_TRUE(settle != std::string::npos);
   UR_EXPECT_TRUE(start.find("LoadWalletLayer();", settle) != std::string::npos);
-  // the watchdog outlasts the SDK's own bounds (2 min to read, 6 to send and
-  // confirm), and the top-up covers a v2 claim's gas limit
-  UR_EXPECT_TRUE(start.find("BeginFlow(ledgerClaimFlow_, kLedgerClaimTimeoutMs,") !=
+  // the watchdog outlasts the SDK's own bounds for every account it may claim
+  UR_EXPECT_TRUE(start.find("const int watchdogMs = snledger::ClaimWatchdogMs(ledgerAccounts_);") !=
                  std::string::npos);
-  UR_EXPECT_TRUE(page.find("constexpr int kLedgerClaimTimeoutMs = 9 * 60 * 1000;") !=
+  UR_EXPECT_TRUE(start.find("BeginFlow(ledgerClaimFlow_, watchdogMs, [this] {") !=
                  std::string::npos);
-  UR_EXPECT_TRUE(page.find("constexpr double kSuggestedLedgerGasTao = 0.02;") != std::string::npos);
   UR_EXPECT_TRUE(LedgerFunctionBody(page, "void EarningsPage::LoadWalletLayer()")
                      .find("sn::FetchLedger(") != std::string::npos);
 }
 
-// CL-2: one gas key sends one claim at a time: v1 and v2 refuse to start
+// CL-4: one gas key sends one claim at a time: v1 and v2 refuse to start
 // while either is in flight, and each redraws both tiles when it starts and ends
 UR_TEST(SnLedgerOneClaimAtATime) {
   const std::string page = ReadLedgerSource("EarningsPage.cpp");

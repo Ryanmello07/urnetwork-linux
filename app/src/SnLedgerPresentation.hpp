@@ -13,7 +13,8 @@
 // returns, and no Claim. Claim opens the v2 claim sheet, whose rows follow the
 // SDK's progress (SnLedgerClaim): sent with the transaction, claimed with the
 // amount the vault paid, or failed, where needs_gas turns on the sheet's gas
-// top-up and already_claimed is paid. The page reads the accounts again after
+// top-up and already_claimed is paid. The top-up also shows while the gas key
+// holds less than a v2 claim needs. The page reads the accounts again after
 // Done.
 //
 // Header-only and free of GTK and the SDK so the unit tests need no vendored
@@ -21,8 +22,10 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -133,6 +136,32 @@ inline SectionView SectionFor(bool hasColdkey, Load load, const std::vector<Acco
 }
 
 // ---- the claim -------------------------------------------------------------------
+
+// What a v2 claim needs in the gas key, in TAO. The SDK sends a claim only when
+// the key covers its whole gas limit (the estimate, about 2.5M, plus a quarter)
+// at the price it signs with: about 0.0173 TAO at a 5 gwei gas price, for about
+// 236k gas used. The sheet suggests this top-up too.
+constexpr double kClaimGasTao = 0.02;
+
+// Whether the sheet shows the gas top-up and holds Claim: a claim came back
+// needs_gas, or the gas key's balance is known and below what a v2 claim needs.
+// An unknown balance holds nothing: the SDK checks it before it sends.
+inline bool NeedsGas(bool claimNeededGas, bool balanceKnown, double balanceTao) {
+  return claimNeededGas || (balanceKnown && balanceTao < kClaimGasTao);
+}
+
+// How long the page waits for a claim's Done before it gives up on it: past the
+// SDK's own bounds, 2 minutes to read the ledger and vault2, then up to 6 to
+// send and confirm each account's claim in turn, and a minute more. Giving up
+// sooner would offer Claim again while the SDK still sends with the gas key.
+inline int ClaimWatchdogMs(const std::vector<Account>& accounts) {
+  int64_t claims = 0;
+  for (const Account& account : accounts) {
+    if (account.claimableRao > 0) ++claims;
+  }
+  const int64_t minutes = 2 + 6 * std::max<int64_t>(claims, 1) + 1;
+  return static_cast<int>(std::min<int64_t>(minutes * 60'000, std::numeric_limits<int>::max()));
+}
 
 // How the sheet reads a failed claim. The SDK's messages start with one of its
 // stable codes ("code: detail").

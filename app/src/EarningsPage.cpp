@@ -35,10 +35,6 @@ constexpr int kThreePaneDip = 1500;  // earnings | history | network
 constexpr int kTwoPaneDip = 900;     // earnings | history
 constexpr int kApiTimeoutMs = 20000;      // plain api calls
 constexpr int kChainTimeoutMs = 180000;   // a claim waits for a receipt
-// A v2 claim (normally one pool) waits out the SDK's own bounds: 2 minutes to
-// read the ledger and the v2 vault, then 6 to send and confirm each claim. A
-// watchdog inside them would offer Claim again while the SDK is still sending.
-constexpr int kLedgerClaimTimeoutMs = 9 * 60 * 1000;
 constexpr int kValidateDebounceMs = 300;
 constexpr int kSheetMinWidth = 480;
 constexpr int kClaimSheetMaxHeight = 560;
@@ -51,10 +47,6 @@ constexpr int kCopiedResetMs = 1800;
 constexpr double kMultiplierHighlight = 2.0;   // a country multiplier goes lime at >= 2.0
 constexpr double kMinGasTao = 0.001;           // below this the gas key cannot pay a claim
 constexpr double kSuggestedGasTao = 0.005;     // the top-up the dialog suggests
-// The v2 dialog's: the SDK sends a v2 claim only when the gas key covers its
-// whole gas limit (about 2.5M gas, plus a quarter) at the price it signs with,
-// about 0.017 TAO at a 5 gwei gas price.
-constexpr double kSuggestedLedgerGasTao = 0.02;
 constexpr double kHeadDemotionMargin = 1.10;   // a score within 10% of the floor is warned
 // The one untranslatable string on this surface (store key sn_alpha_symbol,
 // translatable: false, so it is not in the catalog).
@@ -1635,8 +1627,8 @@ LedgerClaimSheet::LedgerClaimSheet(Gtk::Window& parent, std::string coldkey,
 LedgerClaimSheet::~LedgerClaimSheet() { copiedReset_.disconnect(); }
 
 bool LedgerClaimSheet::NeedsGas() const {
-  if (progress_.NeedsGas()) return true;
-  return gas_ && gas_->balanceKnown && gas_->tao < kMinGasTao;
+  return snledger::NeedsGas(progress_.NeedsGas(), gas_ && gas_->balanceKnown,
+                            gas_ ? gas_->tao : 0.0);
 }
 
 void LedgerClaimSheet::Rebuild() {
@@ -1701,7 +1693,7 @@ void LedgerClaimSheet::Rebuild() {
   totalValue_->set_markup("<span foreground='" + HexForMarkup(kReferralGoldLight) + "' size='" +
                           std::to_string(36 * PANGO_SCALE) + "'>" +
                           Glib::Markup::escape_text(FormatAlphaRao(rao)) + "</span>");
-  BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), kSuggestedLedgerGasTao, copiedReset_);
+  BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), snledger::kClaimGasTao, copiedReset_);
   claimButton_->set_label(Format(T_("claim_amount_button", "Claim {}"), FormatAlphaRao(rao)));
   claimButton_->set_sensitive(claimsAvailable_ && !progress_.Busy() && rao > 0 && !NeedsGas());
   closeButton_->set_label(progress_.AnyClaimed() && !progress_.Busy() ? T_("done", "Done")
@@ -4454,7 +4446,9 @@ void EarningsPage::StartLedgerClaim() {
   if (sheet) sheet->OnSending();
   RebuildUnclaimedTile();
   RebuildLedgerTile();
-  const uint32_t generation = BeginFlow(ledgerClaimFlow_, kLedgerClaimTimeoutMs, [this] {
+  // past the SDK's own bounds for every account it may claim
+  const int watchdogMs = snledger::ClaimWatchdogMs(ledgerAccounts_);
+  const uint32_t generation = BeginFlow(ledgerClaimFlow_, watchdogMs, [this] {
     claiming_ = false;
     if (auto open = ledgerClaimSheet_.lock()) {
       open->ShowError(T_("chain_rpc_unreachable", "The chain RPC is unreachable. Try again."));
@@ -4786,9 +4780,10 @@ void EarningsPage::ApplyPreviewSample() {
   gas.address = "0x9a1cSAMPLEsampleSAMPLEsampleSAMPLEsamplee07f";
   gas.mirrorSs58 = "5GhSAMPLEsampleSAMPLEsampleSAMPLEsampleSAMPL2q";
   gas.balanceKnown = true;
-  // URNETWORK_PREVIEW_GAS=low: the needs-gas state (the mirror address + top-up)
+  // URNETWORK_PREVIEW_GAS=low: the needs-gas state (the mirror address + top-up);
+  // otherwise enough for a v1 and a v2 claim
   const char* gasPreview = g_getenv("URNETWORK_PREVIEW_GAS");
-  gas.tao = (gasPreview && std::string(gasPreview) == "low") ? 0.0002 : 0.0021;
+  gas.tao = (gasPreview && std::string(gasPreview) == "low") ? 0.0002 : 0.0251;
   ApplyGas(gas);
   // the settlement v2 tile: one pool account, partly paid, that a pending root raises
   snledger::Account ledger;
