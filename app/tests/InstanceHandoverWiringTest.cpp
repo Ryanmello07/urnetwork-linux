@@ -138,7 +138,8 @@ UR_TEST(InstanceHandoverWiring_TheInstanceOpensOnlyOnceItsWindowAndTrayExist) {
       startup, {"if (!host->Initialize(storageDir, logDir)) {", "urnw::instance::BeginExiting();",
                 "app->quit();", "return;", "window = std::make_shared<urnw::MainWindow>(*host);",
                 "app->add_window(*window);", "tray = std::make_shared<urnw::Tray>();",
-                "app->hold();", "urnw::instance::OpenLaunches(G_APPLICATION(app->gobj()), serve);"}));
+                "app->hold();", "urnw::instance::OpenLaunches(G_APPLICATION(app->gobj()),",
+                "[&](const urnw::instance::Launch& launch) {", "serve(launch, false);"}));
 }
 
 // Quit refuses launches before the stop holds the main loop, and every end of
@@ -153,24 +154,45 @@ UR_TEST(InstanceHandoverWiring_QuitAndEveryEndOfTheLoopBeginExitingFirst) {
       main, "app->signal_shutdown().connect([] { urnw::instance::BeginExiting(); }, false);"));
 }
 
-// Every activation goes through one serve: links routed, the window shown
-// unless the launch is the autostart entry's. The process's own launch is the
-// first activation.
+// Every activation goes through one serve: an auth link to its gate, every
+// other link routed, the window shown unless the launch is the autostart
+// entry's or carries only auth links (ShowsWindowFor). The process's own
+// launch is the first activation or open, the one a stray auth link may show
+// the window for; a launch handed over never is.
 UR_TEST(InstanceHandoverWiring_EveryActivationIsServedByItsKind) {
   const std::string main = MainBody();
   UR_EXPECT_TRUE(HandoverInOrder(
       main, {"urnw::instance::Activations activations(arguments.kind);",
-             "const auto serve = [&](const urnw::instance::Launch& launch) {",
-             "for (const std::string& uri : launch.uris) host->HandleDeepLink(uri);",
-             "if (window && urnw::instance::ShowsWindow(launch.kind)) window->present();"}));
+             "bool ownLaunchServed = false;",
+             "const auto serve = [&](const urnw::instance::Launch& launch, bool ownLaunch) {",
+             "for (const std::string& uri : launch.uris) {",
+             "if (urnw::authlink::IsAuthHost(uri)) {",
+             "if (window) window->HandleAuthLink(uri, ownLaunch);", "continue;", "try {",
+             "host->HandleDeepLink(uri);", "} catch (const std::exception&) {",
+             "g_warning(\"launch: a deep link could not be handled\");",
+             "if (window && urnw::instance::ShowsWindowFor(launch)) window->present();"}));
+  UR_EXPECT_TRUE(!HandoverHas(main, "urnw::instance::ShowsWindow(launch.kind)"));
   const std::string activate =
       HandoverBetween(main, "app->signal_activate().connect([&] {", "\n  });\n");
-  UR_EXPECT_TRUE(HandoverInOrder(activate, {"launch.kind = activations.Next();", "serve(launch);"}));
+  UR_EXPECT_TRUE(HandoverInOrder(
+      activate, {"const bool ownLaunch = !std::exchange(ownLaunchServed, true);",
+                 "launch.kind = activations.Next();", "serve(launch, ownLaunch);"}));
   UR_EXPECT_TRUE(!HandoverHas(activate, "present("));
   const std::string open = HandoverBetween(main, "app->signal_open().connect(", "\n      });\n");
-  UR_EXPECT_TRUE(HandoverInOrder(open, {"launch.kind = urnw::instance::LaunchKind::Link;",
-                                        "launch.uris.push_back(f->get_uri());", "serve(launch);"}));
+  UR_EXPECT_TRUE(HandoverInOrder(
+      open, {"const bool ownLaunch = !std::exchange(ownLaunchServed, true);",
+             "launch.kind = urnw::instance::LaunchKind::Link;",
+             "launch.uris.push_back(f->get_uri());", "serve(launch, ownLaunch);"}));
   UR_EXPECT_TRUE(!HandoverHas(open, "present("));
+  // the own launch is told apart by these two alone, and a handover is never it
+  size_t writes = 0;
+  for (size_t at = main.find("ownLaunchServed"); at != std::string::npos;
+       at = main.find("ownLaunchServed", at + 1)) {
+    ++writes;
+  }
+  UR_EXPECT_EQ(std::size_t{3}, writes);
+  UR_EXPECT_TRUE(HandoverHas(main, "[&](const urnw::instance::Launch& launch) {\n"
+                                   "                                   serve(launch, false);"));
 }
 
 // The session bus side: the handover object is registered before the claim and

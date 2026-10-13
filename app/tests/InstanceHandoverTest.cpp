@@ -12,6 +12,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "TestHarness.hpp"
@@ -534,6 +535,34 @@ UR_TEST(InstanceHandover_ALinkIsHandedOverAndRoutedWithTheWindow) {
                      (log.events ==
                       std::vector<std::string>{"serve link urnetwork://callback.example/wallet window",
                                                "reply link served"}));
+}
+
+// A urnetwork://auth link raises the window only through its gate
+// (MainWindow::HandleAuthLink): a launch that carries nothing else shows
+// nothing by itself, whatever the case of its scheme and host, and one that
+// also carries another link, or none, shows the window as before.
+UR_TEST(InstanceHandover_ALaunchOfOnlyAuthLinksShowsNothingByItself) {
+  const auto launchOf = [](LaunchKind kind, std::vector<std::string> uris) {
+    Launch launch;
+    launch.kind = kind;
+    launch.uris = std::move(uris);
+    return launch;
+  };
+  UR_EXPECT_FALSE(
+      urnw::instance::ShowsWindowFor(launchOf(LaunchKind::Link, {"urnetwork://auth?state=x"})));
+  UR_EXPECT_FALSE(
+      urnw::instance::ShowsWindowFor(launchOf(LaunchKind::Link, {"URNETWORK://AUTH/?a=b"})));
+  UR_EXPECT_FALSE(urnw::instance::ShowsWindowFor(
+      launchOf(LaunchKind::Link, {"urnetwork://auth?state=x", "urnetwork://auth"})));
+  UR_EXPECT_TRUE(urnw::instance::ShowsWindowFor(launchOf(LaunchKind::Open, {})));
+  UR_EXPECT_TRUE(urnw::instance::ShowsWindowFor(launchOf(LaunchKind::Link, {})));
+  UR_EXPECT_TRUE(urnw::instance::ShowsWindowFor(
+      launchOf(LaunchKind::Link, {"urnetwork://oauth/google?state=x&id_token=y"})));
+  UR_EXPECT_TRUE(urnw::instance::ShowsWindowFor(
+      launchOf(LaunchKind::Link, {"urnetwork://authenticator/x"})));
+  UR_EXPECT_TRUE(urnw::instance::ShowsWindowFor(
+      launchOf(LaunchKind::Link, {"urnetwork://auth?state=x", "urnetwork://onboarding/connect"})));
+  UR_EXPECT_FALSE(urnw::instance::ShowsWindowFor(launchOf(LaunchKind::Autostart, {})));
 }
 
 // The command line as GApplication reads it: positional arguments are links,

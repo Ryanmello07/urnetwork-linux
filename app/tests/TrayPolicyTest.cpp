@@ -177,7 +177,8 @@ UR_TEST(TrayPolicyWiring_TheWindowHidesOnlyToATrayAndNeverStaysUnreachable) {
   const std::string startup =
       TrayPolicySpan(main, "app->signal_startup().connect(", "app->signal_activate().connect(");
   UR_EXPECT_TRUE(TrayPolicyInOrder(
-      startup, {"OpenLaunches(G_APPLICATION(app->gobj()), serve);", "keepReachable();"}));
+      startup, {"OpenLaunches(G_APPLICATION(app->gobj()),", "serve(launch, false);",
+                "keepReachable();"}));
   const std::string keep = TrayPolicySpan(main, "const auto keepReachable = [&] {", "\n  };\n");
   UR_EXPECT_TRUE(TrayPolicyInOrder(
       keep, {"noTrayGrace.disconnect();", "if (!unreachable()) return;",

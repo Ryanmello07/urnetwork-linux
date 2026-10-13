@@ -213,6 +213,7 @@ executable('urnetwork-gui',
     'src/BrandIcons.cpp',
     'src/SeedphraseSheet.cpp',
     'src/NetworkServerSheet.cpp',
+    'src/BrowserApprovalSheet.cpp',
     'src/ConnectCanvas.cpp',
     'src/ConnectPage.cpp',
     'src/SupportPage.cpp',
@@ -741,6 +742,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ApprovalCheckWiringTest.cpp',
     'tests/LogExportTest.cpp',
     'tests/ApprovalHostWiringTest.cpp',
+    'tests/BrowserApprovalWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -866,6 +868,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # LogExportTest reads LogExport.hpp and Settings' Export logs the same way.
               # ApprovalHostWiringTest reads the approval's host half in SdkHost and the
               # window's wallet answer the same way.
+              # BrowserApprovalWiringTest reads the approval's gate, sheet, launch routing
+              # and their host halves the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

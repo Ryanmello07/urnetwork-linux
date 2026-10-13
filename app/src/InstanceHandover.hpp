@@ -50,6 +50,8 @@
 #include <utility>
 #include <vector>
 
+#include "AuthLink.hpp"
+
 namespace urnw::instance {
 
 // The application id, which GApplication owns on the session bus.
@@ -86,7 +88,8 @@ enum class LaunchKind {
   // The autostart entry: only the tray.
   Autostart,
   // urnetwork:// links (wallet callbacks, onboarding): routed, and the window
-  // shows.
+  // shows, except for a launch that carries only urnetwork://auth links, which
+  // the gate judges (MainWindow::HandleAuthLink).
   Link,
 };
 
@@ -143,6 +146,18 @@ struct Launch {
   // window for it; empty when the launch carries none.
   std::string activationToken;
 };
+
+// Whether serving this launch shows the window: a urnetwork://auth link raises
+// it only through its gate, so a launch that carries nothing else shows nothing
+// here (contract section 5, rule 3).
+inline bool ShowsWindowFor(const Launch& launch) {
+  if (!ShowsWindow(launch.kind)) return false;
+  if (launch.uris.empty()) return true;
+  for (const std::string& uri : launch.uris) {
+    if (!authlink::IsAuthHost(uri)) return true;
+  }
+  return false;
+}
 
 // The launcher's environment flag.
 inline bool IsAutostartFlag(const char* value) {

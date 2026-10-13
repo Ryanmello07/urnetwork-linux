@@ -8,12 +8,22 @@
 #include <adwaita.h>
 #include <glib.h>
 
+#include <chrono>
 #include <cstdio>
+#include <optional>
+#include <string_view>
+#include <utility>
 
 #include <glibmm/datetime.h>
 
 #include "AppPrefs.hpp"
+#include "ApprovalCheck.hpp"
+#include "ApprovalUnseal.hpp"
+#include "AuthLink.hpp"
 #include "BittensorWalletFlow.hpp"
+#include "Config.hpp"
+#include "OsRandom.hpp"
+#include "SchemeHandler.hpp"
 #include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
 #include "DaemonUnreachableCopy.hpp"
@@ -32,6 +42,19 @@ namespace urnw {
 
 namespace {
 constexpr const char* kOnboardingPendingKey = "onboarding_pending";
+
+// Why the gate decided what it did, for the log: a closed token. A link that
+// was not even well formed says so with the parser's own reason, which is the
+// more useful word when the gate has only "nothing is waiting" or "this is no
+// answer" to add; anything else is the gate's.
+std::string_view AuthLinkWhy(const authlink::Return& link, const approval::Decision& decision) {
+  const bool parserKnowsBetter =
+      decision.why == approval::Why::NoAttempt || decision.why == approval::Why::InvalidShape;
+  if (link.kind == authlink::Kind::Invalid && parserKnowsBetter) {
+    return authlink::ToString(link.reject);
+  }
+  return approval::ToString(decision.why);
+}
 }  // namespace
 namespace {
 
@@ -237,6 +260,10 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (sessionsPage_) sessionsPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
     if (windowVisible_) {
+      // The browser approval's page check begins when someone is looking at a
+      // signed-out window: that is when the action could be wanted, and when
+      // the network is likely to be up. Once a run.
+      if (!ApprovalContext().signedIn) StartApprovalCheck();
       // RE-READ, never replay: SetPresentationActive(true) above has just
       // reopened the connect controller, so the reading the window was last
       // pushed describes a moment when there was no controller to ask.
@@ -352,6 +379,11 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   });
   host_.SetOnboardingLinkHandler([this](const std::string& url) {
     PostToMain([this, url] { HandleOnboardingLink(url); });
+  });
+  // Another sign-in starting ends a browser approval still waiting: its late
+  // answer is then a stray (UrIoApproval.hpp). Any thread; marshalled.
+  host_.SetSignInStartedHandler([this] {
+    PostToMain([this] { CancelApproval(approval::ClearReason::SignInStarted); });
   });
   // THE CONNECTION FEED, AND IT IS NOT GATED ON VISIBILITY. That asymmetry —
   // this push ungated beside a stats push gated on windowVisible_ — is how two
@@ -517,6 +549,14 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       }
       g_message("preview: navigate done");
     }, 100);
+  }
+
+  // A build that points the approval at a page of its own says so, whatever
+  // the flag is: the override is a compiler command line's (Config.hpp), where
+  // a flag left set can reach a build nobody meant it for. The host only.
+  if constexpr (config::kApprovalOriginIsATest) {
+    g_warning("approval: this build talks to a test origin: %.*s",
+              static_cast<int>(config::kApprovalHost.size()), config::kApprovalHost.data());
   }
 }
 
@@ -1172,6 +1212,7 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 // can see is pure wakeups.
 MainWindow::~MainWindow() {
   geometrySave_.disconnect();
+  approvalTimer_.disconnect();  // the slot's destructor wipes the attempt
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
   host_.SetRowConnect(nullptr);   // and so does the row's start path
@@ -2060,14 +2101,30 @@ void MainWindow::OnOnboardingGuestSignInRequired() {
   DivertGuestToConversion([this] { OpenUpgrade(); });
 }
 
-// android presents AuthCodeLoginSheet — a modal with its own field — instead
-// of an inline box on the login screen; the desktop equivalent is a dialog.
+// The Auth code tile. Where the browser approval is offered (the build flag,
+// this network, the page and the urnetwork:// handler all say so) it opens the
+// browser sign-in sheet, whose paste field takes a code too; everywhere else
+// the auth code dialog, as it always has.
 void MainWindow::OnUseCode() {
   loginError_.set_text("");
+  if (!ApprovalOffered()) {
+    ShowAuthCodeDialog();
+    return;
+  }
+  ShowApprovalSheet(std::string());
+}
+
+// android presents AuthCodeLoginSheet — a modal with its own field — instead
+// of an inline box on the login screen; the desktop equivalent is a dialog.
+void MainWindow::ShowAuthCodeDialog() {
   GtkWidget* dialog = adw_message_dialog_new(
       GTK_WINDOW(gobj()), T_("auth_code_login_sheet_header", "Auth code login"), nullptr);
   auto* field = Gtk::make_managed<Gtk::Entry>();
   field->add_css_class("ur-input");
+  // the code is a credential: masked, and kept out of the input method's
+  // learning as a password is
+  field->set_visibility(false);
+  field->set_input_purpose(Gtk::InputPurpose::PASSWORD);
   field->set_placeholder_text(T_("auth_code", "Auth code"));
   adw_message_dialog_set_extra_child(ADW_MESSAGE_DIALOG(dialog), GTK_WIDGET(field->gobj()));
   adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel",
@@ -2091,26 +2148,298 @@ void MainWindow::OnUseCode() {
       G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
         auto* ctx = static_cast<Ctx*>(data);
         if (g_strcmp0(response, "login") != 0) return;
-        const std::string code = TrimWhitespace(ctx->field->get_text());
-        if (code.empty()) return;
-        MainWindow* self = ctx->self;
-        self->SetLoginBusy(true);
-        self->host_.LoginWithCode(code, [self](AuthResult r) {
-          PostToMain([self, r] {
-            self->SetLoginBusy(false);
-            if (!r.ok) {
-              self->loginError_.set_text(
-                  r.error.empty() ? T_("code_sign_in_failed", "Code sign in failed")
-                                  : r.error.c_str());
-            } else {
-              self->StartTunnelUi("code sign-in");
-            }
-          });
-        });
+        ctx->self->SignInWithAuthCode(ctx->field->get_text());
       }),
       new Ctx{this, field},
       +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
   gtk_window_present(GTK_WINDOW(dialog));
+}
+
+// The one sign-in with a pasted code: the dialog's and the browser sign-in
+// sheet's field.
+void MainWindow::SignInWithAuthCode(std::string code) {
+  code = TrimWhitespace(code);
+  if (code.empty()) return;
+  SetLoginBusy(true);
+  host_.LoginWithCode(code, [this](AuthResult r) {
+    PostToMain([this, r] {
+      SetLoginBusy(false);
+      if (!r.ok) {
+        loginError_.set_text(r.error.empty() ? T_("code_sign_in_failed", "Code sign in failed")
+                                             : r.error.c_str());
+      } else {
+        StartTunnelUi("code sign-in");
+      }
+    });
+  });
+}
+
+// ---- a sign-in approved on a web page (UrIoApproval.hpp) --------------------
+// The window owns the one attempt (approval_), on the main thread. The sheet
+// asks for it through BeginApproval, ApprovalRequestUrl and CancelApproval;
+// its answer reaches the gate, HandleAuthLink, from main.cpp's serve. The log
+// gets closed words only.
+
+// The gate for urnetwork://auth: every answer to a browser sign-in passes here,
+// on the main thread, before the window is raised, a screen is touched or a
+// code is used. In this order: the parser (AuthLink.hpp) says whether the link
+// is a sealed or a denied answer at all; the attempt (UrIoApproval.hpp) says
+// whether it answers the sign-in this app started; for an approval the box is
+// then opened with the attempt's own key, and only a box that holds the
+// attempt's state is an answer. Only then is the attempt consumed, the window
+// raised and the code handed on. A denial for the live attempt raises the
+// window to say so. Anything else (a link nothing waits for, another
+// attempt's, a box that does not open) raises nothing, resets nothing and
+// disturbs no attempt that is alive, except for ShowStrayNotice's one line.
+//
+// The switch has no default, and -Werror=switch makes a verdict added to the
+// model a build error until this gate has decided what it does.
+void MainWindow::HandleAuthLink(const std::string& url, bool ownLaunch) {
+  if (approvalQuitting_) return;
+  const authlink::Return link = authlink::Parse(url);
+  approval::Decision decision = approval_.Check(link, approval::Now(), ApprovalContext());
+  std::optional<std::string> code;
+  if (decision.verdict == approval::Verdict::Accepted) {
+    code = approval::Unseal(approval_.SecretKey(), link);
+    if (!code) decision = approval::Decision{approval::Verdict::Stray, approval::Why::BadSeal};
+  }
+  const std::string_view verdict = approval::ToString(decision.verdict);
+  const std::string_view why = AuthLinkWhy(link, decision);
+  g_message("app: auth link: %.*s (%.*s)", static_cast<int>(verdict.size()), verdict.data(),
+            static_cast<int>(why.size()), why.data());
+  switch (decision.verdict) {
+    case approval::Verdict::Ignored:
+      return;
+    case approval::Verdict::Stray:
+      // An attempt the gate found dead and wiped (its deadline passed on a
+      // clock the timer has not read yet, or another flow took over) leaves a
+      // sheet waiting for an answer that cannot come: it is told, as the timer
+      // tells it.
+      if (decision.why == approval::Why::Expired || decision.why == approval::Why::Superseded) {
+        OnApprovalExpired();
+      }
+      ShowStrayNotice(ownLaunch);
+      return;
+    case approval::Verdict::Denied:
+      present();
+      OnApprovalDenied();
+      return;
+    case approval::Verdict::Accepted:
+      if (!approval_.Consume(link.state)) return;
+      present();
+      OnApprovedCode(std::move(*code));
+      return;
+  }
+}
+
+// A link that answers no attempt raises nothing, resets nothing and shows
+// nothing. The one exception is this process's own launch: the browser's
+// "Open URnetwork?" started the app for a link whose attempt cannot have
+// survived the restart (an attempt lives in memory only), and a launch that
+// opened nothing looks as if it did nothing. That launch shows the window
+// once, with a neutral line that overwrites no real error and changes no step.
+// A link handed to a running instance never does.
+void MainWindow::ShowStrayNotice(bool ownLaunch) {
+  if (!ownLaunch || std::exchange(strayNoticeTaken_, true)) return;
+  if (!strayLine_.Allow(std::chrono::steady_clock::now())) return;
+  present();
+  if (stack_.get_visible_child_name() == "login" && loginError_.get_text().empty()) {
+    SetLoginNotice(T_("auth_code_error",
+                      "Error authenticating code. Please try again or generate a new code."));
+  }
+}
+
+// signedIn reads this window's own last state first, so a signed-in window
+// never waits on the host's lock.
+approval::Context MainWindow::ApprovalContext() {
+  approval::Context context;
+  context.signedIn = authSignedIn_ || host_.IsLoggedIn();
+  context.flow = host_.CurrentBrowserFlow();
+  return context;
+}
+
+bool MainWindow::ApprovalOffered() {
+  return ApprovalOfferedIn(host_.CurrentApprovalNetwork());
+}
+
+// The decision for a network that has been read already: BeginApproval reads it
+// once and uses that one for this and for the request, so an attempt cannot be
+// offered for one network and name another.
+bool MainWindow::ApprovalOfferedIn(const approval::Network& network) {
+  if (!config::kBrowserApprovalEnabled) return false;
+  if (network.kind == approval::NetworkKind::None) {
+    g_message("approval: not offered: this network's API cannot be named in a request");
+    return false;
+  }
+  if (ProcessIsElevated()) {
+    g_message("approval: not offered: this process runs as root");
+    return false;
+  }
+  if (ApprovalContext().signedIn) {
+    g_message("approval: not offered: the app is signed in");
+    return false;
+  }
+  StartApprovalPageCheck();
+  if (ApprovalPageState() != ApprovalPage::Live) {
+    g_message("approval: not offered: the page is not known to be live");
+    return false;
+  }
+  // the official network needs the page to list version 1, another network
+  // version 2: a page that lists only 1 is never sent a request that names a
+  // network
+  if (!ApprovalPageLists(approval::ContractFor(network.kind))) {
+    g_message("approval: not offered: the page does not list this network's contract version");
+    return false;
+  }
+  // The answer comes back as a urnetwork:// launch: the desktop's handler for
+  // the scheme has to be this app's own entry, read back now, at the click.
+  // Nothing is ever written: the packages own the registration.
+  switch (scheme::HandlerStatus()) {
+    case scheme::HandlerState::Ours:
+      return true;
+    case scheme::HandlerState::Foreign:
+      g_message("approval: not offered: another program handles urnetwork:// links");
+      return false;
+    case scheme::HandlerState::Absent:
+      g_message("approval: not offered: no program handles urnetwork:// links");
+      return false;
+  }
+  return false;
+}
+
+// The approval page's descriptor is fetched once per run (ApprovalCheck.hpp),
+// and only where the action could be offered at all: in the official network or
+// another whose API a request can name, by a process that is not root. With the
+// build flag off this app makes no request for it.
+void MainWindow::StartApprovalCheck() {
+  if constexpr (config::kBrowserApprovalEnabled) {
+    if (host_.CurrentApprovalNetwork().kind != approval::NetworkKind::None &&
+        !ProcessIsElevated()) {
+      StartApprovalPageCheck();
+    }
+  }
+}
+
+std::optional<approval::Slot::View> MainWindow::BeginApproval() {
+  // A second click reads the same request back, and does not extend it, unless
+  // another flow took the number since (a network change does, and pushes only
+  // a sign-out): that attempt is dead, its answer would be a stray, and a
+  // request for it would send the person to approve something that can never
+  // finish. The same goes for a request the page would refuse as expired by now
+  // (kReopenWindow): the click starts a new attempt.
+  const approval::Clocks now = approval::Now();
+  if (std::optional<approval::Slot::View> live = approval_.Peek(now)) {
+    if (approval_.Flow() == host_.CurrentBrowserFlow() && approval_.Reopenable(now)) return live;
+    CancelApproval(approval::ClearReason::Superseded);
+  }
+  // read once: the same network decides whether the action is offered and what
+  // the request names; the urnetwork:// handler is read back inside, at the click
+  const approval::Network network = host_.CurrentApprovalNetwork();
+  if (!ApprovalOfferedIn(network)) return std::nullopt;
+  std::optional<approval::KeyPair> keys = approval::FreshKeyPair(approval::NewKeyPair);
+  if (!keys) {
+    g_warning("approval: no usable key pair; the paste flow stays");
+    return std::nullopt;
+  }
+  approval::Slot::Params params;
+  params.publicKey = std::move(keys->publicKey);
+  params.secretKey = std::move(keys->secretKey);
+  // empty for the official network, which makes the request version 1; another
+  // network names its API (version 2)
+  params.api = network.api;
+  params.now = approval::Now();
+  // last, so nothing that can still fail has already told the other flows they
+  // were superseded
+  params.flow = host_.BeginBrowserApproval();
+  std::optional<approval::Slot::View> view =
+      approval_.Begin(std::move(params), osrandom::RandomBytes);
+  if (!view) {
+    g_warning("approval: no entropy for a state; the paste flow stays");
+    return std::nullopt;
+  }
+  // the attempt's five minutes: one one-shot timer, restarted by every attempt
+  // and stopped by every end of one
+  approvalTimer_.disconnect();
+  approvalTimer_ = Glib::signal_timeout().connect(
+      [this]() -> bool {
+        OnApprovalTimer();
+        return false;
+      },
+      std::chrono::duration_cast<std::chrono::milliseconds>(approval::kLife).count());
+  g_message("approval: an attempt started (version %d)",
+            static_cast<int>(approval::ContractFor(network.kind)));
+  return view;
+}
+
+std::string MainWindow::ApprovalRequestUrl(const approval::Slot::View& view) const {
+  return approval::BuildRequestUrl(config::kApprovalPageUrl, view);
+}
+
+void MainWindow::CancelApproval(approval::ClearReason reason) {
+  approvalTimer_.disconnect();
+  if (!approval_.Live()) return;
+  approval_.Clear(reason);
+  const std::string_view word = approval::ToString(reason);
+  g_message("approval: the attempt ended: %.*s", static_cast<int>(word.size()), word.data());
+}
+
+void MainWindow::OnApprovalTimer() {
+  CancelApproval(approval::ClearReason::TimedOut);
+  // An attempt the gate already wiped (it found the deadline passed on the
+  // wall clock, or another flow took over) leaves a sheet waiting for an
+  // answer that cannot come, so the sheet is told whether or not the slot
+  // still held the attempt, and only a sheet that is waiting says anything.
+  OnApprovalExpired();
+}
+
+void MainWindow::ShutdownApproval() {
+  approvalQuitting_ = true;
+  CancelApproval(approval::ClearReason::Shutdown);
+}
+
+// The gate's answer, consumed: to the sheet that is open, or to a fresh one
+// (the person may have closed the sheet and the answer still came).
+void MainWindow::OnApprovedCode(std::string code) {
+  if (approvalSheet_ && approvalSheet_->Open()) {
+    approvalSheet_->BeginRedeem(std::move(code));
+    return;
+  }
+  ShowApprovalSheet(std::move(code));
+}
+
+void MainWindow::OnApprovalDenied() {
+  g_message("login: the browser sign-in was cancelled in the browser");
+  if (approvalSheet_) approvalSheet_->ShowDenied();
+}
+
+void MainWindow::OnApprovalExpired() {
+  if (approvalSheet_) approvalSheet_->ShowTimedOut();
+}
+
+void MainWindow::ShowApprovalSheet(std::string approvedCode) {
+  if (approvalSheet_ && approvalSheet_->Open()) {
+    approval::Wipe(approvedCode);
+    approvalSheet_->present();
+    return;
+  }
+  // a closed sheet is replaced here, and only here: never from its own signal
+  approvalSheet_ = std::make_unique<BrowserApprovalSheet>(*this, host_, ApprovalSheetController());
+  if (!approvedCode.empty()) approvalSheet_->BeginRedeem(std::move(approvedCode));
+  approvalSheet_->present();
+  approval::Wipe(approvedCode);
+}
+
+BrowserApprovalSheet::Controller MainWindow::ApprovalSheetController() {
+  BrowserApprovalSheet::Controller controller;
+  controller.begin = [this] { return BeginApproval(); };
+  controller.requestUrl = [this](const approval::Slot::View& view) {
+    return ApprovalRequestUrl(view);
+  };
+  controller.cancel = [this](approval::ClearReason reason) { CancelApproval(reason); };
+  controller.signInWithCode = [this](std::string code) { SignInWithAuthCode(std::move(code)); };
+  // every sign-in that succeeds here starts the tunnel
+  controller.signedIn = [this] { StartTunnelUi("browser approval sign-in"); };
+  return controller;
 }
 
 // ONE Solana button, as android has: the browser bridge needs the provider
@@ -2429,6 +2758,23 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
           T_("sessions_signed_out_remotely", "This session was signed out from another device."));
     }
   }
+  // A browser approval is a sign-in this app started and waits on. Another
+  // sign-in succeeding and a sign-out end it, so a late answer from the browser
+  // is a stray (UrIoApproval.hpp). A network change takes the next flow number
+  // and pushes only a sign-out, which a signed-out window does not count as one:
+  // what it leaves behind is an attempt for the other server. What the app was
+  // before this push is read first.
+  const bool wasSignedIn = std::exchange(authSignedIn_, loggedIn);
+  if (loggedIn) {
+    CancelApproval(approval::ClearReason::SignedIn);
+  } else if (wasSignedIn) {
+    CancelApproval(approval::ClearReason::SignedOut);
+  } else if (approval_.Live() && approval_.Flow() != host_.CurrentBrowserFlow()) {
+    CancelApproval(approval::ClearReason::Superseded);
+  }
+  // a person who lands on the sign-in screen with the window on screen (a
+  // sign-out, a switch to another network) is who the page check is for
+  if (!loggedIn && windowVisible_) StartApprovalCheck();
 }
 
 // The tray has no button in front of the user, so it must ask the page — the

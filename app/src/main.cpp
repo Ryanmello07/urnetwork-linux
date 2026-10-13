@@ -18,8 +18,11 @@
 #include <clocale>
 #include <memory>
 #include <cstdlib>
+#include <exception>
 #include <string>
+#include <utility>
 
+#include "AuthLink.hpp"
 #include "I18n.hpp"
 #include "InstanceHandover.hpp"
 #include "LaunchAtStartup.hpp"
@@ -130,11 +133,30 @@ int main(int argc, char** argv) {
   // This process's own launch is the first activation; every later one is a
   // launch handed to this instance.
   urnw::instance::Activations activations(arguments.kind);
-  // Every launch this instance serves: its links are routed, and the window
-  // shows unless it is the autostart entry's.
-  const auto serve = [&](const urnw::instance::Launch& launch) {
-    for (const std::string& uri : launch.uris) host->HandleDeepLink(uri);
-    if (window && urnw::instance::ShowsWindow(launch.kind)) window->present();
+  // This process's own launch is the first activation or open (GApplication
+  // emits it right after startup, before the main loop serves any handover); a
+  // stray auth link may show the window for it alone.
+  bool ownLaunchServed = false;
+  // Every launch this instance serves: a urnetwork://auth link goes to its gate
+  // before anything is shown (contract section 5, rule 3), every other link is
+  // routed, and the window shows unless the launch is the autostart entry's or
+  // carries only auth links. The gate's own present runs here, inside the
+  // handover's before_emit and after_emit, so the launch's activation token
+  // still applies to it. No uri is logged.
+  const auto serve = [&](const urnw::instance::Launch& launch, bool ownLaunch) {
+    for (const std::string& uri : launch.uris) {
+      if (urnw::authlink::IsAuthHost(uri)) {
+        if (window) window->HandleAuthLink(uri, ownLaunch);
+        continue;
+      }
+      try {
+        host->HandleDeepLink(uri);
+      } catch (const std::exception&) {
+        // a link any program can fire: dropped, and its text is not logged
+        g_warning("launch: a deep link could not be handled");
+      }
+    }
+    if (window && urnw::instance::ShowsWindowFor(launch)) window->present();
   };
   // A hidden window with no tray to bring it back (an autostart launch, or a
   // tray that went away) shows again, minimized, once the tray has had its
@@ -222,6 +244,9 @@ int main(int argc, char** argv) {
       // then starts.
       urnw::instance::BeginExiting();
       window->SaveGeometry();  // a quit with the window up never closed it
+      // a browser approval does not outlive the app: its key is wiped and its
+      // timer stopped, and a late answer finds the gate closed
+      window->ShutdownApproval();
       // teardown WITHOUT Logout(): Logout wipes the stored jwt, and for a
       // guest network that jwt is the only credential — quitting from the
       // tray was permanently destroying guest accounts (and any balance or
@@ -273,15 +298,19 @@ int main(int argc, char** argv) {
     app->hold();
     // the window and the tray exist: launches handed to this instance are
     // served from here on
-    urnw::instance::OpenLaunches(G_APPLICATION(app->gobj()), serve);
+    urnw::instance::OpenLaunches(G_APPLICATION(app->gobj()),
+                                 [&](const urnw::instance::Launch& launch) {
+                                   serve(launch, false);
+                                 });
     // an autostart launch leaves the window hidden: it waits for the tray
     keepReachable();
   });
 
   app->signal_activate().connect([&] {
+    const bool ownLaunch = !std::exchange(ownLaunchServed, true);
     urnw::instance::Launch launch;
     launch.kind = activations.Next();
-    serve(launch);
+    serve(launch, ownLaunch);
   });
 
   // Every way the main loop ends begins the exit, before GtkApplication's own
@@ -366,12 +395,13 @@ int main(int argc, char** argv) {
   // the original URI even for a custom scheme; route it into the SDK host.
   app->signal_open().connect(
       [&](const std::vector<Glib::RefPtr<Gio::File>>& files, const Glib::ustring&) {
+        const bool ownLaunch = !std::exchange(ownLaunchServed, true);
         urnw::instance::Launch launch;
         launch.kind = urnw::instance::LaunchKind::Link;
         for (const auto& f : files) {
           if (f) launch.uris.push_back(f->get_uri());
         }
-        serve(launch);
+        serve(launch, ownLaunch);
       });
 
   const int status = app->run(argc, argv);

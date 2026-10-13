@@ -16,6 +16,7 @@
 #include "AuthLogout.hpp"
 #include "AuthViews.hpp"
 #include "BittensorManualSheet.hpp"
+#include "BrowserApprovalSheet.hpp"
 #include "BrowserSignInGate.hpp"
 #include "ConnectPage.hpp"
 #include "DataInfoSheet.hpp"
@@ -44,6 +45,7 @@
 #include "GuestConversionSheet.hpp"
 #include "SubscriptionBalance.hpp"
 #include "UpgradeSheet.hpp"
+#include "UrIoApproval.hpp"
 #include "UrMotion.hpp"
 
 namespace urnw {
@@ -92,6 +94,13 @@ class MainWindow : public Gtk::ApplicationWindow {
   // daemon's tunnel, and turn the kill switch off.
   void ForceTunnelOff();
   void LiftKillSwitch();
+  // The gate for urnetwork://auth (contract section 5, rule 2), from main.cpp's
+  // serve before anything of the launch is shown. `ownLaunch`: the launch is
+  // this process's own, the one a stray answer may show the window for once.
+  void HandleAuthLink(const std::string& url, bool ownLaunch);
+  // Quit: the attempt ends, its key is wiped, and a link that arrives while the
+  // app exits is ignored.
+  void ShutdownApproval();
 
  private:
   void BuildChrome();         // 48px title bar: 20px app icon + PP NeueBit wordmark
@@ -117,7 +126,12 @@ class MainWindow : public Gtk::ApplicationWindow {
   void BuildAuthPages();  // create network / verify / password reset
   void OnGetStarted();  // authLogin discovery -> password / create / inline error
   void OnSignIn();
-  void OnUseCode();     // auth-code login: a modal sheet, not an inline field
+  // The Auth code tile: the browser sign-in sheet where the approval is
+  // offered, the auth code dialog everywhere else.
+  void OnUseCode();
+  void ShowAuthCodeDialog();  // auth-code login: a modal dialog, not an inline field
+  // The one sign-in with a pasted code, from the dialog and from the sheet.
+  void SignInWithAuthCode(std::string code);
   void OnGoogle();         // Google through Google's web flow (SdkHost::SignInWithSso)
   void OnApple();          // Apple through Apple's web flow (SdkHost::SignInWithSso)
   void OnSso(const std::string& provider);
@@ -127,6 +141,34 @@ class MainWindow : public Gtk::ApplicationWindow {
   void OnBittensorWallet(const std::string& walletId);
   void ShowBittensorManualSheet(const SdkHost::BittensorManualRequest& request);
   void OnWalletAuth(const AuthResult& result);  // shared tail of both wallet sign-ins
+
+  // ---- a sign-in approved on a web page (UrIoApproval.hpp) -----------------
+  // All on the GTK main thread, which owns approval_.
+  approval::Context ApprovalContext();
+  // Whether the sheet's browser approval is offered now, in the network the
+  // host names now (ApprovalOfferedIn, which logs each refusal).
+  bool ApprovalOffered();
+  bool ApprovalOfferedIn(const approval::Network& network);
+  // The page's descriptor, fetched once per run and only where it could be
+  // offered: a signed-out window on screen.
+  void StartApprovalCheck();
+  // The sheet's click: the live attempt read back while the page would still
+  // accept its request, or a new one; nullopt when none can start (the sheet
+  // keeps the paste field).
+  std::optional<approval::Slot::View> BeginApproval();
+  std::string ApprovalRequestUrl(const approval::Slot::View& view) const;
+  void CancelApproval(approval::ClearReason reason);
+  void OnApprovalTimer();
+  // A stray answer raises nothing, but for this process's own launch: once, the
+  // window and a neutral line (rule 3).
+  void ShowStrayNotice(bool ownLaunch);
+  // What the gate hands on: the opened code, a denial, an attempt that ended.
+  void OnApprovedCode(std::string code);
+  void OnApprovalDenied();
+  void OnApprovalExpired();
+  // The sheet, opened or brought forward; with a code it redeems it.
+  void ShowApprovalSheet(std::string approvedCode);
+  BrowserApprovalSheet::Controller ApprovalSheetController();
   void OnSeedphraseChanged();
   void OnSeedphraseSubmit();
   void OnInstantSubmit();
@@ -266,6 +308,17 @@ class MainWindow : public Gtk::ApplicationWindow {
   std::vector<Gtk::Widget*> loginAffordances_;  // everything SetLoginBusy toggles
   // armed while a browser sign-in waits on its deep link
   signin::BrowserFlowGate browserSignIn_;
+  // The browser approval's one attempt (UrIoApproval.hpp): memory only, built
+  // on the main thread it is used on, its secret wiped when it ends.
+  approval::Slot approval_;
+  approval::NeutralLine strayLine_;
+  sigc::connection approvalTimer_;  // the attempt's five minutes
+  // The browser sign-in sheet: replaced only once it has closed, never from its
+  // own signal.
+  std::unique_ptr<BrowserApprovalSheet> approvalSheet_;
+  bool authSignedIn_ = false;      // the state ApplyAuthState applied last
+  bool approvalQuitting_ = false;  // ShutdownApproval ran: the gate is closed
+  bool strayNoticeTaken_ = false;  // the own launch's one stray notice
 
   // ---- seedphrase + instant steps (windows parity) -------------------------
   Gtk::TextView* seedphraseView_ = nullptr;
