@@ -153,6 +153,11 @@ msgctxt "adv_always_tunnel"
 msgid "Always tunnel"
 msgstr "Alltid genom tunneln"
 
+#. Windows split tunnel, App split rules sheet: the line at the top that says what including and excluding an app do.
+msgctxt "adv_app_rules_note"
+msgid "Including an app sends its traffic through the VPN, while excluding it keeps that app's traffic off the VPN."
+msgstr "När du inkluderar en app går dess trafik genom VPN, och när du exkluderar den hålls appens trafik utanför VPN."
+
 #. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
 msgctxt "adv_best_available_note"
 msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
@@ -162,6 +167,16 @@ msgstr "URnetwork väljer de snabbaste fungerande leverantörerna åt dig, utan 
 msgctxt "adv_block_host"
 msgid "Block this host"
 msgstr "Blockera den här värden"
+
+#. Windows sign-in screen, browser sign-in sheet: the text above the auth code field that says how the sheet works. ur.io, Google and Apple are names. The Google or Apple sessions are the sign-ins the browser already holds. 'Account → Create auth code' is the way to the Create auth code button on a signed-in device: use this language's labels of Account (account) and Create auth code (site_app_create_auth_code); right-to-left languages point the arrow the other way.
+msgctxt "adv_browser_sign_in_body"
+msgid "Sign in at ur.io in your browser — your password manager and existing Google or Apple sessions work there. Then paste a one-time auth code from any signed-in device (Account → Create auth code)."
+msgstr "Logga in på ur.io i webbläsaren – där fungerar din lösenordshanterare och befintliga Google- eller Apple-sessioner. Klistra sedan in en autentiseringskod för engångsbruk från valfri inloggad enhet (Konto → Skapa autentiseringskod)."
+
+#. Windows sign-in screen: the title of the sheet for signing in through the browser at ur.io with a one-time auth code.
+msgctxt "adv_browser_sign_in_title"
+msgid "Browser sign-in"
+msgstr "Inloggning via webbläsaren"
 
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that sends the connection's host directly from this device, outside the VPN. It adds a split rule, or removes the rule keeping the host in the tunnel while one is in force.
 msgctxt "adv_bypass_tunnel"
@@ -177,6 +192,11 @@ msgstr "Byte (totalt)"
 msgctxt "adv_clear_selection"
 msgid "Clear selection"
 msgstr "Rensa markering"
+
+#. Windows split tunnel, App split rules sheet: the header over the apps that already have a rule (included or excluded). The header of the other list is Apps.
+msgctxt "adv_configured"
+msgid "Configured"
+msgstr "Konfigurerade"
 
 #. Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.
 msgctxt "adv_connection_count"
@@ -194,6 +214,11 @@ msgstr "Kopiera detaljer"
 msgctxt "adv_details_copied"
 msgid "Connection details copied"
 msgstr "Anslutningsdetaljer kopierade"
+
+#. Windows Earnings page, ledger header: the tooltip and screen reader name of the icon-only More button, which holds the earnings actions when the window is too narrow to show them.
+msgctxt "adv_earnings_actions"
+msgid "Earnings actions"
+msgstr "Åtgärder för intäkter"
 
 #. Connection inspector: label of the exit dial failures row.
 msgctxt "adv_exit_dial_failures"
@@ -415,6 +440,11 @@ msgctxt "adv_open_split_rules"
 msgid "open split rules"
 msgstr "öppna delningsregler"
 
+#. Windows sign-in screen, browser sign-in sheet: the button that opens ur.io in the browser and leaves the sheet open. ur.io is a domain name. Keep it short: three buttons share the sheet's bar.
+msgctxt "adv_open_ur_io"
+msgid "Open ur.io"
+msgstr "Öppna ur.io"
+
 #. Connection inspector: label of the override id row.
 msgctxt "adv_override_id"
 msgid "Override"
@@ -545,10 +575,20 @@ msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "Session"
 
+#. Windows sign-in screen, first step: the quiet text link at the bottom left, beside Change Network API. It opens a sheet for signing in through the browser at ur.io with a one-time auth code.
+msgctxt "adv_sign_in_browser"
+msgid "Sign in with browser"
+msgstr "Logga in med webbläsaren"
+
 #. Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.
 msgctxt "adv_split_rules_note"
 msgid "Split rules let the sites you choose connect directly, outside the VPN, and the activity below shows how each connection was routed."
 msgstr "Med delningsregler ansluter de webbplatser du väljer direkt, utanför VPN, och aktiviteten nedan visar hur varje anslutning dirigerades."
+
+#. Windows sign-in screen, error line: a Google or Apple sign-in in the browser was turned back because this network has no such sign-in set up yet. Provider sign-in means signing in with a Google or Apple account, not a URnetwork provider. It points to signing in with email, or through the browser (Sign in with browser), instead.
+msgctxt "adv_sso_not_configured"
+msgid "Provider sign-in isn't available on this network yet — use email or browser sign-in"
+msgstr "Inloggning med Google eller Apple är inte tillgänglig i det här nätverket än – använd e-post eller logga in via webbläsaren"
 
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.
 msgctxt "adv_undo"
@@ -3095,6 +3135,11 @@ msgstr "Släpp fastnade omsändningar"
 msgctxt "dev_release_stuck_retransmits_detail"
 msgid "How long retransmits are held before one is released, in ms. Off waits 30s"
 msgstr "Hur länge omsändningar hålls kvar innan en släpps, i ms. Av väntar 30 s"
+
+#. Windows Developer page: the title of the second pane, which holds the reliability overrides, and its name for screen readers.
+msgctxt "dev_reliability_overrides"
+msgid "Reliability overrides"
+msgstr "Åsidosättningar av tillförlitlighet"
 
 #. Developer tools screen (reliability surface): removal budget count control label.
 msgctxt "dev_removal_budget_count"
@@ -9254,6 +9299,11 @@ msgctxt "upd_manual_install_message"
 msgid "The installer didn't start (it needs administrator approval). The verified download was shown in Explorer — quit the app and run it."
 msgstr "Installationsprogrammet startade inte (det kräver administratörsgodkännande). Den verifierade nedladdningen visades i Utforskaren – avsluta appen och kör den."
 
+#. Windows Settings, version section: the note under the Check for updates row. Its button checks for a new release now, and the result shows on the Update row above it.
+msgctxt "upd_manual_note"
+msgid "Runs the release check now; the outcome lands on the row above."
+msgstr "Söker efter en ny version nu; resultatet visas på raden ovanför."
+
 #. Linux Settings update notice once the update is installed and waiting for a relaunch.
 msgctxt "upd_ready_message"
 msgid "The new AppImage is in place and verified. Relaunch to start using it; the previous file is kept beside it until then."
@@ -9298,6 +9348,36 @@ msgstr "Ersätter AppImage-filen…"
 msgctxt "upd_stage_verifying"
 msgid "Verifying the download…"
 msgstr "Verifierar nedladdningen…"
+
+#. Windows Settings, Update row: a newer release is out. Shown after the app's version and a dash, and the app adds a space, v and the new version right after this text ("1.2.3 — update available: v1.3.0"), so it starts in lowercase where the language allows and must read as a lead-in to that version.
+msgctxt "upd_state_available"
+msgid "update available:"
+msgstr "uppdatering tillgänglig:"
+
+#. Windows Settings, Update row: an update check is running now. Shown after the app's version and a dash ("1.2.3 — checking…"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_checking"
+msgid "checking…"
+msgstr "kontrollerar…"
+
+#. Windows Settings, Update row: the last check found no newer release. Shown after the app's version and a dash ("1.2.3 — up to date"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_current"
+msgid "up to date"
+msgstr "aktuell"
+
+#. Windows Settings, Update row: this is a development build, which never updates itself. Shown after the app's version and a dash ("1.2.3 — dev build, never self-updates"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_dev_build"
+msgid "dev build, never self-updates"
+msgstr "utvecklingsversion, uppdaterar sig aldrig själv"
+
+#. Windows Settings, Update row: the last update check failed (the app log has the details). Shown after the app's version and a dash ("1.2.3 — check failed"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_failed"
+msgid "check failed"
+msgstr "kontrollen misslyckades"
+
+#. Windows Settings, Update row: no update check has run yet. Shown after the app's version and a dash ("1.2.3 — not checked yet"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_not_checked"
+msgid "not checked yet"
+msgstr "inte kontrollerat än"
 
 #. Call to action
 msgctxt "update"
