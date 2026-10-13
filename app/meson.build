@@ -220,6 +220,8 @@ executable('urnetwork-gui',
     'src/SettingsPage.cpp',
     'src/VlessSheet.cpp',
     'src/UpdateChecker.cpp',
+    'src/ApprovalCheck.cpp',
+    'src/SchemeHandler.cpp',
     'src/LicensesSheet.cpp',
     'src/DeveloperPage.cpp',
     'src/EarningsPage.cpp',
@@ -734,6 +736,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/UrIoApprovalTest.cpp',
     'tests/OsRandomTest.cpp',
     'tests/ApprovalContractTest.cpp',
+    'tests/ApprovalDescriptorTest.cpp',
+    'tests/SchemeHandlerTest.cpp',
+    'tests/ApprovalCheckWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -852,6 +857,10 @@ urnetwork_tests = executable('urnetwork-tests',
               # read the approval's pure headers the same way (UrIoApprovalTest also
               # po/linux-keys.txt), and ApprovalContractTest reads
               # ../../docs/app-approval-contract.md.
+              # SchemeHandlerTest reads the urnetwork:// handler's read-back and
+              # ../packaging's desktop entry the same way, and ApprovalCheckWiringTest
+              # the approval page's descriptor check, Config.hpp and every build,
+              # packaging and script file that could define the test origin.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
