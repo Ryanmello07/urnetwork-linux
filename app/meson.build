@@ -739,6 +739,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ApprovalDescriptorTest.cpp',
     'tests/SchemeHandlerTest.cpp',
     'tests/ApprovalCheckWiringTest.cpp',
+    'tests/LogExportTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -861,6 +862,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # ../packaging's desktop entry the same way, and ApprovalCheckWiringTest
               # the approval page's descriptor check, Config.hpp and every build,
               # packaging and script file that could define the test origin.
+              # LogExportTest reads LogExport.hpp and Settings' Export logs the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

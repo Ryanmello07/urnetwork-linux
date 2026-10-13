@@ -21,6 +21,7 @@
 #include "KillSwitchCopy.hpp"
 #include "LaunchAtStartup.hpp"
 #include "LicensesSheet.hpp"
+#include "LogExport.hpp"
 #include "PaneKit.hpp"
 #include "PostQuantumIdentity.hpp"  // ProviderIdentitiesSheet (reused as-is)
 #include "SettingsFold.hpp"
@@ -203,6 +204,30 @@ std::string Lower(const std::string& text) {
   std::transform(out.begin(), out.end(), out.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return out;
+}
+
+// Export logs to a place with no local path: a network share that gvfs mounts
+// without its fuse bridge, which the file chooser offers under Other Locations.
+// The copy without links is written to a private temporary file first, and GIO
+// copies that to the place.
+bool CopyWithoutLinksThroughGio(const std::string& source, GFile* target) {
+  gchar* staged = nullptr;
+  const int fd = g_file_open_tmp("urnetwork-log-XXXXXX", &staged, nullptr);
+  if (fd < 0) return false;
+  g_close(fd, nullptr);
+  bool ok = logexport::CopyWithoutLinks(source, staged);
+  if (ok) {
+    GFile* from = g_file_new_for_path(staged);
+    // the export gets a new file's permissions, as it does through a local path
+    ok = g_file_copy(from, target,
+                     static_cast<GFileCopyFlags>(G_FILE_COPY_OVERWRITE |
+                                                 G_FILE_COPY_TARGET_DEFAULT_PERMS),
+                     nullptr, nullptr, nullptr, nullptr) != FALSE;
+    g_object_unref(from);
+  }
+  g_unlink(staged);
+  g_free(staged);
+  return ok;
 }
 
 }  // namespace
@@ -1807,19 +1832,19 @@ void SettingsPage::SaveLogsToFile() {
           g_object_unref(target);
           return;
         }
-        GFile* from = g_file_new_for_path(owned->source.c_str());
-        GError* error = nullptr;
-        const bool ok = g_file_copy(from, target, G_FILE_COPY_OVERWRITE, nullptr, nullptr,
-                                    nullptr, &error) != FALSE;
+        // copied line by line without the urnetwork: links in it (LogExport.hpp); saving
+        // over the log itself is refused. A place with no local path takes the same copy
+        // through GIO.
+        char* path = g_file_get_path(target);
+        const bool ok = path != nullptr ? logexport::CopyWithoutLinks(owned->source, path)
+                                        : CopyWithoutLinksThroughGio(owned->source, target);
+        g_free(path);
         if (!ok) {
-          g_warning("settings: save logs failed: %s",
-                    error ? error->message : "(no error text)");
+          g_warning("settings: save logs failed: the log could not be copied");
           owned->page->Snack(T_("something_went_wrong", "Something went wrong."), true);
         } else {
           owned->page->Snack(T_("save_logs", "Save logs"), false);
         }
-        g_clear_error(&error);
-        g_object_unref(from);
         g_object_unref(target);
       },
       payload);
