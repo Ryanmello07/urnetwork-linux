@@ -5,6 +5,7 @@
 #include <glibmm/main.h>
 
 #include <cstdio>
+#include <exception>
 #include <map>
 #include <vector>
 
@@ -61,6 +62,20 @@ std::map<std::string, std::string> ParseQuery(const std::string& query) {
   return out;
 }
 
+// urnet::decryptData throws (urnet::Error) for a nonce or data of the wrong
+// length and for a failed decryption, and both arrive on a link that any program
+// can fire at the app: a throw must not leave the handler, so a failure is an
+// empty answer here.
+std::optional<std::vector<uint8_t>> TryDecrypt(const std::string& dataBase58,
+                                               const std::string& nonceBase58,
+                                               const std::string& sharedSecretBase58) {
+  try {
+    return urnet::decryptData(dataBase58, nonceBase58, sharedSecretBase58);
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
 // The words for a failure the bridge page handed back: this app's own for a
 // code it knows (solana::BridgeErrorTextFor, or solana::PayoutBridgeErrorTextFor
 // for a connect that also takes a typed address), with the wallet's name where
@@ -101,9 +116,15 @@ std::optional<std::string> WalletConnect::SharedSecretBase58() const {
   auto priv = urnet::decodeBase58(dappKeyPair_->PrivateKeyBase58);
   auto pub = urnet::decodeBase58(*walletEncryptionPublicKey_);
   if (!priv || !pub) return std::nullopt;
-  auto shared = urnet::generateSharedSecret(*priv, *pub);
-  if (shared.empty()) return std::nullopt;
-  return urnet::encodeBase58(shared.data(), static_cast<int32_t>(shared.size()));
+  // the wallet's key came off a link: generateSharedSecret throws for a key of
+  // the wrong length, and a throw must not leave the handler
+  try {
+    auto shared = urnet::generateSharedSecret(*priv, *pub);
+    if (shared.empty()) return std::nullopt;
+    return urnet::encodeBase58(shared.data(), static_cast<int32_t>(shared.size()));
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
 }
 
 void WalletConnect::OpenUrl(const std::string& url) {
@@ -313,13 +334,13 @@ void WalletConnect::HandleConnect(Provider p, const std::string& query) {
     if (on_error) on_error("failed to derive shared secret");
     return;
   }
-  auto decrypted = urnet::decryptData(params["data"], params["nonce"], *sharedB58);
-  if (decrypted.empty()) {
+  const auto decrypted = TryDecrypt(params["data"], params["nonce"], *sharedB58);
+  if (!decrypted || decrypted->empty()) {
     if (on_error) on_error("failed to decrypt wallet connection");
     return;
   }
   try {
-    auto j = nlohmann::json::parse(std::string(decrypted.begin(), decrypted.end()));
+    auto j = nlohmann::json::parse(std::string(decrypted->begin(), decrypted->end()));
     connectedPublicKey_ = j.at("public_key").get<std::string>();
     session_ = j.at("session").get<std::string>();
     currentProvider_ = p;
@@ -348,13 +369,13 @@ void WalletConnect::HandleSignMessage(Provider p, const std::string& query) {
     if (on_error) on_error("failed to derive shared secret");
     return;
   }
-  auto decrypted = urnet::decryptData(params["data"], params["nonce"], *sharedB58);
-  if (decrypted.empty()) {
+  const auto decrypted = TryDecrypt(params["data"], params["nonce"], *sharedB58);
+  if (!decrypted || decrypted->empty()) {
     if (on_error) on_error("failed to decrypt wallet signature");
     return;
   }
   try {
-    auto j = nlohmann::json::parse(std::string(decrypted.begin(), decrypted.end()));
+    auto j = nlohmann::json::parse(std::string(decrypted->begin(), decrypted->end()));
     const std::string signatureB58 = j.at("signature").get<std::string>();
     auto sigBytes = urnet::decodeBase58(signatureB58);
     if (!sigBytes) {

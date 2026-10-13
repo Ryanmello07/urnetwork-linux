@@ -728,6 +728,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/SessionsPresentationTest.cpp',
     'tests/SessionsBindingTest.cpp',
     'tests/SessionsWiringTest.cpp',
+    'tests/DeepLinkHardeningWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -840,6 +841,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # RelativeTimeSpanTest reads RelativeTime's words the same way, and
               # SessionsWiringTest the Sessions page, its Account row, the window's
               # navigation and the rail; SessionsPresentationTest reads po/en.po.
+              # DeepLinkHardeningWiringTest reads the wallet returns' handlers and
+              # every source's SDK crypto calls the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

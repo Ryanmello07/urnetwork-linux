@@ -1401,8 +1401,12 @@ void SdkHost::SetupWalletCallbacks() {
       }
     }
     if (!verdict.ok) {
-      std::fprintf(stderr, "[sso] rejected return for %s: %s\n", provider.c_str(),
-                   verdict.error.c_str());
+      // the link's own error= text is whatever the program that fired it wrote:
+      // it is not logged
+      const char* why = !r.error.empty() && verdict.error == r.error
+                            ? "the return carried an error"
+                            : verdict.error.c_str();
+      std::fprintf(stderr, "[sso] rejected return for %s: %s\n", provider.c_str(), why);
       // a stray return must not fail the attempt in flight
       if (verdict.error == "unexpected sign-in return" && !expectedProvider.empty() &&
           r.state != state) {
