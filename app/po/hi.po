@@ -4430,6 +4430,16 @@ msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
 msgstr "एक्सटेंडर सेटिंग सहेजी गईं"
 
+#. Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests"
+msgid "lag.dev speed tests"
+msgstr "lag.dev स्पीड टेस्ट"
+
+#. Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests_description"
+msgid "Let people testing their connection on lag.dev measure latency, download and upload to this device. Tests use some of your bandwidth while they run."
+msgstr "lag.dev पर अपने कनेक्शन की जाँच करने वाले लोगों को इस डिवाइस तक लेटेंसी, डाउनलोड और अपलोड मापने दें। चलते समय टेस्ट आपकी बैंडविड्थ का कुछ हिस्सा इस्तेमाल करते हैं।"
+
 #. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
 msgctxt "extender_start_failed"
 msgid "Could not start: {}"
