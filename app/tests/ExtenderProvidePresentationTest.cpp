@@ -20,6 +20,8 @@ using urnw::extender::ProvideRow;
 using urnw::extender::ProvideRowFor;
 using urnw::extender::ProvideRowGuess;
 using urnw::extender::ProvideRowOf;
+using urnw::extender::SpeedTestsRow;
+using urnw::extender::SpeedTestsRowOf;
 using urnw::extender::StatsSections;
 using urnw::extender::StatsSectionsFor;
 
@@ -426,6 +428,51 @@ UR_TEST(ExtenderProvide_HiddenRowReadsNoSetting) {
   UR_EXPECT_TRUE(shown.visible);
   UR_EXPECT_TRUE(shown.on);
   UR_EXPECT_EQ(1, reads);
+}
+
+// The lag.dev speed tests switch (lag.dev/PLAN.md C4): shown only beside a
+// visible Extender row and where its write has a taker, hidden otherwise, and
+// its setting read once, only for a row that shows.
+UR_TEST(SpeedTests_ShowsOnlyBesideTheExtenderRowWithAWriter) {
+  int reads = 0;
+  const auto off = [&reads] {
+    ++reads;
+    return false;
+  };
+  const ProvideRow extenderShown =
+      ProvideRowOf(std::optional<FullStatus>(SupportedStatus("active", "", "", true)),
+                   [] { return true; });
+  const ProvideRow extenderHidden = ProvideRowOf(std::optional<FullStatus>(), [] { return true; });
+  UR_EXPECT_TRUE(extenderShown.visible);
+  UR_EXPECT_FALSE(extenderHidden.visible);
+
+  UR_EXPECT_FALSE(SpeedTestsRowOf(extenderHidden, true, off).visible);
+  UR_EXPECT_FALSE(SpeedTestsRowOf(extenderShown, false, off).visible);
+  UR_EXPECT_FALSE(SpeedTestsRowOf(extenderHidden, false, off).visible);
+  UR_EXPECT_EQ(0, reads);
+
+  const SpeedTestsRow shown = SpeedTestsRowOf(extenderShown, true, off);
+  UR_EXPECT_TRUE(shown.visible);
+  UR_EXPECT_FALSE(shown.on);
+  UR_EXPECT_EQ(1, reads);
+}
+
+// It shows whatever the Extender switch's position: the setting still applies
+// when the role is off, and is on by default.
+UR_TEST(SpeedTests_IndependentOfTheExtenderSwitchAndOnByDefault) {
+  for (const bool extenderOn : {false, true}) {
+    const ProvideRow extender = ProvideRowOf(
+        std::optional<FullStatus>(SupportedStatus(extenderOn ? "active" : "off", "", "", true)),
+        [extenderOn] { return extenderOn; });
+    const SpeedTestsRow row = SpeedTestsRowOf(extender, true, [] { return true; });
+    UR_EXPECT_TRUE(row.visible);
+    UR_EXPECT_TRUE(row.on);
+  }
+  UR_EXPECT_TRUE(SpeedTestsRow().on);
+  UR_EXPECT_FALSE(SpeedTestsRow().visible);
+  // a hidden row compares equal to every other hidden row, so a push that
+  // changes nothing is dropped
+  UR_EXPECT_TRUE(SpeedTestsRowOf(ProvideRow(), true, [] { return false; }) == SpeedTestsRow());
 }
 
 // Every key and English source the row can emit is the catalog's, byte for

@@ -3505,6 +3505,10 @@ void SdkHost::PollDaemonProviderStatsLocked() {
   // switch's write; a daemon that predates them sends neither
   stats.provideExtender = reply->provide_extender;
   stats.provideExtenderWritable = reply->provide_extender_writable;
+  // and the lag.dev measurements setting beside them, with the daemon's word
+  // that it takes the speed tests switch's write
+  stats.measurementsEnabled = reply->measurements_enabled;
+  stats.measurementsEnabledWritable = reply->measurements_enabled_writable;
   const bool statusChanged = !daemonProviderStats_ ||
                              daemonProviderStats_->status.open != stats.status.open ||
                              daemonProviderStats_->status.loaded != stats.status.loaded ||
@@ -3515,7 +3519,9 @@ void SdkHost::PollDaemonProviderStatsLocked() {
       !daemonProviderStats_ ||
       daemonProviderStats_->extenderProvideStatusJson != stats.extenderProvideStatusJson ||
       daemonProviderStats_->provideExtender != stats.provideExtender ||
-      daemonProviderStats_->provideExtenderWritable != stats.provideExtenderWritable;
+      daemonProviderStats_->provideExtenderWritable != stats.provideExtenderWritable ||
+      daemonProviderStats_->measurementsEnabled != stats.measurementsEnabled ||
+      daemonProviderStats_->measurementsEnabledWritable != stats.measurementsEnabledWritable;
   daemonProviderStats_ = std::move(stats);
   // the events the DeviceRemote and its controllers raise for the same facts
   EmitDrawerEvent(DrawerEvent::Throughput);
@@ -4204,6 +4210,13 @@ provide::ExtenderSwitchSource SdkHost::ExtenderSwitchSourceLocked() const {
       daemonProviderStats_ && daemonProviderStats_->provideExtenderWritable);
 }
 
+provide::ExtenderSwitchSource SdkHost::MeasurementsSwitchSourceLocked() const {
+  return provide::MeasurementsSwitchSourceFor(
+      device_.has_value(), daemonProviderStats_.has_value(),
+      daemonProviderStats_ && daemonProviderStats_->provideExtenderWritable,
+      daemonProviderStats_ && daemonProviderStats_->measurementsEnabledWritable);
+}
+
 std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
   std::scoped_lock lock(mutex_);
   switch (ExtenderSwitchSourceLocked()) {
@@ -4263,6 +4276,49 @@ void SdkHost::SetProvideExtender(bool on) {
       break;
   }
   g_warning("extender: dropping a provide extender write with no device");
+}
+
+bool SdkHost::MeasurementsSwitchWritable() {
+  std::scoped_lock lock(mutex_);
+  return MeasurementsSwitchSourceLocked() != provide::ExtenderSwitchSource::None;
+}
+
+bool SdkHost::GetMeasurementsEnabled() {
+  std::scoped_lock lock(mutex_);
+  switch (MeasurementsSwitchSourceLocked()) {
+    case provide::ExtenderSwitchSource::Device:
+      return device_->getMeasurementsEnabled();
+    case provide::ExtenderSwitchSource::Daemon:
+      return daemonProviderStats_->measurementsEnabled;
+    case provide::ExtenderSwitchSource::None:
+      break;
+  }
+  // the setting's default (lag.dev/PLAN.md decision 18); the switch is hidden then
+  return true;
+}
+
+void SdkHost::SetMeasurementsEnabled(bool on) {
+  std::scoped_lock lock(mutex_);
+  switch (MeasurementsSwitchSourceLocked()) {
+    case provide::ExtenderSwitchSource::Device:
+      device_->setMeasurementsEnabled(on);
+      return;
+    case provide::ExtenderSwitchSource::Daemon: {
+      std::string error;
+      if (!control_.SetMeasurementsEnabled(on, &error)) {
+        g_warning("extender: the system service did not write the measurements setting: %s",
+                  error.empty() ? "no detail" : error.c_str());
+      }
+      // Read back at once, written or refused: the switch shows the setting as
+      // it stands.
+      PollDaemonProviderStatsLocked();
+      EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
+      return;
+    }
+    case provide::ExtenderSwitchSource::None:
+      break;
+  }
+  g_warning("extender: dropping a measurements write with no device");
 }
 
 std::optional<urnet::ExtenderSettings> SdkHost::GetExtenderSettings() {

@@ -135,7 +135,8 @@ UR_TEST(controlVerbNamesRoundTrip) {
       ctl::Verb::StartTunnel,    ctl::Verb::AttachTunnel,
       ctl::Verb::StopTunnel,     ctl::Verb::SetProvide,
       ctl::Verb::StartProvider,  ctl::Verb::ProviderStats,
-      ctl::Verb::SetProvideExtender, ctl::Verb::ResetExtenders,
+      ctl::Verb::SetProvideExtender, ctl::Verb::SetMeasurementsEnabled,
+      ctl::Verb::ResetExtenders,
       ctl::Verb::LocationOverrideAvailable,
       ctl::Verb::LocationOverrideWrite, ctl::Verb::LocationOverrideClear,
       ctl::Verb::UploadLogs,     ctl::Verb::Logout,
@@ -153,6 +154,8 @@ UR_TEST(controlVerbNamesRoundTrip) {
   UR_EXPECT_TRUE(ctl::VerbFromString("start_provider") == ctl::Verb::StartProvider);
   UR_EXPECT_TRUE(ctl::VerbFromString("provider_stats") == ctl::Verb::ProviderStats);
   UR_EXPECT_TRUE(ctl::VerbFromString("set_provide_extender") == ctl::Verb::SetProvideExtender);
+  UR_EXPECT_TRUE(ctl::VerbFromString("set_measurements_enabled") ==
+                 ctl::Verb::SetMeasurementsEnabled);
   UR_EXPECT_TRUE(ctl::VerbFromString("reset_extenders") == ctl::Verb::ResetExtenders);
   UR_EXPECT_TRUE(ctl::VerbFromString("location_override_available") ==
                  ctl::Verb::LocationOverrideAvailable);
@@ -1089,6 +1092,88 @@ UR_TEST(controlSetProvideExtenderIsGatedLikeSetProvide) {
   UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetProvideExtender, false, true)) ==
                  ctl::kActionTakeOverTunnel);
   UR_EXPECT_TRUE(ctl::VerbWantsInteraction(ctl::Verb::SetProvideExtender, /*is_log_tail=*/false));
+}
+
+// ---- set_measurements_enabled: the lag.dev speed tests switch -------------
+
+UR_TEST(controlSetMeasurementsEnabledRoundTrip) {
+  for (const bool on : {false, true}) {
+    ctl::SetMeasurementsEnabledRequest req;
+    req.measurements_enabled = on;
+    const auto back = ctl::DecodeFrame(ctl::EncodeFrame(
+        ctl::MakeRequest(ctl::Verb::SetMeasurementsEnabled, 24, nlohmann::json(req))));
+    UR_EXPECT_TRUE(ctl::RequestVerb(*back) == ctl::Verb::SetMeasurementsEnabled);
+    UR_EXPECT_TRUE(back->get<ctl::SetMeasurementsEnabledRequest>().measurements_enabled == on);
+  }
+}
+
+// A write whose value did not arrive writes nothing, not a default the user
+// never chose, and the Extender switch's value is not this switch's.
+UR_TEST(controlSetMeasurementsEnabledWithoutAValueIsRefused) {
+  for (const char* malformed :
+       {R"({})", R"({"measurements_enabled":null})", R"({"measurements_enabled":"false"})",
+        R"({"measurements_enabled":0})", R"({"provide_extender":false})"}) {
+    bool threw = false;
+    try {
+      (void)nlohmann::json::parse(malformed).get<ctl::SetMeasurementsEnabledRequest>();
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    UR_EXPECT_TRUE_MSG(malformed, threw);
+  }
+}
+
+// Priced like set_provide_extender, the switch it sits under: control-tunnel,
+// take-over across uids, and a press, so it may prompt. It needs a grant.
+UR_TEST(controlSetMeasurementsEnabledIsGatedLikeSetProvideExtender) {
+  for (const bool crossUid : {false, true}) {
+    UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetMeasurementsEnabled, false,
+                                                    crossUid)) ==
+                   ctl::ActionIdForVerb(ctl::Verb::SetProvideExtender, false, crossUid));
+  }
+  UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetMeasurementsEnabled, false,
+                                                  false)) == ctl::kActionControlTunnel);
+  UR_EXPECT_TRUE(std::string(ctl::ActionIdForVerb(ctl::Verb::SetMeasurementsEnabled, false,
+                                                  true)) == ctl::kActionTakeOverTunnel);
+  UR_EXPECT_TRUE(
+      ctl::VerbWantsInteraction(ctl::Verb::SetMeasurementsEnabled, /*is_log_tail=*/false));
+}
+
+// provider_stats carries the measurements setting beside the role, and the
+// daemon's word that it takes the speed tests switch's write.
+UR_TEST(controlProviderStatsCarriesTheSpeedTestsSwitch) {
+  ctl::ProviderStatsReply stats;
+  stats.running = true;
+  stats.extender_provide_status_json = R"({"Supported":true,"State":"active","Enabled":true})";
+  stats.provide_extender = true;
+  stats.provide_extender_writable = true;
+  stats.measurements_enabled = false;
+  stats.measurements_enabled_writable = true;
+  const auto back =
+      ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeReply(25, true, nlohmann::json(stats))))
+          ->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_TRUE(back.measurements_enabled_writable);
+  UR_EXPECT_FALSE(back.measurements_enabled);
+  // the Extender switch's setting beside it stays its own
+  UR_EXPECT_TRUE(back.provide_extender);
+}
+
+// A daemon from before the verb: no writer, so the switch stays hidden while
+// disconnected, and the setting reads as its default, on.
+UR_TEST(controlProviderStatsFromAnOlderDaemonHasNoSpeedTestsWriter) {
+  const nlohmann::json older = {
+      {"running", true},
+      {"extender_provide_status_json", R"({"Supported":true,"State":"active","Enabled":true})"},
+      {"provide_extender", true},
+      {"provide_extender_writable", true},
+  };
+  const auto back = ctl::DecodeFrame(ctl::EncodeFrame(ctl::MakeReply(26, true, older)))
+                        ->get<ctl::ProviderStatsReply>();
+  UR_EXPECT_TRUE(back.provide_extender_writable);
+  UR_EXPECT_FALSE(back.measurements_enabled_writable);
+  UR_EXPECT_TRUE(back.measurements_enabled);
+  UR_EXPECT_FALSE(ctl::ProviderStatsReply().measurements_enabled_writable);
+  UR_EXPECT_TRUE(ctl::ProviderStatsReply().measurements_enabled);
 }
 
 // logout names the account's network space; an absent one parses empty (the

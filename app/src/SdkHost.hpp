@@ -1099,6 +1099,18 @@ class SdkHost {
   // dropped: the row is hidden then, and the setter is never called while the
   // row is hidden (N1).
   void SetProvideExtender(bool on);
+  // The lag.dev speed tests switch under the Extender switch (lag.dev/PLAN.md
+  // C4, decision 18): whether its write has a taker now
+  // (provide::MeasurementsSwitchSourceFor), the measurements setting, and its
+  // write. Read and written as the provider extender setting is: through the
+  // device, which persists it in the daemon's space and applies it at once
+  // (queued while the daemon is out of contact), or with no device through the
+  // daemon (set_measurements_enabled) while provider_stats said it takes it.
+  // The page shows the switch only beside the Extender row and while it has a
+  // taker, and never writes it hidden (N1). The setting's default is on.
+  bool MeasurementsSwitchWritable();
+  bool GetMeasurementsEnabled();
+  void SetMeasurementsEnabled(bool on);
 
   // The SDK's shared ExtenderViewController (K7: "encoding, decoding and
   // applying live in the sdk, one implementation for every app"). Opened with
@@ -1373,6 +1385,9 @@ class SdkHost {
   // What the connect page's Extender switch reads and writes now
   // (provide::ExtenderSwitchSourceFor). Requires mutex_.
   provide::ExtenderSwitchSource ExtenderSwitchSourceLocked() const;
+  // What the lag.dev speed tests switch reads and writes now
+  // (provide::MeasurementsSwitchSourceFor). Requires mutex_.
+  provide::ExtenderSwitchSource MeasurementsSwitchSourceLocked() const;
   void EmitDrawerEvent(DrawerEvent event);
   LiveStats ReadStats();  // read the current snapshot from the SDK getters
   void PublishStats();    // ReadStats() -> onStats_
@@ -1593,6 +1608,11 @@ class SdkHost {
     // predates them, which keeps that switch hidden
     bool provideExtender = false;
     bool provideExtenderWritable = false;
+    // the lag.dev measurements setting beside them, the speed tests switch, and
+    // that the daemon takes its write; on and false from a daemon that predates
+    // them, which keeps that switch hidden
+    bool measurementsEnabled = true;
+    bool measurementsEnabledWritable = false;
   };
   // Requires mutex_. One tick of the poll (provide::DaemonProviderStatsStep).
   void PollDaemonProviderStatsLocked();
