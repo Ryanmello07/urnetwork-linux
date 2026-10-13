@@ -729,6 +729,11 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/SessionsBindingTest.cpp',
     'tests/SessionsWiringTest.cpp',
     'tests/DeepLinkHardeningWiringTest.cpp',
+    'tests/AuthLinkTest.cpp',
+    'tests/ApprovalNetworkTest.cpp',
+    'tests/UrIoApprovalTest.cpp',
+    'tests/OsRandomTest.cpp',
+    'tests/ApprovalContractTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -843,6 +848,10 @@ urnetwork_tests = executable('urnetwork-tests',
               # navigation and the rail; SessionsPresentationTest reads po/en.po.
               # DeepLinkHardeningWiringTest reads the wallet returns' handlers and
               # every source's SDK crypto calls the same way.
+              # AuthLinkTest, ApprovalNetworkTest, UrIoApprovalTest and OsRandomTest
+              # read the approval's pure headers the same way (UrIoApprovalTest also
+              # po/linux-keys.txt), and ApprovalContractTest reads
+              # ../../docs/app-approval-contract.md.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)
