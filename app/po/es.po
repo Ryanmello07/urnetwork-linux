@@ -8525,6 +8525,11 @@ msgctxt "site_app_served"
 msgid "Served"
 msgstr "Servido"
 
+#. App earnings/claim: label of the settlement v2 card, shown beside the v1 claims
+msgctxt "site_app_settlement_v2"
+msgid "Settlement v2"
+msgstr "Liquidación v2"
+
 #. App leaderboard: public visibility toggle
 msgctxt "site_app_show_on_leaderboard"
 msgid "Show my network on the leaderboard"
@@ -8674,6 +8679,41 @@ msgstr "Transacción"
 msgctxt "site_app_unlink"
 msgid "Unlink"
 msgstr "Desvincular"
+
+#. App claim: a settlement v2 claim confirmed on chain. {amount} is the SN25α amount the vault paid, with its unit.
+msgctxt "site_app_v2_claimed_amount"
+msgid "Claimed {amount}"
+msgstr "Reclamado: {amount}"
+
+#. App earnings/claim: the settlement v2 amount earned in finalized roots, paid and claimable together
+msgctxt "site_app_v2_earned"
+msgid "Earned"
+msgstr "Ganado"
+
+#. App earnings/claim: the settlement v2 amount already paid to the coldkey
+msgctxt "site_app_v2_paid"
+msgid "Paid"
+msgstr "Pagado"
+
+#. App earnings/claim: settlement v2 earnings in a committed root that is not finalized yet. {amount} is an SN25α amount with its unit.
+msgctxt "site_app_v2_pending"
+msgid "Pending: +{amount}, awaiting finalization"
+msgstr "Pendiente: +{amount}, a la espera de la finalización"
+
+#. App earnings/claim: heads each settlement v2 account when the coldkey has accounts in several operator pools. {no_id} is the pool's operator id.
+msgctxt "site_app_v2_pool"
+msgid "Pool {no_id}"
+msgstr "Pool {no_id}"
+
+#. App earnings/claim: shown in place of the settlement v2 amounts when the ledger cannot be read, never a zero
+msgctxt "site_app_v2_unavailable"
+msgid "Unavailable"
+msgstr "No disponible"
+
+#. App earnings/claim: the settlement v2 ledger cannot be read; a retry button follows
+msgctxt "site_app_v2_unavailable_detail"
+msgid "Settlement v2 balances can't be read right now."
+msgstr "Ahora mismo no se pueden leer los saldos de la liquidación v2."
 
 #. App profile: verified badge
 msgctxt "site_app_verified"
@@ -9550,6 +9590,46 @@ msgstr "Omitir"
 msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
+
+#. Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".
+msgctxt "sn_ledger_claim"
+msgid "Claim settlement v2"
+msgstr "Reclamar liquidación v2"
+
+#. Settlement v2 tile: label of the SN25α the user can claim now.
+msgctxt "sn_ledger_claimable"
+msgid "Claimable"
+msgstr "Por reclamar"
+
+#. Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).
+msgctxt "sn_ledger_earned"
+msgid "Earned"
+msgstr "Ganado"
+
+#. Settlement v2 tile: label of the SN25α already paid to the user's coldkey.
+msgctxt "sn_ledger_paid"
+msgid "Paid"
+msgstr "Pagado"
+
+#. Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".
+msgctxt "sn_ledger_pending"
+msgid "Pending: +{}, awaiting finalization"
+msgstr "Pendiente: +{}, en espera de finalización"
+
+#. Settlement v2 tile and claim dialog: names an operator pool. {} is its number.
+msgctxt "sn_ledger_pool"
+msgid "Pool {}"
+msgstr "Pool {}"
+
+#. Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".
+msgctxt "sn_ledger_title"
+msgid "Settlement v2"
+msgstr "Liquidación v2"
+
+#. Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.
+msgctxt "sn_ledger_unavailable"
+msgid "Unavailable"
+msgstr "No disponible"
 
 #. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
 msgctxt "sn_payout_schedule"

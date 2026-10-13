@@ -9,7 +9,10 @@
 // this device and the settlement vault contract: the SDK builds, signs (with
 // its own gas key) and sends the transaction; no URnetwork API is in the path.
 // Nothing is retroactive — alpha accrues from the first epoch after the wallet
-// is attached; earlier epochs earned points only.
+// is attached; earlier epochs earned points only. Settlement v2 shows apart
+// from those v1 claims: a tile with the coldkey's v2 ledger accounts and its
+// own claim dialog, claimed the same direct way from the v2 vault
+// (SnLedgerPresentation.hpp).
 //
 // USDC payouts continue until the migration to Bittensor completes, so the
 // Solana payout wallet stays reachable from here: a three-dot overflow beside
@@ -31,7 +34,8 @@
 // Pane A (earnings): the points headline with its Providing / Referral /
 // Reliability breakdown (and the Seeker multiplier, points-only), the protocol
 // note with the ur.xyz link, the Unclaimed SN25α tile
-// (wallet only), the Bittensor wallet block (connect through the bridge, or
+// (wallet only) and the Settlement v2 tile under it, the Bittensor wallet
+// block (connect through the bridge, or
 // enter an address manually — validated locally and then against
 // /sn/wallet/validate before anything is sent — and still sign it), the Solana
 // payout wallet card (only with a payout wallet), and the Top 200 head-spot
@@ -73,6 +77,7 @@
 #include "PaneKit.hpp"
 #include "ProviderStatusPresentation.hpp"
 #include "SdkHost.hpp"
+#include "SnLedgerPresentation.hpp"
 #include "SnPayoutPresentation.hpp"
 #include "SolanaWalletPresentation.hpp"
 #include "TransferChart.hpp"
@@ -142,6 +147,7 @@ struct SnWalletCheck {
 
 class ClaimAlphaSheet;
 class EmojiTagSheet;
+class LedgerClaimSheet;
 
 class EarningsPage : public Gtk::Box {
  public:
@@ -227,7 +233,7 @@ class EarningsPage : public Gtk::Box {
   void ShowPreviewSnackbar();
   // URNETWORK_PREVIEW_SAMPLE=1 (a SECOND gate): obviously-synthetic rows pushed
   // through the SAME Apply* functions. URNETWORK_PREVIEW_WALLET=1 adds the
-  // attached-wallet layer (claims, gas key, alpha column);
+  // attached-wallet layer (claims, gas key, alpha column, the v2 tile);
   // URNETWORK_PREVIEW_TOP200=bound renders the bound head-spot status;
   // URNETWORK_PREVIEW_MANUAL=1 opens the manual entry on a "new wallet" verdict;
   // URNETWORK_PREVIEW_GAS=low puts the claim dialog in its needs-gas state;
@@ -327,7 +333,8 @@ class EarningsPage : public Gtk::Box {
 
   // ---- loads -----------------------------------------------------------------
   void LoadEarnings();
-  void LoadWalletLayer();  // claims + gas key: only with an attached wallet
+  void LoadWalletLayer();  // claims, v2 accounts + gas key: only with an attached wallet
+  void LoadGas();          // the gas key and its balance
   void LoadLeaderboard();
 
   // ---- appliers (one writer per surface) -------------------------------------
@@ -340,6 +347,10 @@ class EarningsPage : public Gtk::Box {
                    Fetch state, const Glib::ustring& failure = {},
                    std::optional<snpayout::EpochSchedule> schedule = std::nullopt);
   void ApplyGas(std::optional<SnGasInfo> gas);
+  // the v2 accounts; `claimConfigured` is whether the chain settings name the
+  // v2 vault, read with them
+  void ApplyLedger(snledger::Load load, std::vector<snledger::Account> accounts,
+                   bool claimConfigured);
   void ApplyHead(std::optional<SnHeadInfo> head, Fetch state);
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
   void ApplyRanking(std::optional<urnet::NetworkRanking> ranking, bool ok);
@@ -350,6 +361,7 @@ class EarningsPage : public Gtk::Box {
   // how and when SN payouts happen, under the points (snpayout::PayoutLineFor)
   void RebuildPayoutLine();
   void RebuildUnclaimedTile();
+  void RebuildLedgerTile();  // the Settlement v2 tile (snledger::SectionFor)
   void RebuildWalletBlock();
   void RebuildTop200();
   void RebuildHistory();
@@ -433,6 +445,10 @@ class EarningsPage : public Gtk::Box {
   void OnClaim();
   void OpenClaimSheet(bool allowActions);
   void StartClaim(std::vector<int64_t> epochs);
+  // settlement v2: the tile's Claim opens the v2 claim sheet, whose Claim claims
+  // every claimable v2 account
+  void OnLedgerClaim();
+  void StartLedgerClaim();
 
   // ---- the public-leaderboard switch ----------------------------------------
   void SetRankingToggle(bool on);  // the echo-guarded programmatic write
@@ -481,6 +497,10 @@ class EarningsPage : public Gtk::Box {
   Gtk::Label* unclaimedValue_ = nullptr;
   Gtk::Label* unclaimedStatus_ = nullptr;
   Gtk::Button* claimButton_ = nullptr;
+  Gtk::Box* ledgerCard_ = nullptr;  // the Settlement v2 tile
+  Gtk::Box* ledgerRows_ = nullptr;
+  Gtk::Label* ledgerStatus_ = nullptr;
+  Gtk::Button* ledgerClaimButton_ = nullptr;
   Gtk::Label* walletStatus_ = nullptr;
   Gtk::Box* walletConnectedPanel_ = nullptr;
   Gtk::Label* walletAddressLabel_ = nullptr;
@@ -631,6 +651,9 @@ class EarningsPage : public Gtk::Box {
   Fetch claimsState_ = Fetch::Loading;
   Glib::ustring claimsFailure_;
   std::optional<snpayout::EpochSchedule> schedule_;
+  std::vector<snledger::Account> ledgerAccounts_;
+  snledger::Load ledgerLoad_ = snledger::Load::Loading;
+  bool ledgerConfigured_ = false;  // the chain settings name the v2 vault: v2 Claim shows
   std::optional<SnGasInfo> gas_;
   std::optional<SnHeadInfo> head_;
   Fetch headState_ = Fetch::Loading;
@@ -696,6 +719,7 @@ class EarningsPage : public Gtk::Box {
   std::string connectWalletId_;
   bool changingWallet_ = false;  // "Change" opened the connect affordances
   bool manualEntryOpen_ = false;
+  // a v1 or a v2 claim in flight: the gas key sends one claim at a time
   bool claiming_ = false;
   bool settingRankingPublic_ = false;
   bool applyingRankingToggle_ = false;  // ECHO GUARD on the public switch
@@ -716,6 +740,7 @@ class EarningsPage : public Gtk::Box {
   Flow setWalletFlow_; // 20s: POST /sn/wallet
   Flow pointsPublicFlow_;  // 20s: POST /network/points-ranking-visibility
   Flow claimFlow_;     // 180s: chain round trips
+  Flow ledgerClaimFlow_;  // 3 min + 6 per account: the v2 claim, past the SDK's bounds
   Flow rankingFlow_;   // 20s
   Flow legacyFlow_;    // 20s: the payout read and POST /account/payout-wallet after a link
   Flow removeSolanaFlow_;  // 20s: POST /account/wallets/remove
@@ -728,6 +753,7 @@ class EarningsPage : public Gtk::Box {
 
   std::shared_ptr<Gtk::Window> sheet_;
   std::weak_ptr<ClaimAlphaSheet> claimSheet_;
+  std::weak_ptr<LedgerClaimSheet> ledgerClaimSheet_;
 };
 
 }  // namespace urnw
