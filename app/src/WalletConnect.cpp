@@ -400,6 +400,13 @@ void WalletConnect::DeliverBittensorResult(const urnet::BittensorWalletResult& r
       return;  // the manual sheet shows it and stays open
     case bittensor::Outcome::Fail: {
       if (!on_error) return;
+      // a consent's expired challenge in the SDK's "code: message" form, as its
+      // consent calls report it (NetworkConsent.hpp words it)
+      if (bittensorSession_ &&
+          bittensor::ReportsCode(bittensorSession_->purpose(), result.ErrorCode)) {
+        on_error(result.ErrorCode + ": " + result.ErrorMessage);
+        return;
+      }
       switch (bittensor::FailureTextFor(result.ErrorCode, result.BridgeErrorCode,
                                         !result.ErrorMessage.empty())) {
         case bittensor::FailureText::Refusal: {

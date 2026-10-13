@@ -89,6 +89,9 @@ inline constexpr std::string_view kPurposeConnect = "connect";
 // adding the wallet as a sign-in method (AddSignInFlow.hpp): a login or create
 // session refuses its return (purpose_mismatch), so it never signs in
 inline constexpr std::string_view kPurposeAdd = "add";
+// the network payout consent (NetworkConsent.hpp): the session signs the
+// message SnNetworkConsentChallenge issued, not a /auth/wallet-challenge one
+inline constexpr std::string_view kPurposeConsent = "consent";
 
 inline constexpr std::string_view kTransportBrowserBridge = "browser_bridge";
 inline constexpr std::string_view kTransportManual = "manual";
@@ -220,6 +223,14 @@ constexpr FailureText FailureTextFor(std::string_view errorCode, std::string_vie
   if (errorCode != "wallet_error") return FailureText::Generic;
   if (!BridgeErrorTextFor(bridgeCode).key.empty()) return FailureText::BridgeCode;
   return hasErrorMessage ? FailureText::PageText : FailureText::Generic;
+}
+
+// A consent session's expired challenge reaches its flow as the SDK's own
+// "challenge_expired: ..." error, the form its consent calls fail in
+// (CONSENT.md A1), so the consent section words it itself
+// (sn_consent_expired). Every other refusal reads as for any flow.
+constexpr bool ReportsCode(std::string_view purpose, std::string_view errorCode) noexcept {
+  return purpose == kPurposeConsent && errorCode == "challenge_expired";
 }
 
 // How long a flow waits for its answer. A bridge round trip reports nothing

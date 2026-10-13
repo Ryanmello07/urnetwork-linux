@@ -586,6 +586,18 @@ class SdkHost {
   void SignBittensorConnect(const std::string& walletId, const std::string& walletAddress,
                             std::function<void(WalletSignature)> done);
 
+  // The same signer for the network payout consent (NetworkConsent.hpp,
+  // CONSENT.md A1): a session with purpose "consent" takes `challenge`, the
+  // SnNetworkConsentChallenge result, as it came, so `walletId` signs exactly
+  // its message with its coldkey (the session binds the coldkey and the
+  // expiry), on the bridge or the manual sheet. `done` gets the session's proof
+  // (address, signature and the issued message) or the refusal; an expired
+  // challenge reads "challenge_expired: ...". Same deep-link routing, flow
+  // numbering and superseding as SignBittensorConnect.
+  void SignBittensorConsent(const std::string& walletId,
+                            const urnet::SnNetworkConsentChallengeResult& challenge,
+                            std::function<void(WalletSignature)> done);
+
   // The same bridge as a plain CONNECT for a Solana wallet (Phantom / Solflare):
   // no challenge and no signature. The bridge connects the wallet and the
   // urnetwork://<provider>-connect return hands back its base58 public key,
@@ -1350,10 +1362,13 @@ class SdkHost {
   // manual sheet. Failures before that answer the waiting flow
   // (FailWalletOperation), or `fail` when given -- which also hears a
   // superseded flow (the create-network flow, whose slot is set by `prepare`).
-  void StartBittensorSession(const std::string& walletId, const std::string& purpose,
-                             const std::string& expectedAddress, uint64_t flow,
-                             std::function<bool(const std::string& message)> prepare,
-                             std::function<void(const std::string& error)> fail = nullptr);
+  // A consent (SignBittensorConsent) brings its challenge, the
+  // SnNetworkConsentChallenge result, instead of /auth/wallet-challenge.
+  void StartBittensorSession(
+      const std::string& walletId, const std::string& purpose, const std::string& expectedAddress,
+      uint64_t flow, std::function<bool(const std::string& message)> prepare,
+      std::function<void(const std::string& error)> fail = nullptr,
+      std::optional<urnet::SnNetworkConsentChallengeResult> consent = std::nullopt);
   void FinishCreateNetworkWithWallet(const std::string& signature);
   // blockchain: "solana" (ed25519, base64 signature) | urnet::TAO (sr25519, hex)
   void AuthLoginWithWallet(const std::string& address, const std::string& signature,
