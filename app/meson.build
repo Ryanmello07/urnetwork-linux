@@ -866,6 +866,18 @@ urnetwork_tests = executable('urnetwork-tests',
   install : false)
 test('unit', urnetwork_tests, protocol : 'exitcode')
 
+# The approval's sdk half (src/ApprovalUnseal.hpp) against the page's own
+# sealed vector: the one test binary that links the vendored SDK, so it stays
+# out of urnetwork-tests, which must build without it.
+approval_interop_tests = executable('urnetwork-approval-tests',
+  sources : ['tests/main.cpp', 'tests/ApprovalInteropTest.cpp'],
+  include_directories : [include_directories('src', 'tests'), sdk_inc],
+  dependencies : [json, sdk_lib],
+  cpp_args : sdk_warn_args + exhaustive_switch_args,
+  build_rpath : sdk_root,
+  install : false)
+test('approval-interop', approval_interop_tests, protocol : 'exitcode')
+
 test('appimage-gsettings-schema-closure',
      find_program('../packaging/gsettings.test.sh'),
      protocol : 'exitcode')

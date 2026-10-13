@@ -159,7 +159,8 @@ UR_TEST(DeepLinkHardening_TheSharedSecretCatchesWhatTheSdkThrows) {
 }
 
 // No source calls one of the SDK's throwing crypto functions outside a try
-// that catches std::exception, and WalletConnect.cpp is found calling them.
+// that catches std::exception, and WalletConnect.cpp and ApprovalUnseal.hpp are
+// found calling them.
 UR_TEST(DeepLinkHardening_NoSdkCryptoCallIsOutsideATry) {
   const std::filesystem::path src(UR_SRC_DIR);
   if (!std::filesystem::is_directory(src)) {
@@ -180,8 +181,34 @@ UR_TEST(DeepLinkHardening_NoSdkCryptoCallIsOutsideATry) {
     if (name == "WalletConnect.cpp") {
       UR_EXPECT_TRUE_MSG("WalletConnect.cpp calls the SDK's crypto", found == 2);
     }
+    // the approval's one box: two shared secrets (the page's and the small-order constant) and
+    // the decryption, all inside Unseal's try
+    if (name == "ApprovalUnseal.hpp") {
+      UR_EXPECT_TRUE_MSG("ApprovalUnseal.hpp calls the SDK's crypto", found == 3);
+    }
   }
   UR_EXPECT_TRUE_MSG("the scan saw the sources", scanned > 10);
+}
+
+// The approval's unseal opens the page's box inside one try that catches
+// std::exception, and nothing it holds outlives it unwiped.
+UR_TEST(DeepLinkHardening_TheApprovalsUnsealCatchesWhatTheSdkThrows) {
+  const std::string unseal =
+      FunctionBody(ReadCode("ApprovalUnseal.hpp"), "inline std::optional<std::string> Unseal(");
+  UR_EXPECT_TRUE_MSG("approval::Unseal", !unseal.empty());
+  UR_EXPECT_TRUE(Before(unseal, "const detail::OnExit overwrite{[&] {", "try {"));
+  UR_EXPECT_TRUE(
+      DeepLinkInOrder(unseal, {"try {", "urnet::generateSharedSecret(*secret, *sealedBy);",
+                               "urnet::generateSharedSecret(*secret, std::vector<uint8_t>(32, 0));",
+                               "detail::SameBytes(shared, constant)",
+                               "urnet::decryptData(link.data, link.nonce, sharedBase58);",
+                               "SameSecret(state->get<std::string>(), link.state)",
+                               "} catch (const std::exception&) {\n    return std::nullopt;"}));
+  UR_EXPECT_EQ(std::size_t{1}, CountOf(unseal, "try {"));
+  for (const char* wiped : {"Wipe(secretText);", "if (secret) Wipe(*secret);", "Wipe(shared);",
+                            "Wipe(constant);", "Wipe(plain);", "Wipe(sharedBase58);"}) {
+    UR_EXPECT_TRUE_MSG(std::string("Unseal wipes ") + wiped, Contains(unseal, wiped));
+  }
 }
 
 // The check itself.
