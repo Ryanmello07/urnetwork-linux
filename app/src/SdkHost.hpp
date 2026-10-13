@@ -40,6 +40,7 @@
 #include "SignOut.hpp"
 #include "VerifySendNotice.hpp"
 #include "AddSignInFlow.hpp"
+#include "ApprovalNetwork.hpp"
 #include "AuthLogout.hpp"
 #include "BittensorWalletFlow.hpp"
 #include "WalletBridgeRoute.hpp"
@@ -442,6 +443,69 @@ class SdkHost {
                             std::function<void(InstantAccount)> done);
   void ConfirmInstantAccount(std::function<void(AuthResult)> done);
   void DiscardInstantAccount();
+
+  // ---- a sign-in approved on a web page (UrIoApproval.hpp) -----------------
+  // The page that signs people in mints a one-time auth code with the person's
+  // own session and seals it to a key only this app holds;
+  // MainWindow::HandleAuthLink opens it, and the code is redeemed here. What
+  // comes back is held, not registered or stored, until the person has been
+  // shown which network this computer would join and said yes: the instant
+  // account's shape (above), redeem, then confirm or discard. A code is spent
+  // by its first redeem, so a redeem that failed is never tried again.
+  struct ApprovedNetwork {
+    enum class Failure {
+      None,
+      Transport,  // the call did not complete: the code may be unspent, and it is not retried
+      Refused,    // the server said no (an invalid, expired or spent code gets the same
+                  // answer), or the answer could not be used (no network name)
+    };
+    bool ok = false;
+    Failure failure = Failure::None;
+    // the credential's network_name claim, as received: shown only through
+    // SanitizeExternalDisplayText, never as it is
+    std::string networkName;
+    std::string error;
+  };
+  // POST /auth/code-login with no authorization: a credential a failed sign-in
+  // left on the api is taken off it first. On success the credential is held
+  // in pendingApprovedJwt_ and nothing is announced. `done` runs on an SDK
+  // thread, except when the api is gone, or the approval was superseded, and
+  // there is nothing to call: then it runs before this returns. Nothing is
+  // sent, and the answer is a refusal, when another flow has begun since the
+  // approval did (a network change is one): the code is for the network the
+  // approval began in, and the api this handle talks to may no longer be that
+  // one's. What a redeem already out brings back is dropped the same way.
+  void RedeemApprovedCode(const std::string& code, std::function<void(ApprovedNetwork)> done);
+  // Register this device under the held network, persist it and announce the
+  // sign-in, as every sign-in does. Fails with a clear error if nothing is
+  // held. On a failure the credential the api was handed for the registration
+  // is taken off it again, and the one it persisted is logged out.
+  void ConfirmApprovedNetwork(std::function<void(AuthResult)> done);
+  // Drop the held credential without registering it (declined, or the sheet
+  // closed).
+  void DiscardApprovedNetwork();
+  // A browser approval is about to start: every browser or wallet flow still
+  // waiting is told it was superseded (CancelPendingWalletFlows). Returns the
+  // number of the flow it started, which the attempt belongs to until another
+  // flow takes the next, and which the redeem of its code is held to
+  // (RedeemApprovedCode).
+  uint64_t BeginBrowserApproval();
+  // The number of the flow that started last. Lock-free, any thread.
+  uint64_t CurrentBrowserFlow() const { return walletFlows_.Latest(); }
+  // The network an approval would be for (ApprovalNetwork.hpp): the official
+  // one (the operator's host with no api or connect url of the person's own,
+  // and the operator's own API under it), another network whose API url the
+  // client really uses is https://host[:port], which a request can name, or
+  // none. A snapshot of the active space, written wherever it changes
+  // (Initialize, ApplyNetworkServer) and read here under its own small lock,
+  // never mutex_, which a switch holds across calls into the SDK and
+  // StartTunnel across the control socket: the UI thread can ask.
+  approval::Network CurrentApprovalNetwork() const;
+  // Every sign-in that starts calls it first (NoteSignInStarted): a browser
+  // approval still waiting ends then. Set once on the UI thread (MainWindow),
+  // before any flow; it runs on the thread the sign-in starts on and only
+  // marshals.
+  void SetSignInStartedHandler(std::function<void()> h) { onSignInStarted_ = std::move(h); }
 
   // ---- network server (iOS NetworkServerSheet / windows parity) ------------
   // Which network API this client talks to — on this fork, the difference
@@ -1735,6 +1799,38 @@ class SdkHost {
   // The instant account's jwt, held between CreateInstantAccount and the
   // seedphrase sheet's confirm (guarded by mutex_; a secret — never log it).
   std::optional<std::string> pendingInstantJwt_;
+  // The network a browser approval redeemed, held between RedeemApprovedCode
+  // and ConfirmApprovedNetwork so the person sees which network this computer
+  // would join before the device registers under it (guarded by mutex_; a
+  // secret, never logged).
+  std::optional<std::string> pendingApprovedJwt_;
+  // The number of the flow the last browser approval began in
+  // (BeginBrowserApproval). Its code is for the network that was active then,
+  // and every flow that starts after it, a network change among them, takes
+  // the next number: so RedeemApprovedCode sends the code, and keeps what comes
+  // back, only while this is still the number of the flow that started last.
+  // Lock-free; 0 until an approval has begun, and then nothing is redeemed.
+  std::atomic<uint64_t> approvalFlow_{0};
+  // CurrentApprovalNetwork(): written wherever the network space changes
+  // (Initialize, ApplyNetworkServer) by a caller that holds mutex_, but held
+  // under a lock of its own for the copy only, so the UI thread reads it
+  // without waiting for mutex_. None until a space has been read, and None
+  // again for as long as a switch is in progress.
+  mutable std::mutex approvalNetworkMutex_;
+  approval::Network approvalNetwork_;
+  // Reads the active space and stores what it names (caller holds mutex_).
+  void UpdateApprovalNetworkLocked();
+  void SetApprovalNetwork(approval::Network network);
+  // Answers every browser or wallet flow still waiting with `reason` ("superseded
+  // by ..."), forgets a sign-in's sso attempt and cancels a Bittensor session
+  // that has not signed, and takes the next flow number, which it returns: a
+  // step of an older flow that runs later finds its number stale. Takes
+  // mutex_: never call it holding it.
+  uint64_t CancelPendingWalletFlows(const std::string& reason);
+  // Every sign-in's first statement: the handler set with
+  // SetSignInStartedHandler hears that one starts.
+  void NoteSignInStarted();
+  std::function<void()> onSignInStarted_;
 
   // Advanced Mode standing state (D5): the atomic is the authority between
   // the disk read at startup and any later toggle.

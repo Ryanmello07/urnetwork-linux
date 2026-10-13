@@ -2212,6 +2212,12 @@ void MainWindow::OnWalletAuth(const AuthResult& result) {
   PostToMain([this, result] {
     browserSignIn_.Settle();
     SetLoginBusy(false);
+    if (!result.ok && bridge::IsSuperseded(result.error)) {
+      // another sign-in, a browser approval or a network change took over:
+      // nothing failed, and what took over says what happens next
+      loginError_.set_text("");
+      return;
+    }
     if (!result.ok && bittensor::IsCancelled(result.error)) {
       // the user closed the Bittensor manual sheet: nothing failed
       loginError_.set_text("");

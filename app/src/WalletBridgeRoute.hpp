@@ -10,6 +10,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string_view>
 
@@ -58,14 +59,18 @@ constexpr SignatureRoute RouteSignature(bool signWaiting, bool createWaiting,
 // only while its flow is still the newest. A Bittensor connect superseded by a
 // Solana connect while its challenge was being fetched therefore opens no tab,
 // and leaves the Solana keypair (and so its return) intact.
+//
+// The number is atomic so that the UI thread can read it without the host's
+// lock (a browser approval asks which flow started last, SdkHost
+// CurrentBrowserFlow); every flow still takes its number under that lock.
 class FlowCounter {
  public:
-  constexpr uint64_t Begin() noexcept { return ++latest_; }
-  constexpr uint64_t Latest() const noexcept { return latest_; }
-  constexpr bool IsCurrent(uint64_t flow) const noexcept { return flow != 0 && flow == latest_; }
+  uint64_t Begin() noexcept { return latest_.fetch_add(1, std::memory_order_acq_rel) + 1; }
+  uint64_t Latest() const noexcept { return latest_.load(std::memory_order_acquire); }
+  bool IsCurrent(uint64_t flow) const noexcept { return flow != 0 && flow == Latest(); }
 
  private:
-  uint64_t latest_ = 0;
+  std::atomic<uint64_t> latest_{0};
 };
 
 }  // namespace urnw::bridge

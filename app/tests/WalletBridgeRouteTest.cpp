@@ -85,6 +85,23 @@ UR_TEST(WalletBridge_ALateChallengeNeverOpensTheBridgeForAnOlderFlow) {
   UR_EXPECT_TRUE(flows.IsCurrent(signIn));
 }
 
+// The number is read from the UI thread without the host's lock (a browser
+// approval asks which flow started last): reading it through a const counter
+// takes nothing, and the counter is an atomic.
+UR_TEST(WalletBridge_TheFlowIsReadWithoutTheLock) {
+  FlowCounter flows;
+  const FlowCounter& reader = flows;
+  UR_EXPECT_TRUE(reader.Latest() == 0);
+  UR_EXPECT_FALSE(reader.IsCurrent(0));
+  const uint64_t first = flows.Begin();
+  UR_EXPECT_TRUE(reader.Latest() == first);
+  UR_EXPECT_TRUE(reader.IsCurrent(first));
+  const uint64_t second = flows.Begin();
+  UR_EXPECT_TRUE(second == first + 1);
+  UR_EXPECT_TRUE(reader.Latest() == second);
+  UR_EXPECT_FALSE(reader.IsCurrent(first));
+}
+
 // ---- the call sites ----------------------------------------------------------
 
 namespace {
@@ -162,6 +179,20 @@ UR_TEST(WalletBridge_TheHostChecksItsFlowBeforeALateChallengeOpensTheBridge) {
     UR_EXPECT_TRUE_MSG("the reason \"" + literal + "\"", IsSuperseded(literal));
   }
   UR_EXPECT_TRUE_MSG("the host writes superseded reasons", reasons > 0);
+}
+
+// The counter is an atomic, so the read above needs no lock.
+UR_TEST(WalletBridge_TheCounterIsAnAtomic) {
+  const std::string source = ReadSource("WalletBridgeRoute.hpp");
+  if (source.empty()) {
+    UR_FAIL("could not read WalletBridgeRoute.hpp to check the flow counter is atomic");
+    return;
+  }
+  UR_EXPECT_TRUE(source.find("std::atomic<uint64_t> latest_{0};") != std::string::npos);
+  UR_EXPECT_TRUE(source.find("latest_.fetch_add(1, std::memory_order_acq_rel) + 1") !=
+                 std::string::npos);
+  UR_EXPECT_TRUE(source.find("latest_.load(std::memory_order_acquire)") != std::string::npos);
+  UR_EXPECT_TRUE(source.find("uint64_t latest_ = 0;") == std::string::npos);
 }
 
 // A superseded Bittensor connect ended by the user's choice: the page settles it

@@ -740,6 +740,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/SchemeHandlerTest.cpp',
     'tests/ApprovalCheckWiringTest.cpp',
     'tests/LogExportTest.cpp',
+    'tests/ApprovalHostWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -863,6 +864,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # the approval page's descriptor check, Config.hpp and every build,
               # packaging and script file that could define the test origin.
               # LogExportTest reads LogExport.hpp and Settings' Export logs the same way.
+              # ApprovalHostWiringTest reads the approval's host half in SdkHost and the
+              # window's wallet answer the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

@@ -487,6 +487,10 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
       g_message("sdkhost: restored the network space this client was last pointed at: '%s'",
                 hostName.c_str());
     }
+    // the network a browser approval would be for, read from the space the
+    // launch bound (after the retired key was moved, so a moved space is read
+    // as what it became)
+    UpdateApprovalNetworkLocked();
     api_ = networkSpace_->getApi();
     AdoptSpaceApiLocked();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
@@ -594,6 +598,7 @@ void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRo
 
 void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& password,
                                 std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   urnet::AuthLoginWithPasswordArgs args;
   args.user_auth = userAuth;
   args.password = password;
@@ -618,6 +623,7 @@ void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& 
 }
 
 void SdkHost::LoginWithCode(const std::string& authCode, std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   urnet::AuthCodeLoginArgs args;
   args.auth_code = authCode;
   api_->authCodeLogin(args, [this, done](std::optional<urnet::AuthCodeLoginResult> result,
@@ -655,6 +661,7 @@ std::string NormalizeSeedphrase(const std::string& raw) {
 
 void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
                                   std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   urnet::AuthLoginArgs args;
   args.seedphrase = NormalizeSeedphrase(seedphrase);
   // NOTE: nothing on any path below may echo the args — an error log that
@@ -678,6 +685,7 @@ void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
 
 void SdkHost::CreateInstantAccount(const std::string& referralCode,
                                    std::function<void(InstantAccount)> done) {
+  NoteSignInStarted();
   // NO user_auth, password, auth_jwt or wallet_auth: that combination is what
   // makes the server mint a seedphrase-secured network and return the phrase.
   urnet::NetworkCreateArgs args;
@@ -726,6 +734,7 @@ void SdkHost::CreateInstantAccount(const std::string& referralCode,
 }
 
 void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   std::string jwt;
   {
     std::scoped_lock lock(mutex_);
@@ -742,6 +751,247 @@ void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
 void SdkHost::DiscardInstantAccount() {
   std::scoped_lock lock(mutex_);
   pendingInstantJwt_.reset();
+}
+
+// ---- a sign-in approved on a web page (UrIoApproval.hpp) --------------------
+// Nothing here logs a code, a credential or a network name: the lines are
+// closed.
+
+void SdkHost::RedeemApprovedCode(const std::string& code,
+                                 std::function<void(ApprovedNetwork)> done) {
+  urnet::AuthCodeLoginArgs args;
+  args.auth_code = code;
+  // The flow the approval began in (BeginBrowserApproval). The code was minted
+  // for the network that was active then, and a network change takes the next
+  // flow number, like every other flow that starts: so the code goes out, and
+  // the credential it returns is kept, only while this is still the number of
+  // the flow that started last. Read once, for both.
+  const uint64_t flow = approvalFlow_.load(std::memory_order_acquire);
+  const auto answer = [this, done, flow](std::optional<urnet::AuthCodeLoginResult> result,
+                                         std::optional<std::string> err) {
+    ApprovedNetwork out;
+    // never retried: the server answers an invalid, an expired and a spent
+    // code the same way, as a 200 carrying an error, and a call that did not
+    // complete may have spent the code anyway
+    if (err || !result) {
+      out.failure = ApprovedNetwork::Failure::Transport;
+      out.error = err ? *err : "no result";
+      g_warning("sdkhost: redeeming the approved code did not complete");
+      if (done) done(out);
+      return;
+    }
+    if (result->error && !result->error->message.empty()) {
+      out.failure = ApprovedNetwork::Failure::Refused;
+      out.error = result->error->message;
+      g_warning("sdkhost: the server refused the approved code");
+      if (done) done(out);
+      return;
+    }
+    // the credential must name a network the person can be asked about: fail
+    // closed without one
+    const std::optional<std::string> networkName =
+        result->by_jwt.empty() ? std::nullopt : sso::JwtClaimString(result->by_jwt, "network_name");
+    if (!networkName || networkName->empty()) {
+      out.failure = ApprovedNetwork::Failure::Refused;
+      out.error = "the approval did not name a network";
+      g_warning("sdkhost: the approved code gave no network to confirm");
+      if (done) done(out);
+      return;
+    }
+    bool superseded = false;
+    {
+      std::scoped_lock lock(mutex_);
+      // a flow that began while the code was out left api_ on another network
+      // (a switch replaces it), and what the old network answered is not that
+      // network's to confirm
+      superseded = flow == 0 || !walletFlows_.IsCurrent(flow);
+      if (!superseded) pendingApprovedJwt_ = result->by_jwt;
+    }
+    if (superseded) {
+      out.failure = ApprovedNetwork::Failure::Refused;
+      out.error = "the approval was superseded by another sign-in";
+      g_warning("sdkhost: the approved code was redeemed after another flow took over; its "
+                "network is dropped");
+      if (done) done(out);
+      return;
+    }
+    g_message("sdkhost: the approved code was redeemed; its network is held for the person to "
+              "confirm");
+    out.ok = true;
+    out.networkName = *networkName;
+    if (done) done(out);
+  };
+  // The dispatch is under mutex_, as the network server's switch replaces api_
+  // under it: the page answers minutes after the sheet opened, and in between
+  // the person is free to open the network server sheet, whose
+  // ApplyNetworkServer reassigns api_ and so releases the handle this call goes
+  // through. authCodeLogin queues its callback onto an SDK thread rather than
+  // running it inline, so this does not re-enter. The credential is not
+  // registered, stored or announced. The flow is judged under that same lock,
+  // as the handle is read: a switch takes the next number before it takes the
+  // lock and replaces api_ under it, so a number that is still current here
+  // means the switch has not replaced the handle yet, and the code goes to the
+  // API of the network it was minted for. This is the last place it can be
+  // stopped; the gate that accepted the answer (MainWindow::HandleAuthLink)
+  // judged the same number just before.
+  //
+  // The code goes out with no Authorization (contract section 5, rule 4): the
+  // sdk sends whatever credential the handle holds, and a signed-out app can
+  // still hold one. RegisterNetworkClient gives api_ the network's jwt and
+  // persists it before it registers the device, a refused registration leaves
+  // both, and the next launch puts the stored one back on api_. The gate found
+  // the app signed out, so whatever is on the handle is stale.
+  bool superseded = false;
+  {
+    std::scoped_lock lock(mutex_);
+    if (api_) {
+      superseded = flow == 0 || !walletFlows_.IsCurrent(flow);
+      if (!superseded) {
+        api_->setByJwt("");
+        api_->authCodeLogin(args, answer);
+        return;
+      }
+    }
+  }
+  ApprovedNetwork out;
+  if (superseded) {
+    out.failure = ApprovedNetwork::Failure::Refused;
+    out.error = "the approval was superseded by another sign-in";
+    g_warning("sdkhost: the approved code was not redeemed: another flow took over since the "
+              "approval began");
+  } else {
+    out.failure = ApprovedNetwork::Failure::Transport;
+    out.error = "the network session went away during sign-in";
+  }
+  if (done) done(out);
+}
+
+void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {
+  std::string jwt;
+  {
+    std::scoped_lock lock(mutex_);
+    if (pendingApprovedJwt_) {
+      jwt = std::move(*pendingApprovedJwt_);
+      pendingApprovedJwt_.reset();
+    }
+  }
+  if (jwt.empty()) {
+    if (done) done({false, false, "no approved sign-in is pending"});
+    return;
+  }
+  RegisterNetworkClient(jwt, [this, done](AuthResult r) {
+    if (!r.ok) {
+      // RegisterNetworkClient hands the api the network credential and
+      // persists it before it registers the device, and its failures leave
+      // both there: a refused registration (a client limit, a plan gate) must
+      // leave a signed-out app with neither, not one calling the api as that
+      // network, or signed in as it at the next launch
+      std::scoped_lock lock(mutex_);
+      if (api_) api_->setByJwt("");
+      if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+    }
+    if (done) done(r);
+  });
+}
+
+void SdkHost::DiscardApprovedNetwork() {
+  std::scoped_lock lock(mutex_);
+  pendingApprovedJwt_.reset();
+}
+
+uint64_t SdkHost::BeginBrowserApproval() {
+  // First, and before mutex_ (it answers the callbacks of the flows it
+  // supersedes, which take it): whatever waited for the browser or a wallet is
+  // told, and the attempt that starts now is the flow that started last.
+  const uint64_t flow = CancelPendingWalletFlows("superseded by a ur.io approval");
+  // the redeem of this approval's code is judged against it (RedeemApprovedCode)
+  approvalFlow_.store(flow, std::memory_order_release);
+  DiscardApprovedNetwork();
+  return flow;
+}
+
+approval::Network SdkHost::CurrentApprovalNetwork() const {
+  std::scoped_lock lock(approvalNetworkMutex_);
+  return approvalNetwork_;
+}
+
+void SdkHost::SetApprovalNetwork(approval::Network network) {
+  std::scoped_lock lock(approvalNetworkMutex_);
+  approvalNetwork_ = std::move(network);
+}
+
+// The official network is the operator's space with no url of the person's
+// own, as it always was, and whose API really is the operator's own: the host
+// name alone does not say so, because a test environment of the operator
+// (URNETWORK_NETWORK_HOST and URNETWORK_NETWORK_ENV) keeps the host and has
+// another API under it, which NetworkOf names by that API. Any other space is
+// named by the API url the client really uses (getApiUrl: what the network
+// server sheet typed, or what the host derives), never by the host name that
+// was typed, and only if that url is https://host[:port]. A space that cannot
+// be read names nothing.
+void SdkHost::UpdateApprovalNetworkLocked() {
+  // requires mutex_
+  approval::Network network;
+  try {
+    if (networkSpace_.has_value()) {
+      const bool official = networkSpace_->getHostName() == kUrHostName &&
+                            networkSpace_->getConfiguredApiUrl().empty() &&
+                            networkSpace_->getConfiguredPlatformUrl().empty();
+      network = approval::NetworkOf(official, networkSpace_->getApiUrl(), kUrHostName);
+    }
+  } catch (const std::exception&) {
+    g_warning("sdkhost: the network space could not be read for the approval");
+    network = approval::Network();
+  }
+  SetApprovalNetwork(std::move(network));
+}
+
+// The bridge has one pair of callbacks and the browser one tab per flow, so a
+// flow that starts supersedes every flow still waiting, and superseding one
+// answers it: a dropped callback left whatever waited on it (a busy flag, a
+// spinner) waiting for a reply that could no longer come.
+uint64_t SdkHost::CancelPendingWalletFlows(const std::string& reason) {
+  // before mutex_: each takes it
+  CancelPendingSolanaConnect(reason);
+  CancelPendingAddSignIn(reason);
+  std::function<void(AuthResult)> authDone;
+  std::function<void(AuthResult)> createDone;
+  std::function<void(WalletSignature)> signDone;
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    // from here on every earlier flow's late step is stale
+    flow = walletFlows_.Begin();
+    authDone = std::exchange(walletAuthDone_, nullptr);
+    createDone = std::exchange(walletCreateDone_, nullptr);
+    signDone = std::exchange(walletSignDone_, nullptr);
+    pendingWalletNetworkName_.clear();
+    pendingWalletReferralCode_.clear();
+    // a sign-in's sso attempt dies with it, so its late return matches no
+    // attempt and is dropped
+    if (ssoOwner_ == addsignin::Owner::SignIn) {
+      ssoOwner_ = addsignin::Owner::None;
+      ssoProvider_.clear();
+      ssoState_.clear();
+      ssoNonce_.clear();
+    }
+  }
+  // a Bittensor proof that has not signed refuses a late hand-back
+  if (auto session = wallet_.bittensorSession()) {
+    if (session->state() != "signed") session->cancel();
+  }
+  if (signDone) {
+    WalletSignature out;
+    out.error = reason;
+    signDone(std::move(out));
+  }
+  if (createDone) createDone({false, false, reason});
+  if (authDone) authDone({false, false, reason});
+  return flow;
+}
+
+void SdkHost::NoteSignInStarted() {
+  if (onSignInStarted_) onSignInStarted_();
 }
 
 // ---- Advanced Mode (the windows D5 standing-state contract) -----------------
@@ -797,6 +1047,11 @@ SdkHost::NetworkServer SdkHost::CurrentNetworkServer() {
 bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string& apiUrl,
                                  const std::string& connectUrl) {
   if (hostName.empty()) return false;
+  // Another server is another account and another page to sign in on: a
+  // browser approval waiting (and a Google, Apple or wallet sign-in waiting)
+  // belongs to the server it began on, and is answered and dropped here, before
+  // mutex_, which CancelPendingWalletFlows takes.
+  CancelPendingWalletFlows("superseded by a network change");
   bool ok = false;
   bool loggedIn = false;
   {
@@ -809,6 +1064,12 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
     control_.StopTunnel();  // best effort — signed-out screens have none
     pendingWalletAuth_.reset();
     pendingInstantJwt_.reset();
+    pendingApprovedJwt_.reset();
+    // no network an approval can name until the switch below has said so
+    SetApprovalNetwork(approval::Network());
+    // set once networkSpace_ names the new space; api_ follows it a few
+    // statements later
+    bool spaceReplaced = false;
 
     try {
       // the override's own host is keyed under the override's env, as the
@@ -840,6 +1101,7 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       values.platform_url = connectUrl;
 
       networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
+      spaceReplaced = true;
       // the user's choice persists, but the override's space stays bound for
       // this process only
       if (!IsLaunchOverrideSpace(launchOverride, hostName, envName)) {
@@ -876,6 +1138,14 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
                    hostName.c_str(), e.what());
       ok = false;
     }
+    // Read again from the space in use now: the new one when the switch
+    // worked, or, when it threw before it replaced the old one (which is then
+    // still in use), the old one, which a snapshot left empty would hide until
+    // the next switch or a restart. A switch that threw after networkSpace_ was
+    // replaced leaves api_ on the old server, and a code minted for the network
+    // the new space names must not be redeemed there, so the snapshot stays
+    // empty until the next switch.
+    if (ok || !spaceReplaced) UpdateApprovalNetworkLocked();
   }
   if (!ok) return false;
   // The new space's stored auth decides what the window shows. Almost always
@@ -1041,6 +1311,7 @@ void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult
 void SdkHost::CreateNetwork(const std::string& networkName, const std::string& userAuth,
                             const std::string& password, const std::string& referralCode,
                             std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
@@ -1059,6 +1330,7 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
 void SdkHost::CreateNetworkWithPendingWallet(const std::string& networkName,
                                              const std::string& referralCode,
                                              std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   CancelPendingSolanaConnect("superseded by wallet network creation");
   std::optional<urnet::WalletAuthArgs> walletAuth;
   uint64_t flow = 0;
@@ -1153,6 +1425,7 @@ bool SdkHost::HasPendingWalletAuth() {
 
 void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
                          std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   urnet::AuthVerifyArgs args;
   args.user_auth = userAuth;
   args.verify_code = code;
@@ -1551,6 +1824,7 @@ void SdkHost::ConnectSolanaWallet(WalletConnect::Provider provider,
 
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
                                std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   CancelPendingSolanaConnect("superseded by a wallet sign-in");
   CancelPendingAddSignIn("superseded by a wallet sign-in");
   {
@@ -1564,6 +1838,7 @@ void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
 
 void SdkHost::SignInWithBittensor(const std::string& walletId,
                                   std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   CancelPendingSolanaConnect("superseded by a wallet sign-in");
   CancelPendingAddSignIn("superseded by a wallet sign-in");
   uint64_t flow = 0;
@@ -1697,6 +1972,7 @@ void SdkHost::StartBittensorSession(const std::string& walletId, const std::stri
 }
 
 void SdkHost::SignInWithSso(const std::string& provider, std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   CancelPendingSolanaConnect("superseded by a wallet sign-in");
   CancelPendingAddSignIn("superseded by a wallet sign-in");
   // a fresh state + nonce per attempt, never reused: the return is accepted
@@ -1978,6 +2254,7 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& j
 void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
                                           const std::string& referralCode,
                                           std::function<void(AuthResult)> done) {
+  NoteSignInStarted();
   std::string type;
   std::string jwt;
   {
@@ -5246,6 +5523,10 @@ void SdkHost::Logout() {
   pendingSsoType_.clear();
   pendingSsoJwt_.clear();
   pendingInstantJwt_.reset();
+  // and so is a network a browser approval redeemed and nobody confirmed; an
+  // approval still out is superseded, so what its redeem brings back is dropped
+  pendingApprovedJwt_.reset();
+  walletFlows_.Begin();
   // The local credentials first, because nothing can hold them up: the app is
   // signed out on disk even if it is ended while the daemon is asked below.
   if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
