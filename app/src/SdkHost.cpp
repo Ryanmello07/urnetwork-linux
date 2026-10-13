@@ -5256,6 +5256,26 @@ void SdkHost::Logout() {
   // Answered "superseded by ..." (bridge::IsSuperseded), so its sheet settles
   // quietly, and outside mutex_, which it takes.
   CancelPendingAddSignIn("superseded by signing out");
+  // So is a wallet's signature still asked for (a coldkey connect, a payout
+  // consent): its slot would otherwise take the next sign-in's proof first
+  // (bridge::RouteSignature), and its session a late return. Answered the same
+  // way, outside mutex_; a challenge still being fetched for it opens no tab.
+  std::function<void(WalletSignature)> signDone;
+  {
+    std::scoped_lock lock(mutex_);
+    signDone = std::move(walletSignDone_);
+    walletSignDone_ = nullptr;
+    if (signDone) walletFlows_.Begin();
+  }
+  if (signDone) {
+    if (auto session = wallet_.bittensorSession()) {
+      // a proof already accepted stays accepted; anything later is refused
+      if (session->state() != urnet::BittensorWalletStateSigned) session->cancel();
+    }
+    WalletSignature out;
+    out.error = "superseded by signing out";
+    signDone(std::move(out));
+  }
   // and so is a row click still settling
   CancelRowConnect("sign-out");
   std::scoped_lock lock(mutex_);

@@ -386,6 +386,15 @@ void WalletConnect::HandleBittensorReturn(const std::string& url) {
   const urnet::BittensorWalletResult result =
       bittensorSession_->handleBridgeReturn(url, g_get_real_time() / 1000)
           .value_or(urnet::BittensorWalletResult{});
+  // a return the consent session did not take, and that left it waiting (a
+  // forged or mismatched hand-back), is not the consent's answer
+  if (bittensor::KeepsWaiting(bittensorSession_->purpose(), bittensorSession_->state(),
+                              result.Proof.has_value())) {
+    std::fprintf(stderr, "[wallet] a Bittensor return the consent session did not take (%s), "
+                         "still waiting\n",
+                 result.ErrorCode.c_str());
+    return;
+  }
   DeliverBittensorResult(result, /*manual=*/false);
 }
 
@@ -400,15 +409,17 @@ void WalletConnect::DeliverBittensorResult(const urnet::BittensorWalletResult& r
       return;  // the manual sheet shows it and stays open
     case bittensor::Outcome::Fail: {
       if (!on_error) return;
+      const std::string purpose = bittensorSession_ ? bittensorSession_->purpose() : std::string();
       // a consent's expired challenge in the SDK's "code: message" form, as its
-      // consent calls report it (NetworkConsent.hpp words it)
-      if (bittensorSession_ &&
-          bittensor::ReportsCode(bittensorSession_->purpose(), result.ErrorCode)) {
-        on_error(result.ErrorCode + ": " + result.ErrorMessage);
+      // consent calls report it (NetworkConsent.hpp words it): the session's
+      // code alone, never a return's text
+      if (bittensor::ReportsCode(purpose, result.ErrorCode)) {
+        on_error(result.ErrorCode + ": ");
         return;
       }
-      switch (bittensor::FailureTextFor(result.ErrorCode, result.BridgeErrorCode,
-                                        !result.ErrorMessage.empty())) {
+      // a return's own words only for a flow that shows them
+      const bool pageText = !result.ErrorMessage.empty() && bittensor::ShowsPageText(purpose);
+      switch (bittensor::FailureTextFor(result.ErrorCode, result.BridgeErrorCode, pageText)) {
         case bittensor::FailureText::Refusal: {
           const bittensor::ErrorText text = bittensor::ErrorTextFor(result.ErrorCode);
           on_error(g_dpgettext2(GETTEXT_PACKAGE, std::string(text.key).c_str(),

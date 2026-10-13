@@ -29,12 +29,14 @@
 // coldkey that way. With no consent it explains itself and offers Sign with
 // wallet.
 //
-// Three refusals read in the section's own words (A1): an expired challenge
-// (challenge_expired: the session's expiry or the server's), a signature the
-// server does not verify for the coldkey (signature_mismatch), and a session
-// that is not the network owner's (network_owner_only). A wallet step the user
-// closed, or another wallet flow took over, ends quietly; every other failure
-// goes to the page's error surface.
+// Three refusals read in the section's own words (A1), each only from the step
+// the SDK reports it for: an expired challenge (challenge_expired: the SDK's
+// challenge, the session's expiry or the server's submit), a signature the
+// server does not verify for the coldkey (signature_mismatch, the submit), and
+// a session that is not the network owner's (network_owner_only, the status,
+// the challenge and the submit). Text from a wallet's return is never one of
+// them (A3). A wallet step the user closed, or another wallet flow took over,
+// ends quietly; every other failure goes to the page's error surface.
 //
 // Header-only and free of GTK and the SDK (tests/NetworkConsentTest.cpp): the
 // page hands the flow its ports, the SDK's consent calls and the wallet, and
@@ -71,10 +73,29 @@ constexpr bool HasCode(std::string_view error, std::string_view code) noexcept {
 // of them, and goes to the page's error surface.
 enum class Notice { None, Expired, Failed, OwnerOnly };
 
-constexpr Notice NoticeFor(std::string_view error) noexcept {
-  if (HasCode(error, kChallengeExpired)) return Notice::Expired;
-  if (HasCode(error, kSignatureMismatch)) return Notice::Failed;
-  if (HasCode(error, kNetworkOwnerOnly)) return Notice::OwnerOnly;
+// The step a failure comes from. Each step words only the refusals the SDK
+// reports for it (A1), so no text a wallet's return carries can read as
+// another step's refusal (A3).
+enum class Step { Status, Challenge, Signature, Submit };
+
+constexpr Notice NoticeFor(Step step, std::string_view error) noexcept {
+  const bool ownerOnly = HasCode(error, kNetworkOwnerOnly);
+  const bool expired = HasCode(error, kChallengeExpired);
+  switch (step) {
+    case Step::Status:
+      return ownerOnly ? Notice::OwnerOnly : Notice::None;
+    case Step::Challenge:
+      if (expired) return Notice::Expired;
+      return ownerOnly ? Notice::OwnerOnly : Notice::None;
+    case Step::Signature:
+      // the session's own expiry: the owner and the signature's match are
+      // the challenge's and the submit's to refuse
+      return expired ? Notice::Expired : Notice::None;
+    case Step::Submit:
+      if (expired) return Notice::Expired;
+      if (HasCode(error, kSignatureMismatch)) return Notice::Failed;
+      return ownerOnly ? Notice::OwnerOnly : Notice::None;
+  }
   return Notice::None;
 }
 
@@ -287,7 +308,7 @@ class Flow {
       if (!status || (status->active && status->coldkeySs58.empty())) {
         status_.reset();
         phase_ = Phase::Unavailable;
-        notice_ = NoticeFor(error);
+        notice_ = NoticeFor(Step::Status, error);
         Changed();
         return;
       }
@@ -302,7 +323,7 @@ class Flow {
                                                      std::string error) {
       if (generation != generation_) return;
       if (!challenge || challenge->message.empty()) {
-        Fail(error);
+        Fail(Step::Challenge, error);
         return;
       }
       Sign(generation, *challenge);
@@ -315,7 +336,7 @@ class Flow {
     ports_.sign(walletId_, issued, [this, generation, issued](Signed signed_) {
       if (generation != generation_) return;
       if (!signed_.ok || signed_.signature.empty()) {
-        Fail(signed_.error);
+        Fail(Step::Signature, signed_.error);
         return;
       }
       // a proof for another message or another coldkey is not this consent:
@@ -328,7 +349,7 @@ class Flow {
                     [this, generation](Submitted submitted) {
                       if (generation != generation_) return;
                       if (!submitted.ok) {
-                        Fail(submitted.error);
+                        Fail(Step::Submit, submitted.error);
                         return;
                       }
                       // stored: the status shows it, from the next epoch
@@ -341,9 +362,9 @@ class Flow {
 
   // A step failed: the section is back on the status it had, with the refusal
   // in its own words, or quietly, or with the error on the page's surface.
-  void Fail(const std::string& error) {
+  void Fail(Step step, const std::string& error) {
     const bool quiet = IsQuiet(error);
-    const Notice notice = quiet ? Notice::None : NoticeFor(error);
+    const Notice notice = quiet ? Notice::None : NoticeFor(step, error);
     Settle(notice);
     if (!quiet && notice == Notice::None && on_error) on_error(error);
   }

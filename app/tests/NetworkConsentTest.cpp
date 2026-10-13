@@ -725,6 +725,128 @@ UR_TEST(Consent_AClosedOrSupersededWalletStepEndsQuietly) {
   }
 }
 
+// A3: text a wallet's return carries is never a refusal: the signature step
+// words only its own expiry, so a return's "network_owner_only: ..." or
+// "signature_mismatch: ..." goes to the page's error surface like any other
+// failure (the review's ProbeConsentPageTextSpoofsRefusal)
+UR_TEST(Consent_AReturnsTextIsNeverARefusal) {
+  for (const char* forged : {"network_owner_only: x", "signature_mismatch: x",
+                             "network_owner_only", "signature_mismatch"}) {
+    Fake fake;
+    Flow flow(fake.Ports());
+    LoadWith(flow, fake, NoConsent());
+    flow.Start("talisman", kColdkey);
+    Answer(fake.challengeDone, 0, IssuedChallenge(), std::string());
+    Answer(fake.signDone, 0, Signed{false, {}, {}, {}, forged});
+    UR_EXPECT_TRUE_MSG(forged, flow.Current() == ExpectedNone());
+    UR_EXPECT_TRUE_MSG(forged, fake.errors.size() == 1 && fake.errors[0] == forged);
+    UR_EXPECT_TRUE_MSG(forged, fake.submits.empty());
+  }
+}
+
+// A1, A3: each step words only the refusals the SDK reports for it: the status
+// the owner, the challenge the owner and the expiry, the signature its expiry,
+// and the submit all three
+UR_TEST(Consent_EachStepWordsOnlyItsOwnRefusals) {
+  using consent::NoticeFor;
+  using consent::Step;
+  const char* const owner = "network_owner_only: x";
+  const char* const expired = "challenge_expired: x";
+  const char* const mismatch = "signature_mismatch: x";
+  UR_EXPECT_TRUE(NoticeFor(Step::Status, owner) == Notice::OwnerOnly);
+  UR_EXPECT_TRUE(NoticeFor(Step::Status, expired) == Notice::None);
+  UR_EXPECT_TRUE(NoticeFor(Step::Status, mismatch) == Notice::None);
+  UR_EXPECT_TRUE(NoticeFor(Step::Challenge, owner) == Notice::OwnerOnly);
+  UR_EXPECT_TRUE(NoticeFor(Step::Challenge, expired) == Notice::Expired);
+  UR_EXPECT_TRUE(NoticeFor(Step::Challenge, mismatch) == Notice::None);
+  UR_EXPECT_TRUE(NoticeFor(Step::Signature, owner) == Notice::None);
+  UR_EXPECT_TRUE(NoticeFor(Step::Signature, expired) == Notice::Expired);
+  UR_EXPECT_TRUE(NoticeFor(Step::Signature, mismatch) == Notice::None);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, owner) == Notice::OwnerOnly);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, expired) == Notice::Expired);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, mismatch) == Notice::Failed);
+  for (const Step step : {Step::Status, Step::Challenge, Step::Signature, Step::Submit}) {
+    UR_EXPECT_TRUE(NoticeFor(step, "") == Notice::None);
+    UR_EXPECT_TRUE(NoticeFor(step, "wallet_error: user_rejected") == Notice::None);
+  }
+  // and a challenge refused with a mismatch's code is the page's error surface's
+  Fake fake;
+  Flow flow(fake.Ports());
+  LoadWith(flow, fake, NoConsent());
+  flow.Start("talisman", kColdkey);
+  Answer(fake.challengeDone, 0, std::nullopt, mismatch);
+  UR_EXPECT_TRUE(flow.Current() == ExpectedNone());
+  UR_EXPECT_TRUE(fake.errors.size() == 1 && fake.errors[0] == mismatch);
+}
+
+// A3: a consent shows no words of a return's own, keeps waiting through a
+// return its session did not take, and every other flow is as before
+UR_TEST(Consent_AReturnNeverSpeaksForTheConsent) {
+  namespace bt = urnw::bittensor;
+  UR_EXPECT_FALSE(bt::ShowsPageText(bt::kPurposeConsent));
+  for (const std::string_view purpose :
+       {bt::kPurposeLogin, bt::kPurposeCreate, bt::kPurposeConnect, bt::kPurposeAdd}) {
+    UR_EXPECT_TRUE(bt::ShowsPageText(purpose));
+    UR_EXPECT_FALSE(bt::KeepsWaiting(purpose, bt::kStateAwaitingWallet, false));
+  }
+  UR_EXPECT_TRUE(bt::kStateAwaitingWallet == "awaiting_wallet");
+  // a return the session did not take, that left it waiting
+  UR_EXPECT_TRUE(bt::KeepsWaiting(bt::kPurposeConsent, "awaiting_wallet", false));
+  // one that ended it, or a proof, is the consent's answer
+  for (const char* state : {"failed", "signed", "cancelled", "challenge"}) {
+    UR_EXPECT_TRUE_MSG(state, !bt::KeepsWaiting(bt::kPurposeConsent, state, false));
+  }
+  UR_EXPECT_FALSE(bt::KeepsWaiting(bt::kPurposeConsent, "awaiting_wallet", true));
+  // a page failure with a code this app does not word reads as the generic
+  // failure for a consent, never as the page's text
+  UR_EXPECT_TRUE(bt::FailureTextFor("wallet_error", "zzz", false) == bt::FailureText::Generic);
+
+  const std::string wallet = ReadCode("WalletConnect.cpp");
+  if (wallet.empty()) {
+    UR_FAIL("could not read WalletConnect.cpp");
+    return;
+  }
+  const std::string deliver = FunctionBody(wallet, "void WalletConnect::DeliverBittensorResult(");
+  UR_EXPECT_TRUE(Contains(deliver, "const bool pageText = !result.ErrorMessage.empty() && "
+                                   "bittensor::ShowsPageText(purpose);"));
+  UR_EXPECT_TRUE(Contains(deliver, "bittensor::FailureTextFor(result.ErrorCode, "
+                                   "result.BridgeErrorCode, pageText)"));
+  // the premise, for every other flow: the page's words reach them as before
+  UR_EXPECT_TRUE(Contains(
+      deliver, "case bittensor::FailureText::PageText:\n          on_error(result.ErrorMessage);"));
+  const std::string ret = FunctionBody(wallet, "void WalletConnect::HandleBittensorReturn(");
+  UR_EXPECT_TRUE(Contains(ret, "bittensor::KeepsWaiting(bittensorSession_->purpose(), "
+                               "bittensorSession_->state(),"));
+  UR_EXPECT_TRUE(Before(ret, "bittensor::KeepsWaiting(", "DeliverBittensorResult(result,"));
+}
+
+// A3: sign-out answers and empties the one signature slot a coldkey connect or a
+// consent waits in, keeps a challenge still being fetched from the bridge, and
+// cancels the session: a waiting request would otherwise take the next
+// sign-in's proof first (the review's ProbeConsentSlotSurvivesSignOut)
+UR_TEST(ConsentWiring_SignOutReleasesTheSignatureSlot) {
+  namespace bridge = urnw::bridge;
+  UR_EXPECT_TRUE(bridge::RouteSignature(/*signWaiting=*/true, /*createWaiting=*/false,
+                                        /*walletSignInWaiting=*/true) ==
+                 bridge::SignatureRoute::AnswerRequest);
+  UR_EXPECT_TRUE(bridge::IsSuperseded("superseded by signing out"));
+  const std::string host = ReadCode("SdkHost.cpp");
+  if (host.empty()) {
+    UR_FAIL("could not read SdkHost.cpp");
+    return;
+  }
+  const std::string logout = FunctionBody(host, "void SdkHost::Logout()");
+  for (const char* step :
+       {"signDone = std::move(walletSignDone_);", "walletSignDone_ = nullptr;",
+        "if (signDone) walletFlows_.Begin();", "session->cancel();",
+        "out.error = \"superseded by signing out\";", "signDone(std::move(out));"}) {
+    UR_EXPECT_TRUE_MSG(step, Contains(logout, step));
+  }
+  // answered outside mutex_, before the sign-out takes it for the rest
+  UR_EXPECT_TRUE(Before(logout, "signDone(std::move(out));", "signedOut_.store(true);"));
+  UR_EXPECT_TRUE(Before(logout, "walletSignDone_ = nullptr;", "signDone(std::move(out));"));
+}
+
 // A1: the codes are the SDK's, matched on its "code: message" prefix only
 UR_TEST(Consent_CodesMatchOnTheSdksPrefix) {
   UR_EXPECT_TRUE(consent::kNetworkOwnerOnly == "network_owner_only");
@@ -738,12 +860,15 @@ UR_TEST(Consent_CodesMatchOnTheSdksPrefix) {
   UR_EXPECT_FALSE(consent::HasCode("challenge_expire", consent::kChallengeExpired));
   UR_EXPECT_FALSE(consent::HasCode("error: challenge_expired: y", consent::kChallengeExpired));
   UR_EXPECT_FALSE(consent::HasCode("", consent::kChallengeExpired));
-  UR_EXPECT_TRUE(consent::NoticeFor("challenge_expired: x") == Notice::Expired);
-  UR_EXPECT_TRUE(consent::NoticeFor("signature_mismatch: x") == Notice::Failed);
-  UR_EXPECT_TRUE(consent::NoticeFor("signature_mismatch") == Notice::Failed);
-  UR_EXPECT_TRUE(consent::NoticeFor("network_owner_only: x") == Notice::OwnerOnly);
-  UR_EXPECT_TRUE(consent::NoticeFor("invalid_ss58_address: x") == Notice::None);
-  UR_EXPECT_TRUE(consent::NoticeFor("The request was declined in your wallet.") == Notice::None);
+  using consent::NoticeFor;
+  using consent::Step;
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, "challenge_expired: x") == Notice::Expired);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, "signature_mismatch: x") == Notice::Failed);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, "signature_mismatch") == Notice::Failed);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, "network_owner_only: x") == Notice::OwnerOnly);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, "invalid_ss58_address: x") == Notice::None);
+  UR_EXPECT_TRUE(NoticeFor(Step::Submit, "The request was declined in your wallet.") ==
+                 Notice::None);
   UR_EXPECT_TRUE(consent::IsQuiet(urnw::bittensor::kCancelled));
   UR_EXPECT_TRUE(consent::IsQuiet("superseded by another sign-in method"));
   UR_EXPECT_FALSE(consent::IsQuiet("challenge_expired: "));
@@ -962,9 +1087,8 @@ UR_TEST(ConsentWiring_TheSignatureIsTheExistingConnectors) {
       Before(start, "if (!WalletFlowIsCurrent(flow)) {", "wallet_.SignWithBittensor(session);"));
   // a consent session's expiry reaches the flow coded, before any other words
   const std::string deliver = FunctionBody(wallet, "void WalletConnect::DeliverBittensorResult(");
-  UR_EXPECT_TRUE(Contains(
-      deliver, "bittensor::ReportsCode(bittensorSession_->purpose(), result.ErrorCode)"));
-  UR_EXPECT_TRUE(Contains(deliver, "on_error(result.ErrorCode + \": \" + result.ErrorMessage);"));
+  UR_EXPECT_TRUE(Contains(deliver, "bittensor::ReportsCode(purpose, result.ErrorCode)"));
+  UR_EXPECT_TRUE(Contains(deliver, "on_error(result.ErrorCode + \": \");"));
   UR_EXPECT_TRUE(Before(deliver, "bittensor::ReportsCode(", "bittensor::FailureTextFor("));
 }
 

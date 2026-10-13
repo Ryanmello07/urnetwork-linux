@@ -233,6 +233,25 @@ constexpr bool ReportsCode(std::string_view purpose, std::string_view errorCode)
   return purpose == kPurposeConsent && errorCode == "challenge_expired";
 }
 
+// A consent never shows a return's own words (CONSENT.md A3): any opener of the
+// app's link can put text in a hand-back, so a page failure without a code this
+// app words reads as the generic failure. Every other flow shows them as before.
+constexpr bool ShowsPageText(std::string_view purpose) noexcept {
+  return purpose != kPurposeConsent;
+}
+
+// the session state of a bridge transport waiting for its hand-back (the SDK's
+// BittensorWalletStateAwaitingWallet)
+inline constexpr std::string_view kStateAwaitingWallet = "awaiting_wallet";
+
+// A bridge return a consent session did not take, and that left it waiting (a
+// forged hand-back, or one for another message, CONSENT.md A3), is not the
+// consent's answer: the consent keeps waiting for its own.
+constexpr bool KeepsWaiting(std::string_view purpose, std::string_view sessionState,
+                            bool proof) noexcept {
+  return purpose == kPurposeConsent && !proof && sessionState == kStateAwaitingWallet;
+}
+
 // How long a flow waits for its answer. A bridge round trip reports nothing
 // when the tab is closed, so it times out; the manual sheet is bounded by the
 // challenge itself (5 minutes) plus the time to submit.
