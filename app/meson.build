@@ -532,7 +532,8 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # labels, the extender share/import decisions, the reset's owed re-send and its
 # call sites, the Solana payout wallet's card
 # and connect-sheet rules, the Settlement v2 tile and its claim sheet's
-# progress, the wallet bridge's return routing, the dual-stack
+# progress, the payout consent's states, steps and refusals, the wallet
+# bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
 # install-kind probe, the launch throttle), when it asks GitHub again after
@@ -610,6 +611,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/PayoutPromotionWiringTest.cpp',
     'tests/SnPayoutPresentationTest.cpp',
     'tests/SnLedgerPresentationTest.cpp',
+    'tests/NetworkConsentTest.cpp',
     'tests/WalletBridgeRouteTest.cpp',
     'tests/BittensorWalletFlowTest.cpp',
     'tests/ManageSubscriptionTest.cpp',
@@ -840,6 +842,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # sign-out reports and the sign-in page's notice.
               # AccountRowIconsTest reads the Account pane's rows, the kit's
               # leading icon and its css the same way.
+              # NetworkConsentTest reads the payout consent's section, ports and
+              # SDK calls, its host and bridge call sites and po/en.po the same way.
               # RelativeTimeSpanTest reads RelativeTime's words the same way, and
               # SessionsWiringTest the Sessions page, its Account row, the window's
               # navigation and the rail; SessionsPresentationTest reads po/en.po.

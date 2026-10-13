@@ -34,7 +34,9 @@
 // Pane A (earnings): the points headline with its Providing / Referral /
 // Reliability breakdown (and the Seeker multiplier, points-only), the protocol
 // note with the ur.xyz link, the Unclaimed SN25α tile
-// (wallet only) and the Settlement v2 tile under it, the Bittensor wallet
+// (wallet only) and the Settlement v2 tile under it, then the payout consent
+// (signed in: the network's coldkey consent, signed with the Bittensor wallet,
+// NetworkConsent.hpp), the Bittensor wallet
 // block (connect through the bridge, or
 // enter an address manually — validated locally and then against
 // /sn/wallet/validate before anything is sent — and still sign it), the Solana
@@ -74,6 +76,7 @@
 #include "DemandChart.hpp"
 #include "ExtenderProvidePresentation.hpp"
 #include "LeaderboardIndicator.hpp"
+#include "NetworkConsent.hpp"
 #include "PaneKit.hpp"
 #include "ProviderStatusPresentation.hpp"
 #include "SdkHost.hpp"
@@ -410,11 +413,16 @@ class EarningsPage : public Gtk::Box {
                         std::optional<SnWalletCheck> check, const std::string& err);
   void OnConnectManual();
   // Which Bittensor wallet signs (Talisman on the browser bridge, TAO.com on
-  // the manual sheet), then StartWalletSignature with it.
-  void ChooseBittensorWallet(const std::string& expectedAddress);
+  // the manual sheet, WalletConnect on the bridge's pairing): `chosen` gets its
+  // id; a dismissed chooser chooses nothing. The coldkey connect hands it to
+  // StartWalletSignature, the payout consent to its flow.
+  void ChooseBittensorWallet(std::function<void(const std::string& walletId)> chosen);
   // The wallet as a signer: `expectedAddress` is the typed address (the wallet
   // must sign with that account) or empty (whichever account the wallet picks).
   void StartWalletSignature(const std::string& walletId, const std::string& expectedAddress);
+  // A browser-bridge wallet's step is in the system browser now: the snackbar
+  // says where to look (nothing for the manual sheet, which is on screen).
+  void NotifyContinueInBrowser(const std::string& walletId);
   void OnWalletSigned(uint32_t generation, const SdkHost::WalletSignature& signature,
                       const std::string& expectedAddress);
   void SetSnWallet(const std::string& address, const std::string& signature,
@@ -422,6 +430,19 @@ class EarningsPage : public Gtk::Box {
   void ApplyWalletConnectResult(uint32_t generation, bool ok, const std::string& serverError,
                                 const std::string& address);
   void FinishConnecting();
+
+  // ---- the network payout consent (NetworkConsent.hpp) -------------------------
+  // The section beside the Settlement v2 tile, drawn from the flow's view only.
+  void RebuildConsentSection();
+  // Sign with wallet and Change wallet: the shared chooser, then the coldkey.
+  void OnConsentAction();
+  // The coldkey the consent names, typed and checked (ss58) before the flow
+  // starts with it and `walletId`.
+  void AskConsentColdkey(const std::string& walletId);
+  // The flow's ports: the SDK's consent calls and the wallet. Every answer is
+  // marshaled to the main loop, dropped once the page's epoch moved, and given
+  // up on by consentStep_'s watchdog (one step is in flight at a time).
+  consent::Flow::Ports ConsentPorts();
 
   // ---- the Solana payout wallet (USDC until the Bittensor migration) ---------
   // The three-dot overflow (icon-only, named "Wallet options") over `menu`.
@@ -501,6 +522,15 @@ class EarningsPage : public Gtk::Box {
   Gtk::Box* ledgerRows_ = nullptr;
   Gtk::Label* ledgerStatus_ = nullptr;
   Gtk::Button* ledgerClaimButton_ = nullptr;
+  // the payout consent section (RebuildConsentSection)
+  Gtk::Widget* consentHeader_ = nullptr;
+  Gtk::Box* consentCard_ = nullptr;
+  Gtk::Label* consentLine_ = nullptr;
+  Gtk::Label* consentBody_ = nullptr;
+  Gtk::Label* consentNotice_ = nullptr;
+  Gtk::Button* consentSignButton_ = nullptr;
+  Gtk::Button* consentChangeButton_ = nullptr;
+  Gtk::Label* consentChangeNote_ = nullptr;
   Gtk::Label* walletStatus_ = nullptr;
   Gtk::Box* walletConnectedPanel_ = nullptr;
   Gtk::Label* walletAddressLabel_ = nullptr;
@@ -744,6 +774,10 @@ class EarningsPage : public Gtk::Box {
   Flow rankingFlow_;   // 20s
   Flow legacyFlow_;    // 20s: the payout read and POST /account/payout-wallet after a link
   Flow removeSolanaFlow_;  // 20s: POST /account/wallets/remove
+  Flow consentStep_;  // the consent's step: the wallet's minutes, 20s for a call
+
+  // the payout consent (NetworkConsent.hpp); its ports reach host_ and epoch_
+  consent::Flow consent_;
 
   // preview + balance relay
   bool previewMode_ = false;

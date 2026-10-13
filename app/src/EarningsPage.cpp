@@ -1065,6 +1065,82 @@ void LedgerClaim(SdkHost& host, urnet::SnLedgerClaimCallback callback) {
   host.device().snLedgerClaim(std::move(callback));
 }
 
+// The network payout consent (NetworkConsent.hpp, CONSENT.md §9): the Api's
+// three consent calls, which send the network credential (the challenge and the
+// submit refuse "network_owner_only: ..." without one). Every error keeps the
+// SDK's "code: message" form, a refused submit's code included, so the flow
+// reads network_owner_only, challenge_expired and signature_mismatch.
+using ConsentStatusDone =
+    std::function<void(std::optional<consent::Status> status, std::string err)>;
+void FetchConsentStatus(SdkHost& host, ConsentStatusDone done) {
+  host.api().snNetworkConsentStatus([done](std::optional<urnet::SnNetworkConsentStatus> result,
+                                           std::optional<std::string> err) {
+    if (err || !result) {
+      done(std::nullopt, err.value_or(std::string("no status")));
+      return;
+    }
+    consent::Status status;
+    status.active = result->active;
+    status.coldkeySs58 = result->coldkey_ss58;
+    status.fromEpoch = result->from_epoch;
+    status.throughEpoch = result->through_epoch;
+    done(std::move(status), std::string());
+  });
+}
+
+using ConsentChallengeDone =
+    std::function<void(std::optional<consent::Challenge> challenge, std::string err)>;
+void RequestConsentChallenge(SdkHost& host, const std::string& coldkeySs58,
+                             ConsentChallengeDone done) {
+  host.api().snNetworkConsentChallenge(
+      coldkeySs58, [done](std::optional<urnet::SnNetworkConsentChallengeResult> result,
+                          std::optional<std::string> err) {
+        if (err || !result || result->message.empty()) {
+          done(std::nullopt, err.value_or(std::string("no challenge")));
+          return;
+        }
+        consent::Challenge challenge;
+        challenge.message = result->message;
+        challenge.coldkeySs58 = result->coldkey_ss58;
+        challenge.fromEpoch = result->from_epoch;
+        challenge.throughEpoch = result->through_epoch;
+        challenge.expiresAt = result->expires_at;
+        done(std::move(challenge), std::string());
+      });
+}
+
+// The challenge back as the SDK's own, every field as it came, for the
+// consent session.
+urnet::SnNetworkConsentChallengeResult ToSdkChallenge(const consent::Challenge& challenge) {
+  urnet::SnNetworkConsentChallengeResult result;
+  result.message = challenge.message;
+  result.coldkey_ss58 = challenge.coldkeySs58;
+  result.from_epoch = challenge.fromEpoch;
+  result.through_epoch = challenge.throughEpoch;
+  result.expires_at = challenge.expiresAt;
+  return result;
+}
+
+using ConsentSubmitDone = std::function<void(bool ok, std::string err)>;
+void SubmitConsent(SdkHost& host, const std::string& coldkeySs58, const std::string& message,
+                   const std::string& signature, ConsentSubmitDone done) {
+  host.api().snNetworkConsentSubmit(
+      coldkeySs58, message, signature,
+      [done](std::optional<urnet::SnSetWalletResult> result, std::optional<std::string> err) {
+        if (err || !result || result->error) {
+          std::string detail = err.value_or(std::string());
+          if (detail.empty() && result && result->error) {
+            // signature_mismatch: a signature that does not verify for the coldkey
+            const std::string code = result->error->code.value_or(std::string());
+            detail = code.empty() ? result->error->message : code + ": " + result->error->message;
+          }
+          done(false, detail.empty() ? std::string("no result") : detail);
+          return;
+        }
+        done(true, std::string());
+      });
+}
+
 }  // namespace sn
 
 // The claim dialogs' gas key and, when it cannot pay a claim, the top-up: the
@@ -1741,9 +1817,16 @@ void LedgerClaimSheet::ShowError(const Glib::ustring& message) {
 // ---- EarningsPage ------------------------------------------------------------
 
 EarningsPage::EarningsPage(SdkHost& host)
-    : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0), host_(host) {
+    : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0), host_(host), consent_(ConsentPorts()) {
   EnsureBrandCss();
   EnsureDrawerCss();
+  // the consent section redraws with the wallet block, whose bridge it shares
+  // (RebuildWalletBlock); a failure it does not word itself is the snackbar's
+  consent_.on_changed = [this] { RebuildWalletBlock(); };
+  consent_.on_error = [this](const std::string& error) {
+    Notify(SnErrorMessage(error, T_("something_went_wrong", "Something went wrong.")),
+           kit::Snackbar::Severity::Error);
+  };
   // the wallet overflow menus, built once: one "earnings" action group on the
   // page, one menu per overflow (the popovers resolve the actions up the tree)
   walletActions_ = Gio::SimpleActionGroup::create();
@@ -1815,6 +1898,9 @@ EarningsPage::~EarningsPage() {
   rankingFlow_.timer.disconnect();
   legacyFlow_.timer.disconnect();
   removeSolanaFlow_.timer.disconnect();
+  consentStep_.timer.disconnect();
+  consent_.on_changed = nullptr;
+  consent_.on_error = nullptr;
   sheet_.reset();
 }
 
@@ -1979,6 +2065,8 @@ void EarningsPage::ShowPreviewSnackbar() {
 }
 
 void EarningsPage::SettleAllEmpty() {
+  // no session: no consent to show, and nothing in flight counts any more
+  consent_.Reset();
   ApplyPoints(urnet::AccountPointsList{}, Fetch::Ready);
   ApplyEpochs(std::vector<AccountEpochRow>{}, Fetch::Ready);
   ApplySnWallet(std::nullopt, Fetch::Ready);
@@ -2096,6 +2184,49 @@ void EarningsPage::BuildEarningsPane() {
     tile->append(*ledgerClaimButton_);
     row.content->append(*tile);
     ledgerCard_->set_visible(false);
+    content->append(*row.root);
+  }
+
+  // 3c. the payout consent — one signature by the network's coldkey pays every
+  //     provider client of the network (consent::Flow decides what shows)
+  {
+    auto group = kit::MakePaneGroupHeader(T_("sn_consent_title", "Payout consent"));
+    consentHeader_ = group.root;
+    consentHeader_->set_visible(false);
+    content->append(*group.root);
+  }
+  {
+    auto row = MakePaddedRow(12);
+    row.content->set_spacing(6);
+    consentCard_ = row.root;
+    consentLine_ = MakeWrappedNote({}, "ur-key");
+    row.content->append(*consentLine_);
+    consentBody_ = MakeWrappedNote(
+        T_("sn_consent_body",
+           "Sign once with your Bittensor wallet so this network's earnings are paid to it."),
+        "ur-row-note");
+    row.content->append(*consentBody_);
+    consentNotice_ = MakeWrappedNote({}, "ur-row-note");
+    consentNotice_->add_css_class("ur-danger-text");
+    consentNotice_->set_visible(false);
+    row.content->append(*consentNotice_);
+    consentSignButton_ = Gtk::make_managed<Gtk::Button>(T_("sn_consent_sign", "Sign with wallet"));
+    consentSignButton_->add_css_class("ur-pane-primary");
+    consentSignButton_->set_hexpand(true);
+    consentSignButton_->signal_clicked().connect(
+        sigc::mem_fun(*this, &EarningsPage::OnConsentAction));
+    row.content->append(*consentSignButton_);
+    consentChangeButton_ = Gtk::make_managed<Gtk::Button>(T_("sn_consent_change", "Change wallet"));
+    consentChangeButton_->add_css_class("flat");
+    consentChangeButton_->set_halign(Gtk::Align::START);
+    consentChangeButton_->signal_clicked().connect(
+        sigc::mem_fun(*this, &EarningsPage::OnConsentAction));
+    row.content->append(*consentChangeButton_);
+    consentChangeNote_ = MakeWrappedNote(
+        T_("sn_consent_change_note", "A new wallet takes effect from the next epoch."),
+        "ur-row-note");
+    row.content->append(*consentChangeNote_);
+    consentCard_->set_visible(false);
     content->append(*row.root);
   }
 
@@ -2702,6 +2833,9 @@ void EarningsPage::LoadEarnings() {
     });
   });
 
+  // 4b. the payout consent: the status, whatever the wallet above
+  consent_.Load();
+
   // 5. the head-spot eligibility
   sn::FetchHead(host_, [this, epoch, seen](std::optional<SnHeadInfo> head, std::string err) {
     PostToMain([this, epoch, seen, head = std::move(head), err = std::move(err)] {
@@ -3200,7 +3334,7 @@ void EarningsPage::RebuildWalletBlock() {
     kit::SetAccessibleLabel(*walletAddressLabel_,
                             Glib::ustring(T_("bittensor_wallet", "Bittensor wallet")) + ", " +
                                 wallet_->coldkeySs58);
-    changeWalletButton_->set_sensitive(!connecting_);
+    changeWalletButton_->set_sensitive(!connecting_ && !consent_.Busy());
   }
   const bool offerConnect = walletState_ != Fetch::Loading && (!connected || changingWallet_);
   walletConnectPanel_->set_visible(offerConnect);
@@ -3209,13 +3343,15 @@ void EarningsPage::RebuildWalletBlock() {
   walletMoreDisconnected_->set_visible(!connected);
   // a link label keeps its markup; only its visibility follows the wallet state
   walletConnectNote_->set_visible(!connected);
-  connectBridgeButton_->set_sensitive(!connecting_);
-  manualToggleButton_->set_sensitive(!connecting_);
+  // the bridge carries one wallet flow at a time: a consent signing holds it too
+  const bool bridgeBusy = connecting_ || consent_.Busy();
+  connectBridgeButton_->set_sensitive(!bridgeBusy);
+  manualToggleButton_->set_sensitive(!bridgeBusy);
   manualPanel_->set_visible(manualEntryOpen_);
   const std::string typed = TrimWhitespace(walletAddressBox_->get_text().raw());
   const bool checked = check_.has_value() && !typed.empty() && checkedAddress_ == typed &&
                        check_->validSyntax && !check_->banned;
-  connectManualButton_->set_sensitive(checked && !connecting_);
+  connectManualButton_->set_sensitive(checked && !bridgeBusy);
   kit::SetTextOrCollapse(
       *connectingStatus_,
       connecting_ ? Glib::ustring(T_("opening_bittensor_wallet_in_browser",
@@ -3224,6 +3360,7 @@ void EarningsPage::RebuildWalletBlock() {
   // the overflow stays live while the bridge is out: a Solana connect
   // supersedes the Bittensor one (SdkHost::ConnectSolanaWallet)
   RebuildSolanaCard();  // the waiting line follows the Bittensor panel it sits in
+  RebuildConsentSection();  // its button follows the connect's hold on the bridge
 }
 
 void EarningsPage::RebuildTop200() {
@@ -3499,20 +3636,22 @@ void EarningsPage::OnLedgerTabChanged() {
 // ---- attach a Bittensor wallet -----------------------------------------------
 
 void EarningsPage::OnConnectWithBridge() {
-  if (connecting_) return;
+  if (connecting_ || consent_.Busy()) return;
   if (!CanCallApi()) {
     RefuseNoSession();
     return;
   }
-  ChooseBittensorWallet(std::string());  // whichever account the wallet picks
+  // whichever account the wallet picks
+  ChooseBittensorWallet(
+      [this](const std::string& walletId) { StartWalletSignature(walletId, std::string()); });
 }
 
-void EarningsPage::ChooseBittensorWallet(const std::string& expectedAddress) {
+void EarningsPage::ChooseBittensorWallet(
+    std::function<void(const std::string& walletId)> chosen) {
   auto* window = dynamic_cast<Gtk::Window*>(get_root());
   GtkWidget* dialog = NewBittensorWalletChooser(window ? window->gobj() : nullptr);
   struct Ctx {
-    EarningsPage* self;
-    std::string expectedAddress;
+    std::function<void(const std::string& walletId)> chosen;
     std::shared_ptr<uint64_t> epoch;
     uint64_t seen;
   };
@@ -3522,11 +3661,9 @@ void EarningsPage::ChooseBittensorWallet(const std::string& expectedAddress) {
         auto* ctx = static_cast<Ctx*>(data);
         if (*ctx->epoch != ctx->seen) return;  // the page was reset meanwhile
         const std::string_view walletId = bittensor::ChosenWallet(response ? response : "");
-        if (!walletId.empty()) {
-          ctx->self->StartWalletSignature(std::string(walletId), ctx->expectedAddress);
-        }
+        if (!walletId.empty()) ctx->chosen(std::string(walletId));
       }),
-      new Ctx{this, expectedAddress, epoch_, *epoch_},
+      new Ctx{std::move(chosen), epoch_, *epoch_},
       +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
   gtk_window_present(GTK_WINDOW(dialog));
 }
@@ -3644,7 +3781,7 @@ void EarningsPage::ApplyWalletCheck(uint64_t generation, const std::string& addr
 }
 
 void EarningsPage::OnConnectManual() {
-  if (connecting_) return;
+  if (connecting_ || consent_.Busy()) return;
   const std::string address = TrimWhitespace(walletAddressBox_->get_text().raw());
   if (address.empty()) return;
   if (!check_ || checkedAddress_ != address || !check_->validSyntax || check_->banned) {
@@ -3655,7 +3792,9 @@ void EarningsPage::OnConnectManual() {
     RefuseNoSession();
     return;
   }
-  ChooseBittensorWallet(address);  // still signed: the wallet must sign with THIS account
+  // still signed: the wallet must sign with THIS account
+  ChooseBittensorWallet(
+      [this, address](const std::string& walletId) { StartWalletSignature(walletId, address); });
 }
 
 void EarningsPage::StartWalletSignature(const std::string& walletId,
@@ -3670,16 +3809,7 @@ void EarningsPage::StartWalletSignature(const std::string& walletId,
   const std::string transport =
       urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
   const uint32_t timeoutMs = bittensor::TimeoutMsFor(transport, walletId);
-  if (transport == bittensor::kTransportBrowserBridge) {
-    // the page in the browser carries the flow now: say where to look
-    const bittensor::ContinueText text = bittensor::ContinueTextFor(walletId);
-    const std::string key(text.key);
-    const std::string english(text.english);
-    const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
-    Notify(text.takesWalletName ? Format(localized, urnet::bittensorWalletDisplayName(walletId))
-                                : std::string(localized),
-           kit::Snackbar::Severity::Info);
-  }
+  NotifyContinueInBrowser(walletId);
   const uint32_t generation = BeginFlow(connectFlow_, static_cast<int>(timeoutMs), [this] {
     FinishConnecting();
     Notify(T_("wallet_connect_failed", "Failed to connect the wallet."),
@@ -3696,6 +3826,20 @@ void EarningsPage::StartWalletSignature(const std::string& walletId,
           OnWalletSigned(generation, signature, expectedAddress);
         });
       });
+}
+
+void EarningsPage::NotifyContinueInBrowser(const std::string& walletId) {
+  const std::string transport =
+      urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
+  if (transport != bittensor::kTransportBrowserBridge) return;
+  // the page in the browser carries the flow now: say where to look
+  const bittensor::ContinueText text = bittensor::ContinueTextFor(walletId);
+  const std::string key(text.key);
+  const std::string english(text.english);
+  const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
+  Notify(text.takesWalletName ? Format(localized, urnet::bittensorWalletDisplayName(walletId))
+                              : std::string(localized),
+         kit::Snackbar::Severity::Info);
 }
 
 void EarningsPage::OnWalletSigned(uint32_t generation, const SdkHost::WalletSignature& signature,
@@ -3863,6 +4007,223 @@ void EarningsPage::ApplyWalletConnectResult(uint32_t generation, bool ok,
 void EarningsPage::FinishConnecting() {
   connecting_ = false;
   RebuildWalletBlock();
+}
+
+// ---- the network payout consent ------------------------------------------------
+// consent::Flow decides; the section draws its view, and its ports answer it
+// through the SDK's consent calls and the wallet's consent session over the
+// issued message. Sign with wallet asks the wallet, then the coldkey.
+
+void EarningsPage::RebuildConsentSection() {
+  if (consentCard_ == nullptr) return;
+  const consent::View view = consent_.Current();
+  consentHeader_->set_visible(view.visible);
+  consentCard_->set_visible(view.visible);
+  if (!view.visible) return;
+  Glib::ustring line;
+  switch (view.line) {
+    case consent::Line::Loading:
+      line = T_("loading", "Loading...");
+      break;
+    case consent::Line::Unavailable:
+      line = T_("something_went_wrong", "Something went wrong.");
+      break;
+    case consent::Line::None:
+      line = T_("sn_consent_none", "No payout wallet yet. Earnings aren't paid until you sign.");
+      break;
+    case consent::Line::Active:
+      line = Format(T_("sn_consent_active", "Earnings are paid to {}"),
+                    ShortSs58(view.coldkeySs58));
+      break;
+    case consent::Line::Signing:
+      line = T_("sn_consent_signing", "Waiting for your wallet's signature…");
+      break;
+  }
+  consentLine_->set_text(line);
+  // the whole coldkey behind its short form
+  consentLine_->set_tooltip_text(view.coldkeySs58);
+  consentLine_->set_has_tooltip(!view.coldkeySs58.empty());
+  consentBody_->set_visible(view.body);
+  Glib::ustring notice;
+  switch (view.notice) {
+    case consent::Notice::None:
+      break;
+    case consent::Notice::Expired:
+      notice = T_("sn_consent_expired", "The request expired. Try again.");
+      break;
+    case consent::Notice::Failed:
+      notice = T_("sn_consent_failed", "The signature didn't match this wallet. Try again.");
+      break;
+    case consent::Notice::OwnerOnly:
+      notice = T_("sn_consent_owner_only", "Only the network owner can choose the payout wallet.");
+      break;
+  }
+  kit::SetTextOrCollapse(*consentNotice_, notice);
+  consentSignButton_->set_visible(view.action == consent::Action::Sign);
+  consentChangeButton_->set_visible(view.action == consent::Action::Change);
+  // the coldkey connect above holds the bridge while it runs
+  consentSignButton_->set_sensitive(!connecting_);
+  consentChangeButton_->set_sensitive(!connecting_);
+  consentChangeNote_->set_visible(view.changeNote);
+}
+
+void EarningsPage::OnConsentAction() {
+  // the bridge carries one wallet flow at a time
+  if (connecting_ || consent_.Busy()) return;
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  ChooseBittensorWallet([this](const std::string& walletId) { AskConsentColdkey(walletId); });
+}
+
+// The coldkey the consent names, typed after the wallet is chosen. The payout
+// coldkey is a deliberate choice (it may not be the wallet's sign-in account),
+// so the field starts empty, and Continue waits for an address the SDK's ss58
+// check accepts: nothing is asked of the server before. The dialog is the
+// app's AdwMessageDialog idiom (OnRemoveSolanaWallet), its deprecation
+// warnings silenced here only.
+void EarningsPage::AskConsentColdkey(const std::string& walletId) {
+  auto* window = dynamic_cast<Gtk::Window*>(get_root());
+  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+  GtkWidget* dialog = adw_message_dialog_new(
+      window ? window->gobj() : nullptr, T_("sn_consent_title", "Payout consent"),
+      T_("sn_consent_body",
+         "Sign once with your Bittensor wallet so this network's earnings are paid to it."));
+  auto* fields = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 6);
+  auto* field = Gtk::make_managed<Gtk::Entry>();
+  field->add_css_class("ur-input");
+  field->set_placeholder_text(T_("earnings_address_placeholder", "Enter a Bittensor address"));
+  kit::SetAccessibleLabel(*field, T_("earnings_address_placeholder", "Enter a Bittensor address"));
+  fields->append(*field);
+  auto* invalid = MakeWrappedNote(
+      T_("invalid_ss58_address", "That is not a valid Bittensor address."), "ur-row-note");
+  invalid->add_css_class("ur-danger-text");
+  invalid->set_visible(false);
+  fields->append(*invalid);
+  adw_message_dialog_set_extra_child(ADW_MESSAGE_DIALOG(dialog), GTK_WIDGET(fields->gobj()));
+  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
+                                   "continue", T_("continue_txt", "Continue"), nullptr);
+  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "continue",
+                                             ADW_RESPONSE_SUGGESTED);
+  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "continue");
+  adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
+  adw_message_dialog_set_response_enabled(ADW_MESSAGE_DIALOG(dialog), "continue", FALSE);
+  field->signal_changed().connect([dialog, field, invalid] {
+    const std::string address = TrimWhitespace(field->get_text().raw());
+    const bool valid = sn::ValidateSs58(address);
+    adw_message_dialog_set_response_enabled(ADW_MESSAGE_DIALOG(dialog), "continue", valid);
+    invalid->set_visible(!address.empty() && !valid);
+  });
+  // Enter continues once the address is valid
+  field->signal_activate().connect([dialog, field] {
+    if (sn::ValidateSs58(TrimWhitespace(field->get_text().raw()))) {
+      adw_message_dialog_response(ADW_MESSAGE_DIALOG(dialog), "continue");
+    }
+  });
+  G_GNUC_END_IGNORE_DEPRECATIONS
+  struct Ctx {
+    EarningsPage* self;
+    Gtk::Entry* field;
+    std::string walletId;
+    std::shared_ptr<uint64_t> epoch;
+    uint64_t seen;
+  };
+  g_signal_connect_data(
+      dialog, "response",
+      G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
+        auto* ctx = static_cast<Ctx*>(data);
+        if (*ctx->epoch != ctx->seen) return;  // the page was reset meanwhile
+        if (g_strcmp0(response, "continue") != 0 || ctx->self->connecting_) return;
+        ctx->self->consent_.Start(ctx->walletId, TrimWhitespace(ctx->field->get_text().raw()));
+      }),
+      new Ctx{this, field, walletId, epoch_, *epoch_},
+      +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+consent::Flow::Ports EarningsPage::ConsentPorts() {
+  consent::Flow::Ports ports;
+  // a read: it settles when it answers, like the page's other reads
+  ports.status = [this](consent::Flow::StatusDone done) {
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    sn::FetchConsentStatus(host_, [epoch, seen, done](std::optional<consent::Status> status,
+                                                      std::string err) {
+      PostToMain([epoch, seen, done, status = std::move(status), err = std::move(err)] {
+        if (*epoch != seen) return;
+        if (!status) g_warning("earnings: sn consent status failed: %s", err.c_str());
+        done(status, err);
+      });
+    });
+  };
+  ports.validSs58 = [](const std::string& address) { return sn::ValidateSs58(address); };
+  ports.challenge = [this](const std::string& coldkeySs58, consent::Flow::ChallengeDone done) {
+    const uint32_t generation = BeginFlow(consentStep_, kApiTimeoutMs, [done] {
+      done(std::nullopt, T_("something_went_wrong", "Something went wrong."));
+    });
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    sn::RequestConsentChallenge(
+        host_, coldkeySs58,
+        [this, epoch, seen, generation, done](std::optional<consent::Challenge> challenge,
+                                              std::string err) {
+          PostToMain([this, epoch, seen, generation, done, challenge = std::move(challenge),
+                      err = std::move(err)] {
+            if (*epoch != seen) return;
+            if (!SettleFlow(consentStep_, generation, "consent challenge")) return;
+            if (!challenge) g_warning("earnings: sn consent challenge failed: %s", err.c_str());
+            done(challenge, err);
+          });
+        });
+  };
+  // the session takes the challenge as the SDK returned it: its message is
+  // what the wallet signs. It waits as long as the coldkey connect's does:
+  // minutes on the bridge, the challenge's life on the manual sheet and for
+  // WalletConnect.
+  ports.sign = [this](const std::string& walletId, const consent::Challenge& challenge,
+                      consent::Flow::SignDone done) {
+    const std::string transport =
+        urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
+    NotifyContinueInBrowser(walletId);
+    const uint32_t generation = BeginFlow(
+        consentStep_, static_cast<int>(bittensor::TimeoutMsFor(transport, walletId)), [done] {
+          done(consent::Signed{false, {}, {}, {},
+                               T_("wallet_connect_failed", "Failed to connect the wallet.")});
+        });
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    host_.SignBittensorConsent(
+        walletId, sn::ToSdkChallenge(challenge),
+        [this, epoch, seen, generation, done](SdkHost::WalletSignature signature) {
+          PostToMain([this, epoch, seen, generation, done, signature = std::move(signature)] {
+            if (*epoch != seen) return;
+            if (!SettleFlow(consentStep_, generation, "consent signature")) return;
+            // the session's proof: the flow submits it only for the issued
+            // message and its coldkey
+            done(consent::Signed{signature.ok, signature.address, signature.message,
+                                 signature.signature, signature.error});
+          });
+        });
+  };
+  ports.submit = [this](const std::string& coldkeySs58, const std::string& message,
+                        const std::string& signature, consent::Flow::SubmitDone done) {
+    const uint32_t generation = BeginFlow(consentStep_, kApiTimeoutMs, [done] {
+      done(consent::Submitted{false, T_("something_went_wrong", "Something went wrong.")});
+    });
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    sn::SubmitConsent(host_, coldkeySs58, message, signature,
+                      [this, epoch, seen, generation, done](bool ok, std::string err) {
+                        PostToMain([this, epoch, seen, generation, done, ok, err = std::move(err)] {
+                          if (*epoch != seen) return;
+                          if (!SettleFlow(consentStep_, generation, "consent submit")) return;
+                          if (!ok) g_warning("earnings: sn consent submit failed: %s", err.c_str());
+                          done(consent::Submitted{ok, err});
+                        });
+                      });
+  };
+  return ports;
 }
 
 // ---- the Solana payout wallet --------------------------------------------------
