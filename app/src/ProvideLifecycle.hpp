@@ -289,4 +289,21 @@ constexpr ExtenderSwitchSource ExtenderSwitchSourceFor(bool sessionDevice, bool 
   return ExtenderSwitchSource::None;
 }
 
+// What the lag.dev speed tests switch under it reads and writes
+// (SdkHost::GetMeasurementsEnabled, SetMeasurementsEnabled; lag.dev/PLAN.md
+// C4): the measurements setting, a setting of the same space that rides on the
+// role. The Extender switch's source, and with no session the daemon only when
+// provider_stats said it takes this write too (set_measurements_enabled);
+// otherwise nothing, and that switch hides (N1).
+constexpr ExtenderSwitchSource MeasurementsSwitchSourceFor(bool sessionDevice,
+                                                           bool providerOnlyRead,
+                                                           bool daemonWritesExtender,
+                                                           bool daemonWritesMeasurements) {
+  if (sessionDevice) return ExtenderSwitchSource::Device;
+  if (providerOnlyRead && daemonWritesExtender && daemonWritesMeasurements) {
+    return ExtenderSwitchSource::Daemon;
+  }
+  return ExtenderSwitchSource::None;
+}
+
 }  // namespace urnw::provide

@@ -928,6 +928,22 @@ bool ControlClient::SetProvideExtender(bool on, std::string* error) {
   return true;
 }
 
+bool ControlClient::SetMeasurementsEnabled(bool on, std::string* error) {
+  std::scoped_lock lock(mutex_);
+  ctl::SetMeasurementsEnabledRequest req;
+  req.measurements_enabled = on;
+  // Re-sent once on a dead socket, as set_provide_extender: the same value
+  // written twice changes nothing.
+  const auto reply = CallLocked(ctl::Verb::SetMeasurementsEnabled, nlohmann::json(req), error,
+                                /*allowRetry=*/true, PolkitAwareTimeoutLocked());
+  if (!reply) return false;
+  if (!ctl::ReplyOk(*reply)) {
+    if (error) *error = ctl::ReplyError(*reply);
+    return false;
+  }
+  return true;
+}
+
 ControlClient::LogoutOutcome ControlClient::Logout(const std::string& networkSpaceJson,
                                                   std::string* error, std::string* code) {
   std::scoped_lock lock(mutex_);

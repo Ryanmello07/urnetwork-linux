@@ -195,6 +195,11 @@ class TunnelHost {
   // space's setting file, and the role's start or stop, as set_provide's mode
   // change does).
   bool SetProvideExtender(bool on, std::string* error);
+  // The lag.dev speed tests switch while no tunnel session's device takes it
+  // (set_measurements_enabled, lag.dev/PLAN.md C4): writes the measurements
+  // setting where SetProvideExtender writes the provider extender setting, by
+  // the same rule, refused the same way. Main loop only.
+  bool SetMeasurementsEnabled(bool on, std::string* error);
 
   // Account > Extenders' Reset extenders (reset_extenders; connect EXTENDER.md
   // E7): applies a reset the GUI made in its own space to the space this daemon
