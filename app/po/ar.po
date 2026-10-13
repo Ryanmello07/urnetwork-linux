@@ -153,6 +153,11 @@ msgctxt "adv_always_tunnel"
 msgid "Always tunnel"
 msgstr "عبر النفق دائمًا"
 
+#. Windows split tunnel, App split rules sheet: the line at the top that says what including and excluding an app do.
+msgctxt "adv_app_rules_note"
+msgid "Including an app sends its traffic through the VPN, while excluding it keeps that app's traffic off the VPN."
+msgstr "تضمين تطبيق يرسل حركة مروره عبر VPN، بينما استثناؤه يُبقي حركة مرور ذلك التطبيق خارج VPN."
+
 #. Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.
 msgctxt "adv_best_available_note"
 msgid "URnetwork picks the fastest healthy providers for you, with no location constraint, and re-picks as the network changes."
@@ -162,6 +167,16 @@ msgstr "يختار URnetwork لك أسرع المزودين السليمين، �
 msgctxt "adv_block_host"
 msgid "Block this host"
 msgstr "حظر هذا المضيف"
+
+#. Windows sign-in screen, browser sign-in sheet: the text above the auth code field that says how the sheet works. ur.io, Google and Apple are names. The Google or Apple sessions are the sign-ins the browser already holds. 'Account → Create auth code' is the way to the Create auth code button on a signed-in device: use this language's labels of Account (account) and Create auth code (site_app_create_auth_code); right-to-left languages point the arrow the other way.
+msgctxt "adv_browser_sign_in_body"
+msgid "Sign in at ur.io in your browser — your password manager and existing Google or Apple sessions work there. Then paste a one-time auth code from any signed-in device (Account → Create auth code)."
+msgstr "سجّل الدخول إلى ur.io في متصفحك — يعمل هناك مدير كلمات المرور لديك وجلسات Google أو Apple الحالية. ثم الصق رمز مصادقة لمرة واحدة من أي جهاز مسجَّل الدخول (الحساب ← إنشاء رمز مصادقة)."
+
+#. Windows sign-in screen: the title of the sheet for signing in through the browser at ur.io with a one-time auth code.
+msgctxt "adv_browser_sign_in_title"
+msgid "Browser sign-in"
+msgstr "تسجيل الدخول عبر المتصفح"
 
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that sends the connection's host directly from this device, outside the VPN. It adds a split rule, or removes the rule keeping the host in the tunnel while one is in force.
 msgctxt "adv_bypass_tunnel"
@@ -177,6 +192,11 @@ msgstr "البايتات (الإجمالي)"
 msgctxt "adv_clear_selection"
 msgid "Clear selection"
 msgstr "مسح التحديد"
+
+#. Windows split tunnel, App split rules sheet: the header over the apps that already have a rule (included or excluded). The header of the other list is Apps.
+msgctxt "adv_configured"
+msgid "Configured"
+msgstr "المُعدّة"
 
 #. Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.
 msgctxt "adv_connection_count"
@@ -198,6 +218,11 @@ msgstr "نسخ التفاصيل"
 msgctxt "adv_details_copied"
 msgid "Connection details copied"
 msgstr "تم نسخ تفاصيل الاتصال"
+
+#. Windows Earnings page, ledger header: the tooltip and screen reader name of the icon-only More button, which holds the earnings actions when the window is too narrow to show them.
+msgctxt "adv_earnings_actions"
+msgid "Earnings actions"
+msgstr "إجراءات الأرباح"
 
 #. Connection inspector: label of the exit dial failures row.
 msgctxt "adv_exit_dial_failures"
@@ -419,6 +444,11 @@ msgctxt "adv_open_split_rules"
 msgid "open split rules"
 msgstr "فتح قواعد التقسيم"
 
+#. Windows sign-in screen, browser sign-in sheet: the button that opens ur.io in the browser and leaves the sheet open. ur.io is a domain name. Keep it short: three buttons share the sheet's bar.
+msgctxt "adv_open_ur_io"
+msgid "Open ur.io"
+msgstr "فتح ur.io"
+
 #. Connection inspector: label of the override id row.
 msgctxt "adv_override_id"
 msgid "Override"
@@ -549,10 +579,20 @@ msgctxt "adv_session_mode"
 msgid "Session"
 msgstr "الجلسة"
 
+#. Windows sign-in screen, first step: the quiet text link at the bottom left, beside Change Network API. It opens a sheet for signing in through the browser at ur.io with a one-time auth code.
+msgctxt "adv_sign_in_browser"
+msgid "Sign in with browser"
+msgstr "تسجيل الدخول عبر المتصفح"
+
 #. Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.
 msgctxt "adv_split_rules_note"
 msgid "Split rules let the sites you choose connect directly, outside the VPN, and the activity below shows how each connection was routed."
 msgstr "تتيح قواعد التقسيم للمواقع التي تختارها الاتصال مباشرةً خارج VPN، ويعرض النشاط أدناه كيف تم توجيه كل اتصال."
+
+#. Windows sign-in screen, error line: a Google or Apple sign-in in the browser was turned back because this network has no such sign-in set up yet. Provider sign-in means signing in with a Google or Apple account, not a URnetwork provider. It points to signing in with email, or through the browser (Sign in with browser), instead.
+msgctxt "adv_sso_not_configured"
+msgid "Provider sign-in isn't available on this network yet — use email or browser sign-in"
+msgstr "تسجيل الدخول باستخدام Google أو Apple غير متاح على هذه الشبكة بعد — استخدم البريد الإلكتروني أو تسجيل الدخول عبر المتصفح"
 
 #. Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.
 msgctxt "adv_undo"
@@ -3119,6 +3159,11 @@ msgstr "تحرير عمليات إعادة الإرسال العالقة"
 msgctxt "dev_release_stuck_retransmits_detail"
 msgid "How long retransmits are held before one is released, in ms. Off waits 30s"
 msgstr "المدة التي تُحتجز فيها عمليات إعادة الإرسال قبل تحرير إحداها، بالمللي ثانية. عند الإيقاف، ينتظر 30 ثانية"
+
+#. Windows Developer page: the title of the second pane, which holds the reliability overrides, and its name for screen readers.
+msgctxt "dev_reliability_overrides"
+msgid "Reliability overrides"
+msgstr "تجاوزات الموثوقية"
 
 #. Developer tools screen (reliability surface): removal budget count control label.
 msgctxt "dev_removal_budget_count"
@@ -8586,6 +8631,11 @@ msgctxt "site_app_served"
 msgid "Served"
 msgstr "المُقدَّم"
 
+#. App earnings/claim: label of the settlement v2 card, shown beside the v1 claims
+msgctxt "site_app_settlement_v2"
+msgid "Settlement v2"
+msgstr "التسوية v2"
+
 #. App leaderboard: public visibility toggle
 msgctxt "site_app_show_on_leaderboard"
 msgid "Show my network on the leaderboard"
@@ -8735,6 +8785,41 @@ msgstr "المعاملة"
 msgctxt "site_app_unlink"
 msgid "Unlink"
 msgstr "إلغاء الربط"
+
+#. App claim: a settlement v2 claim confirmed on chain. {amount} is the SN25α amount the vault paid, with its unit.
+msgctxt "site_app_v2_claimed_amount"
+msgid "Claimed {amount}"
+msgstr "تمت المطالبة بـ {amount}"
+
+#. App earnings/claim: the settlement v2 amount earned in finalized roots, paid and claimable together
+msgctxt "site_app_v2_earned"
+msgid "Earned"
+msgstr "المكتسب"
+
+#. App earnings/claim: the settlement v2 amount already paid to the coldkey
+msgctxt "site_app_v2_paid"
+msgid "Paid"
+msgstr "المدفوع"
+
+#. App earnings/claim: settlement v2 earnings in a committed root that is not finalized yet. {amount} is an SN25α amount with its unit.
+msgctxt "site_app_v2_pending"
+msgid "Pending: +{amount}, awaiting finalization"
+msgstr "قيد الانتظار: +{amount}، بانتظار الاعتماد"
+
+#. App earnings/claim: heads each settlement v2 account when the coldkey has accounts in several operator pools. {no_id} is the pool's operator id.
+msgctxt "site_app_v2_pool"
+msgid "Pool {no_id}"
+msgstr "المجمّع {no_id}"
+
+#. App earnings/claim: shown in place of the settlement v2 amounts when the ledger cannot be read, never a zero
+msgctxt "site_app_v2_unavailable"
+msgid "Unavailable"
+msgstr "غير متاح"
+
+#. App earnings/claim: the settlement v2 ledger cannot be read; a retry button follows
+msgctxt "site_app_v2_unavailable_detail"
+msgid "Settlement v2 balances can't be read right now."
+msgstr "تعذّرت قراءة أرصدة التسوية v2 الآن."
 
 #. App profile: verified badge
 msgctxt "site_app_verified"
@@ -9623,6 +9708,11 @@ msgstr "تخطي"
 msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
+
+#. Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".
+msgctxt "sn_ledger_claim"
+msgid "Claim settlement v2"
+msgstr "المطالبة بالتسوية v2"
 
 #. Settlement v2 tile: label of the SN25α the user can claim now.
 msgctxt "sn_ledger_claimable"
@@ -10611,6 +10701,11 @@ msgctxt "upd_manual_install_message"
 msgid "The installer didn't start (it needs administrator approval). The verified download was shown in Explorer — quit the app and run it."
 msgstr "لم يبدأ المثبّت (يحتاج إلى موافقة المسؤول). عُرض الملف الذي تم التحقق منه في مستكشف الملفات — أغلق التطبيق وشغّله."
 
+#. Windows Settings, version section: the note under the Check for updates row. Its button checks for a new release now, and the result shows on the Update row above it.
+msgctxt "upd_manual_note"
+msgid "Runs the release check now; the outcome lands on the row above."
+msgstr "يبحث عن إصدار جديد الآن، وتظهر النتيجة في الصف أعلاه."
+
 #. Linux Settings update notice once the update is installed and waiting for a relaunch.
 msgctxt "upd_ready_message"
 msgid "The new AppImage is in place and verified. Relaunch to start using it; the previous file is kept beside it until then."
@@ -10655,6 +10750,36 @@ msgstr "جارٍ استبدال ملف AppImage…"
 msgctxt "upd_stage_verifying"
 msgid "Verifying the download…"
 msgstr "جارٍ التحقق من الملف الذي تم تنزيله…"
+
+#. Windows Settings, Update row: a newer release is out. Shown after the app's version and a dash, and the app adds a space, v and the new version right after this text ("1.2.3 — update available: v1.3.0"), so it starts in lowercase where the language allows and must read as a lead-in to that version.
+msgctxt "upd_state_available"
+msgid "update available:"
+msgstr "يتوفر تحديث:"
+
+#. Windows Settings, Update row: an update check is running now. Shown after the app's version and a dash ("1.2.3 — checking…"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_checking"
+msgid "checking…"
+msgstr "جارٍ التحقق…"
+
+#. Windows Settings, Update row: the last check found no newer release. Shown after the app's version and a dash ("1.2.3 — up to date"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_current"
+msgid "up to date"
+msgstr "محدَّث"
+
+#. Windows Settings, Update row: this is a development build, which never updates itself. Shown after the app's version and a dash ("1.2.3 — dev build, never self-updates"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_dev_build"
+msgid "dev build, never self-updates"
+msgstr "إصدار تطوير، لا يُحدِّث نفسه أبدًا"
+
+#. Windows Settings, Update row: the last update check failed (the app log has the details). Shown after the app's version and a dash ("1.2.3 — check failed"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_failed"
+msgid "check failed"
+msgstr "فشل التحقق"
+
+#. Windows Settings, Update row: no update check has run yet. Shown after the app's version and a dash ("1.2.3 — not checked yet"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.
+msgctxt "upd_state_not_checked"
+msgid "not checked yet"
+msgstr "لم يتم التحقق بعد"
 
 #. Call to action
 msgctxt "update"
