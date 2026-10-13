@@ -8557,12 +8557,12 @@ msgctxt "split_tunnel_extension_needs_approval"
 msgid "To keep these apps off the VPN, allow the URnetwork Split Tunnel extension in System Settings."
 msgstr "Agar aplikasi ini tidak melalui VPN, izinkan ekstensi URnetwork Split Tunnel di Pengaturan Sistem."
 
-#. macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.
+#. Error when the app could not open the browser for a sign-in page (macOS: adding a sign-in method; Windows: the browser sign-in).
 msgctxt "sso_browser_open_failed"
 msgid "Could not open the browser. Please try again."
 msgstr "Tidak dapat membuka browser. Silakan coba lagi."
 
-#. Error when a browser sign-in (Google or Apple through the browser) took too long and expired.
+#. Error when a browser sign-in (Google or Apple through the browser, or a sign-in approved on the web page) took too long and expired.
 msgctxt "sso_sign_in_timed_out"
 msgid "Sign-in timed out. Please try again."
 msgstr "Waktu masuk habis. Silakan coba lagi."
