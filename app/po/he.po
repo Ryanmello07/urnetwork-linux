@@ -966,6 +966,11 @@ msgctxt "balance_codes_title"
 msgid "Balance Codes"
 msgstr "קודי יתרה"
 
+#. Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "battery_optimization_settings_hint"
+msgid "Tap to open Android's battery optimization list. If URnetwork isn't listed, switch the filter to “All apps”, then choose URnetwork and “Don't optimize”."
+msgstr "הקש כדי לפתוח את רשימת אופטימיזציית הסוללה של Android. אם URnetwork לא מופיעה ברשימה, שנה את המסנן ל\"כל האפליקציות\", ואז בחר ב-URnetwork וב\"ללא אופטימיזציה\"."
+
 #. Settings
 msgctxt "become_supporter"
 msgid "Get UR Pro"
@@ -3848,10 +3853,10 @@ msgctxt "direct_update_up_to_date"
 msgid "URnetwork is up to date."
 msgstr "URnetwork מעודכן."
 
-#. Call to action
-msgctxt "disable_ignore_battery_hint"
-msgid "To disable, please go to App Battery Usage in System Settings"
-msgstr "לביטול, עבור אל שימוש בסוללה של האפליקציה בהגדרות המערכת"
+#. Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "disable_ignore_battery_settings_hint"
+msgid "To turn this off, tap the switch to open Android's battery optimization list, switch the filter to “All apps”, then choose URnetwork and “Optimize”."
+msgstr "כדי לכבות זאת, הקש על המתג כדי לפתוח את רשימת אופטימיזציית הסוללה של Android, שנה את המסנן ל\"כל האפליקציות\", ואז בחר ב-URnetwork וב\"אופטימיזציה\"."
 
 #. Disconnect VPN button text
 msgctxt "disconnect"
