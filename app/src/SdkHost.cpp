@@ -503,16 +503,19 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
                                                  ClientEventLocale());
     // RESTORE THE API'S AUTHORIZATION FROM THE PERSISTED SESSION.
     //
-    // api_->setByJwt is called in exactly one other place — RegisterNetworkClient,
-    // the fresh-sign-in path — so the token otherwise lives only in the Api of
-    // the process that did the login. A relaunch rebuilds the Api with no token
-    // while the app still LOOKS signed in (the client jwt is on disk, so
-    // IsLoggedIn() is true and every page runs its loads), and the SDK only
-    // re-authorizes the Api as a side effect of creating a DeviceRemote — which
-    // needs urnetworkd to be up. With no daemon, or before the tunnel is
-    // started, every authenticated read 401s and each page renders that as its
-    // own failure state. The Windows host already carries this restore
-    // (urnetwork-windows/app/src/App/SdkHost.cpp:353-357).
+    // Otherwise api_->setByJwt is called by a fresh sign-in
+    // (RegisterNetworkClient), by the two space re-derivations
+    // (ApplyNetworkServer, SetPrivateExtender), by RestoreApiAuthorizationLocked
+    // after a device teardown that leaves the person signed in, and by
+    // Logout's clear, so the token otherwise lives only in the Api of the
+    // process that did the login. A relaunch rebuilds
+    // the Api with no token while the app still LOOKS signed in (the client jwt
+    // is on disk, so IsLoggedIn() is true and every page runs its loads), and
+    // the SDK only re-authorizes the Api as a side effect of creating a
+    // DeviceRemote — which needs urnetworkd to be up. With no daemon, or before
+    // the tunnel is started, every authenticated read 401s and each page
+    // renders that as its own failure state. The Windows host already carries
+    // this restore (urnetwork-windows/app/src/App/SdkHost.cpp:353-357).
     //
     // getByJwt() is the USER jwt the Api authorizes with; getByClientJwt() is
     // the device credential the tunnel session needs — they are not the same.
@@ -2735,6 +2738,7 @@ TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {
     // Drop it before anything else can use it, and tell the UI, so the pages
     // that fold on hasDevice() stop rendering a session that does not exist.
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
     EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
     PublishConnectReading();
   }
@@ -3184,6 +3188,7 @@ TunnelStartResult SdkHost::BindRemoteDeviceLocked(const std::string& clientJwt,
     // manager-owned controller behind for the next attempt, and stop the
     // daemon-side tunnel we just started but cannot bind to.
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
     control_.StopTunnel();
     return TunnelStartResult::Failed;
   }
@@ -4999,6 +5004,7 @@ void SdkHost::ConnectBestAvailable() {
                 deviceControlGeneration_ == control_.SessionGeneration() ? "yes" : "no",
                 statusError.empty() ? "" : "; ", statusError.c_str());
       TeardownDeviceLocked();
+      RestoreApiAuthorizationLocked();
       EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
       PublishConnectReading();
       // AND THEN DO WHAT THE PRESS ASKED FOR. The caller skipped the start
@@ -5261,6 +5267,7 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
     g_message("provide: the bound device is stale (daemon tunnel_state=%s); dropping it",
               ctl::ToString(status->tunnel_state));
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
     EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
     PublishConnectReading();
   }
@@ -5531,6 +5538,7 @@ void SdkHost::OnRpcBindDeadline() {
     std::scoped_lock lock(mutex_);
     lastTunnelError_ = message;
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
   }
   // Blocking, on the main loop, bounded by the control client's receive
   // timeout — the same trade StartTunnel's failure path already makes.
@@ -5562,6 +5570,11 @@ void SdkHost::TeardownDeviceLocked() {
   // the control channel, decided by the caller.
   if (device_) { device_->close(); device_.reset(); }
   provideHasNetworkKey_.store(false);
+}
+
+void SdkHost::RestoreApiAuthorizationLocked() {
+  if (!api_ || !localState_) return;
+  if (const std::string byJwt = localState_->getByJwt(); !byJwt.empty()) api_->setByJwt(byJwt);
 }
 
 void SdkHost::Shutdown() {

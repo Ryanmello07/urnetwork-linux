@@ -1703,7 +1703,9 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         return;
       }
       try {
-        const auto req = request.at("args").get<ctl::LogTailRequest>();
+        // The request is the flat frame every verb sends (ctl::MakeRequest,
+        // LogTailClient::Fetch): its cursor and max_lines beside verb and id.
+        const auto req = request.get<ctl::LogTailRequest>();
         reply(ctl::MakeReply(
             id, true, nlohmann::json(DaemonLog::Instance().Tail(req.cursor, req.max_lines))));
       } catch (const std::exception& e) {

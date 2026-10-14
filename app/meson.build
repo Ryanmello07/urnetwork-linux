@@ -688,6 +688,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/Utf8TruncateTest.cpp',
     'tests/ControlReplyWiringTest.cpp',
     'tests/DaemonInstanceGuardTest.cpp',
+    'tests/DaemonTextFileTest.cpp',
+    'tests/LogTailWiringTest.cpp',
+    'tests/ApiAuthorizationWiringTest.cpp',
     'tests/DaemonCrashOutputTest.cpp',
     'tests/TunnelHostLockWiringTest.cpp',
     'tests/GlogFlushWiringTest.cpp',
@@ -805,6 +808,9 @@ urnetwork_tests = executable('urnetwork-tests',
               # sites, meson.build and ../../packaging/lib/common.sh the same way.
               # ControlReplyWiringTest reads the daemon's reply sends and log ring the same way.
               # DaemonInstanceGuardTest reads the daemon's start and revert paths the same way.
+              # DaemonTextFileTest reads the daemon's whole-file readers the same way.
+              # LogTailWiringTest reads the log_tail client and the daemon's handler the same way.
+              # ApiAuthorizationWiringTest reads SdkHost's device teardowns the same way.
               # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
               # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
               # GlogFlushWiringTest reads the daemon's glog flushes the same way.
