@@ -1808,7 +1808,7 @@ jobs:
           {
             echo "Test build of the browser approval sign-in (beta/browser-approval: urnetwork/linux main plus feat/browser-approval-signin, with kBrowserApprovalEnabled on). This is not an official URnetwork release, and it is a draft so that no updater ever offers it."
             echo
-            echo "The browser sign-in is behind the sign-in screen's Auth code tile. It is offered only when the approval page (https://manager.bringyour.com/login-app) serves /approval-contract.json listing linux; until the web change that adds the linux row is deployed there, the tile opens the auth code dialog (now with a masked field)."
+            echo "The browser sign-in is behind the sign-in screen's Auth code tile. It is offered only when the approval page (https://beta.app.ur.network/login-app) serves /approval-contract.json listing linux; until the web change that adds the linux row is deployed there, the tile opens the auth code dialog (now with a masked field)."
             echo
             echo "**The service and the UI are separate downloads.** The AppImage (and the Flatpak) ship the UI only; the privileged service is the \`.install.tar.gz\` below, which the app itself downloads, verifies and installs behind a single polkit prompt."
             echo
