@@ -4,14 +4,15 @@
 // not and with or without a coldkey; its figures (Claimable, Paid, Earned and
 // what a pending root adds); and the claim sheet's rows through a claim (sent,
 // claimed with the vault's amount, needs gas, already claimed, another
-// failure, a failure about no account, Done), the gas a v2 claim needs and how
-// long the page waits for one. The page and the sheet need GTK and the SDK, so
-// their wiring and their English fallbacks (which must be the catalog's msgids)
-// are read from the sources and po/en.po.
+// failure, a failure about no account, Done), the gas a v2 claim needs (and a
+// v1 claim, on the v1 sheet) and how long the page waits for one. The page and
+// the sheets need GTK and the SDK, so their wiring and their English fallbacks
+// (which must be the catalog's msgids) are read from the sources and po/en.po.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -358,7 +359,7 @@ UR_TEST(SnLedgerAV2ClaimNeedsItsGasLimitInTheGasKey) {
   using urnw::snledger::NeedsGas;
   UR_EXPECT_TRUE(kClaimGasTao == 0.02);
   UR_EXPECT_TRUE(NeedsGas(false, true, 0.0));
-  UR_EXPECT_TRUE(NeedsGas(false, true, 0.005));  // a v1 top-up is not enough
+  UR_EXPECT_TRUE(NeedsGas(false, true, 0.005));  // the v1 sheet's old top-up is not enough
   UR_EXPECT_TRUE(NeedsGas(false, true, 0.0199));
   UR_EXPECT_FALSE(NeedsGas(false, true, 0.02));
   UR_EXPECT_FALSE(NeedsGas(false, true, 0.5));
@@ -493,6 +494,38 @@ UR_TEST(SnLedgerClaimSheetWiring) {
                  std::string::npos);
   UR_EXPECT_TRUE(LedgerFunctionBody(page, "void EarningsPage::LoadWalletLayer()")
                      .find("sn::FetchLedger(") != std::string::npos);
+}
+
+// VERSION2-LAUNCH.md §2.6: the SDK signs every v1 claim with at least 2,700,000
+// gas (below that the vault defers the payment) and sends it only when the gas
+// key holds that limit at 1.1 x the gas price, else needs_gas. So the v1 sheet
+// shows the top-up and holds Claim below that limit's cost at 5 gwei, and the
+// top-up asks for a v2 claim's 0.02 TAO, which covers it
+UR_TEST(SnLedgerAV1ClaimNeedsItsGasFloorInTheGasKey) {
+  const std::string page = ReadLedgerSource("EarningsPage.cpp");
+  // the value of the page's `constexpr double <name> = <value>;`, or -1
+  const auto constant = [&page](const std::string& name) {
+    const std::string declaration = "\nconstexpr double " + name + " = ";
+    const size_t at = page.find(declaration);
+    if (at == std::string::npos) return -1.0;
+    return std::strtod(page.c_str() + at + declaration.size(), nullptr);
+  };
+  const double floorTao = 2'700'000 * 1.1 * 5e9 / 1e18;  // 0.01485
+  const double minimum = constant("kMinGasTao");
+  const double suggested = constant("kSuggestedGasTao");
+  UR_EXPECT_TRUE(minimum == 0.015);
+  UR_EXPECT_TRUE(suggested == 0.02);
+  UR_EXPECT_TRUE(suggested == urnw::snledger::kClaimGasTao);
+  UR_EXPECT_TRUE(floorTao <= minimum && minimum <= suggested);
+  UR_EXPECT_TRUE(LedgerFunctionBody(page, "bool ClaimAlphaSheet::NeedsGas() const")
+                     .find("return gas_ && gas_->balanceKnown && gas_->tao < kMinGasTao;") !=
+                 std::string::npos);
+  UR_EXPECT_TRUE(LedgerFunctionBody(page, "void ClaimAlphaSheet::RebuildAction()")
+                     .find("claimButton_->set_sensitive(claimsAvailable_ && !busy_ && rao > 0 && "
+                           "!NeedsGas());") != std::string::npos);
+  UR_EXPECT_TRUE(LedgerFunctionBody(page, "void ClaimAlphaSheet::RebuildGas()")
+                     .find("BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), kSuggestedGasTao, "
+                           "copiedReset_);") != std::string::npos);
 }
 
 // CL-4: one gas key sends one claim at a time: v1 and v2 refuse to start
