@@ -29,6 +29,7 @@
 #include "daemon/GlogFlusher.hpp"
 #include "daemon/SelfRestart.hpp"
 #include "daemon/SupportDiagnostics.hpp"
+#include "daemon/TextFile.hpp"
 
 namespace urnw {
 namespace {
@@ -181,6 +182,11 @@ void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_
   flight->Finish(uploadId, logupload::FlightState::Failed);
 }
 
+// Key material only, and deliberately not textfile::ReadAll: a read that
+// fails after the open throws here. A seed that is there but cannot be read
+// must not pass for a missing one, or NewDeviceLocked would write a new
+// identity over it; every caller runs under a catch, so the start fails and
+// the stored files stay.
 std::vector<uint8_t> ReadFileBytes(const std::string& path) {
   std::ifstream f(path, std::ios::binary);
   if (!f) return {};
@@ -292,10 +298,9 @@ TunnelHost::TunnelHost(std::string storageRoot)
 }
 
 void TunnelHost::RestoreStopRecord() {
-  std::ifstream in(selfrestart::kStopRecordPath, std::ios::binary);
-  if (!in) return;
-  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  in.close();
+  if (::access(selfrestart::kStopRecordPath, F_OK) != 0) return;
+  // A record that cannot be read decodes as unreadable below and is dropped.
+  const std::string text = textfile::ReadAll(selfrestart::kStopRecordPath);
   // Read once, whatever it held: a record is about one stop.
   ::unlink(selfrestart::kStopRecordPath);
   const std::optional<selfrestart::StopRecord> record =
@@ -2549,12 +2554,10 @@ uint64_t ReadIfaceCounter(const std::string& iface, const char* which) {
   return 0;
 }
 
-std::string ReadTextFile(const std::string& path) {
-  std::ifstream in(path);
-  if (!in) return {};
-  return std::string(std::istreambuf_iterator<char>(in),
-                     std::istreambuf_iterator<char>());
-}
+// /proc/net/route, /proc/net/wireless and the default route's sysfs carrier and
+// speed, which a Wi-Fi or link-down interface answers with EINVAL
+// (TextFile.hpp): never a throw out of the reaper tick.
+std::string ReadTextFile(const std::string& path) { return textfile::ReadAll(path); }
 
 LinuxNetworkQualitySnapshot ReadNetworkQuality(const std::string& tunnelInterface) {
   LinuxNetworkQualitySnapshot snapshot;
