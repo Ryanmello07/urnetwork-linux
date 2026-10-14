@@ -8553,8 +8553,8 @@ msgstr "应用 hotkey 签名"
 
 #. App top200: unparseable paste
 msgctxt "site_app_top200_bad_signature"
-msgid "Paste the binding payload exactly as the app shows it."
-msgstr "请完全按照应用显示的内容粘贴绑定数据。"
+msgid "Paste the whole binding payload: JSON with binding and client_signature."
+msgstr "请粘贴完整的绑定数据：包含 binding 和 client_signature 的 JSON。"
 
 #. App top200: binding not complete
 msgctxt "site_app_top200_binding_incomplete"
@@ -8588,8 +8588,8 @@ msgstr "Hotkey"
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "Sign each binding digest with the hotkey using your own tooling (snclaim bind-head) and paste the signature here."
-msgstr "请使用您自己的工具（snclaim bind-head）以 hotkey 为每个绑定摘要签名，然后将签名粘贴到此处。"
+msgid "provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here."
+msgstr "provider fleet bind 会替您用 hotkey 签名。对于粘贴的绑定数据，请使用您自己的工具以 hotkey 为每个绑定摘要签名，然后将签名粘贴到此处。"
 
 #. App top200: hotkey signature input
 msgctxt "site_app_top200_hotkey_signature"
@@ -8613,8 +8613,8 @@ msgstr "已添加 {count} 台设备"
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Each provider device signs its fleet binding from its app under Account › Top 200. Paste each device's binding payload here, one device at a time."
-msgstr "每台提供商设备都在其应用的“帐户 › 前 200 名”中为设备群绑定签名。请在此处逐台粘贴每台设备的绑定数据。"
+msgid "Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time."
+msgstr "应用暂时还不能为设备绑定签名。请在 CLI 中使用 provider fleet bind 绑定每台设备，并提供您的设备群清单、该设备的客户端密钥种子（~/.urnetwork/.provider.key）和 hotkey 种子。该命令会签署绑定，并从您自己的 EVM 密钥提交。由其他工具生成的绑定数据可在此处逐台粘贴。"
 
 #. App top200: step 1
 msgctxt "site_app_top200_step_register"

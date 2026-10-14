@@ -8582,7 +8582,7 @@ msgstr ""
 
 #. App top200: unparseable paste
 msgctxt "site_app_top200_bad_signature"
-msgid "Paste the binding payload exactly as the app shows it."
+msgid "Paste the whole binding payload: JSON with binding and client_signature."
 msgstr ""
 
 #. App top200: binding not complete
@@ -8617,7 +8617,7 @@ msgstr ""
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "Sign each binding digest with the hotkey using your own tooling (snclaim bind-head) and paste the signature here."
+msgid "provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here."
 msgstr ""
 
 #. App top200: hotkey signature input
@@ -8642,7 +8642,7 @@ msgstr ""
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Each provider device signs its fleet binding from its app under Account › Top 200. Paste each device's binding payload here, one device at a time."
+msgid "Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time."
 msgstr ""
 
 #. App top200: step 1

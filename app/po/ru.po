@@ -8611,8 +8611,8 @@ msgstr "Применить подпись hotkey"
 
 #. App top200: unparseable paste
 msgctxt "site_app_top200_bad_signature"
-msgid "Paste the binding payload exactly as the app shows it."
-msgstr "Вставьте данные привязки точно в том виде, в каком их показывает приложение."
+msgid "Paste the whole binding payload: JSON with binding and client_signature."
+msgstr "Вставьте данные привязки целиком: JSON с полями binding и client_signature."
 
 #. App top200: binding not complete
 msgctxt "site_app_top200_binding_incomplete"
@@ -8646,8 +8646,8 @@ msgstr "Hotkey"
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "Sign each binding digest with the hotkey using your own tooling (snclaim bind-head) and paste the signature here."
-msgstr "Подпишите каждый дайджест привязки ключом hotkey с помощью собственных инструментов (snclaim bind-head) и вставьте подпись сюда."
+msgid "provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here."
+msgstr "provider fleet bind подписывает ключом hotkey за вас. Для вставленных данных привязки подпишите каждый дайджест привязки ключом hotkey с помощью собственных инструментов и вставьте подпись сюда."
 
 #. App top200: hotkey signature input
 msgctxt "site_app_top200_hotkey_signature"
@@ -8671,8 +8671,8 @@ msgstr "Добавлено устройств: {count}"
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Each provider device signs its fleet binding from its app under Account › Top 200. Paste each device's binding payload here, one device at a time."
-msgstr "Каждое устройство-провайдер подписывает привязку своего парка в приложении в разделе Аккаунт › Топ-200. Вставляйте сюда данные привязки каждого устройства по одному."
+msgid "Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time."
+msgstr "Приложения пока не умеют подписывать привязки устройств. В CLI привяжите каждое устройство командой provider fleet bind, указав манифест парка, seed клиентского ключа устройства (~/.urnetwork/.provider.key) и seed ключа hotkey. Команда подписывает привязку и отправляет её с вашего собственного EVM-ключа. Данные привязки из других инструментов можно вставлять сюда по одному устройству."
 
 #. App top200: step 1
 msgctxt "site_app_top200_step_register"

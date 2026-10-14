@@ -625,6 +625,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/UpdateStatePresentationTest.cpp',
     'tests/UpdateWiringTest.cpp',
     'tests/CatalogLookupTest.cpp',
+    'tests/RetiredCliCommandsTest.cpp',
     'tests/ReferralCodeStateTest.cpp',
     'tests/ReferralShareTest.cpp',
     'tests/ReferralTotalsStateTest.cpp',
@@ -758,6 +759,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # EarningsPageTeardownTest reads EarningsPage.cpp the same way:
               # its destructor must touch no widget (issue #13).
               # PotfilesTest reads every source and po/POTFILES.in the same way.
+              # RetiredCliCommandsTest reads po/ the same way.
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
               # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
               # ErrorIdInternalTest reads every source the same way: the C ABI's

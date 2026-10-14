@@ -8698,8 +8698,8 @@ msgstr "تطبيق توقيع hotkey"
 
 #. App top200: unparseable paste
 msgctxt "site_app_top200_bad_signature"
-msgid "Paste the binding payload exactly as the app shows it."
-msgstr "الصق بيانات الربط تمامًا كما يعرضها التطبيق."
+msgid "Paste the whole binding payload: JSON with binding and client_signature."
+msgstr "الصق بيانات الربط كاملة: JSON يحتوي على binding و client_signature."
 
 #. App top200: binding not complete
 msgctxt "site_app_top200_binding_incomplete"
@@ -8733,8 +8733,8 @@ msgstr "Hotkey"
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "Sign each binding digest with the hotkey using your own tooling (snclaim bind-head) and paste the signature here."
-msgstr "وقّع كل ملخص ربط باستخدام hotkey عبر أدواتك الخاصة (snclaim bind-head) والصق التوقيع هنا."
+msgid "provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here."
+msgstr "الأمر provider fleet bind يوقّع باستخدام hotkey نيابةً عنك. أما لبيانات الربط الملصقة، فوقّع كل ملخص ربط باستخدام hotkey عبر أدواتك الخاصة والصق التوقيع هنا."
 
 #. App top200: hotkey signature input
 msgctxt "site_app_top200_hotkey_signature"
@@ -8758,8 +8758,8 @@ msgstr "الأجهزة المضافة: {count}"
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Each provider device signs its fleet binding from its app under Account › Top 200. Paste each device's binding payload here, one device at a time."
-msgstr "يوقّع كل جهاز مزود على ربط أسطوله من تطبيقه ضمن الحساب › أفضل 200. الصق هنا بيانات الربط لكل جهاز، جهازًا تلو الآخر."
+msgid "Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time."
+msgstr "لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. من سطر الأوامر، اربط كل جهاز باستخدام provider fleet bind مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وبذرة hotkey. يوقّع الأمر الربط ويرسله من مفتاح EVM الخاص بك. يمكنك لصق بيانات الربط المُنشأة بأدوات أخرى هنا، جهازًا تلو الآخر."
 
 #. App top200: step 1
 msgctxt "site_app_top200_step_register"

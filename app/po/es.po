@@ -8582,8 +8582,8 @@ msgstr "Aplicar la firma de la hotkey"
 
 #. App top200: unparseable paste
 msgctxt "site_app_top200_bad_signature"
-msgid "Paste the binding payload exactly as the app shows it."
-msgstr "Pega la carga útil de vinculación exactamente como la muestra la app."
+msgid "Paste the whole binding payload: JSON with binding and client_signature."
+msgstr "Pega la carga útil de vinculación completa: JSON con binding y client_signature."
 
 #. App top200: binding not complete
 msgctxt "site_app_top200_binding_incomplete"
@@ -8617,8 +8617,8 @@ msgstr "Hotkey"
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "Sign each binding digest with the hotkey using your own tooling (snclaim bind-head) and paste the signature here."
-msgstr "Firma cada resumen de vinculación con la hotkey usando tus propias herramientas (snclaim bind-head) y pega la firma aquí."
+msgid "provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here."
+msgstr "provider fleet bind firma con la hotkey por ti. Para una carga útil pegada, firma cada resumen de vinculación con la hotkey usando tus propias herramientas y pega la firma aquí."
 
 #. App top200: hotkey signature input
 msgctxt "site_app_top200_hotkey_signature"
@@ -8642,8 +8642,8 @@ msgstr "Dispositivos añadidos: {count}"
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Each provider device signs its fleet binding from its app under Account › Top 200. Paste each device's binding payload here, one device at a time."
-msgstr "Cada dispositivo proveedor firma su vinculación de flota desde su app en Cuenta › Top 200. Pega aquí la carga útil de vinculación de cada dispositivo, de uno en uno."
+msgid "Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time."
+msgstr "Las apps aún no pueden firmar vinculaciones de dispositivos. Desde la CLI, vincula cada dispositivo con provider fleet bind, usando tu manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y la semilla de la hotkey. Firma la vinculación y la envía desde tu propia clave EVM. Puedes pegar aquí cargas útiles creadas con otras herramientas, de una en una."
 
 #. App top200: step 1
 msgctxt "site_app_top200_step_register"
