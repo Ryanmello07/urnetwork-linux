@@ -190,11 +190,12 @@ UR_TEST(ApprovalCheckWiring_TheLogGetsClosedWords) {
   }
 }
 
-// The approval is off in this build, and its page's origin is a build constant.
-UR_TEST(ApprovalCheckWiring_TheApprovalIsOffAndItsOriginIsABuildConstant) {
+// The approval is on in this beta line (off on main), and its page's origin is a
+// build constant.
+UR_TEST(ApprovalCheckWiring_TheApprovalIsOnInTheBetaAndItsOriginIsABuildConstant) {
   const std::string config = ReadCode("Config.hpp");
   for (const char* line : {
-           "inline constexpr bool kBrowserApprovalEnabled = false;",
+           "inline constexpr bool kBrowserApprovalEnabled = true;",
            "#if defined(UR_APPROVAL_TEST_ORIGIN)\n#define UR_APPROVAL_ORIGIN "
            "UR_APPROVAL_TEST_ORIGIN\n"
            "inline constexpr bool kApprovalOriginIsATest = true;\n#else\n"

@@ -34,8 +34,9 @@ namespace urnw::config {
 // process is not running as root and the desktop starts this app for
 // urnetwork:// links (SchemeHandler.hpp). Turn it on once the page lists linux;
 // until then the tile opens the auth code dialog as it always has. A test pins
-// it false.
-inline constexpr bool kBrowserApprovalEnabled = false;
+// it false on main; this beta line (beta/browser-approval, never merged) turns
+// it on to test the approval, and its test pins it true.
+inline constexpr bool kBrowserApprovalEnabled = true;
 
 // The origin of the approval page, a build constant: the app never takes a page
 // from a server, a file, a network space or a request. For a local end-to-end
