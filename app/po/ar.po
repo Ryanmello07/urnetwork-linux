@@ -8733,8 +8733,8 @@ msgstr "Hotkey"
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here."
-msgstr "الأمر provider fleet bind يوقّع باستخدام hotkey نيابةً عنك. أما لبيانات الربط الملصقة، فوقّع كل ملخص ربط باستخدام hotkey عبر أدواتك الخاصة والصق التوقيع هنا."
+msgid "With --hotkey_seed_file, the payload from provider fleet sign already carries the hotkey signature. Or, where the hotkey seed is kept, run provider fleet sign with the device's --client_id and --hotkey_seed_file and paste the 0x signature it prints here. provider fleet bind signs with the hotkey for you."
+msgstr "مع --hotkey_seed_file تتضمن بيانات الربط التي يطبعها provider fleet sign توقيع hotkey مسبقًا. أو، حيث تحتفظ ببذرة hotkey، شغّل provider fleet sign مع --client_id الخاص بالجهاز و --hotkey_seed_file والصق هنا توقيع 0x الذي يطبعه. الأمر provider fleet bind يوقّع باستخدام hotkey نيابةً عنك."
 
 #. App top200: hotkey signature input
 msgctxt "site_app_top200_hotkey_signature"
@@ -8758,8 +8758,8 @@ msgstr "الأجهزة المضافة: {count}"
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time."
-msgstr "لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. من سطر الأوامر، اربط كل جهاز باستخدام provider fleet bind مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وبذرة hotkey. يوقّع الأمر الربط ويرسله من مفتاح EVM الخاص بك. يمكنك لصق بيانات الربط المُنشأة بأدوات أخرى هنا، جهازًا تلو الآخر."
+msgid "Device signing is not in the apps yet. On each provider device, run provider fleet sign with your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs, and paste the JSON it prints here, one device at a time. It sends nothing and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key."
+msgstr "لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. على كل جهاز مزوّد، شغّل provider fleet sign مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وحقب الصلاحية، ثم الصق هنا JSON الذي يطبعه، جهازًا تلو الآخر. لا يرسل الأمر أي شيء وتبقى البذور على الجهاز. أما provider fleet bind فيوقّع ويرسل في خطوة واحدة من مفتاح EVM الخاص بك."
 
 #. App top200: step 1
 msgctxt "site_app_top200_step_register"
