@@ -871,6 +871,57 @@ void ConnectPage::BuildPaneA() {
   extenderDescription_->set_visible(false);
   moreOptionsHost_->append(*extenderDescription_);
 
+  // The lag.dev speed tests switch (lag.dev/PLAN.md C4, decision 18): whether
+  // the extender role serves lag.dev's measurement API, so people testing their
+  // connection there can measure to this device. It rides on the role, so it
+  // shows only beside the Extender switch, hidden, never disabled
+  // (DrawSpeedTestsRow). Built like the Extender row, its title starting under
+  // the Extender title.
+  speedTestsRow_ = kit::MakePaneRow(44);
+  {
+    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+    line->set_hexpand(true);
+    // the Extender dot's glyph, never shown, so the two titles line up
+    auto* inset = Gtk::make_managed<Gtk::Label>("●");
+    inset->set_opacity(0);
+    inset->set_valign(Gtk::Align::CENTER);
+    kit::MarkDecorative(*inset);
+    line->append(*inset);
+    auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 1);
+    text->set_hexpand(true);
+    text->set_valign(Gtk::Align::CENTER);
+    auto* title =
+        Gtk::make_managed<Gtk::Label>(T_("extender_speed_tests", "lag.dev speed tests"));
+    title->add_css_class("ur-row-title");
+    title->set_xalign(0);
+    text->append(*title);
+    auto* note = Gtk::make_managed<Gtk::Label>(T_(
+        "extender_speed_tests_description",
+        "Let people testing their connection on lag.dev measure latency, download and upload "
+        "to this device. Tests use some of your bandwidth while they run."));
+    note->add_css_class("ur-row-note");
+    note->set_xalign(0);
+    note->set_wrap(true);
+    CapNatural(note, 30);
+    text->append(*note);
+    line->append(*text);
+    speedTestsToggle_ = Gtk::make_managed<Gtk::Switch>();
+    speedTestsToggle_->set_valign(Gtk::Align::CENTER);
+    // the setting's default, until the first reading draws it
+    speedTestsToggle_->set_active(true);
+    kit::SetAccessibleLabel(*speedTestsToggle_,
+                            T_("extender_speed_tests", "lag.dev speed tests"));
+    speedTestsToggle_->property_active().signal_changed().connect([this] {
+      // echo guard: a feed-driven write must not travel back to the SDK
+      if (updatingControls_) return;
+      OnSpeedTestsToggled();
+    });
+    line->append(*speedTestsToggle_);
+    if (auto* inner = RowInner(speedTestsRow_)) inner->append(*line);
+  }
+  speedTestsRow_->set_visible(false);
+  moreOptionsHost_->append(*speedTestsRow_);
+
   // connect options: the four toggle rows, each writing through SdkHost with
   // an echo guard (the load writes the same control)
   auto optionsHeader = kit::MakePaneGroupHeader(T_("connect_options", "Connect options"));
@@ -3124,6 +3175,39 @@ void ConnectPage::ApplyKillSwitchUi() {
 void ConnectPage::ApplyExtenderProvideState() {
   DrawExtenderRow(extender::ProvideRowOf(host_.GetExtenderProvideStatus(),
                                          [this] { return host_.GetProvideExtender(); }));
+  // the lag.dev speed tests switch under it, beside the row as just drawn: its
+  // setting is read only when it will show
+  DrawSpeedTestsRow(extender::SpeedTestsRowOf(extenderRowDrawn_,
+                                              host_.MeasurementsSwitchWritable(),
+                                              [this] { return host_.GetMeasurementsEnabled(); }));
+}
+
+void ConnectPage::DrawSpeedTestsRow(const extender::SpeedTestsRow& row) {
+  if (!speedTestsRow_ || !speedTestsToggle_) return;
+  // a reading that changes nothing is dropped
+  if (speedTestsApplied_ && row == speedTestsDrawn_) return;
+  speedTestsApplied_ = true;
+  speedTestsDrawn_ = row;
+  speedTestsRow_->set_visible(row.visible);
+  if (!row.visible) return;
+  // the switch shows the setting, written under the echo guard
+  if (speedTestsToggle_->get_active() != row.on) {
+    updatingControls_ = true;
+    speedTestsToggle_->set_active(row.on);
+    updatingControls_ = false;
+  }
+}
+
+// The switch writes the measurements setting at once and holds its new
+// position; the next reading of the setting replaces it.
+void ConnectPage::OnSpeedTestsToggled() {
+  if (!speedTestsToggle_) return;
+  // never while hidden: a device or daemon that cannot take the write shows no
+  // switch (N1)
+  if (!speedTestsDrawn_.visible) return;
+  const bool on = speedTestsToggle_->get_active();
+  host_.SetMeasurementsEnabled(on);
+  speedTestsDrawn_.on = on;
 }
 
 void ConnectPage::DrawExtenderRow(const extender::ProvideRow& row) {

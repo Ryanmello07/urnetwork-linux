@@ -186,6 +186,7 @@ inline bool VerbNeedsAuthorization(ctl::Verb verb) {
     case ctl::Verb::SetProvideExtender:
     // control-tunnel, or take-over-tunnel beside another uid's session, as
     // set_provide_extender
+    case ctl::Verb::SetMeasurementsEnabled:
     case ctl::Verb::ResetExtenders:
     case ctl::Verb::SetKillSwitch:
     case ctl::Verb::LocationOverrideWrite:
@@ -455,6 +456,10 @@ class ControlClient {
   // refusal or a transport failure. Sent only to a daemon whose provider_stats
   // said it takes it.
   bool SetProvideExtender(bool on, std::string* error = nullptr);
+  // The lag.dev speed tests switch the same way (ControlProtocol.hpp
+  // set_measurements_enabled). False with `error` for a refusal or a transport
+  // failure. Sent only to a daemon whose provider_stats said it takes it.
+  bool SetMeasurementsEnabled(bool on, std::string* error = nullptr);
   // The account signed out (ControlProtocol.hpp logout): the daemon deletes the
   // device identity it keeps and logs out what its sdk stored in
   // `networkSpaceJson`'s space. Done when the daemon did it, Unsupported when it

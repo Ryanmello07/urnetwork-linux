@@ -1841,6 +1841,15 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
   } catch (const std::exception& e) {
     noteReadFailure("extender setting", e);
   }
+  // And the lag.dev measurements setting beside it, the speed tests switch
+  // under the Extender switch, which this daemon writes too
+  // (SetMeasurementsEnabled): never said without a setting to show.
+  try {
+    reply.measurements_enabled = providerDevice_->getMeasurementsEnabled();
+    reply.measurements_enabled_writable = true;
+  } catch (const std::exception& e) {
+    noteReadFailure("measurements setting", e);
+  }
   if (providerContractVc_) {
     try {
       if (auto points = providerContractVc_->getProviderThroughputPoints()) {
@@ -1968,6 +1977,52 @@ bool TunnelHost::SetProvideExtender(bool on, std::string* error) {
     return false;
   }
   DaemonLogf("[provide] provide extender %s (%s)\n", on ? "on" : "off",
+             provide::ToString(target));
+  return true;
+}
+
+bool TunnelHost::SetMeasurementsEnabled(bool on, std::string* error) {
+  std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    // A bring-up owns the session. The GUI reads the setting again, so the
+    // switch shows it as it stands.
+    if (error) *error = "a tunnel start is in progress";
+    return false;
+  }
+  // the provider extender setting's rule: the same space holds both, and the
+  // same devices read them
+  const provide::ExtenderSettingTarget target = provide::ExtenderSettingTargetFor(
+      providerDevice_.has_value(), device_.has_value(), networkSpace_.has_value());
+  try {
+    switch (target) {
+      case provide::ExtenderSettingTarget::ProviderDevice:
+        // persisted in its space and applied at once: the measurement API
+        // starts or stops, and the operator withdraws or restores the name
+        providerDevice_->setMeasurementsEnabled(on);
+        break;
+      case provide::ExtenderSettingTarget::SessionDevice:
+        device_->setMeasurementsEnabled(on);
+        break;
+      case provide::ExtenderSettingTarget::NetworkSpace:
+        networkSpace_->getAsyncLocalState().getLocalState().setMeasurementsEnabled(on);
+        break;
+      case provide::ExtenderSettingTarget::None:
+        if (error) {
+          *error = "no device has run in this daemon yet, so there is no network space to keep "
+                   "the setting in";
+        }
+        return false;
+    }
+  } catch (const std::exception& e) {
+    if (error) {
+      *error = std::string("the measurements setting could not be written to ") +
+               provide::ToString(target);
+    }
+    DaemonLogf("[provide] writing the measurements setting to %s failed: %s\n",
+               provide::ToString(target), e.what());
+    return false;
+  }
+  DaemonLogf("[provide] lag.dev measurements %s (%s)\n", on ? "on" : "off",
              provide::ToString(target));
   return true;
 }

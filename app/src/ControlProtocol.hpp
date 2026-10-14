@@ -359,6 +359,7 @@ enum class Verb {
   StartProvider,
   ProviderStats,
   SetProvideExtender,
+  SetMeasurementsEnabled,
   ResetExtenders,
   SetKillSwitch,
   LocationOverrideAvailable,
@@ -380,6 +381,7 @@ inline const char* ToString(Verb v) {
     case Verb::StartProvider: return "start_provider";
     case Verb::ProviderStats: return "provider_stats";
     case Verb::SetProvideExtender: return "set_provide_extender";
+    case Verb::SetMeasurementsEnabled: return "set_measurements_enabled";
     case Verb::ResetExtenders: return "reset_extenders";
     case Verb::SetKillSwitch: return "set_kill_switch";
     case Verb::LocationOverrideAvailable: return "location_override_available";
@@ -402,6 +404,7 @@ inline Verb VerbFromString(const std::string& s) {
   if (s == "start_provider") return Verb::StartProvider;
   if (s == "provider_stats") return Verb::ProviderStats;
   if (s == "set_provide_extender") return Verb::SetProvideExtender;
+  if (s == "set_measurements_enabled") return Verb::SetMeasurementsEnabled;
   if (s == "reset_extenders") return Verb::ResetExtenders;
   if (s == "set_kill_switch") return Verb::SetKillSwitch;
   if (s == "location_override_available") return Verb::LocationOverrideAvailable;
@@ -463,6 +466,9 @@ inline const char* ActionIdForVerb(Verb verb, bool is_log_tail, bool cross_uid) 
     // set_provide_extender too: it writes that session's provider extender
     // setting, the switch beside the provide mode.
     case Verb::SetProvideExtender:
+    // set_measurements_enabled as well: the lag.dev speed tests switch under
+    // the Extender switch, a setting of the same space that rides on the role.
+    case Verb::SetMeasurementsEnabled:
     // reset_extenders as well: the daemon's spaces are shared by every user of
     // this machine, so a reset changes what another uid's live session dials
     // through, and that costs the take-over action.
@@ -514,6 +520,8 @@ inline bool VerbWantsInteraction(Verb verb, bool is_log_tail) {
     case Verb::SetProvide:
     // a press of the connect page's Extender switch
     case Verb::SetProvideExtender:
+    // a press of the lag.dev speed tests switch under it
+    case Verb::SetMeasurementsEnabled:
     // a confirmed press of Account > Extenders' Reset extenders
     case Verb::ResetExtenders:
     case Verb::SetKillSwitch:
@@ -1044,6 +1052,31 @@ inline void from_json(const nlohmann::json& j, SetProvideExtenderRequest& v) {
     throw std::runtime_error("set_provide_extender requires provide_extender (a boolean)");
   }
   v.provide_extender = it->get<bool>();
+}
+
+// ---- set_measurements_enabled ----------------------------------------------
+// The lag.dev speed tests switch while no tunnel session's device takes it
+// (lag.dev/PLAN.md C4, decision 18): whether the extender role serves
+// lag.dev's measurement API. Like the provider extender setting it belongs to
+// the network space (`.measurements_enabled`) and every device reads it from
+// its space when it starts, so the daemon writes it by the same rule
+// (provide::ExtenderSettingTargetFor). Gated like set_provide_extender. A new
+// verb, additive within protocol v1: the GUI sends it only to a daemon whose
+// provider_stats said it takes it (measurements_enabled_writable).
+struct SetMeasurementsEnabledRequest {
+  bool measurements_enabled = true;
+};
+inline void to_json(nlohmann::json& j, const SetMeasurementsEnabledRequest& v) {
+  j["measurements_enabled"] = v.measurements_enabled;
+}
+// Strict, as set_provide_extender's: a write whose value did not arrive must
+// not write a default the user never chose.
+inline void from_json(const nlohmann::json& j, SetMeasurementsEnabledRequest& v) {
+  auto it = j.find("measurements_enabled");
+  if (it == j.end() || !it->is_boolean()) {
+    throw std::runtime_error("set_measurements_enabled requires measurements_enabled (a boolean)");
+  }
+  v.measurements_enabled = it->get<bool>();
 }
 
 // ---- reset_extenders -------------------------------------------------------
@@ -1599,6 +1632,13 @@ struct ProviderStatsReply {
   // disconnected, as before.
   bool provide_extender = false;
   bool provide_extender_writable = false;
+  // The lag.dev measurements setting read beside them (getMeasurementsEnabled),
+  // the speed tests switch under the Extender switch, and that this daemon
+  // takes its write (set_measurements_enabled). A daemon that predates them
+  // sends neither, which reads as the setting on and no writer: that switch
+  // stays hidden while disconnected, and the setting still applies.
+  bool measurements_enabled = true;
+  bool measurements_enabled_writable = false;
 };
 inline void to_json(nlohmann::json& j, const ProviderStatsReply& v) {
   j["running"] = v.running;
@@ -1613,6 +1653,8 @@ inline void to_json(nlohmann::json& j, const ProviderStatsReply& v) {
   j["extender_throughput_points_json"] = v.extender_throughput_points_json;
   j["provide_extender"] = v.provide_extender;
   j["provide_extender_writable"] = v.provide_extender_writable;
+  j["measurements_enabled"] = v.measurements_enabled;
+  j["measurements_enabled_writable"] = v.measurements_enabled_writable;
 }
 inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
   detail::Get(j, "running", v.running);  // absent = nothing runs
@@ -1627,6 +1669,9 @@ inline void from_json(const nlohmann::json& j, ProviderStatsReply& v) {
   detail::Get(j, "extender_throughput_points_json", v.extender_throughput_points_json);
   detail::Get(j, "provide_extender", v.provide_extender);
   detail::Get(j, "provide_extender_writable", v.provide_extender_writable);  // absent = no writer
+  detail::Get(j, "measurements_enabled", v.measurements_enabled);  // absent = on
+  detail::Get(j, "measurements_enabled_writable",
+              v.measurements_enabled_writable);  // absent = no writer
 }
 
 // ---- upload_logs -----------------------------------------------------------

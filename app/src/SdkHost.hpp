@@ -650,6 +650,18 @@ class SdkHost {
   void SignBittensorConnect(const std::string& walletId, const std::string& walletAddress,
                             std::function<void(WalletSignature)> done);
 
+  // The same signer for the network payout consent (NetworkConsent.hpp,
+  // CONSENT.md A1): a session with purpose "consent" takes `challenge`, the
+  // SnNetworkConsentChallenge result, as it came, so `walletId` signs exactly
+  // its message with its coldkey (the session binds the coldkey and the
+  // expiry), on the bridge or the manual sheet. `done` gets the session's proof
+  // (address, signature and the issued message) or the refusal; an expired
+  // challenge reads "challenge_expired: ...". Same deep-link routing, flow
+  // numbering and superseding as SignBittensorConnect.
+  void SignBittensorConsent(const std::string& walletId,
+                            const urnet::SnNetworkConsentChallengeResult& challenge,
+                            std::function<void(WalletSignature)> done);
+
   // The same bridge as a plain CONNECT for a Solana wallet (Phantom / Solflare):
   // no challenge and no signature. The bridge connects the wallet and the
   // urnetwork://<provider>-connect return hands back its base58 public key,
@@ -1163,6 +1175,18 @@ class SdkHost {
   // dropped: the row is hidden then, and the setter is never called while the
   // row is hidden (N1).
   void SetProvideExtender(bool on);
+  // The lag.dev speed tests switch under the Extender switch (lag.dev/PLAN.md
+  // C4, decision 18): whether its write has a taker now
+  // (provide::MeasurementsSwitchSourceFor), the measurements setting, and its
+  // write. Read and written as the provider extender setting is: through the
+  // device, which persists it in the daemon's space and applies it at once
+  // (queued while the daemon is out of contact), or with no device through the
+  // daemon (set_measurements_enabled) while provider_stats said it takes it.
+  // The page shows the switch only beside the Extender row and while it has a
+  // taker, and never writes it hidden (N1). The setting's default is on.
+  bool MeasurementsSwitchWritable();
+  bool GetMeasurementsEnabled();
+  void SetMeasurementsEnabled(bool on);
 
   // The SDK's shared ExtenderViewController (K7: "encoding, decoding and
   // applying live in the sdk, one implementation for every app"). Opened with
@@ -1414,10 +1438,13 @@ class SdkHost {
   // manual sheet. Failures before that answer the waiting flow
   // (FailWalletOperation), or `fail` when given -- which also hears a
   // superseded flow (the create-network flow, whose slot is set by `prepare`).
-  void StartBittensorSession(const std::string& walletId, const std::string& purpose,
-                             const std::string& expectedAddress, uint64_t flow,
-                             std::function<bool(const std::string& message)> prepare,
-                             std::function<void(const std::string& error)> fail = nullptr);
+  // A consent (SignBittensorConsent) brings its challenge, the
+  // SnNetworkConsentChallenge result, instead of /auth/wallet-challenge.
+  void StartBittensorSession(
+      const std::string& walletId, const std::string& purpose, const std::string& expectedAddress,
+      uint64_t flow, std::function<bool(const std::string& message)> prepare,
+      std::function<void(const std::string& error)> fail = nullptr,
+      std::optional<urnet::SnNetworkConsentChallengeResult> consent = std::nullopt);
   void FinishCreateNetworkWithWallet(const std::string& signature);
   // blockchain: "solana" (ed25519, base64 signature) | urnet::TAO (sr25519, hex)
   void AuthLoginWithWallet(const std::string& address, const std::string& signature,
@@ -1437,6 +1464,9 @@ class SdkHost {
   // What the connect page's Extender switch reads and writes now
   // (provide::ExtenderSwitchSourceFor). Requires mutex_.
   provide::ExtenderSwitchSource ExtenderSwitchSourceLocked() const;
+  // What the lag.dev speed tests switch reads and writes now
+  // (provide::MeasurementsSwitchSourceFor). Requires mutex_.
+  provide::ExtenderSwitchSource MeasurementsSwitchSourceLocked() const;
   void EmitDrawerEvent(DrawerEvent event);
   LiveStats ReadStats();  // read the current snapshot from the SDK getters
   void PublishStats();    // ReadStats() -> onStats_
@@ -1657,6 +1687,11 @@ class SdkHost {
     // predates them, which keeps that switch hidden
     bool provideExtender = false;
     bool provideExtenderWritable = false;
+    // the lag.dev measurements setting beside them, the speed tests switch, and
+    // that the daemon takes its write; on and false from a daemon that predates
+    // them, which keeps that switch hidden
+    bool measurementsEnabled = true;
+    bool measurementsEnabledWritable = false;
   };
   // Requires mutex_. One tick of the poll (provide::DaemonProviderStatsStep).
   void PollDaemonProviderStatsLocked();
