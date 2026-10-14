@@ -1353,6 +1353,14 @@ class SdkHost {
   // Tear down the device/tunnel/view-controllers without touching the stored
   // auth (Logout clears auth too; the guest upgrade only swaps the device).
   void TeardownDeviceLocked();
+  // After a teardown that leaves the person signed in (a stale device, a bind
+  // that failed, the bind watchdog): put the stored user jwt back on the api,
+  // as Initialize does. Binding a DeviceRemote replaces the api's user jwt
+  // with the device's client jwt, and closing it (the SDK's
+  // Api.closeDeviceOwner) clears that and leaves none, so without this every
+  // client-class call (referral code, preferences, the subscription balance)
+  // goes out unauthorized until the next device binds. Requires mutex_.
+  void RestoreApiAuthorizationLocked();
   // the device persists the override, else local state does; false when
   // there is neither
   bool AddBlockActionOverrideLocked(const urnet::BlockActionOverride& override_);

@@ -2,8 +2,6 @@
 #include "daemon/SupportDiagnostics.hpp"
 
 #include <cstdint>
-#include <fstream>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -13,6 +11,7 @@
 #include <urnetwork_sdk.hpp>
 
 #include "NetworkQuality.hpp"
+#include "daemon/TextFile.hpp"
 
 namespace urnw {
 namespace support {
@@ -47,11 +46,7 @@ void Write(const std::string& key, const char* tag, const std::string& line) {
   urnet::logAppInfo(tag, line);
 }
 
-std::string ReadProcText(const char* path) {
-  std::ifstream in(path);
-  if (!in) return {};
-  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
+std::string ReadProcText(const char* path) { return textfile::ReadAll(path); }
 
 // The link the default route leaves through (IPv4, else IPv6), never the tun.
 std::string DefaultRouteInterface(const std::string& tunnelInterface) {
