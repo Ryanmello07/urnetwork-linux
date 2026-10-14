@@ -686,6 +686,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ControlReplyWiringTest.cpp',
     'tests/DaemonInstanceGuardTest.cpp',
     'tests/DaemonTextFileTest.cpp',
+    'tests/LogTailWiringTest.cpp',
     'tests/DaemonCrashOutputTest.cpp',
     'tests/TunnelHostLockWiringTest.cpp',
     'tests/GlogFlushWiringTest.cpp',
@@ -792,6 +793,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # ControlReplyWiringTest reads the daemon's reply sends and log ring the same way.
               # DaemonInstanceGuardTest reads the daemon's start and revert paths the same way.
               # DaemonTextFileTest reads the daemon's whole-file readers the same way.
+              # LogTailWiringTest reads the log_tail client and the daemon's handler the same way.
               # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
               # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
               # GlogFlushWiringTest reads the daemon's glog flushes the same way.
