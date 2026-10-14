@@ -8646,8 +8646,8 @@ msgstr "Hotkey"
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here."
-msgstr "provider fleet bind подписывает ключом hotkey за вас. Для вставленных данных привязки подпишите каждый дайджест привязки ключом hotkey с помощью собственных инструментов и вставьте подпись сюда."
+msgid "With --hotkey_seed_file, the payload from provider fleet sign already carries the hotkey signature. Or, where the hotkey seed is kept, run provider fleet sign with the device's --client_id and --hotkey_seed_file and paste the 0x signature it prints here. provider fleet bind signs with the hotkey for you."
+msgstr "С --hotkey_seed_file данные от provider fleet sign уже содержат подпись hotkey. Или там, где хранится seed hotkey, выполните provider fleet sign с --client_id устройства и --hotkey_seed_file и вставьте сюда выведенную подпись 0x. provider fleet bind подписывает ключом hotkey за вас."
 
 #. App top200: hotkey signature input
 msgctxt "site_app_top200_hotkey_signature"
@@ -8671,8 +8671,8 @@ msgstr "Добавлено устройств: {count}"
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time."
-msgstr "Приложения пока не умеют подписывать привязки устройств. В CLI привяжите каждое устройство командой provider fleet bind, указав манифест парка, seed клиентского ключа устройства (~/.urnetwork/.provider.key) и seed ключа hotkey. Команда подписывает привязку и отправляет её с вашего собственного EVM-ключа. Данные привязки из других инструментов можно вставлять сюда по одному устройству."
+msgid "Device signing is not in the apps yet. On each provider device, run provider fleet sign with your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs, and paste the JSON it prints here, one device at a time. It sends nothing and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key."
+msgstr "Приложения пока не умеют подписывать привязки устройств. На каждом устройстве-провайдере выполните provider fleet sign, указав манифест парка, seed клиентского ключа устройства (~/.urnetwork/.provider.key) и эпохи действия, и вставьте сюда выведенный JSON, по одному устройству. Команда ничего не отправляет, а seed остаются на устройстве. provider fleet bind, напротив, подписывает и отправляет за один шаг с вашего собственного EVM-ключа."
 
 #. App top200: step 1
 msgctxt "site_app_top200_step_register"
