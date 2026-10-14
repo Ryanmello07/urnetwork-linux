@@ -45,8 +45,13 @@ constexpr int kStatsChartHeight = 132;
 constexpr int kBlockedChartHeight = 66;
 constexpr int kCopiedResetMs = 1800;
 constexpr double kMultiplierHighlight = 2.0;   // a country multiplier goes lime at >= 2.0
-constexpr double kMinGasTao = 0.001;           // below this the gas key cannot pay a claim
-constexpr double kSuggestedGasTao = 0.005;     // the top-up the dialog suggests
+// A v1 claim's gas in the gas key, in TAO. The SDK signs a v1 claim with its
+// estimate plus a quarter and at least 2,700,000 gas (below that the vault
+// defers the payment), and sends it only when the key holds that limit at 1.1 x
+// the gas price, else needs_gas: about 0.0149 TAO at 5 gwei. The top-up is a v2
+// claim's (snledger::kClaimGasTao).
+constexpr double kMinGasTao = 0.015;           // below this the SDK refuses a claim
+constexpr double kSuggestedGasTao = 0.02;      // the top-up the dialog suggests
 constexpr double kHeadDemotionMargin = 1.10;   // a score within 10% of the floor is warned
 // The one untranslatable string on this surface (store key sn_alpha_symbol,
 // translatable: false, so it is not in the catalog).
