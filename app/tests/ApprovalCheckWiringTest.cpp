@@ -198,23 +198,23 @@ UR_TEST(ApprovalCheckWiring_TheApprovalIsOffAndItsOriginIsABuildConstant) {
            "#if defined(UR_APPROVAL_TEST_ORIGIN)\n#define UR_APPROVAL_ORIGIN "
            "UR_APPROVAL_TEST_ORIGIN\n"
            "inline constexpr bool kApprovalOriginIsATest = true;\n#else\n"
-           "#define UR_APPROVAL_ORIGIN \"https://manager.bringyour.com\"\n"
+           "#define UR_APPROVAL_ORIGIN \"https://beta.app.ur.network\"\n"
            "inline constexpr bool kApprovalOriginIsATest = false;\n#endif",
            "inline constexpr char kApprovalPageUrl[] = UR_APPROVAL_ORIGIN \"/login-app\";",
            "inline constexpr char kApprovalDescriptorUrl[] = UR_APPROVAL_ORIGIN "
            "\"/approval-contract.json\";",
            "#undef UR_APPROVAL_ORIGIN",
            "inline constexpr std::string_view kApprovalHost = HostOfUrl(kApprovalPageUrl);",
-           "static_assert(HostOfUrl(\"https://manager.bringyour.com/login-app\") == "
-           "\"manager.bringyour.com\");",
+           "static_assert(HostOfUrl(\"https://beta.app.ur.network/login-app\") == "
+           "\"beta.app.ur.network\");",
            "static_assert(HostOfUrl(\"http://localhost:5173\") == \"localhost:5173\");",
            "static_assert(HostOfUrl(\"no scheme\").empty());",
            "#if !defined(UR_APPROVAL_TEST_ORIGIN)\nstatic_assert(!kApprovalOriginIsATest);",
            "static_assert(std::string_view(kApprovalPageUrl) == "
-           "\"https://manager.bringyour.com/login-app\");",
+           "\"https://beta.app.ur.network/login-app\");",
            "static_assert(std::string_view(kApprovalDescriptorUrl) ==\n"
-           "              \"https://manager.bringyour.com/approval-contract.json\");",
-           "static_assert(kApprovalHost == \"manager.bringyour.com\");",
+           "              \"https://beta.app.ur.network/approval-contract.json\");",
+           "static_assert(kApprovalHost == \"beta.app.ur.network\");",
            "namespace urnw::config {",
        }) {
     UR_EXPECT_TRUE_MSG(std::string("Config.hpp is missing ") + line, Contains(config, line));
