@@ -4,8 +4,8 @@
 //
 // Top to bottom: this device's client id and client key (each copyable) and
 // its fleet manifest member entry; the binding field with Paste; once the
-// pasted text is a binding of this device, the review (fleet id, hotkey,
-// chain and subnet, epochs); Sign with this device; then the
+// pasted text is a binding of this device, the review (fleet id, the full
+// hotkey, chain and subnet, epochs); Sign with this device; then the
 // {binding, client_signature} payload with Copy payload.
 //
 // The rules live in Top200Binding.hpp. The sheet reads the identity and signs
@@ -47,6 +47,7 @@ class Top200SignSheet : public Gtk::Window {
   void OnTextChanged();
   void Revalidate();
   void OnSign();
+  void StartSign();
   void ShowError(const Glib::ustring& message);
   void UpdateSignButton();
   void FlashCopied(Gtk::Button& button, const Glib::ustring& label, sigc::connection& reset);
@@ -86,6 +87,7 @@ class Top200SignSheet : public Gtk::Window {
   sigc::connection memberCopiedReset_;
   sigc::connection payloadCopiedReset_;
   sigc::connection identityRetry_;
+  sigc::connection signRetry_;
 };
 
 }  // namespace urnw

@@ -126,6 +126,59 @@ UR_TEST(top200NonBindingsAreInvalid) {
   }
 }
 
+UR_TEST(top200TextBeforeTheObjectIsInvalid) {
+  // nlohmann skips a leading UTF-8 BOM but the sdk's Go decoder refuses it:
+  // the review must not show a binding the sign then refuses
+  UR_EXPECT_TRUE(Check("\xEF\xBB\xBF" + kVectorBinding) == BindingError::Invalid);
+  UR_EXPECT_TRUE(Check("  \xEF\xBB\xBF" + kVectorBinding) == BindingError::Invalid);
+  UR_EXPECT_TRUE(Check("\xEF\xBB\xBF  " + kVectorBinding) == BindingError::Invalid);
+  UR_EXPECT_TRUE(Check("x" + kVectorBinding) == BindingError::Invalid);
+  UR_EXPECT_TRUE(Check("\xC2\xA0" + kVectorBinding) == BindingError::Invalid);  // NBSP
+  // JSON whitespace around the object is still trimmed
+  const BindingCheck padded =
+      ValidateBinding(" \t\r\n" + kVectorBinding + "\n ", kVectorClientId, kVectorClientKey);
+  UR_EXPECT_TRUE(padded.error == BindingError::None);
+  UR_EXPECT_TRUE(padded.trimmed == kVectorBinding);
+}
+
+UR_TEST(top200PastedTextLengthLimit) {
+  UR_EXPECT_EQ(4096, kMaxBindingTextChars);
+  // a binding padded inside the object to exactly the limit still validates;
+  // one character more is refused before parsing
+  const std::string inner = kVectorBinding.substr(1);
+  const std::string atLimit =
+      "{" + std::string(kMaxBindingTextChars - kVectorBinding.size(), ' ') + inner;
+  UR_EXPECT_EQ(kMaxBindingTextChars, atLimit.size());
+  UR_EXPECT_TRUE(Check(atLimit) == BindingError::None);
+  const std::string over = "{" + std::string(kMaxBindingTextChars + 1 - kVectorBinding.size(), ' ') +
+                           inner;
+  UR_EXPECT_TRUE(Check(over) == BindingError::Invalid);
+  // the limit is on the trimmed text: surrounding whitespace does not count
+  UR_EXPECT_TRUE(Check(std::string(8192, ' ') + atLimit + std::string(8192, '\n')) ==
+                 BindingError::None);
+  // and counts characters, not bytes
+  UR_EXPECT_EQ(3, Utf8CharCount("a\xC3\xA9\xE2\x80\xA6"));
+  UR_EXPECT_TRUE(Check(std::string(1 << 20, '{')) == BindingError::Invalid);
+}
+
+UR_TEST(top200SignButtonWaitsForTheIdentity) {
+  // reviewed binding, identity read still out: Sign stays disabled
+  UR_EXPECT_FALSE(SignButton(true, false, false, false).sensitive);
+  UR_EXPECT_FALSE(SignButton(true, false, true, false).sensitive);
+  // identity answered without a key: still disabled
+  UR_EXPECT_FALSE(SignButton(true, true, false, false).sensitive);
+  // nothing reviewed: disabled
+  UR_EXPECT_FALSE(SignButton(false, true, true, false).sensitive);
+  // ready
+  const SignButtonState ready = SignButton(true, true, true, false);
+  UR_EXPECT_TRUE(ready.sensitive);
+  UR_EXPECT_FALSE(ready.busy);
+  // a sign out (or waiting for the worker) shows the spinner, never a live button
+  const SignButtonState signing = SignButton(true, true, true, true);
+  UR_EXPECT_FALSE(signing.sensitive);
+  UR_EXPECT_TRUE(signing.busy);
+}
+
 UR_TEST(top200MissingExtraAndDuplicateFieldsAreInvalid) {
   // a missing field
   const std::string missing =
@@ -351,6 +404,20 @@ UR_TEST(top200SignIsWiredEndToEnd) {
   UR_EXPECT_TRUE(Top200SourceHas(sheet, "host_.RequestSignSnFleetBinding("));
   UR_EXPECT_TRUE(Top200SourceHas(sheet, "top200::FinishSign(trimmed, signature, error)"));
   UR_EXPECT_TRUE(Top200SourceHas(sheet, "top200::MemberEntry(clientId_, clientKey_)"));
+  // the review shows the hotkey in full, never shortened
+  UR_EXPECT_TRUE(Top200SourceHas(sheet, "hotkeyValue_->set_text(binding.hotkey);"));
+  UR_EXPECT_FALSE(Top200SourceHas(sheet, "ShortKey(binding.hotkey)"));
+  // the button follows SignButton, and a busy worker retries the tapped sign
+  UR_EXPECT_TRUE(Top200SourceHas(
+      sheet, "top200::SignButton(reviewed, identityLoaded_, !clientKey_.empty(), signing_)"));
+  const size_t start = sheet.find("void Top200SignSheet::StartSign(");
+  const size_t startEnd = sheet.find("\nvoid Top200SignSheet::", start + 1);
+  UR_EXPECT_TRUE(start != std::string::npos && startEnd != std::string::npos);
+  if (start != std::string::npos && startEnd != std::string::npos) {
+    const std::string body = sheet.substr(start, startEnd - start);
+    UR_EXPECT_TRUE(Top200SourceHas(body, "signRetry_ = Glib::signal_timeout().connect("));
+    UR_EXPECT_TRUE(Top200SourceHas(body, "StartSign();"));
+  }
   // the link only pre-fills: nothing in Prefill signs
   const size_t prefill = sheet.find("void Top200SignSheet::Prefill(");
   const size_t prefillEnd = sheet.find("\nvoid Top200SignSheet::", prefill + 1);

@@ -16,8 +16,9 @@ namespace {
 constexpr int kSheetMinWidth = 520;
 constexpr int kSheetMaxHeight = 720;
 constexpr int kCopiedResetMs = 1800;
-// the identity worker is shared with the sign: a busy worker is asked again
-constexpr int kIdentityRetryMs = 300;
+// the fleet worker is shared by the identity read and the sign (and by a
+// closed sheet's call still out): a busy worker is asked again
+constexpr int kWorkerRetryMs = 300;
 
 Gtk::Label* MakeNote(const Glib::ustring& text, const char* cssClass) {
   auto* label = Gtk::make_managed<Gtk::Label>(text);
@@ -148,8 +149,12 @@ Top200SignSheet::Top200SignSheet(SdkHost& host) : host_(host) {
   fleetIdValue_ = MakeMono({});
   fleetIdValue_->set_selectable(true);
   reviewBox_->append(*MakeValueRow(T_("top200_sign_fleet_id", "Fleet ID"), *fleetIdValue_));
+  // the hotkey in full, all 64 hex digits: it decides who gets this device's
+  // spot, so the user compares every digit with the page
   hotkeyValue_ = MakeMono({});
   hotkeyValue_->set_selectable(true);
+  hotkeyValue_->set_wrap(true);
+  hotkeyValue_->set_wrap_mode(Pango::WrapMode::CHAR);
   reviewBox_->append(*MakeValueRow(T_("top200_sign_hotkey", "Hotkey"), *hotkeyValue_));
   chainValue_ = MakeNote({}, "ur-value");
   reviewBox_->append(*chainValue_);
@@ -218,6 +223,7 @@ Top200SignSheet::~Top200SignSheet() {
   memberCopiedReset_.disconnect();
   payloadCopiedReset_.disconnect();
   identityRetry_.disconnect();
+  signRetry_.disconnect();
 }
 
 void Top200SignSheet::Prefill(const std::optional<std::string>& binding) {
@@ -244,7 +250,7 @@ void Top200SignSheet::RequestIdentity() {
         RequestIdentity();
         return false;
       },
-      kIdentityRetryMs);
+      kWorkerRetryMs);
 }
 
 void Top200SignSheet::OnIdentity(const std::string& clientId, const std::string& clientKey) {
@@ -328,8 +334,7 @@ void Top200SignSheet::Revalidate() {
       const top200::Binding& binding = *check_->binding;
       fleetIdValue_->set_text(top200::ShortKey(binding.fleetId));
       fleetIdValue_->set_tooltip_text(binding.fleetId);
-      hotkeyValue_->set_text(top200::ShortKey(binding.hotkey));
-      hotkeyValue_->set_tooltip_text(binding.hotkey);
+      hotkeyValue_->set_text(binding.hotkey);
       chainValue_->set_text(
           Format(T_("top200_sign_chain", "Chain {0} · subnet {1}"), binding.chainId, binding.netuid));
       epochsValue_->set_text(Format(T_("top200_sign_epochs", "Valid from epoch {0} to {1}"),
@@ -348,11 +353,13 @@ void Top200SignSheet::ShowError(const Glib::ustring& message) {
 
 void Top200SignSheet::UpdateSignButton() {
   // only a reviewed binding of this device, never while a sign is out
-  const bool ready = check_ && check_->error == top200::BindingError::None &&
-                     reviewBox_->get_visible() && !clientKey_.empty();
-  signButton_->set_sensitive(ready && !signing_);
-  spinner_->set_visible(signing_);
-  if (signing_) {
+  const bool reviewed = check_ && check_->error == top200::BindingError::None &&
+                        reviewBox_->get_visible();
+  const top200::SignButtonState state =
+      top200::SignButton(reviewed, identityLoaded_, !clientKey_.empty(), signing_);
+  signButton_->set_sensitive(state.sensitive);
+  spinner_->set_visible(state.busy);
+  if (state.busy) {
     spinner_->start();
   } else {
     spinner_->stop();
@@ -364,7 +371,17 @@ void Top200SignSheet::OnSign() {
   // checked again at the tap: the device and the text must still agree
   Revalidate();
   if (!check_ || check_->error != top200::BindingError::None) return;
-  const std::string trimmed = check_->trimmed;
+  signing_ = true;
+  signingText_ = check_->trimmed;
+  // the text the device signs stays the text on screen until it answers
+  text_->set_editable(false);
+  errorLine_->set_visible(false);
+  UpdateSignButton();
+  StartSign();
+}
+
+void Top200SignSheet::StartSign() {
+  const std::string trimmed = signingText_;
   auto alive = alive_;
   const bool started = host_.RequestSignSnFleetBinding(
       trimmed, [this, alive, trimmed](std::string signature, std::string error) {
@@ -388,13 +405,16 @@ void Top200SignSheet::OnSign() {
         doneBox_->set_visible(true);
         UpdateSignButton();
       });
-  if (!started) return;  // the worker is busy: the button stays for another tap
-  signing_ = true;
-  signingText_ = trimmed;
-  // the text the device signs stays the text on screen until it answers
-  text_->set_editable(false);
-  errorLine_->set_visible(false);
-  UpdateSignButton();
+  if (started) return;
+  // the worker is busy: the tap stays taken (spinner on, field locked) and
+  // the sign is asked again, as RequestIdentity does
+  signRetry_.disconnect();
+  signRetry_ = Glib::signal_timeout().connect(
+      [this]() -> bool {
+        StartSign();
+        return false;
+      },
+      kWorkerRetryMs);
 }
 
 void Top200SignSheet::FlashCopied(Gtk::Button& button, const Glib::ustring& label,

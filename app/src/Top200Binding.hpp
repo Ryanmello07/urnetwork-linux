@@ -14,14 +14,22 @@
 //
 // The sheet validates the pasted text before any sdk call (ValidateBinding),
 // shows the fleet id, hotkey, chain and epochs, and only on the user's tap asks
-// the device to sign the trimmed text. The sdk checks the client_id but not the
-// client_key, so refusing a binding for another key is this side's job: a
-// wrong key would yield a signature that never verifies.
+// the device to sign the trimmed text. The sdk refuses another device's
+// client_id or client_key too, and ambiguous JSON (a duplicate, case-variant or
+// extra key), in the process that holds the key (sdk 98ba0ea8, main 61e89201).
+// The check here is the first line, not the only one: it runs before any sdk
+// call so the review never shows a binding the device would not sign.
 //
-// Stricter than the sdk on purpose: the sdk's Go decoder matches keys without
-// regard to case and lets a later duplicate win, so a binding carrying both
-// "hotkey" and "HOTKEY" could show the user one hotkey and sign another. Here
-// the object must hold exactly the 11 keys, spelled exactly, each once.
+// The text must open with `{` once JSON whitespace is trimmed: nlohmann skips a
+// leading UTF-8 BOM but the sdk's Go decoder refuses one, so a BOM (or any text
+// before the object) is refused here and review and sign agree. Pasted text
+// over kMaxBindingTextChars characters is refused before it is parsed.
+//
+// Go's encoding/json matches keys without regard to case and lets a later
+// duplicate win, so a binding carrying both "hotkey" and "HOTKEY" could show
+// the user one hotkey and sign another. The sdk refuses such a binding before
+// it decodes it; here too the object must hold exactly the 11 keys, spelled
+// exactly, each once.
 //
 // The payload copied back to the page is the trimmed binding text wrapped by
 // string concatenation (BuildPayload), never re-serialized, so a page-built
@@ -45,6 +53,9 @@ namespace top200 {
 
 // A link's binding parameter longer than this is refused before decoding.
 inline constexpr size_t kMaxLinkBindingChars = 4096;
+// Trimmed pasted text longer than this (in characters) is not a binding: a
+// binding is about 600, and a huge clipboard is not parsed on each keystroke.
+inline constexpr size_t kMaxBindingTextChars = 4096;
 inline constexpr const char* kSignLinkPrefix = "urnetwork://top200/sign";
 // The detail of a sign that returned no signature (top200_sign_error_failed).
 inline constexpr const char* kEmptySignatureDetail = "empty signature";
@@ -122,6 +133,16 @@ inline std::optional<std::string> ClientIdHex(const std::string& clientId) {
   return LowercaseAscii(hex);
 }
 
+// The number of characters (UTF-8 code points) in `text`: each byte that is
+// not a continuation byte starts one.
+inline size_t Utf8CharCount(const std::string& text) {
+  size_t count = 0;
+  for (const char c : text) {
+    if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) ++count;
+  }
+  return count;
+}
+
 // The binding check, in the spec's order: not a binding is Invalid whatever
 // the device; then no client key (the daemon's device is not reachable) is
 // NoKey; then a client_id or client_key that is not this device's is
@@ -130,6 +151,9 @@ inline BindingCheck ValidateBinding(const std::string& text, const std::string& 
                                     const std::string& deviceClientKey) {
   BindingCheck check;
   check.trimmed = TrimJsonWhitespace(text);
+  if (kMaxBindingTextChars < Utf8CharCount(check.trimmed)) return check;
+  // nothing before the object: not a BOM (nlohmann skips one, Go refuses it)
+  if (check.trimmed.empty() || check.trimmed.front() != '{') return check;
 
   static const std::set<std::string> kFields = {
       "chain_id",   "netuid",           "coordinator",    "fleet_id",
@@ -200,6 +224,23 @@ inline BindingCheck ValidateBinding(const std::string& text, const std::string& 
   }
   check.error = BindingError::None;
   return check;
+}
+
+// What the Sign button shows. Sign is enabled only for a reviewed binding of
+// this device once the identity read has answered with a client key, and never
+// while a sign is out (or waiting for the shared fleet worker): then the
+// spinner shows instead, so a tap is never dropped without a sign of it.
+struct SignButtonState {
+  bool sensitive = false;
+  bool busy = false;
+};
+
+inline SignButtonState SignButton(bool reviewed, bool identityLoaded, bool hasClientKey,
+                                  bool signing) {
+  SignButtonState state;
+  state.busy = signing;
+  state.sensitive = reviewed && identityLoaded && hasClientKey && !signing;
+  return state;
 }
 
 // {"binding":<trimmed>,"client_signature":"<signature>"}, by concatenation.
