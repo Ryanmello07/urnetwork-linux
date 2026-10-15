@@ -22,6 +22,7 @@
 #include "I18n.hpp"
 #include "LeaderboardIndicator.hpp"
 #include "SolanaWalletSheet.hpp"
+#include "Top200SignSheet.hpp"
 #include "UrTheme.hpp"
 #include "WalletBridgeRoute.hpp"
 
@@ -3374,6 +3375,16 @@ void EarningsPage::RebuildTop200() {
   const bool show = headState_ == Fetch::Ready && head_ && (head_->eligible || head_->bound);
   top200Card_->set_visible(show);
   if (!show) return;
+  // Sign fleet binding, in both states: bindings renew per epoch window and
+  // new devices join the fleet after the spot is bound
+  const auto signButton = [this] {
+    auto* sign = Gtk::make_managed<Gtk::Button>(T_("top200_sign_binding", "Sign fleet binding"));
+    sign->add_css_class("ur-btn-secondary");
+    sign->set_halign(Gtk::Align::START);
+    sign->set_margin_top(4);
+    sign->signal_clicked().connect([this] { OpenTop200SignSheet(std::nullopt, false); });
+    return sign;
+  };
   if (head_->bound) {
     // the status row: this network holds a head spot
     auto* card = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
@@ -3402,6 +3413,7 @@ void EarningsPage::RebuildTop200() {
              "Your score is close to the eviction floor. Add routable IPs to keep the spot."),
           "ur-danger-text"));
     }
+    card->append(*signButton());
     top200Panel_->append(*card);
     return;
   }
@@ -3425,6 +3437,7 @@ void EarningsPage::RebuildTop200() {
   button->set_margin_top(4);
   button->signal_clicked().connect([this] { OpenLink(kTop200Url); });
   tile->append(*button);
+  tile->append(*signButton());
   top200Panel_->append(*tile);
 }
 
@@ -4952,11 +4965,32 @@ void EarningsPage::PresentSheet(const std::shared_ptr<Gtk::Window>& sheet) {
   sheet->present();
 }
 
+void EarningsPage::OpenTop200SignSheet(const std::optional<std::string>& prefill, bool fromLink) {
+  if (auto open = top200SignSheet_.lock()) {
+    if (fromLink) open->Prefill(prefill);
+    open->present();
+    return;
+  }
+  if (sheet_ || (sheet_open && sheet_open())) {
+    g_message("earnings: top 200 sign sheet suppressed — a modal is already open");
+    return;
+  }
+  if (dynamic_cast<Gtk::Window*>(get_root()) == nullptr) {
+    g_warning("earnings: no window root; the top 200 sign sheet was not opened");
+    return;
+  }
+  auto sheet = std::make_shared<Top200SignSheet>(host_);
+  if (fromLink) sheet->Prefill(prefill);
+  top200SignSheet_ = sheet;
+  PresentSheet(sheet);
+}
+
 void EarningsPage::CloseSheet() {
   if (!sheet_) return;
   sheet_.reset();
   claimSheet_.reset();
   ledgerClaimSheet_.reset();
+  top200SignSheet_.reset();
   if (on_sheet_open_changed) on_sheet_open_changed(false);
 }
 

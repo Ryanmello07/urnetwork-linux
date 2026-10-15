@@ -151,6 +151,7 @@ struct SnWalletCheck {
 class ClaimAlphaSheet;
 class EmojiTagSheet;
 class LedgerClaimSheet;
+class Top200SignSheet;
 
 class EarningsPage : public Gtk::Box {
  public:
@@ -246,6 +247,13 @@ class EarningsPage : public Gtk::Box {
   void ApplyPreviewSample();
   // URNETWORK_PREVIEW_CLAIM=1: open the claim dialog over the sample.
   void ShowPreviewClaimDialog();
+
+  // Earnings › Top 200 › Sign fleet binding (Top200SignSheet). The Top 200
+  // block's button opens it with an empty field; the app link
+  // urnetwork://top200/sign opens it whatever the block shows, pre-filled with
+  // `prefill` (nullopt with `fromLink`: the link's binding did not decode). A
+  // link that lands while the sheet is open pre-fills that sheet. Never signs.
+  void OpenTop200SignSheet(const std::optional<std::string>& prefill, bool fromLink);
 
   // ---- window-level routing --------------------------------------------------
   // The window's one-ContentDialog-at-a-time gate.
@@ -788,6 +796,7 @@ class EarningsPage : public Gtk::Box {
   std::shared_ptr<Gtk::Window> sheet_;
   std::weak_ptr<ClaimAlphaSheet> claimSheet_;
   std::weak_ptr<LedgerClaimSheet> ledgerClaimSheet_;
+  std::weak_ptr<Top200SignSheet> top200SignSheet_;
 };
 
 }  // namespace urnw

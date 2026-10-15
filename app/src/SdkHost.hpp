@@ -1266,6 +1266,25 @@ class SdkHost {
   // has moved on, so it carries its own staleness guard.
   bool RequestDaemonStatus(std::function<void(std::optional<ctl::StatusReply>)> done);
 
+  // ---- Top 200 fleet binding (Top200Binding.hpp, support inbox 7934) --------
+  // Both run ONE device rpc on a worker (the DeviceRemote forwards them over
+  // the existing loopback device rpc to the daemon's DeviceLocal, which holds
+  // the client key; nothing new listens and no key leaves the daemon) and
+  // deliver `done` on the GTK main loop. They share one single-flight worker:
+  // false, and no `done`, while either is in flight. `done` may land after the
+  // sheet closed, so it carries its own liveness guard.
+  //
+  // This device's client id (uuid form) and Ed25519 client public key (0x
+  // hex). Both "" with no bound device (no tunnel session, the daemon not
+  // reachable); the key alone "" when the daemon's device has none.
+  bool RequestSnFleetIdentity(
+      std::function<void(std::string clientId, std::string clientKey)> done);
+  // Signs the binding text as given (the sheet validated it first). `error`
+  // carries the sdk's text when the sign threw; an empty `signature` with no
+  // error is the sheet's to refuse (top200::FinishSign).
+  bool RequestSignSnFleetBinding(std::string bindingJson,
+                                 std::function<void(std::string signature, std::string error)> done);
+
   // Exposed so the (full-parity) UI/view models can drive the SDK directly.
   urnet::Api& api() { return *api_; }
   // The app-wide client event queue (ClientEvents.hpp): every product event
@@ -1280,6 +1299,12 @@ class SdkHost {
   // routed to the window, which owns the destinations. Fired on the GTK loop.
   void SetOnboardingLinkHandler(std::function<void(const std::string& url)> handler) {
     onOnboardingLink_ = std::move(handler);
+  }
+  // urnetwork://top200/... deep links (the ur.io Top 200 page's "Open in the
+  // app", Top200Binding.hpp ParseSignLink): routed to the window, which opens
+  // the sign sheet pre-filled. Never signs.
+  void SetTop200LinkHandler(std::function<void(const std::string& url)> handler) {
+    onTop200Link_ = std::move(handler);
   }
   // "There is a session I can drive", NOT "I am holding a handle".
   //
@@ -1494,6 +1519,7 @@ class SdkHost {
   std::optional<urnet::Api> api_;
   std::unique_ptr<ClientEventQueue> events_;
   std::function<void(const std::string& url)> onOnboardingLink_;
+  std::function<void(const std::string& url)> onTop200Link_;
   bool productUpdatesOptOut_ = false;  // the next create's product_updates
   // the sign-up pages' opt-out onto a create's args (absent = opted in)
   void ApplySignupPreferences(urnet::NetworkCreateArgs& args) const;
@@ -1666,6 +1692,14 @@ class SdkHost {
   std::atomic<bool> daemonStatusBusy_{false};
   std::mutex daemonStatusWorkerMutex_;
   std::thread daemonStatusWorker_;
+  // The Top 200 fleet identity read and sign's worker, guarded the same two
+  // ways; ~SdkHost joins it.
+  std::atomic<bool> snFleetBusy_{false};
+  std::mutex snFleetWorkerMutex_;
+  std::thread snFleetWorker_;
+  // Runs `work` on snFleetWorker_ when it is free and posts the completion it
+  // returns to the main loop (RequestSnFleetIdentity, RequestSignSnFleetBinding).
+  bool StartSnFleetWorker(std::function<std::function<void()>()> work);
   // ResetExtenders' worker, guarded the same two ways: extenderResetBusy_ is
   // its single-flight gate, cleared by the worker before it marshals `done`,
   // and extenderResetWorkerMutex_ guards only the thread object, which ~SdkHost

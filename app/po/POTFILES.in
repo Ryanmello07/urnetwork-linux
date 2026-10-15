@@ -53,6 +53,7 @@ src/AccountPage.cpp
 src/ReferralRoyalty.cpp
 src/ReferralCodeBox.cpp
 src/BittensorManualSheet.cpp
+src/Top200SignSheet.cpp
 src/EmojiTagSheet.cpp
 src/ExcludeAppsSheet.cpp
 src/ExtenderProvideRowPaint.hpp
