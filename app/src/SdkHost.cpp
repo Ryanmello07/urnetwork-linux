@@ -359,6 +359,12 @@ SdkHost::~SdkHost() {
     std::scoped_lock statusLock(daemonStatusWorkerMutex_);
     if (daemonStatusWorker_.joinable()) daemonStatusWorker_.join();
   }
+  // The Top 200 fleet worker holds `this` too; unbounded for the same reason,
+  // and it never takes snFleetWorkerMutex_.
+  {
+    std::scoped_lock fleetLock(snFleetWorkerMutex_);
+    if (snFleetWorker_.joinable()) snFleetWorker_.join();
+  }
   // The provider_stats poll's timeout holds `this` as well.
   if (providerStatsPollId_ != 0) {
     g_source_remove(providerStatsPollId_);
@@ -2203,6 +2209,10 @@ void SdkHost::AuthNetworkClientWithLocale(const urnet::AuthNetworkClientArgs& ar
 void SdkHost::HandleDeepLink(const std::string& url) {
   if (url.rfind("urnetwork://onboarding/", 0) == 0) {
     if (onOnboardingLink_) onOnboardingLink_(url);
+    return;
+  }
+  if (url.rfind("urnetwork://top200/", 0) == 0) {
+    if (onTop200Link_) onTop200Link_(url);
     return;
   }
   wallet_.HandleDeepLink(url);  // returns false for non-wallet links (future: OAuth)
@@ -4689,6 +4699,81 @@ bool SdkHost::RequestReliability(ReliabilityRead scope,
     });
   });
   return true;
+}
+
+// ---- Top 200 fleet binding ---------------------------------------------------
+// The DeviceRemote's getSnClientKey / signSnFleetBinding are synchronous rpcs
+// to the daemon's DeviceLocal, so they run on a worker under mutex_ (the
+// device may be torn down meanwhile), never on the GTK loop.
+
+bool SdkHost::StartSnFleetWorker(std::function<std::function<void()>()> work) {
+  bool expected = false;
+  if (!snFleetBusy_.compare_exchange_strong(expected, true)) return false;
+  std::scoped_lock lock(snFleetWorkerMutex_);
+  // the previous worker cleared the gate before its marshal, so it may still
+  // be joinable; its join returns as soon as that enqueue is done
+  if (snFleetWorker_.joinable()) snFleetWorker_.join();
+  snFleetWorker_ = std::thread([this, work = std::move(work)] {
+    std::function<void()> completion = work();
+    // cleared before the marshal, so a main loop that never runs the
+    // completion cannot wedge the next request
+    snFleetBusy_.store(false);
+    if (completion) PostToMain(std::move(completion));
+  });
+  return true;
+}
+
+bool SdkHost::RequestSnFleetIdentity(
+    std::function<void(std::string clientId, std::string clientKey)> done) {
+  if (!done) return false;
+  return StartSnFleetWorker([this, done = std::move(done)]() -> std::function<void()> {
+    std::string clientId;
+    std::string clientKey;
+    {
+      std::scoped_lock lock(mutex_);
+      if (device_ && deviceControlGeneration_ == control_.SessionGeneration()) {
+        try {
+          clientId = device_->getClientId();
+          clientKey = device_->getSnClientKey();
+        } catch (const std::exception& e) {
+          g_warning("sdkhost: fleet identity read threw: %s", e.what());
+          clientKey.clear();
+        } catch (...) {
+          g_warning("sdkhost: fleet identity read threw");
+          clientKey.clear();
+        }
+      }
+    }
+    return [done, clientId, clientKey] { done(clientId, clientKey); };
+  });
+}
+
+bool SdkHost::RequestSignSnFleetBinding(
+    std::string bindingJson, std::function<void(std::string signature, std::string error)> done) {
+  if (!done) return false;
+  return StartSnFleetWorker(
+      [this, bindingJson = std::move(bindingJson), done = std::move(done)]()
+          -> std::function<void()> {
+        std::string signature;
+        std::string error;
+        {
+          std::scoped_lock lock(mutex_);
+          if (!device_ || deviceControlGeneration_ != control_.SessionGeneration()) {
+            error = "device service not connected";
+          } else {
+            // never log the binding or the signature: the operator's data
+            try {
+              signature = device_->signSnFleetBinding(bindingJson);
+            } catch (const std::exception& e) {
+              error = e.what();
+            } catch (...) {
+              error = "unknown error";
+            }
+          }
+        }
+        if (!error.empty()) g_warning("sdkhost: fleet binding sign failed");
+        return [done, signature, error] { done(signature, error); };
+      });
 }
 
 void SdkHost::ConnectBestAvailable() {

@@ -8585,6 +8585,16 @@ msgctxt "site_app_top200_apply_hotkey_sig"
 msgid "Apply hotkey signature"
 msgstr "Aplicar la firma de la hotkey"
 
+#. App top200: validity epochs missing, not whole numbers, or reversed
+msgctxt "site_app_top200_bad_epochs"
+msgid "Enter the validity epochs as whole numbers, the last one no earlier than the first."
+msgstr "Introduce las épocas de validez como números enteros, la última no anterior a la primera."
+
+#. App top200: the pasted fleet manifest does not parse or validate
+msgctxt "site_app_top200_bad_manifest"
+msgid "This is not a valid fleet manifest. Paste the JSON that provider fleet manifest prints."
+msgstr "Esto no es un manifiesto de flota válido. Pega el JSON que imprime provider fleet manifest."
+
 #. App top200: unparseable paste
 msgctxt "site_app_top200_bad_signature"
 msgid "Paste the whole binding payload: JSON with binding and client_signature."
@@ -8595,10 +8605,20 @@ msgctxt "site_app_top200_binding_incomplete"
 msgid "Calldata appears once the device signature and the hotkey signature both verify."
 msgstr "El calldata aparece cuando se verifican tanto la firma del dispositivo como la firma de la hotkey."
 
+#. App top200: build each manifest member's binding
+msgctxt "site_app_top200_build_bindings"
+msgid "Build bindings"
+msgstr "Generar vinculaciones"
+
 #. App top200: calldata label
 msgctxt "site_app_top200_calldata"
 msgid "Binding calldata"
 msgstr "Calldata de vinculación"
+
+#. App top200: the current epoch, from GET /sn/head
+msgctxt "site_app_top200_current_epoch"
+msgid "The current epoch is {}."
+msgstr "La época actual es {}."
 
 #. App top200: device row label
 msgctxt "site_app_top200_device"
@@ -8630,15 +8650,45 @@ msgctxt "site_app_top200_hotkey_signature"
 msgid "Hotkey signature (hex)"
 msgstr "Firma de la hotkey (hex)"
 
+#. App top200: where the app signs a binding; {path} is Earnings › Top 200 › Sign fleet binding in the reader's language
+msgctxt "site_app_top200_in_app"
+msgid "In the URnetwork app: {}"
+msgstr "En la app URnetwork: {}"
+
 #. App top200: intro
 msgctxt "site_app_top200_intro"
 msgid "Head miners are the top {cutoff} networks by routable egress IP breadth. A head spot is paid natively by the subnet every tempo, straight to your coldkey."
 msgstr "Los mineros principales son las {cutoff} mejores redes según la variedad de IP de salida enrutables. La subred paga un puesto principal de forma nativa en cada tempo, directamente a tu coldkey."
 
+#. App top200: fleet manifest textarea label
+msgctxt "site_app_top200_manifest"
+msgid "Fleet manifest"
+msgstr "Manifiesto de flota"
+
+#. App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it
+msgctxt "site_app_top200_manifest_hash_mismatch"
+msgid "This manifest does not match the commitment_sha256 pasted with it."
+msgstr "Este manifiesto no coincide con el commitment_sha256 pegado con él."
+
+#. App top200: how to get the fleet manifest and where an app shows its member entry
+msgctxt "site_app_top200_manifest_hint"
+msgid "Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
+msgstr "Pega tu manifiesto de flota (el JSON que imprime provider fleet manifest) y las épocas de validez para generar la vinculación de cada dispositivo. La app muestra la entrada de miembro de su dispositivo para el manifiesto en Ganancias › Top 200 › Firmar vinculación de flota."
+
+#. App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1
+msgctxt "site_app_top200_manifest_hotkey_mismatch"
+msgid "The manifest's hotkey is not the hotkey entered in step 1."
+msgstr "La hotkey del manifiesto no es la hotkey introducida en el paso 1."
+
 #. App top200: status when not eligible
 msgctxt "site_app_top200_not_eligible"
 msgid "Not eligible yet. Your score is {score} and the eviction floor is {floor}."
 msgstr "Aún no cumples los requisitos. Tu puntuación es {score} y el umbral de expulsión es {floor}."
+
+#. App top200: link that opens the app's Sign fleet binding screen with this binding filled in
+msgctxt "site_app_top200_open_in_app"
+msgid "Open in the app"
+msgstr "Abrir en la app"
 
 #. App top200: progress
 msgctxt "site_app_top200_signatures_added"
@@ -8647,8 +8697,8 @@ msgstr "Dispositivos añadidos: {count}"
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Device signing is not in the apps yet. On each provider device, run provider fleet sign with your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs, and paste the JSON it prints here, one device at a time. It sends nothing and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key."
-msgstr "Las apps aún no pueden firmar vinculaciones de dispositivos. En cada dispositivo proveedor, ejecuta provider fleet sign con tu manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y las épocas de validez, y pega aquí el JSON que imprime, un dispositivo a la vez. No envía nada y las semillas se quedan en el dispositivo. En cambio, provider fleet bind firma y envía en un solo paso desde tu propia clave EVM."
+msgid "Each provider device signs its own binding. Build the bindings below from your fleet manifest and copy each one to its device. In the URnetwork app, open Earnings › Top 200 › Sign fleet binding, paste the binding, check the fleet ID, hotkey and epochs, sign, and paste the payload the app shows here. On a CLI provider, run provider fleet sign with the fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs instead, and paste the JSON it prints. Neither sends anything and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key."
+msgstr "Cada dispositivo proveedor firma su propia vinculación. Genera abajo las vinculaciones a partir de tu manifiesto de flota y copia cada una a su dispositivo. En la app URnetwork, abre Ganancias › Top 200 › Firmar vinculación de flota, pega la vinculación, comprueba el ID de flota, la hotkey y las épocas, fírmala y pega aquí los datos que muestra la app. En un proveedor de CLI, ejecuta en su lugar provider fleet sign con el manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y las épocas de validez, y pega el JSON que imprime. Ninguno de los dos envía nada y las semillas se quedan en el dispositivo. En cambio, provider fleet bind firma y envía en un solo paso desde tu propia clave EVM."
 
 #. App top200: step 1
 msgctxt "site_app_top200_step_register"
@@ -8669,6 +8719,16 @@ msgstr "Enviar vinculación"
 msgctxt "site_app_top200_unavailable"
 msgid "Head spot status is not available right now."
 msgstr "El estado del puesto principal no está disponible en este momento."
+
+#. App top200: first epoch the bindings are valid for (input label)
+msgctxt "site_app_top200_valid_from"
+msgid "Valid from epoch"
+msgstr "Válida desde la época"
+
+#. App top200: last epoch the bindings are valid for (input label)
+msgctxt "site_app_top200_valid_to"
+msgid "Valid to epoch"
+msgstr "Válida hasta la época"
 
 #. App account: total referrals label
 msgctxt "site_app_total_referrals"
@@ -10312,6 +10372,106 @@ msgstr "Tu puntuación está cerca del umbral de expulsión. Añade IP enrutable
 msgctxt "top200_detail"
 msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
 msgstr "La variedad de IP enrutables de tu red ocupa aproximadamente el puesto #{0} de {1} puestos principales. Los mineros principales ganan SN25α de forma nativa en cada tempo."
+
+#. Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).
+msgctxt "top200_sign_action"
+msgid "Sign with this device"
+msgstr "Firmar con este dispositivo"
+
+#. Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).
+msgctxt "top200_sign_binding"
+msgid "Sign fleet binding"
+msgstr "Firmar vinculación de flota"
+
+#. Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.
+msgctxt "top200_sign_binding_label"
+msgid "Binding to sign"
+msgstr "Vinculación para firmar"
+
+#. Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).
+msgctxt "top200_sign_chain"
+msgid "Chain {0} · subnet {1}"
+msgstr "Cadena {0} · subred {1}"
+
+#. Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).
+msgctxt "top200_sign_client_key"
+msgid "Client key"
+msgstr "Clave de cliente"
+
+#. Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.
+msgctxt "top200_sign_copy_member"
+msgid "Copy member entry"
+msgstr "Copiar entrada de miembro"
+
+#. Top 200 sign screen: button that copies the signed {binding, client_signature} payload.
+msgctxt "top200_sign_copy_payload"
+msgid "Copy payload"
+msgstr "Copiar datos"
+
+#. Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).
+msgctxt "top200_sign_done"
+msgid "Signed. Copy the payload and paste it on the Top 200 page under Device signature."
+msgstr "Firmada. Copia los datos y pégalos en la página Top 200, en Firma del dispositivo."
+
+#. Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.
+msgctxt "top200_sign_epochs"
+msgid "Valid from epoch {0} to {1}"
+msgstr "Válida de la época {0} a la {1}"
+
+#. Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.
+msgctxt "top200_sign_error_failed"
+msgid "The binding could not be signed: {}"
+msgstr "No se pudo firmar la vinculación: {}"
+
+#. Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).
+msgctxt "top200_sign_error_invalid"
+msgid "This is not a fleet binding. Copy the whole binding from the Top 200 page."
+msgstr "Esto no es una vinculación de flota. Copia la vinculación completa de la página Top 200."
+
+#. Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).
+msgctxt "top200_sign_error_no_key"
+msgid "This device's client key is not available right now. Start URnetwork on this device, then try again."
+msgstr "La clave de cliente de este dispositivo no está disponible ahora. Inicia URnetwork en este dispositivo y vuelve a intentarlo."
+
+#. Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.
+msgctxt "top200_sign_error_other_device"
+msgid "This binding is for another device. A device signs only the binding with its own client ID and client key."
+msgstr "Esta vinculación es de otro dispositivo. Un dispositivo solo firma la vinculación con su propio ID de cliente y su propia clave de cliente."
+
+#. Top 200 sign screen: label of the binding's fleet_id (0x hex).
+msgctxt "top200_sign_fleet_id"
+msgid "Fleet ID"
+msgstr "ID de flota"
+
+#. Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.
+msgctxt "top200_sign_hotkey"
+msgid "Hotkey"
+msgstr "Hotkey"
+
+#. Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.
+msgctxt "top200_sign_intro"
+msgid "Your fleet operator builds this device's binding on the Top 200 page at ur.io. Paste it here to sign it with this device's client key. Nothing is sent: you copy the signed payload back to the page yourself."
+msgstr "El operador de tu flota prepara la vinculación de este dispositivo en la página Top 200 de ur.io. Pégala aquí para firmarla con la clave de cliente de este dispositivo. No se envía nada: tú copias de vuelta a la página los datos firmados."
+
+#. Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.
+msgctxt "top200_sign_member_hint"
+msgid "Your fleet manifest lists this device by its client ID and client key. Copy its member entry and send it to your fleet operator."
+msgstr "El manifiesto de tu flota identifica este dispositivo por su ID de cliente y su clave de cliente. Copia su entrada de miembro y envíasela al operador de tu flota."
+
+#. Top 200 sign screen: button that pastes the binding from the clipboard.
+msgctxt "top200_sign_paste"
+msgid "Paste"
+msgstr "Pegar"
+
+#. Top 200 sign screen: shown above the parsed binding's values before the Sign button.
+msgctxt "top200_sign_review"
+msgid "Check that the fleet ID, hotkey and epochs match the Top 200 page before you sign."
+msgstr "Antes de firmar, comprueba que el ID de flota, la hotkey y las épocas coinciden con la página Top 200."
+
+#. Top 200 sign screen: label of the section showing this device's client ID and client key.
+msgctxt "top200_sign_this_device"
+msgid "This device"
+msgstr "Este dispositivo"
 
 #. Headline of the Top 200 tile when eligible.
 msgctxt "top200_you_qualify"

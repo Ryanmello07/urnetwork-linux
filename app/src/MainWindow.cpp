@@ -24,6 +24,7 @@
 #include "I18n.hpp"
 #include "LocationSelection.hpp"
 #include "StatusStripPresentation.hpp"
+#include "Top200Binding.hpp"
 #include "TrayPolicy.hpp"
 #include "Ui.hpp"
 #include "WindowGeometry.hpp"
@@ -352,6 +353,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   });
   host_.SetOnboardingLinkHandler([this](const std::string& url) {
     PostToMain([this, url] { HandleOnboardingLink(url); });
+  });
+  host_.SetTop200LinkHandler([this](const std::string& url) {
+    PostToMain([this, url] { HandleTop200Link(url); });
   });
   // THE CONNECTION FEED, AND IT IS NOT GATED ON VISIBILITY. That asymmetry —
   // this push ungated beside a stats push gated on windowVisible_ — is how two
@@ -2313,6 +2317,16 @@ void MainWindow::HandleOnboardingLink(const std::string& url) {
     case OnboardingLink::None:
       break;
   }
+}
+
+void MainWindow::HandleTop200Link(const std::string& url) {
+  // signed out: dropped, nothing is kept for later
+  if (!host_.IsLoggedIn() || !shell_ || !earningsPage_) return;
+  const top200::SignLink link = top200::ParseSignLink(url);
+  if (!link.matched) return;
+  present();
+  shell_->Navigate("earnings");
+  earningsPage_->OpenTop200SignSheet(link.binding, /*fromLink=*/true);
 }
 
 void MainWindow::OpenOnboardingIfPending() {
