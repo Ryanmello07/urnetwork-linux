@@ -22,6 +22,7 @@
 #include "I18n.hpp"
 #include "LeaderboardIndicator.hpp"
 #include "SolanaWalletSheet.hpp"
+#include "Top200SignSheet.hpp"
 #include "UrTheme.hpp"
 #include "WalletBridgeRoute.hpp"
 
@@ -45,8 +46,13 @@ constexpr int kStatsChartHeight = 132;
 constexpr int kBlockedChartHeight = 66;
 constexpr int kCopiedResetMs = 1800;
 constexpr double kMultiplierHighlight = 2.0;   // a country multiplier goes lime at >= 2.0
-constexpr double kMinGasTao = 0.001;           // below this the gas key cannot pay a claim
-constexpr double kSuggestedGasTao = 0.005;     // the top-up the dialog suggests
+// A v1 claim's gas in the gas key, in TAO. The SDK signs a v1 claim with its
+// estimate plus a quarter and at least 2,700,000 gas (below that the vault
+// defers the payment), and sends it only when the key holds that limit at 1.1 x
+// the gas price, else needs_gas: about 0.0149 TAO at 5 gwei. The top-up is a v2
+// claim's (snledger::kClaimGasTao).
+constexpr double kMinGasTao = 0.015;           // below this the SDK refuses a claim
+constexpr double kSuggestedGasTao = 0.02;      // the top-up the dialog suggests
 constexpr double kHeadDemotionMargin = 1.10;   // a score within 10% of the floor is warned
 // The one untranslatable string on this surface (store key sn_alpha_symbol,
 // translatable: false, so it is not in the catalog).
@@ -1008,7 +1014,194 @@ void Claim(SdkHost& host, const std::vector<int64_t>& epochs, ClaimEvents events
   host.device().snClaim(urnet::Int64List(epochs.begin(), epochs.end()), callback);
 }
 
+// Settlement v2: the coldkey's accounts, read by the SDK in this process from
+// the operator's ledger (GET /sn/ledger/account) once the wallet cache is
+// synced, as for the v1 claims: the read is the cached coldkey's. The chain
+// settings say whether the release configures v2 claims: the v2 vault's
+// address, which the release pins and no server sets. Any failure is the
+// ledger unavailable: the page shows no balance rather than a zero.
+using LedgerDone = std::function<void(std::optional<std::vector<snledger::Account>> accounts,
+                                      bool claimConfigured, std::string err)>;
+void FetchLedger(SdkHost& host, LedgerDone done) {
+  if (!host.hasDevice()) {
+    done(std::nullopt, false, kNoDevice);
+    return;
+  }
+  urnet::DeviceRemote& device = host.device();
+  device.syncSnWallet([&device, done](std::optional<urnet::SnGetWalletResult> synced,
+                                      std::optional<std::string> syncErr) {
+    (void)synced;
+    (void)syncErr;  // a stale cache still reads
+    device.snLedgerAccounts([&device, done](std::optional<urnet::SnLedgerAccountsResult> result,
+                                            std::optional<std::string> err) {
+      const std::optional<urnet::SnChainSettings> settings = device.getSnChainSettings();
+      const bool configured = settings && !settings->vault2_address.empty();
+      // a result without its list is as unreadable as an error: never a zero
+      if (err || !result || result->error || !result->accounts) {
+        done(std::nullopt, configured,
+             ErrorText(result ? result->error : std::nullopt, err, "no accounts"));
+        return;
+      }
+      std::vector<snledger::Account> accounts;
+      for (const auto& account : *result->accounts) {
+        snledger::Account row;
+        row.vault = account.vault;
+        row.noId = account.no_id;
+        row.index = account.index;
+        row.finalizedRao = account.finalized_rao;
+        row.claimableRao = account.claimable_rao;
+        row.paidRao = account.paid_rao;
+        row.pending = account.pending;
+        row.pendingRao = account.pending_rao;
+        accounts.push_back(row);
+      }
+      done(std::move(accounts), configured, std::string());
+    });
+  });
+}
+
+// The v2 claim: the SDK claims every finalized v2 account of the coldkey whose
+// claimable it verified against the v2 vault, one transaction each, signed with
+// the gas key, and reports each as the receipts arrive, then Done.
+void LedgerClaim(SdkHost& host, urnet::SnLedgerClaimCallback callback) {
+  if (!host.hasDevice()) {
+    if (callback.done) callback.done();
+    return;
+  }
+  host.device().snLedgerClaim(std::move(callback));
+}
+
+// The network payout consent (NetworkConsent.hpp, CONSENT.md §9): the Api's
+// three consent calls, which send the network credential (the challenge and the
+// submit refuse "network_owner_only: ..." without one). Every error keeps the
+// SDK's "code: message" form, a refused submit's code included, so the flow
+// reads network_owner_only, challenge_expired and signature_mismatch.
+using ConsentStatusDone =
+    std::function<void(std::optional<consent::Status> status, std::string err)>;
+void FetchConsentStatus(SdkHost& host, ConsentStatusDone done) {
+  host.api().snNetworkConsentStatus([done](std::optional<urnet::SnNetworkConsentStatus> result,
+                                           std::optional<std::string> err) {
+    if (err || !result) {
+      done(std::nullopt, err.value_or(std::string("no status")));
+      return;
+    }
+    consent::Status status;
+    status.active = result->active;
+    status.coldkeySs58 = result->coldkey_ss58;
+    status.fromEpoch = result->from_epoch;
+    status.throughEpoch = result->through_epoch;
+    done(std::move(status), std::string());
+  });
+}
+
+using ConsentChallengeDone =
+    std::function<void(std::optional<consent::Challenge> challenge, std::string err)>;
+void RequestConsentChallenge(SdkHost& host, const std::string& coldkeySs58,
+                             ConsentChallengeDone done) {
+  host.api().snNetworkConsentChallenge(
+      coldkeySs58, [done](std::optional<urnet::SnNetworkConsentChallengeResult> result,
+                          std::optional<std::string> err) {
+        if (err || !result || result->message.empty()) {
+          done(std::nullopt, err.value_or(std::string("no challenge")));
+          return;
+        }
+        consent::Challenge challenge;
+        challenge.message = result->message;
+        challenge.coldkeySs58 = result->coldkey_ss58;
+        challenge.fromEpoch = result->from_epoch;
+        challenge.throughEpoch = result->through_epoch;
+        challenge.expiresAt = result->expires_at;
+        done(std::move(challenge), std::string());
+      });
+}
+
+// The challenge back as the SDK's own, every field as it came, for the
+// consent session.
+urnet::SnNetworkConsentChallengeResult ToSdkChallenge(const consent::Challenge& challenge) {
+  urnet::SnNetworkConsentChallengeResult result;
+  result.message = challenge.message;
+  result.coldkey_ss58 = challenge.coldkeySs58;
+  result.from_epoch = challenge.fromEpoch;
+  result.through_epoch = challenge.throughEpoch;
+  result.expires_at = challenge.expiresAt;
+  return result;
+}
+
+using ConsentSubmitDone = std::function<void(bool ok, std::string err)>;
+void SubmitConsent(SdkHost& host, const std::string& coldkeySs58, const std::string& message,
+                   const std::string& signature, ConsentSubmitDone done) {
+  host.api().snNetworkConsentSubmit(
+      coldkeySs58, message, signature,
+      [done](std::optional<urnet::SnSetWalletResult> result, std::optional<std::string> err) {
+        if (err || !result || result->error) {
+          std::string detail = err.value_or(std::string());
+          if (detail.empty() && result && result->error) {
+            // signature_mismatch: a signature that does not verify for the coldkey
+            const std::string code = result->error->code.value_or(std::string());
+            detail = code.empty() ? result->error->message : code + ": " + result->error->message;
+          }
+          done(false, detail.empty() ? std::string("no result") : detail);
+          return;
+        }
+        done(true, std::string());
+      });
+}
+
 }  // namespace sn
+
+// The claim dialogs' gas key and, when it cannot pay a claim, the top-up: the
+// address to send about `suggestedTao` TAO to, with Copy. The panel is rebuilt
+// with its button, so a pending "Copied!" reset goes with the old one.
+void BuildGasPanel(Gtk::Box& panel, Gtk::Window& sheet, const std::optional<SnGasInfo>& gas,
+                   bool needsGas, double suggestedTao, sigc::connection& copiedReset) {
+  copiedReset.disconnect();
+  RemoveAllChildren(panel);
+  auto* keyLine = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  auto* key = MakeSizedLabel(T_("gas_key", "Gas key"), 12, "ur-caption");
+  key->set_hexpand(true);
+  keyLine->append(*key);
+  Glib::ustring value = "-";
+  if (gas) {
+    value = ShortHex(gas->address);
+    if (gas->balanceKnown) {
+      value += Glib::ustring(" · ") +
+               Format(T_("tao_amount_linux", "{} TAO"), FormatTao(gas->tao));
+    }
+  }
+  auto* valueLabel = MakeSizedLabel(value, 13, "ur-value");
+  valueLabel->set_wrap(false);
+  if (gas) valueLabel->set_tooltip_text(gas->address);
+  keyLine->append(*valueLabel);
+  panel.append(*keyLine);
+
+  if (!needsGas) return;
+  // the needs-gas state: the mirror address is what the user must fund
+  auto* box = MakeGoldTile();
+  box->append(*MakeGoldLabel(T_("add_tao_for_gas", "Add TAO for gas"), 14));
+  const std::string mirror = gas ? gas->mirrorSs58 : std::string();
+  box->append(*MakeWrappedNote(
+      Format(T_("send_tao_to_mirror", "Send about {0} TAO to {1} to cover gas."),
+             FormatTao(suggestedTao), mirror.empty() ? std::string("-") : mirror),
+      "ur-key"));
+  if (!mirror.empty()) {
+    auto* copy = Gtk::make_managed<Gtk::Button>(T_("copy", "Copy"));
+    copy->add_css_class("flat");
+    copy->set_halign(Gtk::Align::START);
+    copy->signal_clicked().connect([&sheet, &copiedReset, copy, mirror] {
+      sheet.get_clipboard()->set_text(mirror);
+      copy->set_label(T_("copied", "Copied!"));
+      copiedReset.disconnect();
+      copiedReset = Glib::signal_timeout().connect(
+          [copy]() -> bool {
+            copy->set_label(T_("copy", "Copy"));
+            return false;
+          },
+          kCopiedResetMs);
+    });
+    box->append(*copy);
+  }
+  panel.append(*box);
+}
 
 }  // namespace
 
@@ -1279,52 +1472,7 @@ void ClaimAlphaSheet::RebuildRows() {
 }
 
 void ClaimAlphaSheet::RebuildGas() {
-  RemoveAllChildren(*gasPanel_);
-  auto* keyLine = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  auto* key = MakeSizedLabel(T_("gas_key", "Gas key"), 12, "ur-caption");
-  key->set_hexpand(true);
-  keyLine->append(*key);
-  Glib::ustring value = "-";
-  if (gas_) {
-    value = ShortHex(gas_->address);
-    if (gas_->balanceKnown) {
-      value += Glib::ustring(" · ") +
-               Format(T_("tao_amount_linux", "{} TAO"), FormatTao(gas_->tao));
-    }
-  }
-  auto* valueLabel = MakeSizedLabel(value, 13, "ur-value");
-  valueLabel->set_wrap(false);
-  if (gas_) valueLabel->set_tooltip_text(gas_->address);
-  keyLine->append(*valueLabel);
-  gasPanel_->append(*keyLine);
-
-  if (!NeedsGas()) return;
-  // the needs-gas state: the mirror address is what the user must fund
-  auto* box = MakeGoldTile();
-  box->append(*MakeGoldLabel(T_("add_tao_for_gas", "Add TAO for gas"), 14));
-  const std::string mirror = gas_ ? gas_->mirrorSs58 : std::string();
-  box->append(*MakeWrappedNote(
-      Format(T_("send_tao_to_mirror", "Send about {0} TAO to {1} to cover gas."),
-             FormatTao(kSuggestedGasTao), mirror.empty() ? std::string("-") : mirror),
-      "ur-key"));
-  if (!mirror.empty()) {
-    auto* copy = Gtk::make_managed<Gtk::Button>(T_("copy", "Copy"));
-    copy->add_css_class("flat");
-    copy->set_halign(Gtk::Align::START);
-    copy->signal_clicked().connect([this, copy, mirror] {
-      get_clipboard()->set_text(mirror);
-      copy->set_label(T_("copied", "Copied!"));
-      copiedReset_.disconnect();
-      copiedReset_ = Glib::signal_timeout().connect(
-          [copy]() -> bool {
-            copy->set_label(T_("copy", "Copy"));
-            return false;
-          },
-          kCopiedResetMs);
-    });
-    box->append(*copy);
-  }
-  gasPanel_->append(*box);
+  BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), kSuggestedGasTao, copiedReset_);
 }
 
 void ClaimAlphaSheet::RebuildAction() {
@@ -1432,12 +1580,259 @@ void ClaimAlphaSheet::ShowError(const Glib::ustring& message) {
   kit::SetTextOrCollapse(*errorText_, message);
 }
 
+// ---- LedgerClaimSheet --------------------------------------------------------
+// The settlement v2 claim dialog, drawn like the v1 one: the total in gold, one
+// row per account (its pool, the amount, the progress and, once sent, the
+// transaction's explorer link), where the alpha lands, the gas key with the
+// needs-gas top-up, and the one action, which claims every claimable account
+// (SnLedgerClaim). What the rows say is snledger::ClaimProgress's. Like the v1
+// dialog it opens and reads with no session, and every failure renders ON THE
+// SHEET.
+class LedgerClaimSheet : public Gtk::Window {
+ public:
+  LedgerClaimSheet(Gtk::Window& parent, std::string coldkey,
+                   const std::vector<snledger::Account>& accounts, std::optional<SnGasInfo> gas,
+                   bool claimsAvailable);
+  ~LedgerClaimSheet() override;
+
+  std::function<void()> on_claim;  // page: StartLedgerClaim
+  std::function<void(const std::string& url)> on_open_link;
+  std::function<std::string(const std::string& txHash)> explorer_url;  // page: the chain settings
+
+  void SetGas(std::optional<SnGasInfo> gas);
+  void OnSending();
+  void OnSent(int64_t noId, int64_t index, const std::string& txHash);
+  void OnConfirmed(int64_t noId, int64_t index, const std::string& txHash, int64_t amountRao);
+  void OnFailed(int64_t noId, int64_t index, const std::string& message);
+  void OnDone();
+  void ShowError(const Glib::ustring& message);
+
+ private:
+  bool NeedsGas() const;
+  void Rebuild();
+
+  std::string coldkey_;
+  snledger::ClaimProgress progress_;
+  std::optional<SnGasInfo> gas_;
+  bool claimsAvailable_ = false;
+  sigc::connection copiedReset_;
+  Gtk::Label* totalValue_ = nullptr;
+  Gtk::Box* rowsPanel_ = nullptr;
+  Gtk::Box* gasPanel_ = nullptr;
+  Gtk::Label* errorText_ = nullptr;
+  Gtk::Button* claimButton_ = nullptr;
+  Gtk::Button* closeButton_ = nullptr;
+};
+
+LedgerClaimSheet::LedgerClaimSheet(Gtk::Window& parent, std::string coldkey,
+                                   const std::vector<snledger::Account>& accounts,
+                                   std::optional<SnGasInfo> gas, bool claimsAvailable)
+    : coldkey_(std::move(coldkey)),
+      progress_(accounts),
+      gas_(std::move(gas)),
+      claimsAvailable_(claimsAvailable) {
+  set_transient_for(parent);
+  set_modal(true);
+  set_title(T_("claim_alpha_title", "Claim SN25α"));
+  set_default_size(kSheetMinWidth, -1);
+  add_css_class("ur-sheet");
+
+  auto* column = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 10);
+  column->set_margin(24);
+  column->set_size_request(kSheetMinWidth, -1);
+
+  // 1. the total, in gold, over which settlement pays it
+  totalValue_ = MakeGoldLabel({}, 36, /*condensed=*/true);
+  column->append(*totalValue_);
+  column->append(*MakeSizedLabel(T_("sn_ledger_title", "Settlement v2"), 12, "ur-caption"));
+
+  // 2. one row per account
+  rowsPanel_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  rowsPanel_->set_margin_top(6);
+  column->append(*rowsPanel_);
+
+  column->append(*kit::MakeDivider());
+
+  // 3. where it lands and what pays for it
+  auto* to = MakeSizedLabel(Format(T_("claim_to_address_linux", "To {}"), ShortSs58(coldkey_)),
+                            13, "ur-value");
+  to->set_tooltip_text(coldkey_);
+  column->append(*to);
+  gasPanel_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 6);
+  column->append(*gasPanel_);
+
+  errorText_ = MakeSizedLabel({}, 12, "ur-danger-text");
+  errorText_->set_visible(false);
+  column->append(*errorText_);
+
+  column->append(*kit::MakeDivider());
+
+  // 4. the action and the plain statement of what it does
+  claimButton_ = MakeGoldButton({});
+  claimButton_->signal_clicked().connect([this] {
+    if (progress_.Busy() || progress_.ClaimableRao() <= 0) return;
+    ShowError({});
+    if (!on_claim) {
+      ShowError(T_("something_went_wrong", "Something went wrong."));
+      return;
+    }
+    on_claim();
+  });
+  column->append(*claimButton_);
+  column->append(*MakeSizedLabel(
+      T_("claim_sends_from_device",
+         "Your device sends the claim to the vault contract. Gas is paid in TAO from your "
+         "gas key. Alpha lands on your coldkey."),
+      12, "ur-caption"));
+
+  auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
+  scroller->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+  scroller->set_propagate_natural_height(true);
+  scroller->set_max_content_height(kClaimSheetMaxHeight);
+  scroller->set_child(*column);
+
+  auto* root = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  root->append(*scroller);
+  closeButton_ = Gtk::make_managed<Gtk::Button>(T_("close", "Close"));
+  closeButton_->set_halign(Gtk::Align::END);
+  closeButton_->set_margin(16);
+  closeButton_->signal_clicked().connect([this] { set_visible(false); });
+  root->append(*closeButton_);
+  set_child(*root);
+
+  Rebuild();
+  if (!claimsAvailable_) {
+    ShowError(T_("claim_unavailable_linux", "Claiming is not available on this device yet."));
+  }
+}
+
+LedgerClaimSheet::~LedgerClaimSheet() { copiedReset_.disconnect(); }
+
+bool LedgerClaimSheet::NeedsGas() const {
+  return snledger::NeedsGas(progress_.NeedsGas(), gas_ && gas_->balanceKnown,
+                            gas_ ? gas_->tao : 0.0);
+}
+
+void LedgerClaimSheet::Rebuild() {
+  RemoveAllChildren(*rowsPanel_);
+  for (const snledger::ClaimRow& row : progress_.Rows()) {
+    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+    line->set_margin_top(6);
+    line->set_margin_bottom(6);
+    auto* left = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+    left->set_hexpand(true);
+    left->append(*MakeSizedLabel(Format(T_("sn_ledger_pool", "Pool {}"), row.noId), 13,
+                                 "ur-value"));
+    if (row.phase == snledger::Phase::Failed) {
+      // needs_gas reads "Add TAO for gas", with the top-up below
+      left->append(*MakeSizedLabel(SnErrorMessage(row.message, T_("claim_failed", "Failed")), 12,
+                                   "ur-danger-text"));
+    }
+    if (!row.txHash.empty()) {
+      const std::string url = explorer_url ? explorer_url(row.txHash) : std::string();
+      if (!url.empty() && g_uri_is_valid(url.c_str(), G_URI_FLAGS_NONE, nullptr)) {
+        auto* link = MakeLinkLabel(ShortHex(row.txHash), url, on_open_link);
+        link->add_css_class("ur-caption");
+        left->append(*link);
+      } else {
+        auto* hash = MakeSizedLabel(ShortHex(row.txHash), 12, "ur-caption");
+        hash->set_tooltip_text(row.txHash);
+        left->append(*hash);
+      }
+    }
+    line->append(*left);
+    auto* amount = MakeSizedLabel(FormatAlphaRao(row.amountRao), 13, "ur-value");
+    amount->set_valign(Gtk::Align::CENTER);
+    amount->set_wrap(false);
+    line->append(*amount);
+    Glib::ustring chipText;
+    const char* chipClass = nullptr;
+    switch (row.phase) {
+      case snledger::Phase::Claimable:
+        chipText = T_("unclaimed", "Unclaimed");
+        break;
+      case snledger::Phase::Sending:
+        chipText = T_("claim_sending_linux", "Sending…");
+        break;
+      case snledger::Phase::Sent:
+        chipText = T_("claim_sent", "Sent");
+        break;
+      case snledger::Phase::Claimed:
+        chipText = T_("claim_confirmed", "Claimed");
+        chipClass = "ur-value-on";
+        break;
+      case snledger::Phase::Failed:
+        chipText = T_("claim_failed", "Failed");
+        chipClass = "ur-danger-text";
+        break;
+    }
+    auto* chip = MakeStatusChip(chipText);
+    if (chipClass != nullptr) chip->add_css_class(chipClass);
+    line->append(*chip);
+    rowsPanel_->append(*line);
+  }
+  const int64_t rao = progress_.ClaimableRao();
+  totalValue_->set_markup("<span foreground='" + HexForMarkup(kReferralGoldLight) + "' size='" +
+                          std::to_string(36 * PANGO_SCALE) + "'>" +
+                          Glib::Markup::escape_text(FormatAlphaRao(rao)) + "</span>");
+  BuildGasPanel(*gasPanel_, *this, gas_, NeedsGas(), snledger::kClaimGasTao, copiedReset_);
+  claimButton_->set_label(Format(T_("claim_amount_button", "Claim {}"), FormatAlphaRao(rao)));
+  claimButton_->set_sensitive(claimsAvailable_ && !progress_.Busy() && rao > 0 && !NeedsGas());
+  closeButton_->set_label(progress_.AnyClaimed() && !progress_.Busy() ? T_("done", "Done")
+                                                                       : T_("close", "Close"));
+}
+
+void LedgerClaimSheet::SetGas(std::optional<SnGasInfo> gas) {
+  gas_ = std::move(gas);
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnSending() {
+  progress_.Start();
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnSent(int64_t noId, int64_t index, const std::string& txHash) {
+  progress_.Sent(noId, index, txHash);
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnConfirmed(int64_t noId, int64_t index, const std::string& txHash,
+                                   int64_t amountRao) {
+  progress_.Confirmed(noId, index, txHash, amountRao);
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnFailed(int64_t noId, int64_t index, const std::string& message) {
+  if (!progress_.Failed(noId, index, message)) {
+    ShowError(SnErrorMessage(message, T_("something_went_wrong", "Something went wrong.")));
+  }
+  Rebuild();
+}
+
+void LedgerClaimSheet::OnDone() {
+  progress_.Done();
+  Rebuild();
+}
+
+void LedgerClaimSheet::ShowError(const Glib::ustring& message) {
+  if (!errorText_) return;
+  kit::SetTextOrCollapse(*errorText_, message);
+}
+
 // ---- EarningsPage ------------------------------------------------------------
 
 EarningsPage::EarningsPage(SdkHost& host)
-    : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0), host_(host) {
+    : Gtk::Box(Gtk::Orientation::HORIZONTAL, 0), host_(host), consent_(ConsentPorts()) {
   EnsureBrandCss();
   EnsureDrawerCss();
+  // the consent section redraws with the wallet block, whose bridge it shares
+  // (RebuildWalletBlock); a failure it does not word itself is the snackbar's
+  consent_.on_changed = [this] { RebuildWalletBlock(); };
+  consent_.on_error = [this](const std::string& error) {
+    Notify(SnErrorMessage(error, T_("something_went_wrong", "Something went wrong.")),
+           kit::Snackbar::Severity::Error);
+  };
   // the wallet overflow menus, built once: one "earnings" action group on the
   // page, one menu per overflow (the popovers resolve the actions up the tree)
   walletActions_ = Gio::SimpleActionGroup::create();
@@ -1486,6 +1881,7 @@ EarningsPage::EarningsPage(SdkHost& host)
   SetStatValue(rankValue_, T_("current_ranking", "Current Ranking"), {}, false);
   RebuildWalletBlock();
   RebuildUnclaimedTile();
+  RebuildLedgerTile();
   RebuildTop200();
   RenderPointsHeader();
   RenderPointsFooter();
@@ -1498,6 +1894,7 @@ EarningsPage::~EarningsPage() {
   connectFlow_.timer.disconnect();
   setWalletFlow_.timer.disconnect();
   claimFlow_.timer.disconnect();
+  ledgerClaimFlow_.timer.disconnect();
   pointsPublicFlow_.timer.disconnect();
   pointsScrollConn_.disconnect();
   // controller only: by now the window's teardown may have disposed the
@@ -1507,6 +1904,9 @@ EarningsPage::~EarningsPage() {
   rankingFlow_.timer.disconnect();
   legacyFlow_.timer.disconnect();
   removeSolanaFlow_.timer.disconnect();
+  consentStep_.timer.disconnect();
+  consent_.on_changed = nullptr;
+  consent_.on_error = nullptr;
   sheet_.reset();
 }
 
@@ -1671,6 +2071,8 @@ void EarningsPage::ShowPreviewSnackbar() {
 }
 
 void EarningsPage::SettleAllEmpty() {
+  // no session: no consent to show, and nothing in flight counts any more
+  consent_.Reset();
   ApplyPoints(urnet::AccountPointsList{}, Fetch::Ready);
   ApplyEpochs(std::vector<AccountEpochRow>{}, Fetch::Ready);
   ApplySnWallet(std::nullopt, Fetch::Ready);
@@ -1765,6 +2167,72 @@ void EarningsPage::BuildEarningsPane() {
     tile->append(*claimButton_);
     row.content->append(*tile);
     unclaimedCard_->set_visible(false);
+    content->append(*row.root);
+  }
+
+  // 3b. settlement v2 — the coldkey's v2 accounts, apart from the v1 claims
+  //     above (snledger::SectionFor decides what shows)
+  {
+    auto row = MakePaddedRow(10);
+    ledgerCard_ = row.root;
+    auto* tile = MakeGoldTile();
+    tile->append(*MakeGoldLabel(T_("sn_ledger_title", "Settlement v2"), 12));
+    ledgerRows_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 10);
+    tile->append(*ledgerRows_);
+    ledgerStatus_ = MakeWrappedNote({}, "ur-row-note");
+    ledgerStatus_->set_visible(false);
+    tile->append(*ledgerStatus_);
+    ledgerClaimButton_ = MakeGoldButton(T_("claim", "Claim"));
+    ledgerClaimButton_->set_margin_top(4);
+    ledgerClaimButton_->set_sensitive(false);
+    ledgerClaimButton_->signal_clicked().connect(
+        sigc::mem_fun(*this, &EarningsPage::OnLedgerClaim));
+    tile->append(*ledgerClaimButton_);
+    row.content->append(*tile);
+    ledgerCard_->set_visible(false);
+    content->append(*row.root);
+  }
+
+  // 3c. the payout consent — one signature by the network's coldkey pays every
+  //     provider client of the network (consent::Flow decides what shows)
+  {
+    auto group = kit::MakePaneGroupHeader(T_("sn_consent_title", "Payout consent"));
+    consentHeader_ = group.root;
+    consentHeader_->set_visible(false);
+    content->append(*group.root);
+  }
+  {
+    auto row = MakePaddedRow(12);
+    row.content->set_spacing(6);
+    consentCard_ = row.root;
+    consentLine_ = MakeWrappedNote({}, "ur-key");
+    row.content->append(*consentLine_);
+    consentBody_ = MakeWrappedNote(
+        T_("sn_consent_body",
+           "Sign once with your Bittensor wallet so this network's earnings are paid to it."),
+        "ur-row-note");
+    row.content->append(*consentBody_);
+    consentNotice_ = MakeWrappedNote({}, "ur-row-note");
+    consentNotice_->add_css_class("ur-danger-text");
+    consentNotice_->set_visible(false);
+    row.content->append(*consentNotice_);
+    consentSignButton_ = Gtk::make_managed<Gtk::Button>(T_("sn_consent_sign", "Sign with wallet"));
+    consentSignButton_->add_css_class("ur-pane-primary");
+    consentSignButton_->set_hexpand(true);
+    consentSignButton_->signal_clicked().connect(
+        sigc::mem_fun(*this, &EarningsPage::OnConsentAction));
+    row.content->append(*consentSignButton_);
+    consentChangeButton_ = Gtk::make_managed<Gtk::Button>(T_("sn_consent_change", "Change wallet"));
+    consentChangeButton_->add_css_class("flat");
+    consentChangeButton_->set_halign(Gtk::Align::START);
+    consentChangeButton_->signal_clicked().connect(
+        sigc::mem_fun(*this, &EarningsPage::OnConsentAction));
+    row.content->append(*consentChangeButton_);
+    consentChangeNote_ = MakeWrappedNote(
+        T_("sn_consent_change_note", "A new wallet takes effect from the next epoch."),
+        "ur-row-note");
+    row.content->append(*consentChangeNote_);
+    consentCard_->set_visible(false);
     content->append(*row.root);
   }
 
@@ -2371,6 +2839,9 @@ void EarningsPage::LoadEarnings() {
     });
   });
 
+  // 4b. the payout consent: the status, whatever the wallet above
+  consent_.Load();
+
   // 5. the head-spot eligibility
   sn::FetchHead(host_, [this, epoch, seen](std::optional<SnHeadInfo> head, std::string err) {
     PostToMain([this, epoch, seen, head = std::move(head), err = std::move(err)] {
@@ -2402,11 +2873,13 @@ void EarningsPage::LoadEarnings() {
       });
 }
 
-// The subnet layer: the vault's view of this network's epochs and the gas
-// key. Only with an attached wallet — without one there is nothing to read.
+// The subnet layer: the vault's view of this network's epochs, the coldkey's
+// v2 accounts and the gas key. Only with an attached wallet — without one
+// there is nothing to read.
 void EarningsPage::LoadWalletLayer() {
   if (!wallet_ || !CanCallApi()) return;
   ApplyClaims(std::nullopt, 0, Fetch::Loading);
+  ApplyLedger(snledger::Load::Loading, {}, ledgerConfigured_);
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
   sn::FetchClaims(host_, [this, epoch, seen](std::optional<std::vector<SnClaimRow>> claims,
@@ -2438,14 +2911,29 @@ void EarningsPage::LoadWalletLayer() {
       ApplyClaims(std::move(claims), total, Fetch::Ready, {}, schedule);
     });
   });
+  sn::FetchLedger(host_, [this, epoch, seen](std::optional<std::vector<snledger::Account>> accounts,
+                                              bool configured, std::string err) {
+    PostToMain([this, epoch, seen, accounts = std::move(accounts), configured,
+                err = std::move(err)] {
+      if (*epoch != seen) return;
+      if (!accounts) {
+        g_warning("earnings: sn ledger accounts failed: %s", err.c_str());
+        ApplyLedger(snledger::Load::Unavailable, {}, configured);
+        return;
+      }
+      ApplyLedger(snledger::Load::Ready, *accounts, configured);
+    });
+  });
+  LoadGas();
+}
+
+void EarningsPage::LoadGas() {
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
   sn::FetchGas(host_, [this, epoch, seen](std::optional<SnGasInfo> gas, std::string err) {
     PostToMain([this, epoch, seen, gas = std::move(gas), err = std::move(err)] {
       if (*epoch != seen) return;
-      if (!gas) {
-        g_message("earnings: sn gas key unavailable: %s", err.c_str());
-        ApplyGas(std::nullopt);
-        return;
-      }
+      if (!gas) g_message("earnings: sn gas key unavailable: %s", err.c_str());
       ApplyGas(std::move(gas));
     });
   });
@@ -2573,10 +3061,13 @@ void EarningsPage::ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state
     claimsState_ = Fetch::Ready;
     claimsFailure_.clear();
     schedule_.reset();
+    ledgerAccounts_.clear();
+    ledgerLoad_ = snledger::Load::Ready;
   }
   RebuildWalletBlock();
   RebuildPayoutLine();
   RebuildUnclaimedTile();
+  RebuildLedgerTile();
   RebuildHistory();  // the alpha column follows the wallet
 }
 
@@ -2603,6 +3094,15 @@ void EarningsPage::ApplyClaims(std::optional<std::vector<SnClaimRow>> claims,
 void EarningsPage::ApplyGas(std::optional<SnGasInfo> gas) {
   gas_ = std::move(gas);
   if (auto sheet = claimSheet_.lock()) sheet->SetGas(gas_);
+  if (auto sheet = ledgerClaimSheet_.lock()) sheet->SetGas(gas_);
+}
+
+void EarningsPage::ApplyLedger(snledger::Load load, std::vector<snledger::Account> accounts,
+                               bool claimConfigured) {
+  ledgerLoad_ = load;
+  ledgerAccounts_ = std::move(accounts);
+  ledgerConfigured_ = claimConfigured;
+  RebuildLedgerTile();
 }
 
 void EarningsPage::ApplyHead(std::optional<SnHeadInfo> head, Fetch state) {
@@ -2775,6 +3275,61 @@ void EarningsPage::RebuildUnclaimedTile() {
   claimButton_->set_sensitive(ready && totalClaimableRao_ > 0 && !claiming_);
 }
 
+// The Settlement v2 tile under the unclaimed one: snledger::SectionFor's
+// decision, with the alpha in the app's formatting. Claim opens the v2 claim
+// dialog.
+void EarningsPage::RebuildLedgerTile() {
+  if (ledgerCard_ == nullptr) return;
+  const bool connected = wallet_.has_value() && walletState_ == Fetch::Ready;
+  const snledger::SectionView view =
+      snledger::SectionFor(connected, ledgerLoad_, ledgerAccounts_, ledgerConfigured_, claiming_,
+                           FormatAlphaRao);
+  ledgerCard_->set_visible(view.visible);
+  if (!view.visible) return;
+  RemoveAllChildren(*ledgerRows_);
+  for (const snledger::AccountView& account : view.accounts) {
+    auto* block = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+    if (view.showPools) {
+      block->append(*MakeSizedLabel(Format(T_("sn_ledger_pool", "Pool {}"), account.noId), 12,
+                                    "ur-caption"));
+    }
+    const Glib::ustring claimableLabel = T_("sn_ledger_claimable", "Claimable");
+    block->append(*MakeSizedLabel(claimableLabel, 12, "ur-caption"));
+    auto* claimable = MakeGoldLabel(account.claimable, 34, /*condensed=*/true);
+    kit::SetAccessibleLabel(*claimable, claimableLabel + ", " + account.claimable);
+    block->append(*claimable);
+    auto* cells = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+    cells->append(*MakeStatCell(T_("sn_ledger_paid", "Paid"), account.paid));
+    cells->append(*MakeStatCell(T_("sn_ledger_earned", "Earned"), account.earned));
+    block->append(*cells);
+    if (!account.pendingIncrease.empty()) {
+      block->append(*MakeWrappedNote(
+          Format(T_("sn_ledger_pending", "Pending: +{}, awaiting finalization"),
+                 account.pendingIncrease),
+          "ur-row-note"));
+    }
+    ledgerRows_->append(*block);
+  }
+  Glib::ustring status;
+  switch (view.status) {
+    case snledger::Status::None:
+      break;
+    case snledger::Status::Loading:
+      status = T_("loading", "Loading...");
+      break;
+    case snledger::Status::Unavailable:
+      status = T_("sn_ledger_unavailable", "Unavailable");
+      break;
+    case snledger::Status::NothingYet:
+      status = T_("no_claims_yet_linux",
+                  "Nothing to claim yet. Alpha accrues from the next finalized epoch.");
+      break;
+  }
+  kit::SetTextOrCollapse(*ledgerStatus_, status);
+  ledgerClaimButton_->set_visible(view.showClaim);
+  ledgerClaimButton_->set_sensitive(view.claimEnabled);
+}
+
 void EarningsPage::RebuildWalletBlock() {
   if (walletConnectedPanel_ == nullptr) return;
   const bool connected = wallet_.has_value() && walletState_ == Fetch::Ready;
@@ -2785,7 +3340,7 @@ void EarningsPage::RebuildWalletBlock() {
     kit::SetAccessibleLabel(*walletAddressLabel_,
                             Glib::ustring(T_("bittensor_wallet", "Bittensor wallet")) + ", " +
                                 wallet_->coldkeySs58);
-    changeWalletButton_->set_sensitive(!connecting_);
+    changeWalletButton_->set_sensitive(!connecting_ && !consent_.Busy());
   }
   const bool offerConnect = walletState_ != Fetch::Loading && (!connected || changingWallet_);
   walletConnectPanel_->set_visible(offerConnect);
@@ -2794,13 +3349,15 @@ void EarningsPage::RebuildWalletBlock() {
   walletMoreDisconnected_->set_visible(!connected);
   // a link label keeps its markup; only its visibility follows the wallet state
   walletConnectNote_->set_visible(!connected);
-  connectBridgeButton_->set_sensitive(!connecting_);
-  manualToggleButton_->set_sensitive(!connecting_);
+  // the bridge carries one wallet flow at a time: a consent signing holds it too
+  const bool bridgeBusy = connecting_ || consent_.Busy();
+  connectBridgeButton_->set_sensitive(!bridgeBusy);
+  manualToggleButton_->set_sensitive(!bridgeBusy);
   manualPanel_->set_visible(manualEntryOpen_);
   const std::string typed = TrimWhitespace(walletAddressBox_->get_text().raw());
   const bool checked = check_.has_value() && !typed.empty() && checkedAddress_ == typed &&
                        check_->validSyntax && !check_->banned;
-  connectManualButton_->set_sensitive(checked && !connecting_);
+  connectManualButton_->set_sensitive(checked && !bridgeBusy);
   kit::SetTextOrCollapse(
       *connectingStatus_,
       connecting_ ? Glib::ustring(T_("opening_bittensor_wallet_in_browser",
@@ -2809,6 +3366,7 @@ void EarningsPage::RebuildWalletBlock() {
   // the overflow stays live while the bridge is out: a Solana connect
   // supersedes the Bittensor one (SdkHost::ConnectSolanaWallet)
   RebuildSolanaCard();  // the waiting line follows the Bittensor panel it sits in
+  RebuildConsentSection();  // its button follows the connect's hold on the bridge
 }
 
 void EarningsPage::RebuildTop200() {
@@ -2817,6 +3375,16 @@ void EarningsPage::RebuildTop200() {
   const bool show = headState_ == Fetch::Ready && head_ && (head_->eligible || head_->bound);
   top200Card_->set_visible(show);
   if (!show) return;
+  // Sign fleet binding, in both states: bindings renew per epoch window and
+  // new devices join the fleet after the spot is bound
+  const auto signButton = [this] {
+    auto* sign = Gtk::make_managed<Gtk::Button>(T_("top200_sign_binding", "Sign fleet binding"));
+    sign->add_css_class("ur-btn-secondary");
+    sign->set_halign(Gtk::Align::START);
+    sign->set_margin_top(4);
+    sign->signal_clicked().connect([this] { OpenTop200SignSheet(std::nullopt, false); });
+    return sign;
+  };
   if (head_->bound) {
     // the status row: this network holds a head spot
     auto* card = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
@@ -2845,6 +3413,7 @@ void EarningsPage::RebuildTop200() {
              "Your score is close to the eviction floor. Add routable IPs to keep the spot."),
           "ur-danger-text"));
     }
+    card->append(*signButton());
     top200Panel_->append(*card);
     return;
   }
@@ -2868,6 +3437,7 @@ void EarningsPage::RebuildTop200() {
   button->set_margin_top(4);
   button->signal_clicked().connect([this] { OpenLink(kTop200Url); });
   tile->append(*button);
+  tile->append(*signButton());
   top200Panel_->append(*tile);
 }
 
@@ -3084,20 +3654,22 @@ void EarningsPage::OnLedgerTabChanged() {
 // ---- attach a Bittensor wallet -----------------------------------------------
 
 void EarningsPage::OnConnectWithBridge() {
-  if (connecting_) return;
+  if (connecting_ || consent_.Busy()) return;
   if (!CanCallApi()) {
     RefuseNoSession();
     return;
   }
-  ChooseBittensorWallet(std::string());  // whichever account the wallet picks
+  // whichever account the wallet picks
+  ChooseBittensorWallet(
+      [this](const std::string& walletId) { StartWalletSignature(walletId, std::string()); });
 }
 
-void EarningsPage::ChooseBittensorWallet(const std::string& expectedAddress) {
+void EarningsPage::ChooseBittensorWallet(
+    std::function<void(const std::string& walletId)> chosen) {
   auto* window = dynamic_cast<Gtk::Window*>(get_root());
   GtkWidget* dialog = NewBittensorWalletChooser(window ? window->gobj() : nullptr);
   struct Ctx {
-    EarningsPage* self;
-    std::string expectedAddress;
+    std::function<void(const std::string& walletId)> chosen;
     std::shared_ptr<uint64_t> epoch;
     uint64_t seen;
   };
@@ -3107,11 +3679,9 @@ void EarningsPage::ChooseBittensorWallet(const std::string& expectedAddress) {
         auto* ctx = static_cast<Ctx*>(data);
         if (*ctx->epoch != ctx->seen) return;  // the page was reset meanwhile
         const std::string_view walletId = bittensor::ChosenWallet(response ? response : "");
-        if (!walletId.empty()) {
-          ctx->self->StartWalletSignature(std::string(walletId), ctx->expectedAddress);
-        }
+        if (!walletId.empty()) ctx->chosen(std::string(walletId));
       }),
-      new Ctx{this, expectedAddress, epoch_, *epoch_},
+      new Ctx{std::move(chosen), epoch_, *epoch_},
       +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
   gtk_window_present(GTK_WINDOW(dialog));
 }
@@ -3229,7 +3799,7 @@ void EarningsPage::ApplyWalletCheck(uint64_t generation, const std::string& addr
 }
 
 void EarningsPage::OnConnectManual() {
-  if (connecting_) return;
+  if (connecting_ || consent_.Busy()) return;
   const std::string address = TrimWhitespace(walletAddressBox_->get_text().raw());
   if (address.empty()) return;
   if (!check_ || checkedAddress_ != address || !check_->validSyntax || check_->banned) {
@@ -3240,7 +3810,9 @@ void EarningsPage::OnConnectManual() {
     RefuseNoSession();
     return;
   }
-  ChooseBittensorWallet(address);  // still signed: the wallet must sign with THIS account
+  // still signed: the wallet must sign with THIS account
+  ChooseBittensorWallet(
+      [this, address](const std::string& walletId) { StartWalletSignature(walletId, address); });
 }
 
 void EarningsPage::StartWalletSignature(const std::string& walletId,
@@ -3255,16 +3827,7 @@ void EarningsPage::StartWalletSignature(const std::string& walletId,
   const std::string transport =
       urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
   const uint32_t timeoutMs = bittensor::TimeoutMsFor(transport, walletId);
-  if (transport == bittensor::kTransportBrowserBridge) {
-    // the page in the browser carries the flow now: say where to look
-    const bittensor::ContinueText text = bittensor::ContinueTextFor(walletId);
-    const std::string key(text.key);
-    const std::string english(text.english);
-    const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
-    Notify(text.takesWalletName ? Format(localized, urnet::bittensorWalletDisplayName(walletId))
-                                : std::string(localized),
-           kit::Snackbar::Severity::Info);
-  }
+  NotifyContinueInBrowser(walletId);
   const uint32_t generation = BeginFlow(connectFlow_, static_cast<int>(timeoutMs), [this] {
     FinishConnecting();
     Notify(T_("wallet_connect_failed", "Failed to connect the wallet."),
@@ -3281,6 +3844,20 @@ void EarningsPage::StartWalletSignature(const std::string& walletId,
           OnWalletSigned(generation, signature, expectedAddress);
         });
       });
+}
+
+void EarningsPage::NotifyContinueInBrowser(const std::string& walletId) {
+  const std::string transport =
+      urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
+  if (transport != bittensor::kTransportBrowserBridge) return;
+  // the page in the browser carries the flow now: say where to look
+  const bittensor::ContinueText text = bittensor::ContinueTextFor(walletId);
+  const std::string key(text.key);
+  const std::string english(text.english);
+  const char* localized = g_dpgettext2(GETTEXT_PACKAGE, key.c_str(), english.c_str());
+  Notify(text.takesWalletName ? Format(localized, urnet::bittensorWalletDisplayName(walletId))
+                              : std::string(localized),
+         kit::Snackbar::Severity::Info);
 }
 
 void EarningsPage::OnWalletSigned(uint32_t generation, const SdkHost::WalletSignature& signature,
@@ -3448,6 +4025,223 @@ void EarningsPage::ApplyWalletConnectResult(uint32_t generation, bool ok,
 void EarningsPage::FinishConnecting() {
   connecting_ = false;
   RebuildWalletBlock();
+}
+
+// ---- the network payout consent ------------------------------------------------
+// consent::Flow decides; the section draws its view, and its ports answer it
+// through the SDK's consent calls and the wallet's consent session over the
+// issued message. Sign with wallet asks the wallet, then the coldkey.
+
+void EarningsPage::RebuildConsentSection() {
+  if (consentCard_ == nullptr) return;
+  const consent::View view = consent_.Current();
+  consentHeader_->set_visible(view.visible);
+  consentCard_->set_visible(view.visible);
+  if (!view.visible) return;
+  Glib::ustring line;
+  switch (view.line) {
+    case consent::Line::Loading:
+      line = T_("loading", "Loading...");
+      break;
+    case consent::Line::Unavailable:
+      line = T_("something_went_wrong", "Something went wrong.");
+      break;
+    case consent::Line::None:
+      line = T_("sn_consent_none", "No payout wallet yet. Earnings aren't paid until you sign.");
+      break;
+    case consent::Line::Active:
+      line = Format(T_("sn_consent_active", "Earnings are paid to {}"),
+                    ShortSs58(view.coldkeySs58));
+      break;
+    case consent::Line::Signing:
+      line = T_("sn_consent_signing", "Waiting for your wallet's signature…");
+      break;
+  }
+  consentLine_->set_text(line);
+  // the whole coldkey behind its short form
+  consentLine_->set_tooltip_text(view.coldkeySs58);
+  consentLine_->set_has_tooltip(!view.coldkeySs58.empty());
+  consentBody_->set_visible(view.body);
+  Glib::ustring notice;
+  switch (view.notice) {
+    case consent::Notice::None:
+      break;
+    case consent::Notice::Expired:
+      notice = T_("sn_consent_expired", "The request expired. Try again.");
+      break;
+    case consent::Notice::Failed:
+      notice = T_("sn_consent_failed", "The signature didn't match this wallet. Try again.");
+      break;
+    case consent::Notice::OwnerOnly:
+      notice = T_("sn_consent_owner_only", "Only the network owner can choose the payout wallet.");
+      break;
+  }
+  kit::SetTextOrCollapse(*consentNotice_, notice);
+  consentSignButton_->set_visible(view.action == consent::Action::Sign);
+  consentChangeButton_->set_visible(view.action == consent::Action::Change);
+  // the coldkey connect above holds the bridge while it runs
+  consentSignButton_->set_sensitive(!connecting_);
+  consentChangeButton_->set_sensitive(!connecting_);
+  consentChangeNote_->set_visible(view.changeNote);
+}
+
+void EarningsPage::OnConsentAction() {
+  // the bridge carries one wallet flow at a time
+  if (connecting_ || consent_.Busy()) return;
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  ChooseBittensorWallet([this](const std::string& walletId) { AskConsentColdkey(walletId); });
+}
+
+// The coldkey the consent names, typed after the wallet is chosen. The payout
+// coldkey is a deliberate choice (it may not be the wallet's sign-in account),
+// so the field starts empty, and Continue waits for an address the SDK's ss58
+// check accepts: nothing is asked of the server before. The dialog is the
+// app's AdwMessageDialog idiom (OnRemoveSolanaWallet), its deprecation
+// warnings silenced here only.
+void EarningsPage::AskConsentColdkey(const std::string& walletId) {
+  auto* window = dynamic_cast<Gtk::Window*>(get_root());
+  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+  GtkWidget* dialog = adw_message_dialog_new(
+      window ? window->gobj() : nullptr, T_("sn_consent_title", "Payout consent"),
+      T_("sn_consent_body",
+         "Sign once with your Bittensor wallet so this network's earnings are paid to it."));
+  auto* fields = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 6);
+  auto* field = Gtk::make_managed<Gtk::Entry>();
+  field->add_css_class("ur-input");
+  field->set_placeholder_text(T_("earnings_address_placeholder", "Enter a Bittensor address"));
+  kit::SetAccessibleLabel(*field, T_("earnings_address_placeholder", "Enter a Bittensor address"));
+  fields->append(*field);
+  auto* invalid = MakeWrappedNote(
+      T_("invalid_ss58_address", "That is not a valid Bittensor address."), "ur-row-note");
+  invalid->add_css_class("ur-danger-text");
+  invalid->set_visible(false);
+  fields->append(*invalid);
+  adw_message_dialog_set_extra_child(ADW_MESSAGE_DIALOG(dialog), GTK_WIDGET(fields->gobj()));
+  adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(dialog), "cancel", T_("cancel", "Cancel"),
+                                   "continue", T_("continue_txt", "Continue"), nullptr);
+  adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(dialog), "continue",
+                                             ADW_RESPONSE_SUGGESTED);
+  adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(dialog), "continue");
+  adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(dialog), "cancel");
+  adw_message_dialog_set_response_enabled(ADW_MESSAGE_DIALOG(dialog), "continue", FALSE);
+  field->signal_changed().connect([dialog, field, invalid] {
+    const std::string address = TrimWhitespace(field->get_text().raw());
+    const bool valid = sn::ValidateSs58(address);
+    adw_message_dialog_set_response_enabled(ADW_MESSAGE_DIALOG(dialog), "continue", valid);
+    invalid->set_visible(!address.empty() && !valid);
+  });
+  // Enter continues once the address is valid
+  field->signal_activate().connect([dialog, field] {
+    if (sn::ValidateSs58(TrimWhitespace(field->get_text().raw()))) {
+      adw_message_dialog_response(ADW_MESSAGE_DIALOG(dialog), "continue");
+    }
+  });
+  G_GNUC_END_IGNORE_DEPRECATIONS
+  struct Ctx {
+    EarningsPage* self;
+    Gtk::Entry* field;
+    std::string walletId;
+    std::shared_ptr<uint64_t> epoch;
+    uint64_t seen;
+  };
+  g_signal_connect_data(
+      dialog, "response",
+      G_CALLBACK(+[](AdwMessageDialog*, const char* response, gpointer data) {
+        auto* ctx = static_cast<Ctx*>(data);
+        if (*ctx->epoch != ctx->seen) return;  // the page was reset meanwhile
+        if (g_strcmp0(response, "continue") != 0 || ctx->self->connecting_) return;
+        ctx->self->consent_.Start(ctx->walletId, TrimWhitespace(ctx->field->get_text().raw()));
+      }),
+      new Ctx{this, field, walletId, epoch_, *epoch_},
+      +[](gpointer data, GClosure*) { delete static_cast<Ctx*>(data); }, G_CONNECT_DEFAULT);
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
+consent::Flow::Ports EarningsPage::ConsentPorts() {
+  consent::Flow::Ports ports;
+  // a read: it settles when it answers, like the page's other reads
+  ports.status = [this](consent::Flow::StatusDone done) {
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    sn::FetchConsentStatus(host_, [epoch, seen, done](std::optional<consent::Status> status,
+                                                      std::string err) {
+      PostToMain([epoch, seen, done, status = std::move(status), err = std::move(err)] {
+        if (*epoch != seen) return;
+        if (!status) g_warning("earnings: sn consent status failed: %s", err.c_str());
+        done(status, err);
+      });
+    });
+  };
+  ports.validSs58 = [](const std::string& address) { return sn::ValidateSs58(address); };
+  ports.challenge = [this](const std::string& coldkeySs58, consent::Flow::ChallengeDone done) {
+    const uint32_t generation = BeginFlow(consentStep_, kApiTimeoutMs, [done] {
+      done(std::nullopt, T_("something_went_wrong", "Something went wrong."));
+    });
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    sn::RequestConsentChallenge(
+        host_, coldkeySs58,
+        [this, epoch, seen, generation, done](std::optional<consent::Challenge> challenge,
+                                              std::string err) {
+          PostToMain([this, epoch, seen, generation, done, challenge = std::move(challenge),
+                      err = std::move(err)] {
+            if (*epoch != seen) return;
+            if (!SettleFlow(consentStep_, generation, "consent challenge")) return;
+            if (!challenge) g_warning("earnings: sn consent challenge failed: %s", err.c_str());
+            done(challenge, err);
+          });
+        });
+  };
+  // the session takes the challenge as the SDK returned it: its message is
+  // what the wallet signs. It waits as long as the coldkey connect's does:
+  // minutes on the bridge, the challenge's life on the manual sheet and for
+  // WalletConnect.
+  ports.sign = [this](const std::string& walletId, const consent::Challenge& challenge,
+                      consent::Flow::SignDone done) {
+    const std::string transport =
+        urnet::bittensorWalletTransportFor(walletId, std::string(bittensor::kPlatform));
+    NotifyContinueInBrowser(walletId);
+    const uint32_t generation = BeginFlow(
+        consentStep_, static_cast<int>(bittensor::TimeoutMsFor(transport, walletId)), [done] {
+          done(consent::Signed{false, {}, {}, {},
+                               T_("wallet_connect_failed", "Failed to connect the wallet.")});
+        });
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    host_.SignBittensorConsent(
+        walletId, sn::ToSdkChallenge(challenge),
+        [this, epoch, seen, generation, done](SdkHost::WalletSignature signature) {
+          PostToMain([this, epoch, seen, generation, done, signature = std::move(signature)] {
+            if (*epoch != seen) return;
+            if (!SettleFlow(consentStep_, generation, "consent signature")) return;
+            // the session's proof: the flow submits it only for the issued
+            // message and its coldkey
+            done(consent::Signed{signature.ok, signature.address, signature.message,
+                                 signature.signature, signature.error});
+          });
+        });
+  };
+  ports.submit = [this](const std::string& coldkeySs58, const std::string& message,
+                        const std::string& signature, consent::Flow::SubmitDone done) {
+    const uint32_t generation = BeginFlow(consentStep_, kApiTimeoutMs, [done] {
+      done(consent::Submitted{false, T_("something_went_wrong", "Something went wrong.")});
+    });
+    auto epoch = epoch_;
+    const uint64_t seen = *epoch_;
+    sn::SubmitConsent(host_, coldkeySs58, message, signature,
+                      [this, epoch, seen, generation, done](bool ok, std::string err) {
+                        PostToMain([this, epoch, seen, generation, done, ok, err = std::move(err)] {
+                          if (*epoch != seen) return;
+                          if (!SettleFlow(consentStep_, generation, "consent submit")) return;
+                          if (!ok) g_warning("earnings: sn consent submit failed: %s", err.c_str());
+                          done(consent::Submitted{ok, err});
+                        });
+                      });
+  };
+  return ports;
 }
 
 // ---- the Solana payout wallet --------------------------------------------------
@@ -3901,17 +4695,7 @@ void EarningsPage::OpenClaimSheet(bool allowActions) {
   sheet->SetGas(gas_);  // re-renders the rows with the explorer resolver in place
   claimSheet_ = sheet;
   PresentSheet(sheet);
-  if (allowActions && !gas_) {
-    auto epoch = epoch_;
-    const uint64_t seen = *epoch_;
-    sn::FetchGas(host_, [this, epoch, seen](std::optional<SnGasInfo> gas, std::string err) {
-      PostToMain([this, epoch, seen, gas = std::move(gas), err = std::move(err)] {
-        if (*epoch != seen) return;
-        if (!gas) g_message("earnings: sn gas key unavailable: %s", err.c_str());
-        ApplyGas(std::move(gas));
-      });
-    });
-  }
+  if (allowActions && !gas_) LoadGas();
 }
 
 void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
@@ -3933,6 +4717,7 @@ void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
   claiming_ = true;
   if (sheet) sheet->OnSending(epochs);
   RebuildUnclaimedTile();
+  RebuildLedgerTile();
   const uint32_t generation = BeginFlow(claimFlow_, kChainTimeoutMs, [this] {
     claiming_ = false;
     if (auto open = claimSheet_.lock()) {
@@ -3940,6 +4725,7 @@ void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
       open->OnDone();
     }
     RebuildUnclaimedTile();
+    RebuildLedgerTile();
   });
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
@@ -3986,10 +4772,106 @@ void EarningsPage::StartClaim(std::vector<int64_t> epochs) {
       claiming_ = false;
       if (auto open = claimSheet_.lock()) open->OnDone();
       RebuildUnclaimedTile();
+      RebuildLedgerTile();
       LoadWalletLayer();  // the chain's answer replaces the optimistic rows
     });
   };
   sn::Claim(host_, epochs, std::move(events));
+}
+
+// ---- the settlement v2 claim -----------------------------------------------------
+
+void EarningsPage::OnLedgerClaim() {
+  auto* root = dynamic_cast<Gtk::Window*>(get_root());
+  if (root == nullptr || !wallet_) {
+    g_warning("earnings: no window root or wallet; the v2 claim dialog was not opened");
+    return;
+  }
+  if (sheet_ || (sheet_open && sheet_open())) {
+    g_message("earnings: v2 claim dialog suppressed — a modal is already open");
+    return;
+  }
+  // the preview shows the dialog as it would be with a device that can claim;
+  // the action itself is gated in StartLedgerClaim
+  auto sheet = std::make_shared<LedgerClaimSheet>(*root, wallet_->coldkeySs58, ledgerAccounts_,
+                                                  gas_, sn::ClaimsAvailable(host_) || previewMode_);
+  sheet->on_claim = [this] { StartLedgerClaim(); };
+  sheet->on_open_link = [this](const std::string& url) { OpenLink(url); };
+  sheet->explorer_url = [this](const std::string& txHash) {
+    return sn::ExplorerTxUrl(host_, txHash);
+  };
+  ledgerClaimSheet_ = sheet;
+  PresentSheet(sheet);
+  if (CanCallApi() && !gas_) LoadGas();
+}
+
+void EarningsPage::StartLedgerClaim() {
+  auto sheet = ledgerClaimSheet_.lock();
+  if (claiming_) return;
+  if (!CanCallApi()) {
+    // the sheet is modal: the refusal renders ON it
+    g_warning("earnings: refusing a v2 claim with no session");
+    if (sheet) sheet->ShowError(T_("please_login_to_urnetwork", "Please login to URnetwork"));
+    return;
+  }
+  if (!sn::ClaimsAvailable(host_)) {
+    if (sheet) {
+      sheet->ShowError(
+          T_("claim_unavailable_linux", "Claiming is not available on this device yet."));
+    }
+    return;
+  }
+  claiming_ = true;
+  if (sheet) sheet->OnSending();
+  RebuildUnclaimedTile();
+  RebuildLedgerTile();
+  // past the SDK's own bounds for every account it may claim
+  const int watchdogMs = snledger::ClaimWatchdogMs(ledgerAccounts_);
+  const uint32_t generation = BeginFlow(ledgerClaimFlow_, watchdogMs, [this] {
+    claiming_ = false;
+    if (auto open = ledgerClaimSheet_.lock()) {
+      open->ShowError(T_("chain_rpc_unreachable", "The chain RPC is unreachable. Try again."));
+      open->OnDone();
+    }
+    RebuildUnclaimedTile();
+    RebuildLedgerTile();
+  });
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
+  urnet::SnLedgerClaimCallback callback;
+  callback.sent = [this, epoch, seen](int64_t noId, int64_t index, std::string txHash) {
+    PostToMain([this, epoch, seen, noId, index, txHash = std::move(txHash)] {
+      if (*epoch != seen) return;
+      if (auto open = ledgerClaimSheet_.lock()) open->OnSent(noId, index, txHash);
+    });
+  };
+  callback.confirmed = [this, epoch, seen](int64_t noId, int64_t index, std::string txHash,
+                                           int64_t amountRao) {
+    PostToMain([this, epoch, seen, noId, index, txHash = std::move(txHash), amountRao] {
+      if (*epoch != seen) return;
+      if (auto open = ledgerClaimSheet_.lock()) open->OnConfirmed(noId, index, txHash, amountRao);
+    });
+  };
+  callback.failed = [this, epoch, seen](int64_t noId, int64_t index, std::string message) {
+    PostToMain([this, epoch, seen, noId, index, message = std::move(message)] {
+      if (*epoch != seen) return;
+      g_warning("earnings: v2 claim for pool %lld account %lld failed: %s",
+                static_cast<long long>(noId), static_cast<long long>(index), message.c_str());
+      if (auto open = ledgerClaimSheet_.lock()) open->OnFailed(noId, index, message);
+    });
+  };
+  callback.done = [this, epoch, seen, generation] {
+    PostToMain([this, epoch, seen, generation] {
+      if (*epoch != seen) return;
+      if (!SettleFlow(ledgerClaimFlow_, generation, "v2 claim")) return;
+      claiming_ = false;
+      if (auto open = ledgerClaimSheet_.lock()) open->OnDone();
+      RebuildUnclaimedTile();
+      RebuildLedgerTile();
+      LoadWalletLayer();  // the accounts again, as the chain now has them
+    });
+  };
+  sn::LedgerClaim(host_, std::move(callback));
 }
 
 // ---- the public-leaderboard switch -------------------------------------------
@@ -4083,10 +4965,32 @@ void EarningsPage::PresentSheet(const std::shared_ptr<Gtk::Window>& sheet) {
   sheet->present();
 }
 
+void EarningsPage::OpenTop200SignSheet(const std::optional<std::string>& prefill, bool fromLink) {
+  if (auto open = top200SignSheet_.lock()) {
+    if (fromLink) open->Prefill(prefill);
+    open->present();
+    return;
+  }
+  if (sheet_ || (sheet_open && sheet_open())) {
+    g_message("earnings: top 200 sign sheet suppressed — a modal is already open");
+    return;
+  }
+  if (dynamic_cast<Gtk::Window*>(get_root()) == nullptr) {
+    g_warning("earnings: no window root; the top 200 sign sheet was not opened");
+    return;
+  }
+  auto sheet = std::make_shared<Top200SignSheet>(host_);
+  if (fromLink) sheet->Prefill(prefill);
+  top200SignSheet_ = sheet;
+  PresentSheet(sheet);
+}
+
 void EarningsPage::CloseSheet() {
   if (!sheet_) return;
   sheet_.reset();
   claimSheet_.reset();
+  ledgerClaimSheet_.reset();
+  top200SignSheet_.reset();
   if (on_sheet_open_changed) on_sheet_open_changed(false);
 }
 
@@ -4276,10 +5180,22 @@ void EarningsPage::ApplyPreviewSample() {
   gas.address = "0x9a1cSAMPLEsampleSAMPLEsampleSAMPLEsamplee07f";
   gas.mirrorSs58 = "5GhSAMPLEsampleSAMPLEsampleSAMPLEsampleSAMPL2q";
   gas.balanceKnown = true;
-  // URNETWORK_PREVIEW_GAS=low: the needs-gas state (the mirror address + top-up)
+  // URNETWORK_PREVIEW_GAS=low: the needs-gas state (the mirror address + top-up);
+  // otherwise enough for a v1 and a v2 claim
   const char* gasPreview = g_getenv("URNETWORK_PREVIEW_GAS");
-  gas.tao = (gasPreview && std::string(gasPreview) == "low") ? 0.0002 : 0.0021;
+  gas.tao = (gasPreview && std::string(gasPreview) == "low") ? 0.0002 : 0.0251;
   ApplyGas(gas);
+  // the settlement v2 tile: one pool account, partly paid, that a pending root raises
+  snledger::Account ledger;
+  ledger.vault = "0x5a3e0000000000000000000000000000000000a2";
+  ledger.noId = 1;
+  ledger.index = 42;
+  ledger.finalizedRao = 5120000000;
+  ledger.paidRao = 1879000000;
+  ledger.claimableRao = 3241000000;
+  ledger.pending = true;
+  ledger.pendingRao = 5870000000;
+  ApplyLedger(snledger::Load::Ready, {ledger}, /*claimConfigured=*/true);
 }
 
 void EarningsPage::ShowPreviewClaimDialog() {

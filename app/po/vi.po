@@ -957,6 +957,11 @@ msgctxt "balance_codes_title"
 msgid "Balance Codes"
 msgstr "Các mã số dư"
 
+#. Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "battery_optimization_settings_hint"
+msgid "Tap to open Android's battery optimization list. If URnetwork isn't listed, switch the filter to “All apps”, then choose URnetwork and “Don't optimize”."
+msgstr "Nhấn để mở danh sách tối ưu hóa pin của Android. Nếu không thấy URnetwork trong danh sách, hãy chuyển bộ lọc sang \"Tất cả ứng dụng\", sau đó chọn URnetwork và \"Không tối ưu hóa\"."
+
 #. Settings
 msgctxt "become_supporter"
 msgid "Get UR Pro"
@@ -3830,10 +3835,10 @@ msgctxt "direct_update_up_to_date"
 msgid "URnetwork is up to date."
 msgstr "URnetwork đã là bản mới nhất."
 
-#. Call to action
-msgctxt "disable_ignore_battery_hint"
-msgid "To disable, please go to App Battery Usage in System Settings"
-msgstr "Để tắt, vui lòng vào mục Mức sử dụng pin của ứng dụng trong Cài đặt hệ thống"
+#. Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "disable_ignore_battery_settings_hint"
+msgid "To turn this off, tap the switch to open Android's battery optimization list, switch the filter to “All apps”, then choose URnetwork and “Optimize”."
+msgstr "Để tắt, hãy nhấn vào nút gạt để mở danh sách tối ưu hóa pin của Android, chuyển bộ lọc sang \"Tất cả ứng dụng\", sau đó chọn URnetwork và \"Tối ưu hóa\"."
 
 #. Disconnect VPN button text
 msgctxt "disconnect"
@@ -4468,6 +4473,16 @@ msgstr "Đường hầm sẽ dùng cài đặt bộ mở rộng mới vào lần
 msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
 msgstr "Đã lưu cài đặt bộ mở rộng"
+
+#. Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests"
+msgid "lag.dev speed tests"
+msgstr "Kiểm tra tốc độ lag.dev"
+
+#. Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests_description"
+msgid "Let people testing their connection on lag.dev measure latency, download and upload to this device. Tests use some of your bandwidth while they run."
+msgstr "Cho phép những người đang kiểm tra kết nối trên lag.dev đo độ trễ, tốc độ tải xuống và tải lên tới thiết bị này. Trong khi chạy, các bài kiểm tra sẽ dùng một phần băng thông của bạn."
 
 #. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
 msgctxt "extender_start_failed"
@@ -8326,6 +8341,101 @@ msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
 
+#. Payout consent section, beside the settlement v2 tile and claim: the status while a consent covers the current epoch. The placeholder is the consented Bittensor coldkey, shortened to its first and last four characters around an ellipsis (5F3s…kQ9v); keep it as is.
+msgctxt "sn_consent_active"
+msgid "Earnings are paid to {}"
+msgstr "Thu nhập được trả vào {}"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the explanation under the status. One signature with the Bittensor wallet's coldkey covers every provider client of the network.
+msgctxt "sn_consent_body"
+msgid "Sign once with your Bittensor wallet so this network's earnings are paid to it."
+msgstr "Ký một lần bằng ví Bittensor của bạn để thu nhập của mạng này được trả vào ví đó."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while a consent is active. It reruns the signing with another Bittensor wallet.
+msgctxt "sn_consent_change"
+msgid "Change wallet"
+msgstr "Đổi ví"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the note with Change wallet (sn_consent_change) while a consent is active. An epoch is the settlement period, about 7 days.
+msgctxt "sn_consent_change_note"
+msgid "A new wallet takes effect from the next epoch."
+msgstr "Ví mới có hiệu lực từ epoch tiếp theo."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the consent message expired (300 seconds after the server issued it) before the signed consent reached the server. Trying again requests a new message.
+msgctxt "sn_consent_expired"
+msgid "The request expired. Try again."
+msgstr "Yêu cầu đã hết hạn. Hãy thử lại."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the server refused the signature because it does not verify for the wallet's coldkey (SnErrorCodeSignatureMismatch).
+msgctxt "sn_consent_failed"
+msgid "The signature didn't match this wallet. Try again."
+msgstr "Chữ ký không khớp với ví này. Hãy thử lại."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the status while no consent covers the current epoch, so the network's earnings are not paid. The Sign with wallet button (sn_consent_sign) follows.
+msgctxt "sn_consent_none"
+msgid "No payout wallet yet. Earnings aren't paid until you sign."
+msgstr "Chưa có ví thanh toán. Thu nhập sẽ không được trả cho đến khi bạn ký."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the signed-in session is not the network owner's. Only the owner chooses where the network's earnings are paid.
+msgctxt "sn_consent_owner_only"
+msgid "Only the network owner can choose the payout wallet."
+msgstr "Chỉ chủ sở hữu mạng mới có thể chọn ví thanh toán."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while no consent is active. It connects the Bittensor wallet, which then signs the consent message the server issued.
+msgctxt "sn_consent_sign"
+msgid "Sign with wallet"
+msgstr "Ký bằng ví"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the progress line while the Bittensor wallet is asked to sign the consent message.
+msgctxt "sn_consent_signing"
+msgid "Waiting for your wallet's signature…"
+msgstr "Đang chờ chữ ký từ ví của bạn…"
+
+#. Payout consent section, beside the settlement v2 tile and claim: its title. The network owner signs once with a Bittensor wallet, and that coldkey is paid the earnings of every provider client of the network.
+msgctxt "sn_consent_title"
+msgid "Payout consent"
+msgstr "Đồng ý nhận thanh toán"
+
+#. Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".
+msgctxt "sn_ledger_claim"
+msgid "Claim settlement v2"
+msgstr "Nhận quyết toán v2"
+
+#. Settlement v2 tile: label of the SN25α the user can claim now.
+msgctxt "sn_ledger_claimable"
+msgid "Claimable"
+msgstr "Có thể nhận"
+
+#. Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).
+msgctxt "sn_ledger_earned"
+msgid "Earned"
+msgstr "Đã kiếm được"
+
+#. Settlement v2 tile: label of the SN25α already paid to the user's coldkey.
+msgctxt "sn_ledger_paid"
+msgid "Paid"
+msgstr "Đã trả"
+
+#. Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".
+msgctxt "sn_ledger_pending"
+msgid "Pending: +{}, awaiting finalization"
+msgstr "Đang chờ: +{}, chờ hoàn tất"
+
+#. Settlement v2 tile and claim dialog: names an operator pool. {} is its number.
+msgctxt "sn_ledger_pool"
+msgid "Pool {}"
+msgstr "Pool {}"
+
+#. Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".
+msgctxt "sn_ledger_title"
+msgid "Settlement v2"
+msgstr "Quyết toán v2"
+
+#. Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.
+msgctxt "sn_ledger_unavailable"
+msgid "Unavailable"
+msgstr "Không khả dụng"
+
 #. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
 msgctxt "sn_payout_schedule"
 msgid "Earnings settle every epoch and are paid in SN25α to your Bittensor coldkey when you claim them."
@@ -8946,6 +9056,106 @@ msgstr "Điểm của bạn đang gần ngưỡng loại. Hãy thêm IP có th�
 msgctxt "top200_detail"
 msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
 msgstr "Độ đa dạng IP có thể định tuyến của mạng bạn xếp khoảng hạng #{0} trong {1} vị trí dẫn đầu. Các thợ đào dẫn đầu kiếm SN25α trực tiếp, mỗi tempo."
+
+#. Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).
+msgctxt "top200_sign_action"
+msgid "Sign with this device"
+msgstr "Ký bằng thiết bị này"
+
+#. Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).
+msgctxt "top200_sign_binding"
+msgid "Sign fleet binding"
+msgstr "Ký liên kết đội máy"
+
+#. Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.
+msgctxt "top200_sign_binding_label"
+msgid "Binding to sign"
+msgstr "Liên kết cần ký"
+
+#. Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).
+msgctxt "top200_sign_chain"
+msgid "Chain {0} · subnet {1}"
+msgstr "Chuỗi {0} · mạng con {1}"
+
+#. Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).
+msgctxt "top200_sign_client_key"
+msgid "Client key"
+msgstr "Khóa máy khách"
+
+#. Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.
+msgctxt "top200_sign_copy_member"
+msgid "Copy member entry"
+msgstr "Sao chép mục thành viên"
+
+#. Top 200 sign screen: button that copies the signed {binding, client_signature} payload.
+msgctxt "top200_sign_copy_payload"
+msgid "Copy payload"
+msgstr "Sao chép dữ liệu"
+
+#. Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).
+msgctxt "top200_sign_done"
+msgid "Signed. Copy the payload and paste it on the Top 200 page under Device signature."
+msgstr "Đã ký. Sao chép dữ liệu và dán vào trang Top 200 ở mục Chữ ký thiết bị."
+
+#. Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.
+msgctxt "top200_sign_epochs"
+msgid "Valid from epoch {0} to {1}"
+msgstr "Hiệu lực từ epoch {0} đến {1}"
+
+#. Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.
+msgctxt "top200_sign_error_failed"
+msgid "The binding could not be signed: {}"
+msgstr "Không thể ký liên kết: {}"
+
+#. Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).
+msgctxt "top200_sign_error_invalid"
+msgid "This is not a fleet binding. Copy the whole binding from the Top 200 page."
+msgstr "Đây không phải là liên kết đội máy. Hãy sao chép toàn bộ liên kết từ trang Top 200."
+
+#. Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).
+msgctxt "top200_sign_error_no_key"
+msgid "This device's client key is not available right now. Start URnetwork on this device, then try again."
+msgstr "Khóa máy khách của thiết bị này hiện không khả dụng. Hãy khởi động URnetwork trên thiết bị này rồi thử lại."
+
+#. Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.
+msgctxt "top200_sign_error_other_device"
+msgid "This binding is for another device. A device signs only the binding with its own client ID and client key."
+msgstr "Liên kết này dành cho thiết bị khác. Thiết bị chỉ ký liên kết có ID máy khách và khóa máy khách của chính nó."
+
+#. Top 200 sign screen: label of the binding's fleet_id (0x hex).
+msgctxt "top200_sign_fleet_id"
+msgid "Fleet ID"
+msgstr "ID đội máy"
+
+#. Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.
+msgctxt "top200_sign_hotkey"
+msgid "Hotkey"
+msgstr "Hotkey"
+
+#. Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.
+msgctxt "top200_sign_intro"
+msgid "Your fleet operator builds this device's binding on the Top 200 page at ur.io. Paste it here to sign it with this device's client key. Nothing is sent: you copy the signed payload back to the page yourself."
+msgstr "Người vận hành đội máy của bạn tạo liên kết cho thiết bị này trên trang Top 200 tại ur.io. Dán vào đây để ký bằng khóa máy khách của thiết bị này. Không có gì được gửi đi: bạn tự sao chép dữ liệu đã ký trở lại trang."
+
+#. Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.
+msgctxt "top200_sign_member_hint"
+msgid "Your fleet manifest lists this device by its client ID and client key. Copy its member entry and send it to your fleet operator."
+msgstr "Bản kê khai đội máy liệt kê thiết bị này theo ID máy khách và khóa máy khách của nó. Sao chép mục thành viên của thiết bị và gửi cho người vận hành đội máy của bạn."
+
+#. Top 200 sign screen: button that pastes the binding from the clipboard.
+msgctxt "top200_sign_paste"
+msgid "Paste"
+msgstr "Dán"
+
+#. Top 200 sign screen: shown above the parsed binding's values before the Sign button.
+msgctxt "top200_sign_review"
+msgid "Check that the fleet ID, hotkey and epochs match the Top 200 page before you sign."
+msgstr "Trước khi ký, hãy kiểm tra ID đội máy, hotkey và các epoch khớp với trang Top 200."
+
+#. Top 200 sign screen: label of the section showing this device's client ID and client key.
+msgctxt "top200_sign_this_device"
+msgid "This device"
+msgstr "Thiết bị này"
 
 #. Headline of the Top 200 tile when eligible.
 msgctxt "top200_you_qualify"

@@ -1703,7 +1703,9 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         return;
       }
       try {
-        const auto req = request.at("args").get<ctl::LogTailRequest>();
+        // The request is the flat frame every verb sends (ctl::MakeRequest,
+        // LogTailClient::Fetch): its cursor and max_lines beside verb and id.
+        const auto req = request.get<ctl::LogTailRequest>();
         reply(ctl::MakeReply(
             id, true, nlohmann::json(DaemonLog::Instance().Tail(req.cursor, req.max_lines))));
       } catch (const std::exception& e) {
@@ -1829,6 +1831,27 @@ void ControlServer::DispatchAuthorized(uint64_t connId, int64_t id, ctl::Verb ve
         if (!tunnel_.SetProvideExtender(req.provide_extender, &error)) {
           reply(ctl::MakeErrorReply(
               id, error.empty() ? "the provide extender setting could not be written" : error));
+          return;
+        }
+        reply(ctl::MakeReply(id, true));
+        return;
+      }
+
+      case ctl::Verb::SetMeasurementsEnabled: {
+        // The lag.dev speed tests switch the same way, behind the same owner
+        // gate as set_provide_extender. A request without the value throws out
+        // of the get<> as an error reply.
+        nlohmann::json denied;
+        bool crossUid = false;
+        if (!CheckTunnelOwner(conn, id, &denied, &crossUid, authorizedCrossUid)) {
+          reply(std::move(denied));
+          return;
+        }
+        const auto req = request.get<ctl::SetMeasurementsEnabledRequest>();
+        std::string error;
+        if (!tunnel_.SetMeasurementsEnabled(req.measurements_enabled, &error)) {
+          reply(ctl::MakeErrorReply(
+              id, error.empty() ? "the measurements setting could not be written" : error));
           return;
         }
         reply(ctl::MakeReply(id, true));

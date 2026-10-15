@@ -205,6 +205,36 @@ inline ProvideRow ProvideRowGuess(bool on, bool providing) {
   return ProvideRowFor(true, true, state, std::string(), std::string(), false, false, false, on);
 }
 
+// ---- the lag.dev speed tests switch (lag.dev/PLAN.md C4, decision 18) ------
+// The switch under the Extender row: whether this device's extender role
+// serves lag.dev's measurement API, so people testing their connection there
+// can measure to it. On by default. It rides on the role, so it shows exactly
+// while the Extender row does and its own write has a taker
+// (provide::MeasurementsSwitchSourceFor): hidden, never disabled (N1).
+struct SpeedTestsRow {
+  bool visible = false;
+  // the setting, read beside the Extender row only when this row will show
+  bool on = true;
+
+  friend bool operator==(const SpeedTestsRow& a, const SpeedTestsRow& b) {
+    return a.visible == b.visible && a.on == b.on;
+  }
+  friend bool operator!=(const SpeedTestsRow& a, const SpeedTestsRow& b) { return !(a == b); }
+};
+
+// `extenderRow` is the Extender row as drawn, `writable` whether the switch's
+// write has a taker, and `readSetting` the measurements setting, asked only of
+// a row that will show.
+template <typename ReadSetting>
+SpeedTestsRow SpeedTestsRowOf(const ProvideRow& extenderRow, bool writable,
+                              const ReadSetting& readSetting) {
+  SpeedTestsRow row;
+  if (!extenderRow.visible || !writable) return row;
+  row.visible = true;
+  row.on = readSetting();
+  return row;
+}
+
 // The row's one line of state text. `lookup(key, english)` is the catalog --
 // T_ in the widgets, the English source in the tests -- and
 // `format(pattern, argument)` the store's {} substitution (I18n.hpp's Format).

@@ -359,6 +359,12 @@ SdkHost::~SdkHost() {
     std::scoped_lock statusLock(daemonStatusWorkerMutex_);
     if (daemonStatusWorker_.joinable()) daemonStatusWorker_.join();
   }
+  // The Top 200 fleet worker holds `this` too; unbounded for the same reason,
+  // and it never takes snFleetWorkerMutex_.
+  {
+    std::scoped_lock fleetLock(snFleetWorkerMutex_);
+    if (snFleetWorker_.joinable()) snFleetWorker_.join();
+  }
   // The provider_stats poll's timeout holds `this` as well.
   if (providerStatsPollId_ != 0) {
     g_source_remove(providerStatsPollId_);
@@ -503,16 +509,19 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
                                                  ClientEventLocale());
     // RESTORE THE API'S AUTHORIZATION FROM THE PERSISTED SESSION.
     //
-    // api_->setByJwt is called in exactly one other place — RegisterNetworkClient,
-    // the fresh-sign-in path — so the token otherwise lives only in the Api of
-    // the process that did the login. A relaunch rebuilds the Api with no token
-    // while the app still LOOKS signed in (the client jwt is on disk, so
-    // IsLoggedIn() is true and every page runs its loads), and the SDK only
-    // re-authorizes the Api as a side effect of creating a DeviceRemote — which
-    // needs urnetworkd to be up. With no daemon, or before the tunnel is
-    // started, every authenticated read 401s and each page renders that as its
-    // own failure state. The Windows host already carries this restore
-    // (urnetwork-windows/app/src/App/SdkHost.cpp:353-357).
+    // Otherwise api_->setByJwt is called by a fresh sign-in
+    // (RegisterNetworkClient), by the two space re-derivations
+    // (ApplyNetworkServer, SetPrivateExtender), by RestoreApiAuthorizationLocked
+    // after a device teardown that leaves the person signed in, and by
+    // Logout's clear, so the token otherwise lives only in the Api of the
+    // process that did the login. A relaunch rebuilds
+    // the Api with no token while the app still LOOKS signed in (the client jwt
+    // is on disk, so IsLoggedIn() is true and every page runs its loads), and
+    // the SDK only re-authorizes the Api as a side effect of creating a
+    // DeviceRemote — which needs urnetworkd to be up. With no daemon, or before
+    // the tunnel is started, every authenticated read 401s and each page
+    // renders that as its own failure state. The Windows host already carries
+    // this restore (urnetwork-windows/app/src/App/SdkHost.cpp:353-357).
     //
     // getByJwt() is the USER jwt the Api authorizes with; getByClientJwt() is
     // the device credential the tunnel session needs — they are not the same.
@@ -1879,10 +1888,11 @@ void SdkHost::CancelBittensorManual(uint64_t flow) {
   FailWalletOperation(std::string(bittensor::kCancelled));
 }
 
-void SdkHost::StartBittensorSession(const std::string& walletId, const std::string& purpose,
-                                    const std::string& expectedAddress, uint64_t flow,
-                                    std::function<bool(const std::string& message)> prepare,
-                                    std::function<void(const std::string& error)> fail) {
+void SdkHost::StartBittensorSession(
+    const std::string& walletId, const std::string& purpose, const std::string& expectedAddress,
+    uint64_t flow, std::function<bool(const std::string& message)> prepare,
+    std::function<void(const std::string& error)> fail,
+    std::optional<urnet::SnNetworkConsentChallengeResult> consent) {
   if (!fail) fail = [this](const std::string& error) { FailWalletOperation(error); };
   if (!api_) {
     fail("no api");
@@ -1899,18 +1909,60 @@ void SdkHost::StartBittensorSession(const std::string& walletId, const std::stri
     if (bittensor::SendsWalletConnectProjectId(walletId)) {
       session->setWalletConnectProjectId(kWalletConnectProjectId);
     }
-    // blockchain TAO, the purpose, and the typed address when there is one
-    args = session->challengeArgs(expectedAddress);
+    if (consent) {
+      // a consent brings the challenge SnNetworkConsentChallenge issued: the
+      // session keeps its message verbatim and binds its coldkey and its
+      // expiry, refusing one already past (challenge_expired)
+      session->setNetworkConsentChallenge(consent, g_get_real_time() / 1000);
+    } else {
+      // blockchain TAO, the purpose, and the typed address when there is one
+      args = session->challengeArgs(expectedAddress);
+    }
   } catch (const std::exception& e) {
     fail(e.what());
+    return;
+  }
+  const bool ownsAnswer = static_cast<bool>(prepare);
+  // the wallet transport, on the main loop once the session holds its challenge
+  auto open = [this, flow, session, expectedAddress, prepare = std::move(prepare), fail] {
+    // A Solana connect that started while this challenge was fetched owns the
+    // bridge now: opening a Bittensor tab would also reset its keypair, so its
+    // Phantom or Solflare return could no longer be read.
+    if (!WalletFlowIsCurrent(flow)) {
+      if (prepare) fail("superseded by another wallet flow");
+      return;
+    }
+    const std::string message = session->message();
+    if (prepare && !prepare(message)) return;
+    wallet_.SignWithBittensor(session);
+    if (session->transport() != bittensor::kTransportManual) return;
+    std::function<void(BittensorManualRequest)> handler;
+    {
+      std::scoped_lock lock(mutex_);
+      handler = onBittensorManual_;
+    }
+    if (!handler) {
+      // the flow's slot is set by now (prepare): the shared path answers it
+      FailWalletOperation("no manual wallet entry available");
+      return;
+    }
+    BittensorManualRequest request;
+    request.walletId = session->walletId();
+    request.purpose = session->purpose();
+    request.message = message;
+    request.expectedAddress = expectedAddress;
+    request.flow = flow;
+    handler(std::move(request));
+  };
+  if (consent) {
+    PostToMain(std::move(open));
     return;
   }
   if (!args) {
     fail("could not fetch wallet challenge");
     return;
   }
-  api_->authWalletChallenge(*args, [this, flow, session, expectedAddress, prepare = std::move(prepare),
-                                    fail](
+  api_->authWalletChallenge(*args, [this, flow, session, ownsAnswer, fail, open = std::move(open)](
                                        std::optional<urnet::AuthWalletChallengeResult> result,
                                        std::optional<std::string> err) mutable {
     std::string error;
@@ -1932,42 +1984,13 @@ void SdkHost::StartBittensorSession(const std::string& walletId, const std::stri
       // a newer wallet flow owns the slots now: it is not failed for this one
       // (a flow with its own `prepare` still owns its answer, though)
       if (!WalletFlowIsCurrent(flow)) {
-        if (prepare) fail("superseded by another wallet flow");
+        if (ownsAnswer) fail("superseded by another wallet flow");
         return;
       }
       fail(error);
       return;
     }
-    PostToMain([this, flow, session, expectedAddress, prepare = std::move(prepare), fail] {
-      // A Solana connect that started while this challenge was fetched owns the
-      // bridge now: opening a Bittensor tab would also reset its keypair, so its
-      // Phantom or Solflare return could no longer be read.
-      if (!WalletFlowIsCurrent(flow)) {
-        if (prepare) fail("superseded by another wallet flow");
-        return;
-      }
-      const std::string message = session->message();
-      if (prepare && !prepare(message)) return;
-      wallet_.SignWithBittensor(session);
-      if (session->transport() != bittensor::kTransportManual) return;
-      std::function<void(BittensorManualRequest)> handler;
-      {
-        std::scoped_lock lock(mutex_);
-        handler = onBittensorManual_;
-      }
-      if (!handler) {
-        // the flow's slot is set by now (prepare): the shared path answers it
-        FailWalletOperation("no manual wallet entry available");
-        return;
-      }
-      BittensorManualRequest request;
-      request.walletId = session->walletId();
-      request.purpose = session->purpose();
-      request.message = message;
-      request.expectedAddress = expectedAddress;
-      request.flow = flow;
-      handler(std::move(request));
-    });
+    PostToMain(std::move(open));
   });
 }
 
@@ -2375,6 +2398,23 @@ void SdkHost::SignBittensorConnect(const std::string& walletId,
                         nullptr);
 }
 
+void SdkHost::SignBittensorConsent(const std::string& walletId,
+                                   const urnet::SnNetworkConsentChallengeResult& challenge,
+                                   std::function<void(WalletSignature)> done) {
+  CancelPendingSolanaConnect("superseded by a wallet signature request");
+  CancelPendingAddSignIn("superseded by a wallet signature request");
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    flow = walletFlows_.Begin();
+    walletSignDone_ = std::move(done);
+  }
+  // the session binds the message's coldkey, so only that account signs: the
+  // bridge pins its address and the manual sheet fixes it; purpose "consent"
+  StartBittensorSession(walletId, std::string(bittensor::kPurposeConsent), challenge.coldkey_ss58,
+                        flow, nullptr, nullptr, challenge);
+}
+
 void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
   std::function<void(AuthResult)> done;
   std::optional<urnet::WalletAuthArgs> walletAuth;
@@ -2450,6 +2490,10 @@ void SdkHost::AuthNetworkClientWithLocale(const urnet::AuthNetworkClientArgs& ar
 void SdkHost::HandleDeepLink(const std::string& url) {
   if (url.rfind("urnetwork://onboarding/", 0) == 0) {
     if (onOnboardingLink_) onOnboardingLink_(url);
+    return;
+  }
+  if (url.rfind("urnetwork://top200/", 0) == 0) {
+    if (onTop200Link_) onTop200Link_(url);
     return;
   }
   wallet_.HandleDeepLink(url);  // returns false for non-wallet links (future: OAuth)
@@ -2704,6 +2748,7 @@ TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {
     // Drop it before anything else can use it, and tell the UI, so the pages
     // that fold on hasDevice() stop rendering a session that does not exist.
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
     EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
     PublishConnectReading();
   }
@@ -3153,6 +3198,7 @@ TunnelStartResult SdkHost::BindRemoteDeviceLocked(const std::string& clientJwt,
     // manager-owned controller behind for the next attempt, and stop the
     // daemon-side tunnel we just started but cannot bind to.
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
     control_.StopTunnel();
     return TunnelStartResult::Failed;
   }
@@ -3786,6 +3832,10 @@ void SdkHost::PollDaemonProviderStatsLocked() {
   // switch's write; a daemon that predates them sends neither
   stats.provideExtender = reply->provide_extender;
   stats.provideExtenderWritable = reply->provide_extender_writable;
+  // and the lag.dev measurements setting beside them, with the daemon's word
+  // that it takes the speed tests switch's write
+  stats.measurementsEnabled = reply->measurements_enabled;
+  stats.measurementsEnabledWritable = reply->measurements_enabled_writable;
   const bool statusChanged = !daemonProviderStats_ ||
                              daemonProviderStats_->status.open != stats.status.open ||
                              daemonProviderStats_->status.loaded != stats.status.loaded ||
@@ -3796,7 +3846,9 @@ void SdkHost::PollDaemonProviderStatsLocked() {
       !daemonProviderStats_ ||
       daemonProviderStats_->extenderProvideStatusJson != stats.extenderProvideStatusJson ||
       daemonProviderStats_->provideExtender != stats.provideExtender ||
-      daemonProviderStats_->provideExtenderWritable != stats.provideExtenderWritable;
+      daemonProviderStats_->provideExtenderWritable != stats.provideExtenderWritable ||
+      daemonProviderStats_->measurementsEnabled != stats.measurementsEnabled ||
+      daemonProviderStats_->measurementsEnabledWritable != stats.measurementsEnabledWritable;
   daemonProviderStats_ = std::move(stats);
   // the events the DeviceRemote and its controllers raise for the same facts
   EmitDrawerEvent(DrawerEvent::Throughput);
@@ -4485,6 +4537,13 @@ provide::ExtenderSwitchSource SdkHost::ExtenderSwitchSourceLocked() const {
       daemonProviderStats_ && daemonProviderStats_->provideExtenderWritable);
 }
 
+provide::ExtenderSwitchSource SdkHost::MeasurementsSwitchSourceLocked() const {
+  return provide::MeasurementsSwitchSourceFor(
+      device_.has_value(), daemonProviderStats_.has_value(),
+      daemonProviderStats_ && daemonProviderStats_->provideExtenderWritable,
+      daemonProviderStats_ && daemonProviderStats_->measurementsEnabledWritable);
+}
+
 std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
   std::scoped_lock lock(mutex_);
   switch (ExtenderSwitchSourceLocked()) {
@@ -4544,6 +4603,49 @@ void SdkHost::SetProvideExtender(bool on) {
       break;
   }
   g_warning("extender: dropping a provide extender write with no device");
+}
+
+bool SdkHost::MeasurementsSwitchWritable() {
+  std::scoped_lock lock(mutex_);
+  return MeasurementsSwitchSourceLocked() != provide::ExtenderSwitchSource::None;
+}
+
+bool SdkHost::GetMeasurementsEnabled() {
+  std::scoped_lock lock(mutex_);
+  switch (MeasurementsSwitchSourceLocked()) {
+    case provide::ExtenderSwitchSource::Device:
+      return device_->getMeasurementsEnabled();
+    case provide::ExtenderSwitchSource::Daemon:
+      return daemonProviderStats_->measurementsEnabled;
+    case provide::ExtenderSwitchSource::None:
+      break;
+  }
+  // the setting's default (lag.dev/PLAN.md decision 18); the switch is hidden then
+  return true;
+}
+
+void SdkHost::SetMeasurementsEnabled(bool on) {
+  std::scoped_lock lock(mutex_);
+  switch (MeasurementsSwitchSourceLocked()) {
+    case provide::ExtenderSwitchSource::Device:
+      device_->setMeasurementsEnabled(on);
+      return;
+    case provide::ExtenderSwitchSource::Daemon: {
+      std::string error;
+      if (!control_.SetMeasurementsEnabled(on, &error)) {
+        g_warning("extender: the system service did not write the measurements setting: %s",
+                  error.empty() ? "no detail" : error.c_str());
+      }
+      // Read back at once, written or refused: the switch shows the setting as
+      // it stands.
+      PollDaemonProviderStatsLocked();
+      EmitDrawerEvent(DrawerEvent::ExtenderProvideStatus);
+      return;
+    }
+    case provide::ExtenderSwitchSource::None:
+      break;
+  }
+  g_warning("extender: dropping a measurements write with no device");
 }
 
 std::optional<urnet::ExtenderSettings> SdkHost::GetExtenderSettings() {
@@ -4880,6 +4982,81 @@ bool SdkHost::RequestReliability(ReliabilityRead scope,
   return true;
 }
 
+// ---- Top 200 fleet binding ---------------------------------------------------
+// The DeviceRemote's getSnClientKey / signSnFleetBinding are synchronous rpcs
+// to the daemon's DeviceLocal, so they run on a worker under mutex_ (the
+// device may be torn down meanwhile), never on the GTK loop.
+
+bool SdkHost::StartSnFleetWorker(std::function<std::function<void()>()> work) {
+  bool expected = false;
+  if (!snFleetBusy_.compare_exchange_strong(expected, true)) return false;
+  std::scoped_lock lock(snFleetWorkerMutex_);
+  // the previous worker cleared the gate before its marshal, so it may still
+  // be joinable; its join returns as soon as that enqueue is done
+  if (snFleetWorker_.joinable()) snFleetWorker_.join();
+  snFleetWorker_ = std::thread([this, work = std::move(work)] {
+    std::function<void()> completion = work();
+    // cleared before the marshal, so a main loop that never runs the
+    // completion cannot wedge the next request
+    snFleetBusy_.store(false);
+    if (completion) PostToMain(std::move(completion));
+  });
+  return true;
+}
+
+bool SdkHost::RequestSnFleetIdentity(
+    std::function<void(std::string clientId, std::string clientKey)> done) {
+  if (!done) return false;
+  return StartSnFleetWorker([this, done = std::move(done)]() -> std::function<void()> {
+    std::string clientId;
+    std::string clientKey;
+    {
+      std::scoped_lock lock(mutex_);
+      if (device_ && deviceControlGeneration_ == control_.SessionGeneration()) {
+        try {
+          clientId = device_->getClientId();
+          clientKey = device_->getSnClientKey();
+        } catch (const std::exception& e) {
+          g_warning("sdkhost: fleet identity read threw: %s", e.what());
+          clientKey.clear();
+        } catch (...) {
+          g_warning("sdkhost: fleet identity read threw");
+          clientKey.clear();
+        }
+      }
+    }
+    return [done, clientId, clientKey] { done(clientId, clientKey); };
+  });
+}
+
+bool SdkHost::RequestSignSnFleetBinding(
+    std::string bindingJson, std::function<void(std::string signature, std::string error)> done) {
+  if (!done) return false;
+  return StartSnFleetWorker(
+      [this, bindingJson = std::move(bindingJson), done = std::move(done)]()
+          -> std::function<void()> {
+        std::string signature;
+        std::string error;
+        {
+          std::scoped_lock lock(mutex_);
+          if (!device_ || deviceControlGeneration_ != control_.SessionGeneration()) {
+            error = "device service not connected";
+          } else {
+            // never log the binding or the signature: the operator's data
+            try {
+              signature = device_->signSnFleetBinding(bindingJson);
+            } catch (const std::exception& e) {
+              error = e.what();
+            } catch (...) {
+              error = "unknown error";
+            }
+          }
+        }
+        if (!error.empty()) g_warning("sdkhost: fleet binding sign failed");
+        return [done, signature, error] { done(signature, error); };
+      });
+}
+
 void SdkHost::ConnectBestAvailable() {
   // a location pick or a press while out of balance starts nothing
   if (connectGate_ && connectGate_([this] { ConnectBestAvailable(); })) return;
@@ -4912,6 +5089,7 @@ void SdkHost::ConnectBestAvailable() {
                 deviceControlGeneration_ == control_.SessionGeneration() ? "yes" : "no",
                 statusError.empty() ? "" : "; ", statusError.c_str());
       TeardownDeviceLocked();
+      RestoreApiAuthorizationLocked();
       EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
       PublishConnectReading();
       // AND THEN DO WHAT THE PRESS ASKED FOR. The caller skipped the start
@@ -5174,6 +5352,7 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
     g_message("provide: the bound device is stale (daemon tunnel_state=%s); dropping it",
               ctl::ToString(status->tunnel_state));
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
     EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
     PublishConnectReading();
   }
@@ -5444,6 +5623,7 @@ void SdkHost::OnRpcBindDeadline() {
     std::scoped_lock lock(mutex_);
     lastTunnelError_ = message;
     TeardownDeviceLocked();
+    RestoreApiAuthorizationLocked();
   }
   // Blocking, on the main loop, bounded by the control client's receive
   // timeout — the same trade StartTunnel's failure path already makes.
@@ -5477,6 +5657,11 @@ void SdkHost::TeardownDeviceLocked() {
   provideHasNetworkKey_.store(false);
 }
 
+void SdkHost::RestoreApiAuthorizationLocked() {
+  if (!api_ || !localState_) return;
+  if (const std::string byJwt = localState_->getByJwt(); !byJwt.empty()) api_->setByJwt(byJwt);
+}
+
 void SdkHost::Shutdown() {
   std::scoped_lock lock(mutex_);
   // quit brings the daemon's tunnel down like Logout does, but leaves the
@@ -5506,6 +5691,26 @@ void SdkHost::Logout() {
   // Answered "superseded by ..." (bridge::IsSuperseded), so its sheet settles
   // quietly, and outside mutex_, which it takes.
   CancelPendingAddSignIn("superseded by signing out");
+  // So is a wallet's signature still asked for (a coldkey connect, a payout
+  // consent): its slot would otherwise take the next sign-in's proof first
+  // (bridge::RouteSignature), and its session a late return. Answered the same
+  // way, outside mutex_; a challenge still being fetched for it opens no tab.
+  std::function<void(WalletSignature)> signDone;
+  {
+    std::scoped_lock lock(mutex_);
+    signDone = std::move(walletSignDone_);
+    walletSignDone_ = nullptr;
+    if (signDone) walletFlows_.Begin();
+  }
+  if (signDone) {
+    if (auto session = wallet_.bittensorSession()) {
+      // a proof already accepted stays accepted; anything later is refused
+      if (session->state() != urnet::BittensorWalletStateSigned) session->cancel();
+    }
+    WalletSignature out;
+    out.error = "superseded by signing out";
+    signDone(std::move(out));
+  }
   // and so is a row click still settling
   CancelRowConnect("sign-out");
   std::scoped_lock lock(mutex_);

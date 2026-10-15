@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "daemon/NetworkCountryWatcher.hpp"
 
-#include <fstream>
-#include <iterator>
 #include <utility>
 
 #include "NetworkQuality.hpp"
+#include "daemon/TextFile.hpp"
 #include "daemon/DaemonLog.hpp"
 
 namespace urnw {
@@ -25,11 +24,7 @@ constexpr gint kCallTimeoutMillis = 5000;
 
 int64_t MonotonicSeconds() { return g_get_monotonic_time() / G_USEC_PER_SEC; }
 
-std::string ReadProcText(const char* path) {
-  std::ifstream in(path);
-  if (!in) return {};
-  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
+std::string ReadProcText(const char* path) { return textfile::ReadAll(path); }
 
 // The modems in a GetManagedObjects reply ("(a{oa{sa{sv}}})"): each one's
 // network ports and operator code, plus the paths of its bearers, whose

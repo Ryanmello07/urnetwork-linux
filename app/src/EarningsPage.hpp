@@ -9,7 +9,10 @@
 // this device and the settlement vault contract: the SDK builds, signs (with
 // its own gas key) and sends the transaction; no URnetwork API is in the path.
 // Nothing is retroactive — alpha accrues from the first epoch after the wallet
-// is attached; earlier epochs earned points only.
+// is attached; earlier epochs earned points only. Settlement v2 shows apart
+// from those v1 claims: a tile with the coldkey's v2 ledger accounts and its
+// own claim dialog, claimed the same direct way from the v2 vault
+// (SnLedgerPresentation.hpp).
 //
 // USDC payouts continue until the migration to Bittensor completes, so the
 // Solana payout wallet stays reachable from here: a three-dot overflow beside
@@ -31,7 +34,10 @@
 // Pane A (earnings): the points headline with its Providing / Referral /
 // Reliability breakdown (and the Seeker multiplier, points-only), the protocol
 // note with the ur.xyz link, the Unclaimed SN25α tile
-// (wallet only), the Bittensor wallet block (connect through the bridge, or
+// (wallet only) and the Settlement v2 tile under it, then the payout consent
+// (signed in: the network's coldkey consent, signed with the Bittensor wallet,
+// NetworkConsent.hpp), the Bittensor wallet
+// block (connect through the bridge, or
 // enter an address manually — validated locally and then against
 // /sn/wallet/validate before anything is sent — and still sign it), the Solana
 // payout wallet card (only with a payout wallet), and the Top 200 head-spot
@@ -70,9 +76,11 @@
 #include "DemandChart.hpp"
 #include "ExtenderProvidePresentation.hpp"
 #include "LeaderboardIndicator.hpp"
+#include "NetworkConsent.hpp"
 #include "PaneKit.hpp"
 #include "ProviderStatusPresentation.hpp"
 #include "SdkHost.hpp"
+#include "SnLedgerPresentation.hpp"
 #include "SnPayoutPresentation.hpp"
 #include "SolanaWalletPresentation.hpp"
 #include "TransferChart.hpp"
@@ -142,6 +150,8 @@ struct SnWalletCheck {
 
 class ClaimAlphaSheet;
 class EmojiTagSheet;
+class LedgerClaimSheet;
+class Top200SignSheet;
 
 class EarningsPage : public Gtk::Box {
  public:
@@ -227,7 +237,7 @@ class EarningsPage : public Gtk::Box {
   void ShowPreviewSnackbar();
   // URNETWORK_PREVIEW_SAMPLE=1 (a SECOND gate): obviously-synthetic rows pushed
   // through the SAME Apply* functions. URNETWORK_PREVIEW_WALLET=1 adds the
-  // attached-wallet layer (claims, gas key, alpha column);
+  // attached-wallet layer (claims, gas key, alpha column, the v2 tile);
   // URNETWORK_PREVIEW_TOP200=bound renders the bound head-spot status;
   // URNETWORK_PREVIEW_MANUAL=1 opens the manual entry on a "new wallet" verdict;
   // URNETWORK_PREVIEW_GAS=low puts the claim dialog in its needs-gas state;
@@ -237,6 +247,13 @@ class EarningsPage : public Gtk::Box {
   void ApplyPreviewSample();
   // URNETWORK_PREVIEW_CLAIM=1: open the claim dialog over the sample.
   void ShowPreviewClaimDialog();
+
+  // Earnings › Top 200 › Sign fleet binding (Top200SignSheet). The Top 200
+  // block's button opens it with an empty field; the app link
+  // urnetwork://top200/sign opens it whatever the block shows, pre-filled with
+  // `prefill` (nullopt with `fromLink`: the link's binding did not decode). A
+  // link that lands while the sheet is open pre-fills that sheet. Never signs.
+  void OpenTop200SignSheet(const std::optional<std::string>& prefill, bool fromLink);
 
   // ---- window-level routing --------------------------------------------------
   // The window's one-ContentDialog-at-a-time gate.
@@ -327,7 +344,8 @@ class EarningsPage : public Gtk::Box {
 
   // ---- loads -----------------------------------------------------------------
   void LoadEarnings();
-  void LoadWalletLayer();  // claims + gas key: only with an attached wallet
+  void LoadWalletLayer();  // claims, v2 accounts + gas key: only with an attached wallet
+  void LoadGas();          // the gas key and its balance
   void LoadLeaderboard();
 
   // ---- appliers (one writer per surface) -------------------------------------
@@ -340,6 +358,10 @@ class EarningsPage : public Gtk::Box {
                    Fetch state, const Glib::ustring& failure = {},
                    std::optional<snpayout::EpochSchedule> schedule = std::nullopt);
   void ApplyGas(std::optional<SnGasInfo> gas);
+  // the v2 accounts; `claimConfigured` is whether the chain settings name the
+  // v2 vault, read with them
+  void ApplyLedger(snledger::Load load, std::vector<snledger::Account> accounts,
+                   bool claimConfigured);
   void ApplyHead(std::optional<SnHeadInfo> head, Fetch state);
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
   void ApplyRanking(std::optional<urnet::NetworkRanking> ranking, bool ok);
@@ -350,6 +372,7 @@ class EarningsPage : public Gtk::Box {
   // how and when SN payouts happen, under the points (snpayout::PayoutLineFor)
   void RebuildPayoutLine();
   void RebuildUnclaimedTile();
+  void RebuildLedgerTile();  // the Settlement v2 tile (snledger::SectionFor)
   void RebuildWalletBlock();
   void RebuildTop200();
   void RebuildHistory();
@@ -398,11 +421,16 @@ class EarningsPage : public Gtk::Box {
                         std::optional<SnWalletCheck> check, const std::string& err);
   void OnConnectManual();
   // Which Bittensor wallet signs (Talisman on the browser bridge, TAO.com on
-  // the manual sheet), then StartWalletSignature with it.
-  void ChooseBittensorWallet(const std::string& expectedAddress);
+  // the manual sheet, WalletConnect on the bridge's pairing): `chosen` gets its
+  // id; a dismissed chooser chooses nothing. The coldkey connect hands it to
+  // StartWalletSignature, the payout consent to its flow.
+  void ChooseBittensorWallet(std::function<void(const std::string& walletId)> chosen);
   // The wallet as a signer: `expectedAddress` is the typed address (the wallet
   // must sign with that account) or empty (whichever account the wallet picks).
   void StartWalletSignature(const std::string& walletId, const std::string& expectedAddress);
+  // A browser-bridge wallet's step is in the system browser now: the snackbar
+  // says where to look (nothing for the manual sheet, which is on screen).
+  void NotifyContinueInBrowser(const std::string& walletId);
   void OnWalletSigned(uint32_t generation, const SdkHost::WalletSignature& signature,
                       const std::string& expectedAddress);
   void SetSnWallet(const std::string& address, const std::string& signature,
@@ -410,6 +438,19 @@ class EarningsPage : public Gtk::Box {
   void ApplyWalletConnectResult(uint32_t generation, bool ok, const std::string& serverError,
                                 const std::string& address);
   void FinishConnecting();
+
+  // ---- the network payout consent (NetworkConsent.hpp) -------------------------
+  // The section beside the Settlement v2 tile, drawn from the flow's view only.
+  void RebuildConsentSection();
+  // Sign with wallet and Change wallet: the shared chooser, then the coldkey.
+  void OnConsentAction();
+  // The coldkey the consent names, typed and checked (ss58) before the flow
+  // starts with it and `walletId`.
+  void AskConsentColdkey(const std::string& walletId);
+  // The flow's ports: the SDK's consent calls and the wallet. Every answer is
+  // marshaled to the main loop, dropped once the page's epoch moved, and given
+  // up on by consentStep_'s watchdog (one step is in flight at a time).
+  consent::Flow::Ports ConsentPorts();
 
   // ---- the Solana payout wallet (USDC until the Bittensor migration) ---------
   // The three-dot overflow (icon-only, named "Wallet options") over `menu`.
@@ -433,6 +474,10 @@ class EarningsPage : public Gtk::Box {
   void OnClaim();
   void OpenClaimSheet(bool allowActions);
   void StartClaim(std::vector<int64_t> epochs);
+  // settlement v2: the tile's Claim opens the v2 claim sheet, whose Claim claims
+  // every claimable v2 account
+  void OnLedgerClaim();
+  void StartLedgerClaim();
 
   // ---- the public-leaderboard switch ----------------------------------------
   void SetRankingToggle(bool on);  // the echo-guarded programmatic write
@@ -481,6 +526,19 @@ class EarningsPage : public Gtk::Box {
   Gtk::Label* unclaimedValue_ = nullptr;
   Gtk::Label* unclaimedStatus_ = nullptr;
   Gtk::Button* claimButton_ = nullptr;
+  Gtk::Box* ledgerCard_ = nullptr;  // the Settlement v2 tile
+  Gtk::Box* ledgerRows_ = nullptr;
+  Gtk::Label* ledgerStatus_ = nullptr;
+  Gtk::Button* ledgerClaimButton_ = nullptr;
+  // the payout consent section (RebuildConsentSection)
+  Gtk::Widget* consentHeader_ = nullptr;
+  Gtk::Box* consentCard_ = nullptr;
+  Gtk::Label* consentLine_ = nullptr;
+  Gtk::Label* consentBody_ = nullptr;
+  Gtk::Label* consentNotice_ = nullptr;
+  Gtk::Button* consentSignButton_ = nullptr;
+  Gtk::Button* consentChangeButton_ = nullptr;
+  Gtk::Label* consentChangeNote_ = nullptr;
   Gtk::Label* walletStatus_ = nullptr;
   Gtk::Box* walletConnectedPanel_ = nullptr;
   Gtk::Label* walletAddressLabel_ = nullptr;
@@ -631,6 +689,9 @@ class EarningsPage : public Gtk::Box {
   Fetch claimsState_ = Fetch::Loading;
   Glib::ustring claimsFailure_;
   std::optional<snpayout::EpochSchedule> schedule_;
+  std::vector<snledger::Account> ledgerAccounts_;
+  snledger::Load ledgerLoad_ = snledger::Load::Loading;
+  bool ledgerConfigured_ = false;  // the chain settings name the v2 vault: v2 Claim shows
   std::optional<SnGasInfo> gas_;
   std::optional<SnHeadInfo> head_;
   Fetch headState_ = Fetch::Loading;
@@ -696,6 +757,7 @@ class EarningsPage : public Gtk::Box {
   std::string connectWalletId_;
   bool changingWallet_ = false;  // "Change" opened the connect affordances
   bool manualEntryOpen_ = false;
+  // a v1 or a v2 claim in flight: the gas key sends one claim at a time
   bool claiming_ = false;
   bool settingRankingPublic_ = false;
   bool applyingRankingToggle_ = false;  // ECHO GUARD on the public switch
@@ -716,9 +778,14 @@ class EarningsPage : public Gtk::Box {
   Flow setWalletFlow_; // 20s: POST /sn/wallet
   Flow pointsPublicFlow_;  // 20s: POST /network/points-ranking-visibility
   Flow claimFlow_;     // 180s: chain round trips
+  Flow ledgerClaimFlow_;  // 3 min + 6 per account: the v2 claim, past the SDK's bounds
   Flow rankingFlow_;   // 20s
   Flow legacyFlow_;    // 20s: the payout read and POST /account/payout-wallet after a link
   Flow removeSolanaFlow_;  // 20s: POST /account/wallets/remove
+  Flow consentStep_;  // the consent's step: the wallet's minutes, 20s for a call
+
+  // the payout consent (NetworkConsent.hpp); its ports reach host_ and epoch_
+  consent::Flow consent_;
 
   // preview + balance relay
   bool previewMode_ = false;
@@ -728,6 +795,8 @@ class EarningsPage : public Gtk::Box {
 
   std::shared_ptr<Gtk::Window> sheet_;
   std::weak_ptr<ClaimAlphaSheet> claimSheet_;
+  std::weak_ptr<LedgerClaimSheet> ledgerClaimSheet_;
+  std::weak_ptr<Top200SignSheet> top200SignSheet_;
 };
 
 }  // namespace urnw

@@ -29,6 +29,7 @@
 #include "daemon/GlogFlusher.hpp"
 #include "daemon/SelfRestart.hpp"
 #include "daemon/SupportDiagnostics.hpp"
+#include "daemon/TextFile.hpp"
 
 namespace urnw {
 namespace {
@@ -181,6 +182,11 @@ void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_
   flight->Finish(uploadId, logupload::FlightState::Failed);
 }
 
+// Key material only, and deliberately not textfile::ReadAll: a read that
+// fails after the open throws here. A seed that is there but cannot be read
+// must not pass for a missing one, or NewDeviceLocked would write a new
+// identity over it; every caller runs under a catch, so the start fails and
+// the stored files stay.
 std::vector<uint8_t> ReadFileBytes(const std::string& path) {
   std::ifstream f(path, std::ios::binary);
   if (!f) return {};
@@ -292,10 +298,9 @@ TunnelHost::TunnelHost(std::string storageRoot)
 }
 
 void TunnelHost::RestoreStopRecord() {
-  std::ifstream in(selfrestart::kStopRecordPath, std::ios::binary);
-  if (!in) return;
-  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  in.close();
+  if (::access(selfrestart::kStopRecordPath, F_OK) != 0) return;
+  // A record that cannot be read decodes as unreadable below and is dropped.
+  const std::string text = textfile::ReadAll(selfrestart::kStopRecordPath);
   // Read once, whatever it held: a record is about one stop.
   ::unlink(selfrestart::kStopRecordPath);
   const std::optional<selfrestart::StopRecord> record =
@@ -1841,6 +1846,15 @@ ctl::ProviderStatsReply TunnelHost::ProviderStats(bool pollStatus) {
   } catch (const std::exception& e) {
     noteReadFailure("extender setting", e);
   }
+  // And the lag.dev measurements setting beside it, the speed tests switch
+  // under the Extender switch, which this daemon writes too
+  // (SetMeasurementsEnabled): never said without a setting to show.
+  try {
+    reply.measurements_enabled = providerDevice_->getMeasurementsEnabled();
+    reply.measurements_enabled_writable = true;
+  } catch (const std::exception& e) {
+    noteReadFailure("measurements setting", e);
+  }
   if (providerContractVc_) {
     try {
       if (auto points = providerContractVc_->getProviderThroughputPoints()) {
@@ -1968,6 +1982,52 @@ bool TunnelHost::SetProvideExtender(bool on, std::string* error) {
     return false;
   }
   DaemonLogf("[provide] provide extender %s (%s)\n", on ? "on" : "off",
+             provide::ToString(target));
+  return true;
+}
+
+bool TunnelHost::SetMeasurementsEnabled(bool on, std::string* error) {
+  std::unique_lock<std::mutex> lock(opMutex_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    // A bring-up owns the session. The GUI reads the setting again, so the
+    // switch shows it as it stands.
+    if (error) *error = "a tunnel start is in progress";
+    return false;
+  }
+  // the provider extender setting's rule: the same space holds both, and the
+  // same devices read them
+  const provide::ExtenderSettingTarget target = provide::ExtenderSettingTargetFor(
+      providerDevice_.has_value(), device_.has_value(), networkSpace_.has_value());
+  try {
+    switch (target) {
+      case provide::ExtenderSettingTarget::ProviderDevice:
+        // persisted in its space and applied at once: the measurement API
+        // starts or stops, and the operator withdraws or restores the name
+        providerDevice_->setMeasurementsEnabled(on);
+        break;
+      case provide::ExtenderSettingTarget::SessionDevice:
+        device_->setMeasurementsEnabled(on);
+        break;
+      case provide::ExtenderSettingTarget::NetworkSpace:
+        networkSpace_->getAsyncLocalState().getLocalState().setMeasurementsEnabled(on);
+        break;
+      case provide::ExtenderSettingTarget::None:
+        if (error) {
+          *error = "no device has run in this daemon yet, so there is no network space to keep "
+                   "the setting in";
+        }
+        return false;
+    }
+  } catch (const std::exception& e) {
+    if (error) {
+      *error = std::string("the measurements setting could not be written to ") +
+               provide::ToString(target);
+    }
+    DaemonLogf("[provide] writing the measurements setting to %s failed: %s\n",
+               provide::ToString(target), e.what());
+    return false;
+  }
+  DaemonLogf("[provide] lag.dev measurements %s (%s)\n", on ? "on" : "off",
              provide::ToString(target));
   return true;
 }
@@ -2494,12 +2554,10 @@ uint64_t ReadIfaceCounter(const std::string& iface, const char* which) {
   return 0;
 }
 
-std::string ReadTextFile(const std::string& path) {
-  std::ifstream in(path);
-  if (!in) return {};
-  return std::string(std::istreambuf_iterator<char>(in),
-                     std::istreambuf_iterator<char>());
-}
+// /proc/net/route, /proc/net/wireless and the default route's sysfs carrier and
+// speed, which a Wi-Fi or link-down interface answers with EINVAL
+// (TextFile.hpp): never a throw out of the reaper tick.
+std::string ReadTextFile(const std::string& path) { return textfile::ReadAll(path); }
 
 LinuxNetworkQualitySnapshot ReadNetworkQuality(const std::string& tunnelInterface) {
   LinuxNetworkQualitySnapshot snapshot;

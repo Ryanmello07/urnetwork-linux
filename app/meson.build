@@ -228,6 +228,7 @@ executable('urnetwork-gui',
     'src/EarningsPage.cpp',
     'src/SolanaWalletSheet.cpp',
     'src/BittensorManualSheet.cpp',
+    'src/Top200SignSheet.cpp',
     'src/EmojiTagSheet.cpp',
     'src/AccountPage.cpp',
     'src/GuestConversionSheet.cpp',
@@ -534,7 +535,9 @@ install_data('assets/carousel/LoginCarousel1.jpg',
 # and the statistics sections' visibility, the compact count and count-rate
 # labels, the extender share/import decisions, the reset's owed re-send and its
 # call sites, the Solana payout wallet's card
-# and connect-sheet rules, the wallet bridge's return routing, the dual-stack
+# and connect-sheet rules, the Settlement v2 tile and its claim sheet's
+# progress, the payout consent's states, steps and refusals, the wallet
+# bridge's return routing, the dual-stack
 # tunnel policy and v6 capture set, the updater's release selection (the one
 # official repo, the tag grammar, the own-arch asset and its digest, the
 # install-kind probe, the launch throttle), when it asks GitHub again after
@@ -611,6 +614,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/PayoutNoExtensionTest.cpp',
     'tests/PayoutPromotionWiringTest.cpp',
     'tests/SnPayoutPresentationTest.cpp',
+    'tests/SnLedgerPresentationTest.cpp',
+    'tests/NetworkConsentTest.cpp',
     'tests/WalletBridgeRouteTest.cpp',
     'tests/BittensorWalletFlowTest.cpp',
     'tests/ManageSubscriptionTest.cpp',
@@ -624,6 +629,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/UpdateStatePresentationTest.cpp',
     'tests/UpdateWiringTest.cpp',
     'tests/CatalogLookupTest.cpp',
+    'tests/RetiredCliCommandsTest.cpp',
     'tests/ReferralCodeStateTest.cpp',
     'tests/ReferralShareTest.cpp',
     'tests/ReferralTotalsStateTest.cpp',
@@ -667,6 +673,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/SignOutWiringTest.cpp',
     'tests/ProvideWhileDisconnectedWiringTest.cpp',
     'tests/ProviderOnlyStatusWiringTest.cpp',
+    'tests/SpeedTestsSwitchWiringTest.cpp',
     'tests/ExcludeLauncherTest.cpp',
     'tests/NetworkCountryTest.cpp',
     'tests/NetworkCountryWiringTest.cpp',
@@ -683,6 +690,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/Utf8TruncateTest.cpp',
     'tests/ControlReplyWiringTest.cpp',
     'tests/DaemonInstanceGuardTest.cpp',
+    'tests/DaemonTextFileTest.cpp',
+    'tests/LogTailWiringTest.cpp',
+    'tests/ApiAuthorizationWiringTest.cpp',
     'tests/DaemonCrashOutputTest.cpp',
     'tests/TunnelHostLockWiringTest.cpp',
     'tests/GlogFlushWiringTest.cpp',
@@ -743,6 +753,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/LogExportTest.cpp',
     'tests/ApprovalHostWiringTest.cpp',
     'tests/BrowserApprovalWiringTest.cpp',
+    'tests/Top200BindingTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -765,6 +776,7 @@ urnetwork_tests = executable('urnetwork-tests',
               # EarningsPageTeardownTest reads EarningsPage.cpp the same way:
               # its destructor must touch no widget (issue #13).
               # PotfilesTest reads every source and po/POTFILES.in the same way.
+              # RetiredCliCommandsTest reads po/ the same way.
               # FastDnsWiringTest reads the DNS surfaces and po/en.po the same way.
               # CountedCopyPluralTest reads the counted-copy surfaces and po/ the same way.
               # ErrorIdInternalTest reads every source the same way: the C ABI's
@@ -800,6 +812,9 @@ urnetwork_tests = executable('urnetwork-tests',
               # sites, meson.build and ../../packaging/lib/common.sh the same way.
               # ControlReplyWiringTest reads the daemon's reply sends and log ring the same way.
               # DaemonInstanceGuardTest reads the daemon's start and revert paths the same way.
+              # DaemonTextFileTest reads the daemon's whole-file readers the same way.
+              # LogTailWiringTest reads the log_tail client and the daemon's handler the same way.
+              # ApiAuthorizationWiringTest reads SdkHost's device teardowns the same way.
               # DaemonCrashOutputTest reads ../packaging/urnetworkd.service the same way.
               # TunnelHostLockWiringTest reads TunnelHost's opMutex_ locks the same way.
               # GlogFlushWiringTest reads the daemon's glog flushes the same way.
@@ -852,6 +867,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # sign-out reports and the sign-in page's notice.
               # AccountRowIconsTest reads the Account pane's rows, the kit's
               # leading icon and its css the same way.
+              # NetworkConsentTest reads the payout consent's section, ports and
+              # SDK calls, its host and bridge call sites and po/en.po the same way.
               # RelativeTimeSpanTest reads RelativeTime's words the same way, and
               # SessionsWiringTest the Sessions page, its Account row, the window's
               # navigation and the rail; SessionsPresentationTest reads po/en.po.

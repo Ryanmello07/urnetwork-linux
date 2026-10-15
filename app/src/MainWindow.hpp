@@ -379,6 +379,11 @@ class MainWindow : public Gtk::ApplicationWindow {
   // offer page (the upgrade sheet when no offer is active), the feedback form
   // pre-filled from the link's token.
   void HandleOnboardingLink(const std::string& url);
+  // urnetwork://top200/sign?binding=<base64url> (the ur.io Top 200 page's
+  // "Open in the app"): Earnings, and the sign sheet with the binding in its
+  // field (top200::ParseSignLink). It only pre-fills: the user reviews and
+  // signs. Dropped while signed out.
+  void HandleTop200Link(const std::string& url);
   // connect.first, once per network (remembered in the prefs)
   void NoteConnected();
   // Last width (in dip) fanned out to the destinations. Pages fold their own

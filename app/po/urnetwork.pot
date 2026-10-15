@@ -960,6 +960,11 @@ msgctxt "balance_codes_title"
 msgid "Balance Codes"
 msgstr ""
 
+#. Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "battery_optimization_settings_hint"
+msgid "Tap to open Android's battery optimization list. If URnetwork isn't listed, switch the filter to “All apps”, then choose URnetwork and “Don't optimize”."
+msgstr ""
+
 #. Settings
 msgctxt "become_supporter"
 msgid "Get UR Pro"
@@ -3836,9 +3841,9 @@ msgctxt "direct_update_up_to_date"
 msgid "URnetwork is up to date."
 msgstr ""
 
-#. Call to action
-msgctxt "disable_ignore_battery_hint"
-msgid "To disable, please go to App Battery Usage in System Settings"
+#. Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "disable_ignore_battery_settings_hint"
+msgid "To turn this off, tap the switch to open Android's battery optimization list, switch the filter to “All apps”, then choose URnetwork and “Optimize”."
 msgstr ""
 
 #. Disconnect VPN button text
@@ -4473,6 +4478,16 @@ msgstr ""
 #. Confirmation after the extender settings are saved.
 msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
+msgstr ""
+
+#. Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests"
+msgid "lag.dev speed tests"
+msgstr ""
+
+#. Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests_description"
+msgid "Let people testing their connection on lag.dev measure latency, download and upload to this device. Tests use some of your bandwidth while they run."
 msgstr ""
 
 #. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
@@ -8515,6 +8530,11 @@ msgctxt "site_app_served"
 msgid "Served"
 msgstr ""
 
+#. App earnings/claim: label of the settlement v2 card, shown beside the v1 claims
+msgctxt "site_app_settlement_v2"
+msgid "Settlement v2"
+msgstr ""
+
 #. App leaderboard: public visibility toggle
 msgctxt "site_app_show_on_leaderboard"
 msgid "Show my network on the leaderboard"
@@ -8565,9 +8585,19 @@ msgctxt "site_app_top200_apply_hotkey_sig"
 msgid "Apply hotkey signature"
 msgstr ""
 
+#. App top200: validity epochs missing, not whole numbers, or reversed
+msgctxt "site_app_top200_bad_epochs"
+msgid "Enter the validity epochs as whole numbers, the last one no earlier than the first."
+msgstr ""
+
+#. App top200: the pasted fleet manifest does not parse or validate
+msgctxt "site_app_top200_bad_manifest"
+msgid "This is not a valid fleet manifest. Paste the JSON that provider fleet manifest prints."
+msgstr ""
+
 #. App top200: unparseable paste
 msgctxt "site_app_top200_bad_signature"
-msgid "Paste the binding payload exactly as the app shows it."
+msgid "Paste the whole binding payload: JSON with binding and client_signature."
 msgstr ""
 
 #. App top200: binding not complete
@@ -8575,9 +8605,19 @@ msgctxt "site_app_top200_binding_incomplete"
 msgid "Calldata appears once the device signature and the hotkey signature both verify."
 msgstr ""
 
+#. App top200: build each manifest member's binding
+msgctxt "site_app_top200_build_bindings"
+msgid "Build bindings"
+msgstr ""
+
 #. App top200: calldata label
 msgctxt "site_app_top200_calldata"
 msgid "Binding calldata"
+msgstr ""
+
+#. App top200: the current epoch, from GET /sn/head
+msgctxt "site_app_top200_current_epoch"
+msgid "The current epoch is {}."
 msgstr ""
 
 #. App top200: device row label
@@ -8602,7 +8642,7 @@ msgstr ""
 
 #. App top200: how to produce the hotkey signature
 msgctxt "site_app_top200_hotkey_sign_hint"
-msgid "Sign each binding digest with the hotkey using your own tooling (snclaim bind-head) and paste the signature here."
+msgid "With --hotkey_seed_file, the payload from provider fleet sign already carries the hotkey signature. Or, where the hotkey seed is kept, run provider fleet sign with the device's --client_id and --hotkey_seed_file and paste the 0x signature it prints here. provider fleet bind signs with the hotkey for you."
 msgstr ""
 
 #. App top200: hotkey signature input
@@ -8610,14 +8650,44 @@ msgctxt "site_app_top200_hotkey_signature"
 msgid "Hotkey signature (hex)"
 msgstr ""
 
+#. App top200: where the app signs a binding; {path} is Earnings › Top 200 › Sign fleet binding in the reader's language
+msgctxt "site_app_top200_in_app"
+msgid "In the URnetwork app: {}"
+msgstr ""
+
 #. App top200: intro
 msgctxt "site_app_top200_intro"
 msgid "Head miners are the top {cutoff} networks by routable egress IP breadth. A head spot is paid natively by the subnet every tempo, straight to your coldkey."
 msgstr ""
 
+#. App top200: fleet manifest textarea label
+msgctxt "site_app_top200_manifest"
+msgid "Fleet manifest"
+msgstr ""
+
+#. App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it
+msgctxt "site_app_top200_manifest_hash_mismatch"
+msgid "This manifest does not match the commitment_sha256 pasted with it."
+msgstr ""
+
+#. App top200: how to get the fleet manifest and where an app shows its member entry
+msgctxt "site_app_top200_manifest_hint"
+msgid "Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
+msgstr ""
+
+#. App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1
+msgctxt "site_app_top200_manifest_hotkey_mismatch"
+msgid "The manifest's hotkey is not the hotkey entered in step 1."
+msgstr ""
+
 #. App top200: status when not eligible
 msgctxt "site_app_top200_not_eligible"
 msgid "Not eligible yet. Your score is {score} and the eviction floor is {floor}."
+msgstr ""
+
+#. App top200: link that opens the app's Sign fleet binding screen with this binding filled in
+msgctxt "site_app_top200_open_in_app"
+msgid "Open in the app"
 msgstr ""
 
 #. App top200: progress
@@ -8627,7 +8697,7 @@ msgstr ""
 
 #. App top200: step 2
 msgctxt "site_app_top200_step_bind"
-msgid "Each provider device signs its fleet binding from its app under Account › Top 200. Paste each device's binding payload here, one device at a time."
+msgid "Each provider device signs its own binding. Build the bindings below from your fleet manifest and copy each one to its device. In the URnetwork app, open Earnings › Top 200 › Sign fleet binding, paste the binding, check the fleet ID, hotkey and epochs, sign, and paste the payload the app shows here. On a CLI provider, run provider fleet sign with the fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs instead, and paste the JSON it prints. Neither sends anything and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key."
 msgstr ""
 
 #. App top200: step 1
@@ -8650,6 +8720,16 @@ msgctxt "site_app_top200_unavailable"
 msgid "Head spot status is not available right now."
 msgstr ""
 
+#. App top200: first epoch the bindings are valid for (input label)
+msgctxt "site_app_top200_valid_from"
+msgid "Valid from epoch"
+msgstr ""
+
+#. App top200: last epoch the bindings are valid for (input label)
+msgctxt "site_app_top200_valid_to"
+msgid "Valid to epoch"
+msgstr ""
+
 #. App account: total referrals label
 msgctxt "site_app_total_referrals"
 msgid "Total referrals"
@@ -8663,6 +8743,41 @@ msgstr ""
 #. App settings: unlink referral network
 msgctxt "site_app_unlink"
 msgid "Unlink"
+msgstr ""
+
+#. App claim: a settlement v2 claim confirmed on chain. {amount} is the SN25α amount the vault paid, with its unit.
+msgctxt "site_app_v2_claimed_amount"
+msgid "Claimed {amount}"
+msgstr ""
+
+#. App earnings/claim: the settlement v2 amount earned in finalized roots, paid and claimable together
+msgctxt "site_app_v2_earned"
+msgid "Earned"
+msgstr ""
+
+#. App earnings/claim: the settlement v2 amount already paid to the coldkey
+msgctxt "site_app_v2_paid"
+msgid "Paid"
+msgstr ""
+
+#. App earnings/claim: settlement v2 earnings in a committed root that is not finalized yet. {amount} is an SN25α amount with its unit.
+msgctxt "site_app_v2_pending"
+msgid "Pending: +{amount}, awaiting finalization"
+msgstr ""
+
+#. App earnings/claim: heads each settlement v2 account when the coldkey has accounts in several operator pools. {no_id} is the pool's operator id.
+msgctxt "site_app_v2_pool"
+msgid "Pool {no_id}"
+msgstr ""
+
+#. App earnings/claim: shown in place of the settlement v2 amounts when the ledger cannot be read, never a zero
+msgctxt "site_app_v2_unavailable"
+msgid "Unavailable"
+msgstr ""
+
+#. App earnings/claim: the settlement v2 ledger cannot be read; a retry button follows
+msgctxt "site_app_v2_unavailable_detail"
+msgid "Settlement v2 balances can't be read right now."
 msgstr ""
 
 #. App profile: verified badge
@@ -9541,6 +9656,101 @@ msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr ""
 
+#. Payout consent section, beside the settlement v2 tile and claim: the status while a consent covers the current epoch. The placeholder is the consented Bittensor coldkey, shortened to its first and last four characters around an ellipsis (5F3s…kQ9v); keep it as is.
+msgctxt "sn_consent_active"
+msgid "Earnings are paid to {}"
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the explanation under the status. One signature with the Bittensor wallet's coldkey covers every provider client of the network.
+msgctxt "sn_consent_body"
+msgid "Sign once with your Bittensor wallet so this network's earnings are paid to it."
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while a consent is active. It reruns the signing with another Bittensor wallet.
+msgctxt "sn_consent_change"
+msgid "Change wallet"
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the note with Change wallet (sn_consent_change) while a consent is active. An epoch is the settlement period, about 7 days.
+msgctxt "sn_consent_change_note"
+msgid "A new wallet takes effect from the next epoch."
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the consent message expired (300 seconds after the server issued it) before the signed consent reached the server. Trying again requests a new message.
+msgctxt "sn_consent_expired"
+msgid "The request expired. Try again."
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the server refused the signature because it does not verify for the wallet's coldkey (SnErrorCodeSignatureMismatch).
+msgctxt "sn_consent_failed"
+msgid "The signature didn't match this wallet. Try again."
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the status while no consent covers the current epoch, so the network's earnings are not paid. The Sign with wallet button (sn_consent_sign) follows.
+msgctxt "sn_consent_none"
+msgid "No payout wallet yet. Earnings aren't paid until you sign."
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the signed-in session is not the network owner's. Only the owner chooses where the network's earnings are paid.
+msgctxt "sn_consent_owner_only"
+msgid "Only the network owner can choose the payout wallet."
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while no consent is active. It connects the Bittensor wallet, which then signs the consent message the server issued.
+msgctxt "sn_consent_sign"
+msgid "Sign with wallet"
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: the progress line while the Bittensor wallet is asked to sign the consent message.
+msgctxt "sn_consent_signing"
+msgid "Waiting for your wallet's signature…"
+msgstr ""
+
+#. Payout consent section, beside the settlement v2 tile and claim: its title. The network owner signs once with a Bittensor wallet, and that coldkey is paid the earnings of every provider client of the network.
+msgctxt "sn_consent_title"
+msgid "Payout consent"
+msgstr ""
+
+#. Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".
+msgctxt "sn_ledger_claim"
+msgid "Claim settlement v2"
+msgstr ""
+
+#. Settlement v2 tile: label of the SN25α the user can claim now.
+msgctxt "sn_ledger_claimable"
+msgid "Claimable"
+msgstr ""
+
+#. Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).
+msgctxt "sn_ledger_earned"
+msgid "Earned"
+msgstr ""
+
+#. Settlement v2 tile: label of the SN25α already paid to the user's coldkey.
+msgctxt "sn_ledger_paid"
+msgid "Paid"
+msgstr ""
+
+#. Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".
+msgctxt "sn_ledger_pending"
+msgid "Pending: +{}, awaiting finalization"
+msgstr ""
+
+#. Settlement v2 tile and claim dialog: names an operator pool. {} is its number.
+msgctxt "sn_ledger_pool"
+msgid "Pool {}"
+msgstr ""
+
+#. Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".
+msgctxt "sn_ledger_title"
+msgid "Settlement v2"
+msgstr ""
+
+#. Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.
+msgctxt "sn_ledger_unavailable"
+msgid "Unavailable"
+msgstr ""
+
 #. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
 msgctxt "sn_payout_schedule"
 msgid "Earnings settle every epoch and are paid in SN25α to your Bittensor coldkey when you claim them."
@@ -10161,6 +10371,106 @@ msgstr ""
 #. Detail of the Top 200 tile when eligible.
 msgctxt "top200_detail"
 msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
+msgstr ""
+
+#. Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).
+msgctxt "top200_sign_action"
+msgid "Sign with this device"
+msgstr ""
+
+#. Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).
+msgctxt "top200_sign_binding"
+msgid "Sign fleet binding"
+msgstr ""
+
+#. Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.
+msgctxt "top200_sign_binding_label"
+msgid "Binding to sign"
+msgstr ""
+
+#. Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).
+msgctxt "top200_sign_chain"
+msgid "Chain {0} · subnet {1}"
+msgstr ""
+
+#. Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).
+msgctxt "top200_sign_client_key"
+msgid "Client key"
+msgstr ""
+
+#. Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.
+msgctxt "top200_sign_copy_member"
+msgid "Copy member entry"
+msgstr ""
+
+#. Top 200 sign screen: button that copies the signed {binding, client_signature} payload.
+msgctxt "top200_sign_copy_payload"
+msgid "Copy payload"
+msgstr ""
+
+#. Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).
+msgctxt "top200_sign_done"
+msgid "Signed. Copy the payload and paste it on the Top 200 page under Device signature."
+msgstr ""
+
+#. Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.
+msgctxt "top200_sign_epochs"
+msgid "Valid from epoch {0} to {1}"
+msgstr ""
+
+#. Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.
+msgctxt "top200_sign_error_failed"
+msgid "The binding could not be signed: {}"
+msgstr ""
+
+#. Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).
+msgctxt "top200_sign_error_invalid"
+msgid "This is not a fleet binding. Copy the whole binding from the Top 200 page."
+msgstr ""
+
+#. Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).
+msgctxt "top200_sign_error_no_key"
+msgid "This device's client key is not available right now. Start URnetwork on this device, then try again."
+msgstr ""
+
+#. Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.
+msgctxt "top200_sign_error_other_device"
+msgid "This binding is for another device. A device signs only the binding with its own client ID and client key."
+msgstr ""
+
+#. Top 200 sign screen: label of the binding's fleet_id (0x hex).
+msgctxt "top200_sign_fleet_id"
+msgid "Fleet ID"
+msgstr ""
+
+#. Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.
+msgctxt "top200_sign_hotkey"
+msgid "Hotkey"
+msgstr ""
+
+#. Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.
+msgctxt "top200_sign_intro"
+msgid "Your fleet operator builds this device's binding on the Top 200 page at ur.io. Paste it here to sign it with this device's client key. Nothing is sent: you copy the signed payload back to the page yourself."
+msgstr ""
+
+#. Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.
+msgctxt "top200_sign_member_hint"
+msgid "Your fleet manifest lists this device by its client ID and client key. Copy its member entry and send it to your fleet operator."
+msgstr ""
+
+#. Top 200 sign screen: button that pastes the binding from the clipboard.
+msgctxt "top200_sign_paste"
+msgid "Paste"
+msgstr ""
+
+#. Top 200 sign screen: shown above the parsed binding's values before the Sign button.
+msgctxt "top200_sign_review"
+msgid "Check that the fleet ID, hotkey and epochs match the Top 200 page before you sign."
+msgstr ""
+
+#. Top 200 sign screen: label of the section showing this device's client ID and client key.
+msgctxt "top200_sign_this_device"
+msgid "This device"
 msgstr ""
 
 #. Headline of the Top 200 tile when eligible.

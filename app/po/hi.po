@@ -960,6 +960,11 @@ msgctxt "balance_codes_title"
 msgid "Balance Codes"
 msgstr "बैलेंस कोड्स"
 
+#. Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "battery_optimization_settings_hint"
+msgid "Tap to open Android's battery optimization list. If URnetwork isn't listed, switch the filter to “All apps”, then choose URnetwork and “Don't optimize”."
+msgstr "Android की बैटरी ऑप्टिमाइज़ेशन सूची खोलने के लिए टैप करें। अगर URnetwork सूची में नहीं है, तो फ़िल्टर को \"सभी ऐप्लिकेशन\" पर बदलें, फिर URnetwork और \"ऑप्टिमाइज़ न करें\" चुनें।"
+
 #. Settings
 msgctxt "become_supporter"
 msgid "Get UR Pro"
@@ -3836,10 +3841,10 @@ msgctxt "direct_update_up_to_date"
 msgid "URnetwork is up to date."
 msgstr "URnetwork अप टू डेट है।"
 
-#. Call to action
-msgctxt "disable_ignore_battery_hint"
-msgid "To disable, please go to App Battery Usage in System Settings"
-msgstr "अक्षम करने के लिए, कृपया सिस्टम सेटिंग्स में ऐप बैटरी उपयोग पर जाएँ"
+#. Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "disable_ignore_battery_settings_hint"
+msgid "To turn this off, tap the switch to open Android's battery optimization list, switch the filter to “All apps”, then choose URnetwork and “Optimize”."
+msgstr "इसे बंद करने के लिए, Android की बैटरी ऑप्टिमाइज़ेशन सूची खोलने के लिए स्विच पर टैप करें, फ़िल्टर को \"सभी ऐप्लिकेशन\" पर बदलें, फिर URnetwork और \"ऑप्टिमाइज़ करें\" चुनें।"
 
 #. Disconnect VPN button text
 msgctxt "disconnect"
@@ -4474,6 +4479,16 @@ msgstr "टनल अगली बार कनेक्ट होने पर 
 msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
 msgstr "एक्सटेंडर सेटिंग सहेजी गईं"
+
+#. Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests"
+msgid "lag.dev speed tests"
+msgstr "lag.dev स्पीड टेस्ट"
+
+#. Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests_description"
+msgid "Let people testing their connection on lag.dev measure latency, download and upload to this device. Tests use some of your bandwidth while they run."
+msgstr "lag.dev पर अपने कनेक्शन की जाँच करने वाले लोगों को इस डिवाइस तक लेटेंसी, डाउनलोड और अपलोड मापने दें। चलते समय टेस्ट आपकी बैंडविड्थ का कुछ हिस्सा इस्तेमाल करते हैं।"
 
 #. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
 msgctxt "extender_start_failed"
@@ -8355,6 +8370,101 @@ msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
 
+#. Payout consent section, beside the settlement v2 tile and claim: the status while a consent covers the current epoch. The placeholder is the consented Bittensor coldkey, shortened to its first and last four characters around an ellipsis (5F3s…kQ9v); keep it as is.
+msgctxt "sn_consent_active"
+msgid "Earnings are paid to {}"
+msgstr "कमाई का भुगतान {} पर होता है"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the explanation under the status. One signature with the Bittensor wallet's coldkey covers every provider client of the network.
+msgctxt "sn_consent_body"
+msgid "Sign once with your Bittensor wallet so this network's earnings are paid to it."
+msgstr "अपने Bittensor वॉलेट से एक बार साइन करें, ताकि इस नेटवर्क की कमाई का भुगतान उसी वॉलेट में हो।"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while a consent is active. It reruns the signing with another Bittensor wallet.
+msgctxt "sn_consent_change"
+msgid "Change wallet"
+msgstr "वॉलेट बदलें"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the note with Change wallet (sn_consent_change) while a consent is active. An epoch is the settlement period, about 7 days.
+msgctxt "sn_consent_change_note"
+msgid "A new wallet takes effect from the next epoch."
+msgstr "नया वॉलेट अगले एपोक से लागू होता है।"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the consent message expired (300 seconds after the server issued it) before the signed consent reached the server. Trying again requests a new message.
+msgctxt "sn_consent_expired"
+msgid "The request expired. Try again."
+msgstr "अनुरोध की समय-सीमा समाप्त हो गई है। पुनः प्रयास करें।"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the server refused the signature because it does not verify for the wallet's coldkey (SnErrorCodeSignatureMismatch).
+msgctxt "sn_consent_failed"
+msgid "The signature didn't match this wallet. Try again."
+msgstr "हस्ताक्षर इस वॉलेट से मेल नहीं खाया। पुनः प्रयास करें।"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the status while no consent covers the current epoch, so the network's earnings are not paid. The Sign with wallet button (sn_consent_sign) follows.
+msgctxt "sn_consent_none"
+msgid "No payout wallet yet. Earnings aren't paid until you sign."
+msgstr "अभी कोई पेआउट वॉलेट नहीं है। जब तक आप साइन नहीं करते, कमाई का भुगतान नहीं होता।"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the signed-in session is not the network owner's. Only the owner chooses where the network's earnings are paid.
+msgctxt "sn_consent_owner_only"
+msgid "Only the network owner can choose the payout wallet."
+msgstr "केवल नेटवर्क का मालिक ही पेआउट वॉलेट चुन सकता है।"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while no consent is active. It connects the Bittensor wallet, which then signs the consent message the server issued.
+msgctxt "sn_consent_sign"
+msgid "Sign with wallet"
+msgstr "वॉलेट से साइन करें"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the progress line while the Bittensor wallet is asked to sign the consent message.
+msgctxt "sn_consent_signing"
+msgid "Waiting for your wallet's signature…"
+msgstr "आपके वॉलेट के हस्ताक्षर की प्रतीक्षा है…"
+
+#. Payout consent section, beside the settlement v2 tile and claim: its title. The network owner signs once with a Bittensor wallet, and that coldkey is paid the earnings of every provider client of the network.
+msgctxt "sn_consent_title"
+msgid "Payout consent"
+msgstr "पेआउट सहमति"
+
+#. Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".
+msgctxt "sn_ledger_claim"
+msgid "Claim settlement v2"
+msgstr "सेटलमेंट v2 का दावा करें"
+
+#. Settlement v2 tile: label of the SN25α the user can claim now.
+msgctxt "sn_ledger_claimable"
+msgid "Claimable"
+msgstr "दावा योग्य"
+
+#. Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).
+msgctxt "sn_ledger_earned"
+msgid "Earned"
+msgstr "अर्जित"
+
+#. Settlement v2 tile: label of the SN25α already paid to the user's coldkey.
+msgctxt "sn_ledger_paid"
+msgid "Paid"
+msgstr "भुगतान हो चुका"
+
+#. Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".
+msgctxt "sn_ledger_pending"
+msgid "Pending: +{}, awaiting finalization"
+msgstr "लंबित: +{}, अंतिम रूप दिए जाने की प्रतीक्षा में"
+
+#. Settlement v2 tile and claim dialog: names an operator pool. {} is its number.
+msgctxt "sn_ledger_pool"
+msgid "Pool {}"
+msgstr "पूल {}"
+
+#. Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".
+msgctxt "sn_ledger_title"
+msgid "Settlement v2"
+msgstr "सेटलमेंट v2"
+
+#. Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.
+msgctxt "sn_ledger_unavailable"
+msgid "Unavailable"
+msgstr "उपलब्ध नहीं"
+
 #. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
 msgctxt "sn_payout_schedule"
 msgid "Earnings settle every epoch and are paid in SN25α to your Bittensor coldkey when you claim them."
@@ -8976,6 +9086,106 @@ msgstr "आपका स्कोर निष्कासन सीमा क�
 msgctxt "top200_detail"
 msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
 msgstr "आपके नेटवर्क के रूट करने योग्य IP का दायरा {1} शीर्ष स्थानों में लगभग #{0} पर है। शीर्ष माइनर हर tempo में सीधे SN25α कमाते हैं।"
+
+#. Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).
+msgctxt "top200_sign_action"
+msgid "Sign with this device"
+msgstr "इस डिवाइस से हस्ताक्षर करें"
+
+#. Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).
+msgctxt "top200_sign_binding"
+msgid "Sign fleet binding"
+msgstr "फ़्लीट बाइंडिंग पर हस्ताक्षर करें"
+
+#. Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.
+msgctxt "top200_sign_binding_label"
+msgid "Binding to sign"
+msgstr "हस्ताक्षर के लिए बाइंडिंग"
+
+#. Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).
+msgctxt "top200_sign_chain"
+msgid "Chain {0} · subnet {1}"
+msgstr "चेन {0} · सबनेट {1}"
+
+#. Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).
+msgctxt "top200_sign_client_key"
+msgid "Client key"
+msgstr "क्लाइंट कुंजी"
+
+#. Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.
+msgctxt "top200_sign_copy_member"
+msgid "Copy member entry"
+msgstr "सदस्य प्रविष्टि कॉपी करें"
+
+#. Top 200 sign screen: button that copies the signed {binding, client_signature} payload.
+msgctxt "top200_sign_copy_payload"
+msgid "Copy payload"
+msgstr "डेटा कॉपी करें"
+
+#. Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).
+msgctxt "top200_sign_done"
+msgid "Signed. Copy the payload and paste it on the Top 200 page under Device signature."
+msgstr "हस्ताक्षरित। डेटा कॉपी करें और टॉप 200 पेज पर डिवाइस हस्ताक्षर के अंतर्गत पेस्ट करें।"
+
+#. Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.
+msgctxt "top200_sign_epochs"
+msgid "Valid from epoch {0} to {1}"
+msgstr "एपॉक {0} से {1} तक मान्य"
+
+#. Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.
+msgctxt "top200_sign_error_failed"
+msgid "The binding could not be signed: {}"
+msgstr "बाइंडिंग पर हस्ताक्षर नहीं हो सके: {}"
+
+#. Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).
+msgctxt "top200_sign_error_invalid"
+msgid "This is not a fleet binding. Copy the whole binding from the Top 200 page."
+msgstr "यह फ़्लीट बाइंडिंग नहीं है। टॉप 200 पेज से पूरी बाइंडिंग कॉपी करें।"
+
+#. Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).
+msgctxt "top200_sign_error_no_key"
+msgid "This device's client key is not available right now. Start URnetwork on this device, then try again."
+msgstr "इस डिवाइस की क्लाइंट कुंजी अभी उपलब्ध नहीं है। इस डिवाइस पर URnetwork शुरू करें, फिर दोबारा कोशिश करें।"
+
+#. Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.
+msgctxt "top200_sign_error_other_device"
+msgid "This binding is for another device. A device signs only the binding with its own client ID and client key."
+msgstr "यह बाइंडिंग किसी दूसरे डिवाइस की है। डिवाइस केवल अपनी क्लाइंट ID और क्लाइंट कुंजी वाली बाइंडिंग पर हस्ताक्षर करता है।"
+
+#. Top 200 sign screen: label of the binding's fleet_id (0x hex).
+msgctxt "top200_sign_fleet_id"
+msgid "Fleet ID"
+msgstr "फ़्लीट ID"
+
+#. Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.
+msgctxt "top200_sign_hotkey"
+msgid "Hotkey"
+msgstr "हॉटकी"
+
+#. Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.
+msgctxt "top200_sign_intro"
+msgid "Your fleet operator builds this device's binding on the Top 200 page at ur.io. Paste it here to sign it with this device's client key. Nothing is sent: you copy the signed payload back to the page yourself."
+msgstr "आपके फ़्लीट का संचालक ur.io पर टॉप 200 पेज पर इस डिवाइस की बाइंडिंग बनाता है। इसे इस डिवाइस की क्लाइंट कुंजी से हस्ताक्षरित करने के लिए यहाँ पेस्ट करें। कुछ भी भेजा नहीं जाता: हस्ताक्षरित डेटा आप स्वयं पेज पर वापस कॉपी करते हैं।"
+
+#. Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.
+msgctxt "top200_sign_member_hint"
+msgid "Your fleet manifest lists this device by its client ID and client key. Copy its member entry and send it to your fleet operator."
+msgstr "आपका फ़्लीट मैनिफ़ेस्ट इस डिवाइस को उसकी क्लाइंट ID और क्लाइंट कुंजी से सूचीबद्ध करता है। इसकी सदस्य प्रविष्टि कॉपी करें और अपने फ़्लीट के संचालक को भेजें।"
+
+#. Top 200 sign screen: button that pastes the binding from the clipboard.
+msgctxt "top200_sign_paste"
+msgid "Paste"
+msgstr "पेस्ट करें"
+
+#. Top 200 sign screen: shown above the parsed binding's values before the Sign button.
+msgctxt "top200_sign_review"
+msgid "Check that the fleet ID, hotkey and epochs match the Top 200 page before you sign."
+msgstr "हस्ताक्षर करने से पहले जाँच लें कि फ़्लीट ID, हॉटकी और एपॉक टॉप 200 पेज से मेल खाते हैं।"
+
+#. Top 200 sign screen: label of the section showing this device's client ID and client key.
+msgctxt "top200_sign_this_device"
+msgid "This device"
+msgstr "यह डिवाइस"
 
 #. Headline of the Top 200 tile when eligible.
 msgctxt "top200_you_qualify"

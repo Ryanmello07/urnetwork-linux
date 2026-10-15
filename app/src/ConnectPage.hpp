@@ -213,6 +213,12 @@ class ConnectPage : public Gtk::Box {
   void ApplyExtenderProvideState();
   void DrawExtenderRow(const extender::ProvideRow& row);
   void OnExtenderToggled();
+  // The lag.dev speed tests switch under it (lag.dev/PLAN.md C4): drawn beside
+  // the Extender row by ApplyExtenderProvideState, dropping a reading that
+  // changes nothing; the switch writes the measurements setting and holds its
+  // new position until the next reading.
+  void DrawSpeedTestsRow(const extender::SpeedTestsRow& row);
+  void OnSpeedTestsToggled();
   // the selected-provider row (§2.3): stats.locationName with a selected peer
   // resolved to its device name; empty => "Best available provider"
   void ApplyLocationRow();
@@ -552,6 +558,13 @@ class ConnectPage : public Gtk::Box {
   // the reading the row last drew, so a push that changes nothing is dropped
   extender::ProvideRow extenderRowDrawn_;
   bool extenderRowApplied_ = false;
+  // the lag.dev speed tests row and its switch under the Extender row: hidden,
+  // never disabled, while the Extender row is hidden or the switch's write has
+  // no taker
+  Gtk::Box* speedTestsRow_ = nullptr;
+  Gtk::Switch* speedTestsToggle_ = nullptr;
+  extender::SpeedTestsRow speedTestsDrawn_;
+  bool speedTestsApplied_ = false;
   // connect options (§2.8): the 3-item connection-mode segmented control and
   // the three PerformanceProfile toggles, all echo-guarded
   Gtk::ToggleButton* modeAuto_ = nullptr;

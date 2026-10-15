@@ -650,6 +650,18 @@ class SdkHost {
   void SignBittensorConnect(const std::string& walletId, const std::string& walletAddress,
                             std::function<void(WalletSignature)> done);
 
+  // The same signer for the network payout consent (NetworkConsent.hpp,
+  // CONSENT.md A1): a session with purpose "consent" takes `challenge`, the
+  // SnNetworkConsentChallenge result, as it came, so `walletId` signs exactly
+  // its message with its coldkey (the session binds the coldkey and the
+  // expiry), on the bridge or the manual sheet. `done` gets the session's proof
+  // (address, signature and the issued message) or the refusal; an expired
+  // challenge reads "challenge_expired: ...". Same deep-link routing, flow
+  // numbering and superseding as SignBittensorConnect.
+  void SignBittensorConsent(const std::string& walletId,
+                            const urnet::SnNetworkConsentChallengeResult& challenge,
+                            std::function<void(WalletSignature)> done);
+
   // The same bridge as a plain CONNECT for a Solana wallet (Phantom / Solflare):
   // no challenge and no signature. The bridge connects the wallet and the
   // urnetwork://<provider>-connect return hands back its base58 public key,
@@ -1163,6 +1175,18 @@ class SdkHost {
   // dropped: the row is hidden then, and the setter is never called while the
   // row is hidden (N1).
   void SetProvideExtender(bool on);
+  // The lag.dev speed tests switch under the Extender switch (lag.dev/PLAN.md
+  // C4, decision 18): whether its write has a taker now
+  // (provide::MeasurementsSwitchSourceFor), the measurements setting, and its
+  // write. Read and written as the provider extender setting is: through the
+  // device, which persists it in the daemon's space and applies it at once
+  // (queued while the daemon is out of contact), or with no device through the
+  // daemon (set_measurements_enabled) while provider_stats said it takes it.
+  // The page shows the switch only beside the Extender row and while it has a
+  // taker, and never writes it hidden (N1). The setting's default is on.
+  bool MeasurementsSwitchWritable();
+  bool GetMeasurementsEnabled();
+  void SetMeasurementsEnabled(bool on);
 
   // The SDK's shared ExtenderViewController (K7: "encoding, decoding and
   // applying live in the sdk, one implementation for every app"). Opened with
@@ -1306,6 +1330,25 @@ class SdkHost {
   // has moved on, so it carries its own staleness guard.
   bool RequestDaemonStatus(std::function<void(std::optional<ctl::StatusReply>)> done);
 
+  // ---- Top 200 fleet binding (Top200Binding.hpp, support inbox 7934) --------
+  // Both run ONE device rpc on a worker (the DeviceRemote forwards them over
+  // the existing loopback device rpc to the daemon's DeviceLocal, which holds
+  // the client key; nothing new listens and no key leaves the daemon) and
+  // deliver `done` on the GTK main loop. They share one single-flight worker:
+  // false, and no `done`, while either is in flight. `done` may land after the
+  // sheet closed, so it carries its own liveness guard.
+  //
+  // This device's client id (uuid form) and Ed25519 client public key (0x
+  // hex). Both "" with no bound device (no tunnel session, the daemon not
+  // reachable); the key alone "" when the daemon's device has none.
+  bool RequestSnFleetIdentity(
+      std::function<void(std::string clientId, std::string clientKey)> done);
+  // Signs the binding text as given (the sheet validated it first). `error`
+  // carries the sdk's text when the sign threw; an empty `signature` with no
+  // error is the sheet's to refuse (top200::FinishSign).
+  bool RequestSignSnFleetBinding(std::string bindingJson,
+                                 std::function<void(std::string signature, std::string error)> done);
+
   // Exposed so the (full-parity) UI/view models can drive the SDK directly.
   urnet::Api& api() { return *api_; }
   // The app-wide client event queue (ClientEvents.hpp): every product event
@@ -1320,6 +1363,12 @@ class SdkHost {
   // routed to the window, which owns the destinations. Fired on the GTK loop.
   void SetOnboardingLinkHandler(std::function<void(const std::string& url)> handler) {
     onOnboardingLink_ = std::move(handler);
+  }
+  // urnetwork://top200/... deep links (the ur.io Top 200 page's "Open in the
+  // app", Top200Binding.hpp ParseSignLink): routed to the window, which opens
+  // the sign sheet pre-filled. Never signs.
+  void SetTop200LinkHandler(std::function<void(const std::string& url)> handler) {
+    onTop200Link_ = std::move(handler);
   }
   // "There is a session I can drive", NOT "I am holding a handle".
   //
@@ -1393,6 +1442,14 @@ class SdkHost {
   // Tear down the device/tunnel/view-controllers without touching the stored
   // auth (Logout clears auth too; the guest upgrade only swaps the device).
   void TeardownDeviceLocked();
+  // After a teardown that leaves the person signed in (a stale device, a bind
+  // that failed, the bind watchdog): put the stored user jwt back on the api,
+  // as Initialize does. Binding a DeviceRemote replaces the api's user jwt
+  // with the device's client jwt, and closing it (the SDK's
+  // Api.closeDeviceOwner) clears that and leaves none, so without this every
+  // client-class call (referral code, preferences, the subscription balance)
+  // goes out unauthorized until the next device binds. Requires mutex_.
+  void RestoreApiAuthorizationLocked();
   // the device persists the override, else local state does; false when
   // there is neither
   bool AddBlockActionOverrideLocked(const urnet::BlockActionOverride& override_);
@@ -1414,10 +1471,13 @@ class SdkHost {
   // manual sheet. Failures before that answer the waiting flow
   // (FailWalletOperation), or `fail` when given -- which also hears a
   // superseded flow (the create-network flow, whose slot is set by `prepare`).
-  void StartBittensorSession(const std::string& walletId, const std::string& purpose,
-                             const std::string& expectedAddress, uint64_t flow,
-                             std::function<bool(const std::string& message)> prepare,
-                             std::function<void(const std::string& error)> fail = nullptr);
+  // A consent (SignBittensorConsent) brings its challenge, the
+  // SnNetworkConsentChallenge result, instead of /auth/wallet-challenge.
+  void StartBittensorSession(
+      const std::string& walletId, const std::string& purpose, const std::string& expectedAddress,
+      uint64_t flow, std::function<bool(const std::string& message)> prepare,
+      std::function<void(const std::string& error)> fail = nullptr,
+      std::optional<urnet::SnNetworkConsentChallengeResult> consent = std::nullopt);
   void FinishCreateNetworkWithWallet(const std::string& signature);
   // blockchain: "solana" (ed25519, base64 signature) | urnet::TAO (sr25519, hex)
   void AuthLoginWithWallet(const std::string& address, const std::string& signature,
@@ -1437,6 +1497,9 @@ class SdkHost {
   // What the connect page's Extender switch reads and writes now
   // (provide::ExtenderSwitchSourceFor). Requires mutex_.
   provide::ExtenderSwitchSource ExtenderSwitchSourceLocked() const;
+  // What the lag.dev speed tests switch reads and writes now
+  // (provide::MeasurementsSwitchSourceFor). Requires mutex_.
+  provide::ExtenderSwitchSource MeasurementsSwitchSourceLocked() const;
   void EmitDrawerEvent(DrawerEvent event);
   LiveStats ReadStats();  // read the current snapshot from the SDK getters
   void PublishStats();    // ReadStats() -> onStats_
@@ -1520,6 +1583,7 @@ class SdkHost {
   std::optional<urnet::Api> api_;
   std::unique_ptr<ClientEventQueue> events_;
   std::function<void(const std::string& url)> onOnboardingLink_;
+  std::function<void(const std::string& url)> onTop200Link_;
   bool productUpdatesOptOut_ = false;  // the next create's product_updates
   // the sign-up pages' opt-out onto a create's args (absent = opted in)
   void ApplySignupPreferences(urnet::NetworkCreateArgs& args) const;
@@ -1657,6 +1721,11 @@ class SdkHost {
     // predates them, which keeps that switch hidden
     bool provideExtender = false;
     bool provideExtenderWritable = false;
+    // the lag.dev measurements setting beside them, the speed tests switch, and
+    // that the daemon takes its write; on and false from a daemon that predates
+    // them, which keeps that switch hidden
+    bool measurementsEnabled = true;
+    bool measurementsEnabledWritable = false;
   };
   // Requires mutex_. One tick of the poll (provide::DaemonProviderStatsStep).
   void PollDaemonProviderStatsLocked();
@@ -1687,6 +1756,14 @@ class SdkHost {
   std::atomic<bool> daemonStatusBusy_{false};
   std::mutex daemonStatusWorkerMutex_;
   std::thread daemonStatusWorker_;
+  // The Top 200 fleet identity read and sign's worker, guarded the same two
+  // ways; ~SdkHost joins it.
+  std::atomic<bool> snFleetBusy_{false};
+  std::mutex snFleetWorkerMutex_;
+  std::thread snFleetWorker_;
+  // Runs `work` on snFleetWorker_ when it is free and posts the completion it
+  // returns to the main loop (RequestSnFleetIdentity, RequestSignSnFleetBinding).
+  bool StartSnFleetWorker(std::function<std::function<void()>()> work);
   // ResetExtenders' worker, guarded the same two ways: extenderResetBusy_ is
   // its single-flight gate, cleared by the worker before it marshals `done`,
   // and extenderResetWorkerMutex_ guards only the thread object, which ~SdkHost

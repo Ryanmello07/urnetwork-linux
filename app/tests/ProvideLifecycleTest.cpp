@@ -274,3 +274,30 @@ UR_TEST(provideExtenderSwitchShowsOnlyWhereItsWriteIsTaken) {
   UR_EXPECT_TRUE(provide::ExtenderSwitchSourceFor(false, false, false) ==
                  provide::ExtenderSwitchSource::None);
 }
+
+// The lag.dev speed tests switch under it (lag.dev/PLAN.md C4): a bound device
+// whenever there is one, and with none the provider-only device only while the
+// daemon said it takes both writes. A daemon that takes only the Extender
+// switch's leaves this switch hidden (N1), never dead.
+UR_TEST(provideMeasurementsSwitchShowsOnlyWhereItsWriteIsTaken) {
+  for (const bool reading : {false, true}) {
+    for (const bool extender : {false, true}) {
+      for (const bool measurements : {false, true}) {
+        UR_EXPECT_TRUE(provide::MeasurementsSwitchSourceFor(/*sessionDevice=*/true, reading,
+                                                            extender, measurements) ==
+                       provide::ExtenderSwitchSource::Device);
+        const bool daemon = reading && extender && measurements;
+        UR_EXPECT_TRUE(provide::MeasurementsSwitchSourceFor(false, reading, extender,
+                                                            measurements) ==
+                       (daemon ? provide::ExtenderSwitchSource::Daemon
+                               : provide::ExtenderSwitchSource::None));
+        // never with no Extender switch to sit under
+        if (provide::MeasurementsSwitchSourceFor(false, reading, extender, measurements) !=
+            provide::ExtenderSwitchSource::None) {
+          UR_EXPECT_TRUE(provide::ExtenderSwitchSourceFor(false, reading, extender) !=
+                         provide::ExtenderSwitchSource::None);
+        }
+      }
+    }
+  }
+}

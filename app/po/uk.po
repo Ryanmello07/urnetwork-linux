@@ -963,6 +963,11 @@ msgctxt "balance_codes_title"
 msgid "Balance Codes"
 msgstr "Коди балансу"
 
+#. Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "battery_optimization_settings_hint"
+msgid "Tap to open Android's battery optimization list. If URnetwork isn't listed, switch the filter to “All apps”, then choose URnetwork and “Don't optimize”."
+msgstr "Торкніться, щоб відкрити список оптимізації батареї Android. Якщо URnetwork немає у списку, перемкніть фільтр на «Усі застосунки», а потім виберіть URnetwork і «Не оптимізувати»."
+
 #. Settings
 msgctxt "become_supporter"
 msgid "Get UR Pro"
@@ -3842,10 +3847,10 @@ msgctxt "direct_update_up_to_date"
 msgid "URnetwork is up to date."
 msgstr "У вас найновіша версія URnetwork."
 
-#. Call to action
-msgctxt "disable_ignore_battery_hint"
-msgid "To disable, please go to App Battery Usage in System Settings"
-msgstr "Щоб вимкнути, перейдіть до розділу «Використання батареї застосунком» у налаштуваннях системи"
+#. Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.
+msgctxt "disable_ignore_battery_settings_hint"
+msgid "To turn this off, tap the switch to open Android's battery optimization list, switch the filter to “All apps”, then choose URnetwork and “Optimize”."
+msgstr "Щоб вимкнути, торкніться перемикача, щоб відкрити список оптимізації батареї Android, перемкніть фільтр на «Усі застосунки», а потім виберіть URnetwork і «Оптимізувати»."
 
 #. Disconnect VPN button text
 msgctxt "disconnect"
@@ -4480,6 +4485,16 @@ msgstr "Тунель використає нові налаштування ек
 msgctxt "extender_settings_saved"
 msgid "Extender settings saved"
 msgstr "Налаштування екстендера збережено"
+
+#. Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests"
+msgid "lag.dev speed tests"
+msgstr "Тести швидкості lag.dev"
+
+#. Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.
+msgctxt "extender_speed_tests_description"
+msgid "Let people testing their connection on lag.dev measure latency, download and upload to this device. Tests use some of your bandwidth while they run."
+msgstr "Дозвольте людям, які перевіряють своє з'єднання на lag.dev, вимірювати затримку, швидкість завантаження й вивантаження до цього пристрою. Під час роботи тести використовують частину вашої пропускної здатності."
 
 #. Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.
 msgctxt "extender_start_failed"
@@ -8384,6 +8399,101 @@ msgctxt "sn_alpha_symbol"
 msgid "SN25α"
 msgstr "SN25α"
 
+#. Payout consent section, beside the settlement v2 tile and claim: the status while a consent covers the current epoch. The placeholder is the consented Bittensor coldkey, shortened to its first and last four characters around an ellipsis (5F3s…kQ9v); keep it as is.
+msgctxt "sn_consent_active"
+msgid "Earnings are paid to {}"
+msgstr "Заробіток виплачується на {}"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the explanation under the status. One signature with the Bittensor wallet's coldkey covers every provider client of the network.
+msgctxt "sn_consent_body"
+msgid "Sign once with your Bittensor wallet so this network's earnings are paid to it."
+msgstr "Підпишіть один раз гаманцем Bittensor, щоб заробіток цієї мережі виплачувався на нього."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while a consent is active. It reruns the signing with another Bittensor wallet.
+msgctxt "sn_consent_change"
+msgid "Change wallet"
+msgstr "Змінити гаманець"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the note with Change wallet (sn_consent_change) while a consent is active. An epoch is the settlement period, about 7 days.
+msgctxt "sn_consent_change_note"
+msgid "A new wallet takes effect from the next epoch."
+msgstr "Новий гаманець починає діяти з наступної епохи."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the consent message expired (300 seconds after the server issued it) before the signed consent reached the server. Trying again requests a new message.
+msgctxt "sn_consent_expired"
+msgid "The request expired. Try again."
+msgstr "Термін дії запиту минув. Спробуйте ще раз."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the server refused the signature because it does not verify for the wallet's coldkey (SnErrorCodeSignatureMismatch).
+msgctxt "sn_consent_failed"
+msgid "The signature didn't match this wallet. Try again."
+msgstr "Підпис не відповідає цьому гаманцю. Спробуйте ще раз."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the status while no consent covers the current epoch, so the network's earnings are not paid. The Sign with wallet button (sn_consent_sign) follows.
+msgctxt "sn_consent_none"
+msgid "No payout wallet yet. Earnings aren't paid until you sign."
+msgstr "Гаманця для виплат ще немає. Заробіток не виплачується, доки ви не підпишете."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the error when the signed-in session is not the network owner's. Only the owner chooses where the network's earnings are paid.
+msgctxt "sn_consent_owner_only"
+msgid "Only the network owner can choose the payout wallet."
+msgstr "Вибрати гаманець для виплат може лише власник мережі."
+
+#. Payout consent section, beside the settlement v2 tile and claim: the button shown while no consent is active. It connects the Bittensor wallet, which then signs the consent message the server issued.
+msgctxt "sn_consent_sign"
+msgid "Sign with wallet"
+msgstr "Підписати гаманцем"
+
+#. Payout consent section, beside the settlement v2 tile and claim: the progress line while the Bittensor wallet is asked to sign the consent message.
+msgctxt "sn_consent_signing"
+msgid "Waiting for your wallet's signature…"
+msgstr "Очікування підпису у вашому гаманці…"
+
+#. Payout consent section, beside the settlement v2 tile and claim: its title. The network owner signs once with a Bittensor wallet, and that coldkey is paid the earnings of every provider client of the network.
+msgctxt "sn_consent_title"
+msgid "Payout consent"
+msgstr "Згода на виплати"
+
+#. Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".
+msgctxt "sn_ledger_claim"
+msgid "Claim settlement v2"
+msgstr "Отримати за розрахунками v2"
+
+#. Settlement v2 tile: label of the SN25α the user can claim now.
+msgctxt "sn_ledger_claimable"
+msgid "Claimable"
+msgstr "Можна отримати"
+
+#. Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).
+msgctxt "sn_ledger_earned"
+msgid "Earned"
+msgstr "Зароблено"
+
+#. Settlement v2 tile: label of the SN25α already paid to the user's coldkey.
+msgctxt "sn_ledger_paid"
+msgid "Paid"
+msgstr "Виплачено"
+
+#. Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".
+msgctxt "sn_ledger_pending"
+msgid "Pending: +{}, awaiting finalization"
+msgstr "В очікуванні: +{}, очікує затвердження"
+
+#. Settlement v2 tile and claim dialog: names an operator pool. {} is its number.
+msgctxt "sn_ledger_pool"
+msgid "Pool {}"
+msgstr "Пул {}"
+
+#. Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".
+msgctxt "sn_ledger_title"
+msgid "Settlement v2"
+msgstr "Розрахунки v2"
+
+#. Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.
+msgctxt "sn_ledger_unavailable"
+msgid "Unavailable"
+msgstr "Недоступно"
+
 #. Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.
 msgctxt "sn_payout_schedule"
 msgid "Earnings settle every epoch and are paid in SN25α to your Bittensor coldkey when you claim them."
@@ -9006,6 +9116,106 @@ msgstr "Ваш рахунок близький до межі вибуття. Д�
 msgctxt "top200_detail"
 msgid "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo."
 msgstr "Широта маршрутизованих IP вашої мережі приблизно на місці #{0} з {1} провідних місць. Провідні майнери заробляють SN25α напряму, кожне темпо."
+
+#. Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).
+msgctxt "top200_sign_action"
+msgid "Sign with this device"
+msgstr "Підписати цим пристроєм"
+
+#. Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).
+msgctxt "top200_sign_binding"
+msgid "Sign fleet binding"
+msgstr "Підписати прив'язку парку"
+
+#. Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.
+msgctxt "top200_sign_binding_label"
+msgid "Binding to sign"
+msgstr "Прив'язка для підпису"
+
+#. Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).
+msgctxt "top200_sign_chain"
+msgid "Chain {0} · subnet {1}"
+msgstr "Мережа {0} · підмережа {1}"
+
+#. Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).
+msgctxt "top200_sign_client_key"
+msgid "Client key"
+msgstr "Клієнтський ключ"
+
+#. Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.
+msgctxt "top200_sign_copy_member"
+msgid "Copy member entry"
+msgstr "Скопіювати запис учасника"
+
+#. Top 200 sign screen: button that copies the signed {binding, client_signature} payload.
+msgctxt "top200_sign_copy_payload"
+msgid "Copy payload"
+msgstr "Скопіювати дані"
+
+#. Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).
+msgctxt "top200_sign_done"
+msgid "Signed. Copy the payload and paste it on the Top 200 page under Device signature."
+msgstr "Підписано. Скопіюйте дані та вставте їх на сторінці Топ-200 у поле «Підпис пристрою»."
+
+#. Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.
+msgctxt "top200_sign_epochs"
+msgid "Valid from epoch {0} to {1}"
+msgstr "Діє з епохи {0} по {1}"
+
+#. Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.
+msgctxt "top200_sign_error_failed"
+msgid "The binding could not be signed: {}"
+msgstr "Не вдалося підписати прив'язку: {}"
+
+#. Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).
+msgctxt "top200_sign_error_invalid"
+msgid "This is not a fleet binding. Copy the whole binding from the Top 200 page."
+msgstr "Це не прив'язка парку. Скопіюйте прив'язку повністю зі сторінки Топ-200."
+
+#. Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).
+msgctxt "top200_sign_error_no_key"
+msgid "This device's client key is not available right now. Start URnetwork on this device, then try again."
+msgstr "Клієнтський ключ цього пристрою зараз недоступний. Запустіть URnetwork на цьому пристрої та спробуйте ще раз."
+
+#. Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.
+msgctxt "top200_sign_error_other_device"
+msgid "This binding is for another device. A device signs only the binding with its own client ID and client key."
+msgstr "Ця прив'язка для іншого пристрою. Пристрій підписує лише прив'язку зі своїм ID клієнта та клієнтським ключем."
+
+#. Top 200 sign screen: label of the binding's fleet_id (0x hex).
+msgctxt "top200_sign_fleet_id"
+msgid "Fleet ID"
+msgstr "ID парку"
+
+#. Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.
+msgctxt "top200_sign_hotkey"
+msgid "Hotkey"
+msgstr "Hotkey"
+
+#. Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.
+msgctxt "top200_sign_intro"
+msgid "Your fleet operator builds this device's binding on the Top 200 page at ur.io. Paste it here to sign it with this device's client key. Nothing is sent: you copy the signed payload back to the page yourself."
+msgstr "Оператор вашого парку готує прив'язку цього пристрою на сторінці Топ-200 на ur.io. Вставте її сюди, щоб підписати клієнтським ключем цього пристрою. Нічого не надсилається: підписані дані ви самі копіюєте назад на сторінку."
+
+#. Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.
+msgctxt "top200_sign_member_hint"
+msgid "Your fleet manifest lists this device by its client ID and client key. Copy its member entry and send it to your fleet operator."
+msgstr "Маніфест вашого парку вказує цей пристрій за його ID клієнта та клієнтським ключем. Скопіюйте запис учасника й надішліть його оператору парку."
+
+#. Top 200 sign screen: button that pastes the binding from the clipboard.
+msgctxt "top200_sign_paste"
+msgid "Paste"
+msgstr "Вставити"
+
+#. Top 200 sign screen: shown above the parsed binding's values before the Sign button.
+msgctxt "top200_sign_review"
+msgid "Check that the fleet ID, hotkey and epochs match the Top 200 page before you sign."
+msgstr "Перед підписом переконайтеся, що ID парку, hotkey та епохи збігаються зі сторінкою Топ-200."
+
+#. Top 200 sign screen: label of the section showing this device's client ID and client key.
+msgctxt "top200_sign_this_device"
+msgid "This device"
+msgstr "Цей пристрій"
 
 #. Headline of the Top 200 tile when eligible.
 msgctxt "top200_you_qualify"
