@@ -142,7 +142,7 @@ UR_TEST(ProvideWiring_TheGuiReconcilesAfterDisconnectAndModeChanges) {
                         "ReconcileProvider(\"disconnect\", /*userInitiated=*/true)"));
   UR_EXPECT_TRUE(Has(FunctionBody(host, "void SdkHost::SetProvideControlMode("),
                      "ReconcileProviderLocked(\"provide mode changed\""));
-  UR_EXPECT_TRUE(Has(FunctionBody(host, "void SdkHost::SetProviderTransportSettings("),
+  UR_EXPECT_TRUE(Has(FunctionBody(host, "void SdkHost::SetProviderTransportSettingsLocked("),
                      "/*settingsChanged=*/true"));
   const std::string poll =
       FunctionBody(ReadProvideSource("MainWindow.cpp"),

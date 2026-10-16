@@ -1001,6 +1001,23 @@ class SdkHost {
   void RefreshKillSwitchStatus(KillSwitchDone done = {});
   std::optional<urnet::DnsResolverSettings> GetDnsResolverSettings();
   void SetDnsResolverSettings(const urnet::DnsResolverSettings& settings);
+  // Compare-and-set, for the editors (apple's editor safety): the write goes
+  // ahead only while `stillShown` holds for the settings as they read now,
+  // checked and written under one hold of mutex_. Otherwise nothing is
+  // written, false comes back, and `current` gets the settings as they read,
+  // for the editor to re-seed from: an editor drafted from settings that have
+  // changed since it opened (another surface, the daemon's sync, a read that
+  // failed when it opened) never overwrites them. `stillShown` runs under
+  // mutex_ and must not call back into SdkHost. Main loop.
+  bool SetDnsResolverSettingsIf(
+      const std::function<bool(const std::optional<urnet::DnsResolverSettings>&)>& stillShown,
+      const urnet::DnsResolverSettings& settings,
+      std::optional<urnet::DnsResolverSettings>* current);
+  // The same for the client (`provider` false) or the provider transport policy.
+  bool SetTransportSettingsIf(
+      bool provider,
+      const std::function<bool(const std::optional<urnet::TransportSettings>&)>& stillShown,
+      const urnet::TransportSettings& settings, std::optional<urnet::TransportSettings>* current);
   // Transport policy (client: the carrier this device uses to reach providers;
   // provider: the carrier it uses while providing for others). Reads come from
   // the device when present (the daemon's truth over the rpc, the pending /
@@ -1580,6 +1597,15 @@ class SdkHost {
   // life of the process (each new DeviceRemote reopens the same window).
   bool HoldDeviceRpcDefaultPortLocked(std::string* error);
   void ReleaseDeviceRpcDefaultPort();
+
+  // The editors' settings, read and written with mutex_ held (the public
+  // accessors and the compare-and-set writes share them).
+  std::optional<urnet::DnsResolverSettings> GetDnsResolverSettingsLocked();
+  void SetDnsResolverSettingsLocked(const urnet::DnsResolverSettings& settings);
+  std::optional<urnet::TransportSettings> GetTransportSettingsLocked();
+  void SetTransportSettingsLocked(const urnet::TransportSettings& settings);
+  std::optional<urnet::TransportSettings> GetProviderTransportSettingsLocked();
+  void SetProviderTransportSettingsLocked(const urnet::TransportSettings& settings);
 
   // A command for the queue: `work` on the worker, then the reading it takes
   // there (see SetCommandsSettledHandler), then `apply` on the main loop.

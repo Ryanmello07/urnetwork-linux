@@ -3934,6 +3934,10 @@ void SdkHost::RunKillSwitchRequest(KillSwitchRequest request) {
 
 std::optional<urnet::DnsResolverSettings> SdkHost::GetDnsResolverSettings() {
   std::scoped_lock lock(mutex_);
+  return GetDnsResolverSettingsLocked();
+}
+
+std::optional<urnet::DnsResolverSettings> SdkHost::GetDnsResolverSettingsLocked() {
   if (device_) return device_->getDnsResolverSettings();
   if (localState_) return localState_->getDnsResolverSettings();
   return std::nullopt;
@@ -3941,11 +3945,50 @@ std::optional<urnet::DnsResolverSettings> SdkHost::GetDnsResolverSettings() {
 
 void SdkHost::SetDnsResolverSettings(const urnet::DnsResolverSettings& settings) {
   std::scoped_lock lock(mutex_);
+  SetDnsResolverSettingsLocked(settings);
+}
+
+void SdkHost::SetDnsResolverSettingsLocked(const urnet::DnsResolverSettings& settings) {
   if (device_) {
     device_->setDnsResolverSettings(settings);  // applies to the live mux + persists
     return;
   }
   if (localState_) localState_->setDnsResolverSettings(settings);
+}
+
+bool SdkHost::SetDnsResolverSettingsIf(
+    const std::function<bool(const std::optional<urnet::DnsResolverSettings>&)>& stillShown,
+    const urnet::DnsResolverSettings& settings,
+    std::optional<urnet::DnsResolverSettings>* current) {
+  std::scoped_lock lock(mutex_);
+  std::optional<urnet::DnsResolverSettings> now = GetDnsResolverSettingsLocked();
+  if (!stillShown(now)) {
+    if (current) *current = std::move(now);
+    return false;
+  }
+  SetDnsResolverSettingsLocked(settings);
+  if (current) *current = settings;
+  return true;
+}
+
+bool SdkHost::SetTransportSettingsIf(
+    bool provider,
+    const std::function<bool(const std::optional<urnet::TransportSettings>&)>& stillShown,
+    const urnet::TransportSettings& settings, std::optional<urnet::TransportSettings>* current) {
+  std::scoped_lock lock(mutex_);
+  std::optional<urnet::TransportSettings> now =
+      provider ? GetProviderTransportSettingsLocked() : GetTransportSettingsLocked();
+  if (!stillShown(now)) {
+    if (current) *current = std::move(now);
+    return false;
+  }
+  if (provider) {
+    SetProviderTransportSettingsLocked(settings);
+  } else {
+    SetTransportSettingsLocked(settings);
+  }
+  if (current) *current = settings;
+  return true;
 }
 
 std::optional<urnet::ThroughputPointList> SdkHost::ThroughputPoints() {
@@ -4007,6 +4050,10 @@ bool SdkHost::DeviceHasProviderStats() {
 
 std::optional<urnet::TransportSettings> SdkHost::GetTransportSettings() {
   std::scoped_lock lock(mutex_);
+  return GetTransportSettingsLocked();
+}
+
+std::optional<urnet::TransportSettings> SdkHost::GetTransportSettingsLocked() {
   if (device_) {
     if (auto settings = device_->getTransportSettings(); settings) return settings;
   }
@@ -4016,6 +4063,10 @@ std::optional<urnet::TransportSettings> SdkHost::GetTransportSettings() {
 
 void SdkHost::SetTransportSettings(const urnet::TransportSettings& settings) {
   std::scoped_lock lock(mutex_);
+  SetTransportSettingsLocked(settings);
+}
+
+void SdkHost::SetTransportSettingsLocked(const urnet::TransportSettings& settings) {
   // apply live over the device rpc (the daemon persists it in its own local
   // state) AND mirror into the GUI local state: with the tunnel down the
   // mirror is the only copy, and StartTunnel seeds the device from it
@@ -4031,6 +4082,10 @@ void SdkHost::SetTransportSettings(const urnet::TransportSettings& settings) {
 
 std::optional<urnet::TransportSettings> SdkHost::GetProviderTransportSettings() {
   std::scoped_lock lock(mutex_);
+  return GetProviderTransportSettingsLocked();
+}
+
+std::optional<urnet::TransportSettings> SdkHost::GetProviderTransportSettingsLocked() {
   if (device_) {
     if (auto settings = device_->getProviderTransportSettings(); settings) return settings;
   }
@@ -4040,6 +4095,10 @@ std::optional<urnet::TransportSettings> SdkHost::GetProviderTransportSettings() 
 
 void SdkHost::SetProviderTransportSettings(const urnet::TransportSettings& settings) {
   std::scoped_lock lock(mutex_);
+  SetProviderTransportSettingsLocked(settings);
+}
+
+void SdkHost::SetProviderTransportSettingsLocked(const urnet::TransportSettings& settings) {
   if (device_) device_->setProviderTransportSettings(settings);
   if (localState_) {
     try {
