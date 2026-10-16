@@ -2818,13 +2818,17 @@ TunnelStartResult SdkHost::BindRemoteDeviceLocked(const std::string& clientJwt,
     // reconnects.
     subs_.push_back(device_->addRemoteChangeListener([this, rpcGeneration](bool connected) {
       if (!connected) return;
+      // On the command queue, behind the connect that follows a start: it
+      // takes mutex_, which that connect holds through its rpc, and the save
+      // talks to the Secret Service (the main loop waits on neither).
       PostToMain([this, rpcGeneration] {
-        std::scoped_lock lock(mutex_);
-        if (rpcGeneration != rpcSessionGeneration_.load()) return;  // a newer session owns it
-        if (rpcBindWatchId_ == 0) return;
-        g_source_remove(rpcBindWatchId_);
-        rpcBindWatchId_ = 0;
-        RememberSyncedSessionLocked();
+        RunCommand(ConnectCommandQueue::Kind::Device, [this, rpcGeneration] {
+          std::scoped_lock lock(mutex_);
+          if (rpcGeneration != rpcSessionGeneration_.load()) return;  // a newer session owns it
+          if (rpcBindWatchId_ == 0) return;
+          RemoveRpcBindWatchLocked();
+          RememberSyncedSessionLocked();
+        });
       });
     }));
 
@@ -5475,26 +5479,34 @@ void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {
 // connect time, nothing throws, and every screen simply stays empty forever.
 // This is the detector for that, and only that.
 
-void SdkHost::ArmRpcBindWatchdogLocked() {
-  if (rpcBindWatchId_ != 0) {
+// The watchdog's source, removed unless it has fired already: a fired one
+// removed itself, and its id may name another source by now.
+void SdkHost::RemoveRpcBindWatchLocked() {
+  if (rpcBindWatchId_ != 0 && rpcBindWatchId_ != rpcBindFiredId_.load()) {
     g_source_remove(rpcBindWatchId_);
-    rpcBindWatchId_ = 0;
   }
+  rpcBindWatchId_ = 0;
+}
+
+void SdkHost::ArmRpcBindWatchdogLocked() {
+  RemoveRpcBindWatchLocked();
   rpcBindWatchGeneration_ = rpcSessionGeneration_.load();
   rpcBindWatchId_ = g_timeout_add_seconds(
       kRpcBindDeadlineSeconds,
       [](gpointer data) -> gboolean {
-        static_cast<SdkHost*>(data)->OnRpcBindDeadline();
+        auto* self = static_cast<SdkHost*>(data);
+        // The deadline's reads, teardown, stop_tunnel and keyring forget run on
+        // the command queue, behind the commands: on the main loop they waited
+        // on mutex_ and the device's lock that a queued connect holds.
+        self->rpcBindFiredId_.store(g_source_get_id(g_main_current_source()));
+        self->RunCommand(ConnectCommandQueue::Kind::Device, [self] { self->OnRpcBindDeadline(); });
         return G_SOURCE_REMOVE;
       },
       this);
 }
 
 void SdkHost::CancelRpcBindWatchdogLocked() {
-  if (rpcBindWatchId_ != 0) {
-    g_source_remove(rpcBindWatchId_);
-    rpcBindWatchId_ = 0;
-  }
+  RemoveRpcBindWatchLocked();
   // Anything already queued against this session — the timeout that has
   // already fired and is waiting on mutex_, the remote-change marshal — is
   // stale from here on and must not act on the NEXT session.
@@ -5507,7 +5519,7 @@ void SdkHost::OnRpcBindDeadline() {
     std::scoped_lock lock(mutex_);
     // A newer session owns rpcBindWatchId_ now; leave its watchdog alone.
     if (rpcBindWatchGeneration_ != rpcSessionGeneration_.load()) return;
-    rpcBindWatchId_ = 0;  // this source is removing itself
+    rpcBindWatchId_ = 0;  // this source removed itself when it fired
     if (!device_) return;
     if (ReadGuarded<bool>(
             "device getRemoteConnected", [&] { return device_->getRemoteConnected(); },
@@ -5532,8 +5544,8 @@ void SdkHost::OnRpcBindDeadline() {
     TeardownDeviceLocked();
     RestoreApiAuthorizationLocked();
   }
-  // Blocking, on the main loop, bounded by the control client's receive
-  // timeout — the same trade StartTunnel's failure path already makes.
+  // Blocking, on the command queue's worker, bounded by the control client's
+  // receive timeout — the same trade StartTunnel's failure path makes.
   control_.StopTunnel();
   // The material is bound to nothing now; remembering it could only produce a
   // reattach that mismatches again. TeardownDeviceLocked above has already

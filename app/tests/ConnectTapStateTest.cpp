@@ -259,3 +259,20 @@ UR_TEST(connectCommandsKeepTheHealthPollFromConcluding) {
   UR_EXPECT_TRUE(wiring::Contains(
       page, "return disconnectRequestedAtUs_ != 0 || tapPending_ == connect_tap::Pending::Disconnect;"));
 }
+
+// The rpc bind watchdog's main-loop work goes behind the commands too: the
+// remote-connected edge (mutex_ and the Secret Service save) and the deadline
+// (the device's getters, the teardown, stop_tunnel, the keyring forget) both
+// met the lock the queued connect after a fresh start holds. A fired source
+// removed itself, so a teardown in between never removes it again.
+UR_TEST(connectCommandsQueueTheRpcBindWatchdog) {
+  const std::string host = wiring::ReadCode("SdkHost.cpp");
+  const std::string bind = wiring::FunctionBody(host, "TunnelStartResult SdkHost::BindRemoteDeviceLocked(");
+  UR_EXPECT_TRUE(wiring::Before(bind, "addRemoteChangeListener(", "RunCommand(ConnectCommandQueue::Kind::Device"));
+  UR_EXPECT_TRUE(wiring::Before(bind, "RunCommand(ConnectCommandQueue::Kind::Device", "RememberSyncedSessionLocked();"));
+  const std::string arm = wiring::FunctionBody(host, "void SdkHost::ArmRpcBindWatchdogLocked() {");
+  UR_EXPECT_TRUE(wiring::Before(arm, "rpcBindFiredId_.store(", "self->OnRpcBindDeadline();"));
+  UR_EXPECT_TRUE(wiring::Before(arm, "RunCommand(ConnectCommandQueue::Kind::Device", "self->OnRpcBindDeadline();"));
+  UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(host, "void SdkHost::RemoveRpcBindWatchLocked() {"),
+                                  "rpcBindWatchId_ != rpcBindFiredId_.load()"));
+}

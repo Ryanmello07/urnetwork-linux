@@ -1616,6 +1616,10 @@ class SdkHost {
   void ConnectBestAvailableNow();
   void ConnectNow(const std::optional<urnet::ConnectLocation>& location);
   void DisconnectNow();
+  // Removes the rpc bind watchdog's source unless it fired. Requires mutex_.
+  void RemoveRpcBindWatchLocked();
+  // The id of the watchdog source that fired last (it removed itself).
+  std::atomic<unsigned int> rpcBindFiredId_{0};
   // Logout's device, daemon and credential teardown, on the worker.
   void LogoutNow();
   // The worker. Stopped first in ~SdkHost: the work it runs holds `this`.
