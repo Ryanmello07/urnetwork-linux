@@ -655,7 +655,7 @@ void MainWindow::ShowStartOutcome(const SdkHost::StartOutcome& outcome) {
       // connection", which says nothing about the only thing the user can act
       // on. TunnelStartResult has no enumerator for these (SdkHost.hpp is
       // outside this change), so the verdict is read from the control client
-      // instead; see the serial guard at the top of this function.
+      // instead; see the serial guard in SdkHost::StartAndConnect.
       if (IsAuthRefusal(outcome.authOutcome)) {
         notice = DaemonAuthRefusalCopy(outcome.authOutcome, error);
         break;

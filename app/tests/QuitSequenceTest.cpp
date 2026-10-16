@@ -81,7 +81,10 @@ UR_TEST(quitSequenceIsWhatEveryEndingRuns) {
   UR_EXPECT_TRUE(wiring::Before(app, "std::function<void()> onSessionEnd = [&] { endApp(", "false); };"));
   UR_EXPECT_TRUE(wiring::Contains(app, "for (const int signum : {SIGTERM, SIGINT, SIGHUP}) {"));
   UR_EXPECT_TRUE(wiring::Contains(app, "&onSessionEnd);"));
-  // which waits for the queued commands, bounded, and answers at the cap
+  // which refuses connects first (a tray Connect during the ending would start
+  // a tunnel behind the teardown), then waits for the queued commands,
+  // bounded, and answers at the cap
+  UR_EXPECT_TRUE(wiring::Before(app, "host->RefuseConnects();", "host->WhenCommandsDrained("));
   UR_EXPECT_TRUE(wiring::Contains(app, "host->WhenCommandsDrained([&] { applyQuitStep(quit.OnDrained()); });"));
   UR_EXPECT_TRUE(wiring::Contains(app, "urnw::QuitSequence::kDrainMillis);"));
   UR_EXPECT_TRUE(wiring::Contains(app, "urnw::QuitSequence::kAnswerMillis);"));

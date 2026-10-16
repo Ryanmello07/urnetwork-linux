@@ -158,6 +158,8 @@ int main(int argc, char** argv) {
     // for it to end, then starts.
     urnw::instance::BeginExiting();
     if (window) window->SaveGeometry();  // a quit with the window up never closed it
+    // nothing connects behind the ending; a disconnect still queued runs
+    host->RefuseConnects();
     Glib::signal_timeout().connect_once([&] { applyQuitStep(quit.OnAnswerCap()); },
                                         urnw::QuitSequence::kAnswerMillis);
     Glib::signal_timeout().connect_once([&] { applyQuitStep(quit.OnDrainCap()); },

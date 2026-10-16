@@ -784,6 +784,10 @@ class SdkHost {
   // `then` runs on the main loop once every command queued so far has run (a
   // quit waits on it, bounded, for a disconnect the user tapped). Main loop.
   void WhenCommandsDrained(std::function<void()> then) { commands_.WhenDrained(std::move(then)); }
+  // The app is ending (QuitSequence.hpp): from here no connect is admitted and
+  // the queued ones are skipped, while disconnects still run, so nothing
+  // starts a tunnel behind the quit's teardown or a session's end. Main loop.
+  void RefuseConnects() { commands_.BeginSignOut(); }
 
   // Both connect calls ask the connect gate first (SetConnectGate) and do
   // nothing when it blocks; the connect itself is queued.
