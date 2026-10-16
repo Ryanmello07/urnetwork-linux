@@ -78,6 +78,8 @@ class ConnectPage : public Gtk::Box {
   // (MainWindow::NoteTap): the status reads it (connect_tap::Fold) until the
   // queue settles, over any reading from before the tap.
   void SetTapPending(connect_tap::Pending pending);
+  // The command queue settled: a reseed held back while it was busy runs now.
+  void OnCommandsSettled();
   // The daemon-session line under the status row ("" = healthy).
   // TODO(wiring): MainWindow owns the SCM/daemon probe and still renders it in
   // the LEGACY column's daemonStatusLabel_; it must relay every change here
@@ -474,6 +476,7 @@ class ConnectPage : public Gtk::Box {
   // the SDK — and it is bounded (DisconnectIntentLive), so it cannot latch.
   gint64 disconnectRequestedAtUs_ = 0;
   connect_tap::Pending tapPending_ = connect_tap::Pending::None;
+  bool resyncOwed_ = false;  // a Resync that met outstanding commands
   LiveStats stats_;
   Glib::ustring daemonNotice_;
   bool failsafeArmed_ = false;

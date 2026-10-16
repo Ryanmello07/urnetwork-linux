@@ -230,6 +230,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (windowVisible_ == presentationActive) return;
     windowVisible_ = presentationActive;
     host_.SetPresentationActive(windowVisible_);
+    // The pages' re-show reads run once the queued open has settled.
+    if (windowVisible_) drawerEventsOwed_ = true;
     balance_.SetWindowVisible(windowVisible_);
     UpdateCarouselRunning();
     if (connectPage_) connectPage_->SetPresentationActive(windowVisible_);
@@ -2615,10 +2617,17 @@ void MainWindow::OnCommandsSettled(const ConnectReading& reading) {
   readingApplied_ = false;
   ApplyConnectReading(reading);
   // the reads the GTK thread held back while commands were outstanding
+  if (connectPage_) connectPage_->OnCommandsSettled();
   if (drawerEventsOwed_) {
     drawerEventsOwed_ = false;
     if (windowVisible_ && connectPage_) connectPage_->OnHostEvent(DrawerEvent::DeviceLifecycle);
     if (windowVisible_ && earningsPage_) earningsPage_->OnHostEvent(DrawerEvent::DeviceLifecycle);
+    if (windowVisible_ && locationsSheet_ && locationsSheet_->is_visible()) {
+      locationsSheet_->Refresh();
+    }
+    if (windowVisible_ && providerLocationsSheet_ && providerLocationsSheet_->get_visible()) {
+      providerLocationsSheet_->Refresh();
+    }
     SyncLocationOverrideTarget();
   }
 }

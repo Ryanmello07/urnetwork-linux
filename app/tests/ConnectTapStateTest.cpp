@@ -196,3 +196,31 @@ UR_TEST(connectCommandsAreFencedBySignOut) {
   // and a reading from before it is never handed on as the next account's
   UR_EXPECT_TRUE(wiring::Before(logout, "signInEpoch_.fetch_add(1);", "TeardownDeviceLocked();"));
 }
+
+// A re-show queues the controllers' open behind the commands (SdkHost::
+// SetPresentationActive), so the pages' re-show reads, and the degrade hold's
+// re-evaluation, wait for the queue to settle instead of for the lock the
+// open holds.
+UR_TEST(connectCommandsHoldTheReshowReadsUntilTheySettle) {
+  const std::string page = wiring::ReadCode("ConnectPage.cpp");
+  const std::string resync = wiring::FunctionBody(page, "void ConnectPage::Resync() {");
+  UR_EXPECT_TRUE(wiring::Before(resync, "if (host_.CommandsBusy()) {", "SyncProvideControlMode();"));
+  UR_EXPECT_TRUE(wiring::Before(resync, "resyncOwed_ = true;", "RefreshAllPanes();"));
+  UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(page, "void ConnectPage::OnCommandsSettled() {"),
+                                  "if (resyncOwed_) Resync();"));
+  const std::string earnings = wiring::FunctionBody(wiring::ReadCode("EarningsPage.cpp"),
+                                                    "void EarningsPage::SetPresentationActive(bool active) {");
+  UR_EXPECT_TRUE(wiring::Before(earnings, "if (host_.CommandsBusy()) return;",
+                                "OnHostEvent(DrawerEvent::DeviceLifecycle);"));
+  const std::string window = wiring::ReadCode("MainWindow.cpp");
+  UR_EXPECT_TRUE(wiring::Before(window, "host_.SetPresentationActive(windowVisible_);",
+                                "if (windowVisible_) drawerEventsOwed_ = true;"));
+  const std::string settled =
+      wiring::FunctionBody(window, "void MainWindow::OnCommandsSettled(const ConnectReading& reading) {");
+  UR_EXPECT_TRUE(wiring::Contains(settled, "connectPage_->OnCommandsSettled();"));
+  UR_EXPECT_TRUE(wiring::Contains(settled, "providerLocationsSheet_->Refresh();"));
+  const std::string reading =
+      wiring::FunctionBody(wiring::ReadCode("SdkHost.cpp"), "ConnectReading SdkHost::ReadConnectReading() {");
+  UR_EXPECT_TRUE(wiring::Before(reading, "if (self->CommandsBusy()) {", "self->CurrentConnectReading()"));
+  UR_EXPECT_TRUE(wiring::Before(reading, "self->degradeReevalAtMillis_ = 0;", "self->CurrentConnectReading()"));
+}

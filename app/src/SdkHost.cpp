@@ -3130,6 +3130,14 @@ ConnectReading SdkHost::ReadConnectReading() {
             std::scoped_lock lock(self->degradeMutex_);
             self->degradeReevalId_ = 0;
           }
+          // on the main loop: not while connect commands hold the locks this
+          // read takes. Their settle reads the hold again, and with the
+          // armed time cleared that read arms the re-evaluation anew.
+          if (self->CommandsBusy()) {
+            std::scoped_lock lock(self->degradeMutex_);
+            self->degradeReevalAtMillis_ = 0;
+            return G_SOURCE_REMOVE;
+          }
           if (self->onReading_) self->onReading_(self->CurrentConnectReading());
           return G_SOURCE_REMOVE;
         },

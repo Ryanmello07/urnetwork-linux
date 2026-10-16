@@ -1883,6 +1883,10 @@ void ConnectPage::ApplyBalanceRecovery(const balance_notice::RecoveryLines& line
   balanceRecoveryCancel_->set_visible(lines.cancel);
 }
 
+void ConnectPage::OnCommandsSettled() {
+  if (resyncOwed_) Resync();
+}
+
 void ConnectPage::SetTapPending(connect_tap::Pending pending) {
   if (tapPending_ == pending) return;
   tapPending_ = pending;
@@ -3615,6 +3619,14 @@ bool ConnectPage::ReadLocations(bool force) {
 
 void ConnectPage::Resync() {
   ++(*epoch_);  // anything in flight against the old reading is stale
+  // With connect commands outstanding (a re-show queues the controllers'
+  // open behind them) every read below would wait on the lock they hold:
+  // the reseed runs once the queue settles (OnCommandsSettled).
+  if (host_.CommandsBusy()) {
+    resyncOwed_ = true;
+    return;
+  }
+  resyncOwed_ = false;
   SyncProvideControlMode();
   RefreshAllPanes();
   BeginPlaceholders();

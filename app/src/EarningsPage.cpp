@@ -6548,7 +6548,11 @@ void EarningsPage::SetPresentationActive(bool active) {
     return;
   }
   // every drawer event was dropped while hidden, and with no device the host
-  // announces nothing on re-show
+  // announces nothing on re-show. With connect commands outstanding (the
+  // re-show queues the controllers' open behind them) the reads would wait on
+  // the lock they hold, and the window replays this once the queue settles
+  // (MainWindow::OnCommandsSettled).
+  if (host_.CommandsBusy()) return;
   OnHostEvent(DrawerEvent::DeviceLifecycle);
 }
 
