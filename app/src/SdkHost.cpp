@@ -2784,8 +2784,10 @@ TunnelStartResult SdkHost::BindRemoteDeviceLocked(const std::string& clientJwt,
           "present its certificate (" +
           holdError + ")");
     }
+    deviceBound_.store(false);
     device_ = urnet::newDeviceRemoteWithDefaults(*networkSpace_, clientJwt,
                                                  session.instance_id);
+    deviceBound_.store(true);
     // setRpcServer BEFORE any listener registration or getter (windows
     // SdkHost.cpp:2027-2029), and exactly once per DeviceRemote instance — the
     // binding gives no re-entrancy contract for a second call and no way to
@@ -5572,6 +5574,7 @@ void SdkHost::TeardownDeviceLocked() {
   // leaking them on every logout. The daemon's DeviceLocal, tun and IoLoop
   // are NOT touched here — stopping the tunnel is an explicit stop_tunnel on
   // the control channel, decided by the caller.
+  deviceBound_.store(false);
   if (device_) { device_->close(); device_.reset(); }
   provideHasNetworkKey_.store(false);
 }

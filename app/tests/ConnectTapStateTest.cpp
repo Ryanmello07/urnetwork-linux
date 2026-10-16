@@ -276,3 +276,28 @@ UR_TEST(connectCommandsQueueTheRpcBindWatchdog) {
   UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(host, "void SdkHost::RemoveRpcBindWatchLocked() {"),
                                   "rpcBindWatchId_ != rpcBindFiredId_.load()"));
 }
+
+// The device can be closed and released on the queue's worker now (a
+// sign-out's teardown, a start's stale drop, the bind deadline), so the GTK
+// thread uses the raw device only while no command is outstanding, and
+// hasDevice reads an atomic mirror instead of the optional the worker sets.
+UR_TEST(connectCommandsKeepTheRawDeviceOffTheGtkThreadWhileBusy) {
+  const std::string header = wiring::ReadCode("SdkHost.hpp");
+  UR_EXPECT_TRUE(wiring::Contains(header, "return deviceBound_.load() && deviceControlGeneration_ =="));
+  UR_EXPECT_TRUE(wiring::Contains(header, "bool DeviceSteady() { return !CommandsBusy() && hasDevice(); }"));
+  const std::string host = wiring::ReadCode("SdkHost.cpp");
+  UR_EXPECT_TRUE(wiring::Before(host, "device_ = urnet::newDeviceRemoteWithDefaults(", "deviceBound_.store(true);"));
+  UR_EXPECT_TRUE(wiring::Before(wiring::FunctionBody(host, "void SdkHost::TeardownDeviceLocked() {"),
+                                "deviceBound_.store(false);", "device_.reset();"));
+  // every raw device use on the Earnings page is behind DeviceSteady (or the
+  // board's own busy return)
+  const std::string earnings = wiring::ReadCode("EarningsPage.cpp");
+  for (size_t at = earnings.find("device()."); at != std::string::npos;
+       at = earnings.find("device().", at + 1)) {
+    const size_t from = at > 900 ? at - 900 : 0;
+    const std::string before = earnings.substr(from, at - from);
+    const bool guarded = wiring::Contains(before, "DeviceSteady()") ||
+                         wiring::Contains(before, "if (host_.CommandsBusy()) return;");
+    UR_EXPECT_TRUE_MSG(earnings.substr(at, 60), guarded);
+  }
+}

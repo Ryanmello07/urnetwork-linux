@@ -1408,8 +1408,16 @@ class SdkHost {
   // on it. False from here means "ask StartTunnel", and StartTunnel does the
   // authoritative check (a `status` round trip) before it rebuilds anything.
   bool hasDevice() {
-    return device_.has_value() && deviceControlGeneration_ == control_.SessionGeneration();
+    return deviceBound_.load() && deviceControlGeneration_ == control_.SessionGeneration();
   }
+  // A device the GTK thread may use through device() now: bound, and no
+  // connect command outstanding. The commands run on the queue's worker, and
+  // a sign-out's teardown, a start's stale drop and the bind deadline close
+  // and release device_ there; commands are only queued from the main loop,
+  // so with none outstanding device_ cannot change under a main-loop call.
+  // Main loop.
+  bool DeviceSteady() { return !CommandsBusy() && hasDevice(); }
+  // Only behind DeviceSteady() on the main loop (see there).
   urnet::DeviceRemote& device() { return *device_; }
   // The daemon control channel, shared with the location-override writer
   // (DaemonGeoClueWriter) — one socket, one hello, one version check.
@@ -1879,6 +1887,9 @@ class SdkHost {
   // restarted — so the DeviceLocal this device_ talks to is gone. Atomic
   // because hasDevice() reads it without mutex_.
   std::atomic<uint64_t> deviceControlGeneration_{0};
+  // device_ is engaged: set with it, under mutex_, and read without the lock
+  // by hasDevice() on the main loop while the worker may be setting it.
+  std::atomic<bool> deviceBound_{false};
   // The reservation described by HoldDeviceRpcDefaultPortLocked: a bound,
   // NEVER-listening socket on 127.0.0.1:<ctl::kDeviceRpcPort>. -1 = not held.
   int deviceRpcDefaultPortFd_ = -1;
