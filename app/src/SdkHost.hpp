@@ -917,6 +917,17 @@ class SdkHost {
   // Each listener that hears a rejection reports it (the Api's, and the bound
   // DeviceRemote's), and only the first of them signs out. Main loop.
   bool SignsOut(const auth_logout::Report& report) const { return authLogouts_.SignsOut(report); }
+  // The sign-in an action that ends in a sign-out was made in, read as it
+  // starts (the account deletion's request): its answer signs out only that
+  // sign-in (LogoutIfStill), never one made since (android signOutApplies).
+  // Main loop.
+  auth_logout::Report SignInNow(std::string cause) const {
+    return authLogouts_.Hear(std::move(cause));
+  }
+  // Logout, only while `signIn` is still the sign-in signed in. A server
+  // sign-out and a newer sign-in can land between a deletion's request and its
+  // answer; then nothing is done and false comes back. Main loop.
+  bool LogoutIfStill(const auth_logout::Report& signIn);
   void SetJwtRefreshedHandler(JwtRefreshedHandler h) { onJwtRefreshed_ = std::move(h); }
   // The connection feed. Fired on every event that can change any part of the
   // reading, and NEVER gated on window visibility by its consumer: the copies

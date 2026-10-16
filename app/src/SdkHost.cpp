@@ -5621,6 +5621,16 @@ void SdkHost::ShutdownOffMainLoop(std::function<void()> done) {
   });
 }
 
+bool SdkHost::LogoutIfStill(const auth_logout::Report& signIn) {
+  if (!authLogouts_.SignsOut(signIn)) {
+    g_message("sdkhost: sign-out for a sign-in that has ended (%s): nothing to do",
+              signIn.cause.c_str());
+    return false;
+  }
+  Logout();
+  return true;
+}
+
 // See the contract in the header. On the main loop it ends the session for
 // the app at once: a second sign-out is refused, the row click still settling
 // is dropped, no connect is admitted (apple 5c174fda), and the app reads
