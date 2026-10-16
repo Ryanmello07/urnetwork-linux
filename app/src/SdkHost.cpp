@@ -5606,8 +5606,39 @@ void SdkHost::ShutdownOffMainLoop(std::function<void()> done) {
   });
 }
 
-// See the contract in the header.
+// See the contract in the header. On the main loop it ends the session for
+// the app at once: a second sign-out is refused, the row click still settling
+// is dropped, no connect is admitted (apple 5c174fda), and the app reads
+// signed out. The rest closes the device, asks the daemon and logs the local
+// credentials out (LogoutNow), so it runs on the command queue behind the
+// commands already queued: the leaving account's disconnects reach the daemon
+// first, and the main loop never waits on the device's lock or the daemon
+// (apple 9e5468cb; APPLE_FIXES.md, the device close at sign-out).
 void SdkHost::Logout() {
+  // A sign-out already under way, or done, is this one: nothing is torn down
+  // twice, and a second one never reaches the account signed in next.
+  if (signedOut_.exchange(true)) {
+    g_message("sdkhost: sign-out: already signed out; nothing more to do");
+    return;
+  }
+  // a row click still settling belongs to the leaving account (main loop)
+  CancelRowConnect("sign-out");
+  // From here no connect is admitted, and the leaving account's queued
+  // connects are skipped while its disconnects still run; a reading taken
+  // before this is never handed on as the next account's. The fence ends
+  // with the device, when LogoutNow has run: the next sign-in's commands
+  // carry the new generation and are never blocked by it.
+  commands_.BeginSignOut();
+  signInEpoch_.fetch_add(1);
+  // ...and a sign-out the sdk reports for it from here signs nothing out
+  // again (AuthLogout.hpp)
+  authLogouts_.SignedOut();
+  RunCommand(
+      ConnectCommandQueue::Kind::Disconnect, [this] { LogoutNow(); },
+      [this] { commands_.EndSignOut(); });
+}
+
+void SdkHost::LogoutNow() {
   // A sign-in method being added belongs to the account that is leaving: its
   // return, if it still comes, must not add it to the next account signed in.
   // Answered "superseded by ..." (bridge::IsSuperseded), so its sheet settles
@@ -5633,22 +5664,10 @@ void SdkHost::Logout() {
     out.error = "superseded by signing out";
     signDone(std::move(out));
   }
-  // and so is a row click still settling
-  CancelRowConnect("sign-out");
-  // From here no connect is admitted, and the leaving account's queued
-  // connects are skipped while its disconnects still run (apple 5c174fda); a
-  // reading taken before this is never handed on as the next account's. The
-  // fence ends with the device, below: the next sign-in's commands carry the
-  // new generation and are never blocked by it (apple 9e5468cb).
-  commands_.BeginSignOut();
-  signInEpoch_.fetch_add(1);
+  // (the row click, the fence and signedOut_, which keeps a posted
+  // reconcile, the health poll or a Connect from starting anything for the
+  // account that is leaving, were done on the main loop, in Logout)
   std::scoped_lock lock(mutex_);
-  // Signed out from here: a posted reconcile, the health poll or a Connect that
-  // runs after this starts nothing for the account that is leaving.
-  signedOut_.store(true);
-  // ...and a sign-out the sdk reports for it from here signs nothing out again
-  // (AuthLogout.hpp)
-  authLogouts_.SignedOut();
   pendingWalletAuth_.reset();
   // so are sign-in flows left unfinished before this session (an sso identity
   // with no network, an instant account never confirmed): they belong to no
@@ -5692,8 +5711,6 @@ void SdkHost::Logout() {
   providerBackoff_.NoteSuccess();
   if (onAuth_) onAuth_(false);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);  // drawer falls back to empty states
-  // the device is gone: the sign-out's fence ends with it
-  commands_.EndSignOut();
 }
 
 signout::Daemon SdkHost::SignOutDaemonLocked() {

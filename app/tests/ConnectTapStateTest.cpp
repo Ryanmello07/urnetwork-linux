@@ -191,10 +191,17 @@ UR_TEST(connectCommandsKeepTheGtkThreadOffTheDevice) {
 UR_TEST(connectCommandsAreFencedBySignOut) {
   const std::string host = wiring::ReadCode("SdkHost.cpp");
   const std::string logout = wiring::FunctionBody(host, "void SdkHost::Logout() {");
-  UR_EXPECT_TRUE(wiring::Before(logout, "commands_.BeginSignOut();", "TeardownDeviceLocked();"));
-  UR_EXPECT_TRUE(wiring::Before(logout, "TeardownDeviceLocked();", "commands_.EndSignOut();"));
+  UR_EXPECT_TRUE(wiring::Before(logout, "commands_.BeginSignOut();", "LogoutNow();"));
   // and a reading from before it is never handed on as the next account's
-  UR_EXPECT_TRUE(wiring::Before(logout, "signInEpoch_.fetch_add(1);", "TeardownDeviceLocked();"));
+  UR_EXPECT_TRUE(wiring::Before(logout, "signInEpoch_.fetch_add(1);", "LogoutNow();"));
+  // the device goes on the worker, behind the commands, and the fence ends
+  // once it has (the command's main-loop apply)
+  UR_EXPECT_TRUE(wiring::Before(logout, "ConnectCommandQueue::Kind::Disconnect", "LogoutNow();"));
+  UR_EXPECT_TRUE(wiring::Before(logout, "LogoutNow();", "commands_.EndSignOut();"));
+  UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(host, "void SdkHost::LogoutNow() {"),
+                                  "TeardownDeviceLocked();"));
+  // a second sign-out before the next sign-in tears nothing down again
+  UR_EXPECT_TRUE(wiring::Before(logout, "if (signedOut_.exchange(true)) {", "commands_.BeginSignOut();"));
 }
 
 // A re-show queues the controllers' open behind the commands (SdkHost::

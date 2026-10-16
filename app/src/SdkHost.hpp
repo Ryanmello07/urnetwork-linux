@@ -1616,6 +1616,8 @@ class SdkHost {
   void ConnectBestAvailableNow();
   void ConnectNow(const std::optional<urnet::ConnectLocation>& location);
   void DisconnectNow();
+  // Logout's device, daemon and credential teardown, on the worker.
+  void LogoutNow();
   // The worker. Stopped first in ~SdkHost: the work it runs holds `this`.
   ConnectCommandQueue commands_;
   // ShutdownOffMainLoop's thread, joined in ~SdkHost before the queue stops.

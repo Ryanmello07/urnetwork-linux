@@ -214,7 +214,7 @@ UR_TEST(ProvideWiring_TheStatsCountTheProviderClientsWithoutADevice) {
   UR_EXPECT_TRUE(Has(note, "const int64_t clientCount = running ? status.provider_client_count : -1;"));
   UR_EXPECT_TRUE(Before(note, "daemonProviderClientCount_.exchange(clientCount) != clientCount",
                         "if (changed) PublishStats();"));
-  for (const char* signature : {"void SdkHost::Shutdown()", "void SdkHost::Logout()"}) {
+  for (const char* signature : {"void SdkHost::Shutdown()", "void SdkHost::LogoutNow()"}) {
     UR_EXPECT_TRUE_MSG(signature, Has(FunctionBody(host, signature),
                                       "daemonProviderClientCount_.store(-1);"));
   }
