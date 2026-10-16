@@ -346,9 +346,11 @@ SdkHost::SdkHost()
 }
 
 SdkHost::~SdkHost() {
-  // The connect commands' worker first: its work holds `this` and takes
-  // mutex_. Queued commands are dropped, and the one running finishes
-  // (unbounded, the trade the joins below make too).
+  // A quit's teardown first: it holds `this` and takes mutex_, which a
+  // command may still hold. Unbounded, the trade the joins below make too.
+  if (shutdownWorker_.joinable()) shutdownWorker_.join();
+  // Then the connect commands' worker: its work holds `this` and takes
+  // mutex_. Queued commands are dropped, and the one running finishes.
   commands_.Stop();
   // Leg 3 of the kill switch runs here and holds `this`. Stop it before any
   // member dies; it never takes mutex_ while the joiner holds it, so the join
@@ -5528,6 +5530,21 @@ void SdkHost::Shutdown() {
   daemonProviderNetworkKey_.store(false);
   daemonProviderClientCount_.store(-1);
   DropDaemonProviderStatsLocked();
+}
+
+void SdkHost::ShutdownOffMainLoop(std::function<void()> done) {
+  if (shutdownWorker_.joinable()) return;
+  shutdownWorker_ = std::thread([this, done = std::move(done)] {
+    // an escaping exception on a worker thread is std::terminate
+    try {
+      Shutdown();
+    } catch (const std::exception& e) {
+      g_warning("sdkhost: the quit's teardown threw: %s", e.what());
+    } catch (...) {
+      g_warning("sdkhost: the quit's teardown threw");
+    }
+    if (done) PostToMain(done);
+  });
 }
 
 // See the contract in the header.

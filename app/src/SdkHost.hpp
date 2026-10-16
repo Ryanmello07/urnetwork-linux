@@ -723,6 +723,11 @@ class SdkHost {
   // only credential, so quit-as-logout permanently destroys the account and
   // any balance it purchased.
   void Shutdown();
+  // Shutdown on a thread of its own, then `done` on the main loop: it takes
+  // mutex_ and closes the device, which wait for a connect command still held
+  // in its rpc, and the main loop must not (QuitSequence.hpp). Once only; a
+  // second call runs nothing. Joined in ~SdkHost. Main loop.
+  void ShutdownOffMainLoop(std::function<void()> done);
 
   // Daemon session: connect → hello (protocol enforced both ways) →
   // start_tunnel → bind the DeviceRemote to the daemon's device RPC. The
@@ -1587,6 +1592,8 @@ class SdkHost {
   void DisconnectNow();
   // The worker. Stopped first in ~SdkHost: the work it runs holds `this`.
   ConnectCommandQueue commands_;
+  // ShutdownOffMainLoop's thread, joined in ~SdkHost before the queue stops.
+  std::thread shutdownWorker_;
   std::function<void(ConnectReading)> onCommandsSettled_;
   // The reading the last command's worker took, and the sign-in it was taken
   // in. Main loop.
