@@ -137,7 +137,7 @@ UR_TEST(ProvideWiring_TheControlServerGatesAndOwnsTheProvider) {
 // does it while disconnected (a launch without auto-connect, a service restart).
 UR_TEST(ProvideWiring_TheGuiReconcilesAfterDisconnectAndModeChanges) {
   const std::string host = ReadProvideSource("SdkHost.cpp");
-  const std::string disconnect = FunctionBody(host, "void SdkHost::Disconnect()");
+  const std::string disconnect = FunctionBody(host, "void SdkHost::DisconnectNow()");
   UR_EXPECT_TRUE(Before(disconnect, "control_.StopTunnel();",
                         "ReconcileProvider(\"disconnect\", /*userInitiated=*/true)"));
   UR_EXPECT_TRUE(Has(FunctionBody(host, "void SdkHost::SetProvideControlMode("),

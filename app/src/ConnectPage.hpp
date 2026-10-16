@@ -49,6 +49,7 @@
 #include "QuickAction.hpp"
 #include "SdkHost.hpp"
 #include "SplitRulesSheet.hpp"
+#include "ConnectTap.hpp"
 #include "TapSequenceGate.hpp"
 #include "TransferChart.hpp"
 #include "TransportBar.hpp"
@@ -73,6 +74,10 @@ class ConnectPage : public Gtk::Box {
   // row came to describe a session none of the three was looking at. See
   // Health.hpp for what those three actually meant.
   void ApplyConnectReading(const ConnectReading& reading);
+  // A tap waiting on the command queue, or a start waiting on its balance
+  // (MainWindow::NoteTap): the status reads it (connect_tap::Fold) until the
+  // queue settles, over any reading from before the tap.
+  void SetTapPending(connect_tap::Pending pending);
   // The daemon-session line under the status row ("" = healthy).
   // TODO(wiring): MainWindow owns the SCM/daemon probe and still renders it in
   // the LEGACY column's daemonStatusLabel_; it must relay every change here
@@ -468,6 +473,7 @@ class ConnectPage : public Gtk::Box {
   // providers". It is the one input to health::Render that does not come from
   // the SDK — and it is bounded (DisconnectIntentLive), so it cannot latch.
   gint64 disconnectRequestedAtUs_ = 0;
+  connect_tap::Pending tapPending_ = connect_tap::Pending::None;
   LiveStats stats_;
   Glib::ustring daemonNotice_;
   bool failsafeArmed_ = false;

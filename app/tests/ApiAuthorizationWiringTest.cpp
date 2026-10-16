@@ -47,7 +47,7 @@ UR_TEST(ApiAuthorization_EveryStaleOrFailedDeviceTeardownRestoresIt) {
   const std::string host = ReadCode("SdkHost.cpp");
   for (const char* signature : {"TunnelStartResult SdkHost::StartTunnelLocked(",
                                 "TunnelStartResult SdkHost::BindRemoteDeviceLocked(",
-                                "void SdkHost::ConnectBestAvailable()",
+                                "void SdkHost::ConnectBestAvailableNow()",
                                 "void SdkHost::ReconcileProviderLocked(",
                                 "void SdkHost::OnRpcBindDeadline()"}) {
     const std::string body = Squeezed(FunctionBody(host, signature));

@@ -98,13 +98,20 @@ UR_TEST(ConnectionHealthWiring_EveryReadingCarriesTheHold) {
 // gate let it through.
 UR_TEST(ConnectionHealthWiring_EveryGestureStartsANewAttempt) {
   const std::string host = ReadHealthWiringSource("SdkHost.cpp");
+  // the gate on the caller's thread, then the queued command, whose body
+  // starts the new attempt before it takes the lock
   for (const char* signature : {"void SdkHost::ConnectBestAvailable() {",
                                 "void SdkHost::Connect(const std::optional"}) {
     UR_EXPECT_TRUE_MSG(signature, HealthWiringInOrder(HealthWiringBody(host, signature),
-                                                      {"connectGate_(", "NoteNewConnectAttempt();",
+                                                      {"connectGate_(", "RunCommand("}));
+  }
+  for (const char* signature : {"void SdkHost::ConnectBestAvailableNow() {",
+                                "void SdkHost::ConnectNow(const std::optional"}) {
+    UR_EXPECT_TRUE_MSG(signature, HealthWiringInOrder(HealthWiringBody(host, signature),
+                                                      {"NoteNewConnectAttempt();",
                                                        "std::scoped_lock lock(mutex_);"}));
   }
-  UR_EXPECT_TRUE(HealthWiringInOrder(HealthWiringBody(host, "void SdkHost::Disconnect() {"),
+  UR_EXPECT_TRUE(HealthWiringInOrder(HealthWiringBody(host, "void SdkHost::DisconnectNow() {"),
                                      {"NoteNewConnectAttempt();", "control_.StopTunnel();"}));
   UR_EXPECT_TRUE(HealthWiringHas(HealthWiringBody(host, "void SdkHost::NoteNewConnectAttempt() {"),
                                  "degradeHold_.NoteNewAttempt();"));
@@ -191,6 +198,5 @@ UR_TEST(ConnectionHealthWiring_TheStallReasonAndRetry) {
       HealthWiringHas(window, "connectPage_->on_retry_connect = [this] { RetryConnect(); };"));
   UR_EXPECT_TRUE(HealthWiringInOrder(
       HealthWiringBody(window, "void MainWindow::RetryConnect() {"),
-      {"const auto target = host_.SelectedLocation();", "host_.Disconnect();",
-       "StartTunnelUi(\"retry\", target);"}));
+      {"host_.Disconnect();", "StartTunnelUi(\"retry\", SdkHost::ConnectTarget{});"}));
 }
