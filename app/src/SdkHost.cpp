@@ -343,6 +343,13 @@ SdkHost::SdkHost()
     onCommandsSettled_(lastCommandReadingEpoch_ == signInEpoch_.load() ? lastCommandReading_
                                                                        : ConnectReading{});
   });
+  // The last connect or disconnect applied: the tap's state ends there, not
+  // after the device work queued behind it.
+  commands_.SetTapSettledHandler([this] {
+    if (!onTapSettled_) return;
+    onTapSettled_(lastCommandReadingEpoch_ == signInEpoch_.load() ? lastCommandReading_
+                                                                  : ConnectReading{});
+  });
 }
 
 SdkHost::~SdkHost() {
@@ -5115,7 +5122,13 @@ void SdkHost::RunRowConnect(const std::optional<urnet::ConnectLocation>& locatio
 
 void SdkHost::Disconnect() {
   CancelRowConnect("disconnect");
-  RunCommand(ConnectCommandQueue::Kind::Disconnect, [this] { DisconnectNow(); });
+  // The provider reconcile is device work of its own, queued once the
+  // disconnect has applied: the tap's "Disconnecting…" ends with the
+  // disconnect, not with the provider-only device the daemon builds after it.
+  RunCommand(ConnectCommandQueue::Kind::Disconnect, [this] { DisconnectNow(); }, [this] {
+    RunCommand(ConnectCommandQueue::Kind::Device,
+               [this] { ReconcileProvider("disconnect", /*userInitiated=*/true); });
+  });
 }
 
 void SdkHost::DisconnectNow() {
@@ -5151,10 +5164,10 @@ void SdkHost::DisconnectNow() {
   // the tunnel, which is how a Linux "Always" provider used to stop earning
   // the moment it disconnected. When the provide mode still provides while
   // disconnected, the provider-only device takes over — no tun, no routes, no
-  // DNS (ProvideLifecycle.hpp). After the reading above is posted, so the
-  // window settles on Disconnected before the daemon builds it, and on the
-  // worker, so the main loop never waits on the daemon for it.
-  ReconcileProvider("disconnect", /*userInitiated=*/true);
+  // DNS (ProvideLifecycle.hpp). That reconcile is queued by Disconnect once
+  // this has applied, so the window settles on Disconnected before the daemon
+  // builds it, and it runs on the worker, so the main loop never waits on the
+  // daemon for it.
 }
 
 void SdkHost::SetProvideControlMode(const std::string& mode) {

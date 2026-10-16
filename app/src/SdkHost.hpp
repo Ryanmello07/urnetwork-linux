@@ -771,13 +771,20 @@ class SdkHost {
                        std::function<void(StartOutcome)> done);
   // A command is queued or running, or its result has not applied yet. While
   // one is, the GTK thread makes no device read (each would wait on the
-  // device's state lock the command holds) and the window holds the tap's
-  // state. Main loop.
+  // device's state lock the command holds). Main loop.
   bool CommandsBusy() const { return commands_.Busy(); }
+  // Runs on the main loop each time the last connect or disconnect command
+  // has applied, with the reading the worker took after it: the device's own
+  // word, which ends the tap's held state, whatever device work (a provider
+  // reconcile, the presentation's controllers) is still queued behind it. A
+  // reading from before a sign-out is never handed on (the default reading
+  // is). Main loop.
+  void SetTapSettledHandler(std::function<void(ConnectReading)> handler) {
+    onTapSettled_ = std::move(handler);
+  }
   // Runs on the main loop each time the queue settles, with the reading the
-  // worker took after the last command: the device's own word once the tap's
-  // held state ends. A reading from before a sign-out is never handed on (the
-  // default reading is). Main loop.
+  // worker took after the last command (the same guard): the reads the GTK
+  // thread held back may run now. Main loop.
   void SetCommandsSettledHandler(std::function<void(ConnectReading)> handler) {
     onCommandsSettled_ = std::move(handler);
   }
@@ -1650,6 +1657,7 @@ class SdkHost {
   // ShutdownOffMainLoop's thread, joined in ~SdkHost before the queue stops.
   std::thread shutdownWorker_;
   std::function<void(ConnectReading)> onCommandsSettled_;
+  std::function<void(ConnectReading)> onTapSettled_;
   // The reading the last command's worker took, and the sign-in it was taken
   // in. Main loop.
   ConnectReading lastCommandReading_;
