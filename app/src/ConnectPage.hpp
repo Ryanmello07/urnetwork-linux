@@ -135,7 +135,11 @@ class ConnectPage : public Gtk::Box {
   // Is a Disconnect the user asked for still in flight? Read by MainWindow so
   // an EXPECTED teardown is not reported to the user as the daemon dropping
   // the session on its own.
-  bool DisconnectPending() const { return disconnectRequestedAtUs_ != 0; }
+  // A disconnect the user asked for is in flight: the page's own press, or
+  // one (the tray's, the balance notice's) still on the command queue.
+  bool DisconnectPending() const {
+    return disconnectRequestedAtUs_ != 0 || tapPending_ == connect_tap::Pending::Disconnect;
+  }
 
   // THE PRESS CARRIES ITS OWN ACTION. `disconnect` is the action that wrote the
   // label the user actually clicked, captured at press time — not something the

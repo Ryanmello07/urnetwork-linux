@@ -1101,6 +1101,12 @@ void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status
     connectPage_->SetFailsafeArmed(
         failsafe_notice::ShowsArmedWarning(status->failsafe_armed, status->tunnel_state));
   }
+  // While connect commands are outstanding the window shows the tap's own
+  // state, and a Stopped read now is the queued disconnect's own stop or a
+  // start not done yet, not a teardown to explain; the reading below would
+  // also wait on the lock the command holds. The next tick after the queue
+  // settles reads the daemon again.
+  if (host_.CommandsBusy()) return;
   if (status->tunnel_state != ctl::TunnelState::Error &&
       status->tunnel_state != ctl::TunnelState::Stopped) {
     return;

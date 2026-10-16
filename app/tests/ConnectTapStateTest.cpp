@@ -231,3 +231,21 @@ UR_TEST(connectCommandsHoldTheReshowReadsUntilTheySettle) {
   UR_EXPECT_TRUE(wiring::Before(reading, "if (self->CommandsBusy()) {", "self->CurrentConnectReading()"));
   UR_EXPECT_TRUE(wiring::Before(reading, "self->degradeReevalAtMillis_ = 0;", "self->CurrentConnectReading()"));
 }
+
+// While commands are outstanding the window shows the tap's state, so the
+// health poll concludes nothing from a Stopped the daemon reports (the queued
+// disconnect's own stop, or a start not done yet) and reads nothing through
+// the lock the command holds; and a disconnect still queued is one the user
+// asked for, whoever made it (the tray, the balance notice).
+UR_TEST(connectCommandsKeepTheHealthPollFromConcluding) {
+  const std::string window = wiring::ReadCode("MainWindow.cpp");
+  const std::string poll = wiring::FunctionBody(
+      window, "void MainWindow::ApplyDaemonHealth(const std::optional<ctl::StatusReply>& status) {");
+  UR_EXPECT_TRUE(wiring::Before(poll, "if (host_.CommandsBusy()) return;",
+                                "if (connectPage_ && connectPage_->DisconnectPending()) {"));
+  UR_EXPECT_TRUE(wiring::Before(poll, "if (host_.CommandsBusy()) return;",
+                                "T_(\"tunnel_stopped_unexpectedly\""));
+  const std::string page = wiring::ReadCode("ConnectPage.hpp");
+  UR_EXPECT_TRUE(wiring::Contains(
+      page, "return disconnectRequestedAtUs_ != 0 || tapPending_ == connect_tap::Pending::Disconnect;"));
+}
