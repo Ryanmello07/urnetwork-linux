@@ -342,25 +342,22 @@ T SdkHost::ReadOnMain(const char* key, const std::function<T()>& readLocked) {
     std::scoped_lock lock(mutex_);
     return readLocked();
   }
+  const auto epoch = signInEpoch_.load();
   const bool busy = CommandsBusy();
   std::unique_lock<std::mutex> lock(mutex_, std::defer_lock);
   const bool lockFree = !busy && lock.try_lock();
   if (main_read::SourceFor(/*onMainLoop=*/true, busy, lockFree) == main_read::Source::Snapshot) {
-    const auto kept = mainReads_.find(key);
-    if (kept != mainReads_.end()) {
-      if (const T* value = std::any_cast<T>(&kept->second)) return *value;
-    }
-    // never read yet: the read's own "nothing known"
-    return T{};
+    return mainReads_.Get<T>(key, epoch);
   }
   T value = readLocked();
-  mainReads_[key] = value;
+  if (epoch != signInEpoch_.load()) return T{};
+  mainReads_.Keep<T>(key, epoch, value);
   return value;
 }
 
 template <typename T>
 void SdkHost::KeepOnMain(const char* key, T value) {
-  mainReads_[key] = std::move(value);
+  mainReads_.Keep<T>(key, signInEpoch_.load(), std::move(value));
 }
 
 SdkHost::SdkHost()
@@ -927,6 +924,7 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       }
       networkNameVc_ = urnet::newNetworkNameValidationViewController(*api_);
       loggedIn = !localState_->getByClientJwt().empty();
+      signInEpoch_.fetch_add(1);
       hasClientJwt_.store(loggedIn);
       // the new space's stored credential is the answer, not a sign-out made
       // in another space
@@ -2393,6 +2391,7 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void
           return;
         }
         // the stored credential is this sign-in's from here
+        signInEpoch_.fetch_add(1);
         hasClientJwt_.store(true);
         signedOut_.store(false);
         authLogouts_.SignedIn();

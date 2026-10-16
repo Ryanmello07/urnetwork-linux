@@ -15,6 +15,12 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <any>
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 namespace urnw::main_read {
 
 enum class Source {
@@ -29,5 +35,39 @@ constexpr Source SourceFor(bool onMainLoop, bool commandsBusy, bool lockFree) {
   if (commandsBusy || !lockFree) return Source::Snapshot;
   return Source::Locked;
 }
+
+
+// Main-loop-only mirrors belong to one sign-in/network-space generation. A
+// busy worker must never make a new account read the previous account's data.
+class Snapshots {
+ public:
+  template <typename T>
+  T Get(const char* key, std::uint64_t epoch) {
+    if (!Select(epoch)) return T{};
+    const auto found = values_.find(key);
+    if (found != values_.end()) {
+      if (const T* value = std::any_cast<T>(&found->second)) return *value;
+    }
+    return T{};
+  }
+
+  template <typename T>
+  void Keep(const char* key, std::uint64_t epoch, T value) {
+    if (!Select(epoch)) return;
+    values_[key] = std::move(value);
+  }
+
+ private:
+  bool Select(std::uint64_t epoch) {
+    if (epoch < epoch_) return false;
+    if (epoch_ != epoch) {
+      values_.clear();
+      epoch_ = epoch;
+    }
+    return true;
+  }
+  std::uint64_t epoch_ = 0;
+  std::unordered_map<std::string, std::any> values_;
+};
 
 }  // namespace urnw::main_read

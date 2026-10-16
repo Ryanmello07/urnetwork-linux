@@ -20,7 +20,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
-#include <any>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -38,6 +37,7 @@
 
 #include "ClientEvents.hpp"
 #include "ConnectCommandQueue.hpp"
+#include "MainRead.hpp"
 #include "ControlClient.hpp"
 #include "ExtenderReset.hpp"
 #include "LogUpload.hpp"
@@ -1661,7 +1661,7 @@ class SdkHost {
   // The thread running the GTK main loop (the default context's owner).
   static bool OnMainLoop();
   // The values the main loop's reads last gave, by key. Main loop only.
-  std::unordered_map<std::string, std::any> mainReads_;
+  main_read::Snapshots mainReads_;
   // The stored client jwt is non-empty: what IsLoggedIn reads besides
   // signedOut_, without mutex_ (set where the jwt is stored or switched).
   std::atomic<bool> hasClientJwt_{false};

@@ -130,3 +130,47 @@ UR_TEST(MainReadWiring_TheDeveloperBridgeHoldsTheLockOverTheDevice) {
       wiring::FunctionBody(host, "urnet::DeviceRemote* SdkHost::LockedDevice(std::unique_lock<std::mutex>& lock) {"),
       "lock = std::unique_lock<std::mutex>(mutex_);", "return &*device_;"));
 }
+
+
+UR_TEST(MainReadSnapshots_AccountChangeRetiresEveryOldValueWhileBusy) {
+  urnw::main_read::Snapshots snapshots;
+  snapshots.Keep("dns", 7, std::string("account-a-resolver"));
+  snapshots.Keep("traffic", 7, 123);
+  UR_EXPECT_TRUE(snapshots.Get<std::string>("dns", 7) == "account-a-resolver");
+  // A new sign-in or network space has not completed its first worker read.
+  UR_EXPECT_TRUE(snapshots.Get<std::string>("dns", 8).empty());
+  UR_EXPECT_EQ(0, snapshots.Get<int>("traffic", 8));
+  snapshots.Keep("dns", 8, std::string("account-b-resolver"));
+  UR_EXPECT_TRUE(snapshots.Get<std::string>("dns", 8) == "account-b-resolver");
+  UR_EXPECT_EQ(0, snapshots.Get<int>("traffic", 8));
+}
+
+UR_TEST(MainReadSnapshots_FirstWriteAfterAccountChangeRetiresOtherKeys) {
+  urnw::main_read::Snapshots snapshots;
+  snapshots.Keep("dns", 7, std::string("account-a-resolver"));
+  snapshots.Keep("traffic", 7, 123);
+  snapshots.Keep("dns", 8, std::string("account-b-resolver"));
+  UR_EXPECT_EQ(0, snapshots.Get<int>("traffic", 8));
+  UR_EXPECT_TRUE(snapshots.Get<std::string>("dns", 8) == "account-b-resolver");
+}
+
+UR_TEST(MainReadWiring_AuthTransitionsRetireMirrors) {
+  const auto host = wiring::ReadCode("SdkHost.cpp");
+  for (const auto* signature : {"bool SdkHost::ApplyNetworkServer(",
+                               "void SdkHost::RegisterNetworkClient(",
+                               "void SdkHost::Logout() {"}) {
+    UR_EXPECT_TRUE_MSG(signature, wiring::Contains(wiring::FunctionBody(host, signature),
+                                                  "signInEpoch_.fetch_add(1)"));
+  }
+  const auto read = wiring::FunctionBody(host, "T SdkHost::ReadOnMain(const char* key,");
+  UR_EXPECT_TRUE(wiring::Contains(read, "mainReads_.Get<T>(key, epoch)"));
+  UR_EXPECT_TRUE(wiring::Contains(read, "mainReads_.Keep<T>(key, epoch, value)"));
+}
+
+UR_TEST(MainReadSnapshots_RetiredGenerationCannotReplaceNewValues) {
+  urnw::main_read::Snapshots snapshots;
+  snapshots.Keep("dns", 8, std::string("account-b-resolver"));
+  snapshots.Keep("dns", 7, std::string("account-a-resolver"));
+  UR_EXPECT_TRUE(snapshots.Get<std::string>("dns", 7).empty());
+  UR_EXPECT_TRUE(snapshots.Get<std::string>("dns", 8) == "account-b-resolver");
+}
