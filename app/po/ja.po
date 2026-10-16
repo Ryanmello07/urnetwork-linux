@@ -7916,6 +7916,11 @@ msgctxt "site_app_connect_to_view"
 msgid "Connect to view live activity"
 msgstr "接続するとリアルタイムのアクティビティが表示されます"
 
+#. App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.
+msgctxt "site_app_connecting"
+msgid "Connecting…"
+msgstr "接続中…"
+
 #. App settings: connections section
 msgctxt "site_app_connections"
 msgid "Connections"
