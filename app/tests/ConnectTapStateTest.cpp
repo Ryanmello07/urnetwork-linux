@@ -79,10 +79,20 @@ UR_TEST(connectTapWithNothingPendingIsTheReading) {
 
 UR_TEST(connectTapReadsTheSameInTheTray) {
   // the tray's reading of a pending connect is connecting too, never the
-  // session's own claim of connected
+  // session's own claim of connected, with the window shown or hidden (no
+  // controller, so the reading itself observed nothing)
   const health::Signals folded = Fold(Disconnected(), Pending::Connect);
   const health::Reading view = health::Render(folded);
-  UR_EXPECT_FALSE(health::Proven(health::TrayReading(view, folded, /*statusObserved=*/true)));
+  for (const bool readingObserved : {true, false}) {
+    const health::Reading tray = health::TrayReading(
+        view, folded, urnw::connect_tap::StatusObserved(readingObserved, Pending::Connect));
+    UR_EXPECT_FALSE(health::Proven(tray));
+    UR_EXPECT_TRUE(tray.state == health::State::Connecting);
+  }
+  // with nothing pending, an unobserved session keeps its own claim, as before
+  UR_EXPECT_FALSE(urnw::connect_tap::StatusObserved(false, Pending::None));
+  const std::string window = wiring::ReadCode("MainWindow.cpp");
+  UR_EXPECT_TRUE(wiring::Contains(window, "connect_tap::StatusObserved(reading.statusObserved, pendingTap_)"));
 }
 
 // The three commands queue their device work, and take no lock on the

@@ -142,7 +142,8 @@ UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
       reading,
       {"const health::Reading view = health::Render(signals);",
        "connected_ = view.action != health::Action::Connect;",
-       "health::TrayReading(view, signals, reading.statusObserved);",
+       "health::TrayReading(",
+       "view, signals, connect_tap::StatusObserved(reading.statusObserved, pendingTap_));",
        "const bool proven = health::Proven(tray);",
        "const std::string status = T_(tray.textKey, tray.textEnglish);",
        "on_tray_state(connected_, proven, status, signedIn_);"}));

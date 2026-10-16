@@ -2604,7 +2604,8 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   // (a session still building, held or degraded is not), and its tooltip
   // names the state, all from this one reading. A session the window has not
   // seen a status for keeps its own claim (health::TrayReading).
-  const health::Reading tray = health::TrayReading(view, signals, reading.statusObserved);
+  const health::Reading tray = health::TrayReading(
+      view, signals, connect_tap::StatusObserved(reading.statusObserved, pendingTap_));
   const bool proven = health::Proven(tray);
   const std::string status = T_(tray.textKey, tray.textEnglish);
   if (on_tray_state && (connected_ != wasConnected || proven != trayProven_ ||

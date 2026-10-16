@@ -50,5 +50,14 @@ inline health::Signals Fold(health::Signals s, Pending pending) {
   return s;
 }
 
+// Whether the tray reads the status as observed (health::TrayReading). With
+// the window hidden there is no controller, and an unobserved Connecting
+// reads as the session's own claim, Connected. A pending tap is the window's
+// own word about where the connection is going, never such a claim: a connect
+// just tapped reads connecting, not connected.
+inline bool StatusObserved(bool readingObserved, Pending pending) {
+  return readingObserved || pending != Pending::None;
+}
+
 }  // namespace connect_tap
 }  // namespace urnw
