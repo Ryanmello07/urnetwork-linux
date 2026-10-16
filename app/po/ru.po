@@ -8094,7 +8094,7 @@ msgctxt "site_app_connected"
 msgid "Connected"
 msgstr "Подключено"
 
-#. App connect screen: connecting state
+#. App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.
 msgctxt "site_app_connecting"
 msgid "Connecting…"
 msgstr "Подключение…"
