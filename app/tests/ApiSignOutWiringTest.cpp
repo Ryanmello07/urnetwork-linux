@@ -93,16 +93,16 @@ UR_TEST(ApiSignOut_TheSubscriptionClosesFirst) {
 // sign out again.
 UR_TEST(ApiSignOut_TheTrackerFollowsEverySignInAndSignOut) {
   const std::string host = ReadCode("SdkHost.cpp");
-  UR_EXPECT_TRUE(Before(FunctionBody(host, "void SdkHost::Logout() {"), "signedOut_.store(true);",
+  UR_EXPECT_TRUE(Before(FunctionBody(host, "void SdkHost::Logout() {"), "signedOut_.store(true)",
                         "authLogouts_.SignedOut();"));
-  const std::string registered = FunctionBody(host, "void SdkHost::RegisterNetworkClient(");
+  const std::string registered = FunctionBody(host, "void SdkHost::FinishNetworkClientRegistration(");
   UR_EXPECT_TRUE(Before(registered, "signedOut_.store(false);", "authLogouts_.SignedIn();"));
-  UR_EXPECT_TRUE(Before(registered, "authLogouts_.SignedIn();", "onAuth_(true);"));
+  UR_EXPECT_TRUE(Before(registered, "authLogouts_.SignedIn();", "onAuth_(true, *publishedEpoch);"));
   const std::string server = FunctionBody(host, "bool SdkHost::ApplyNetworkServer(");
   UR_EXPECT_TRUE(Before(server, "signedOut_.store(!loggedIn);", "if (loggedIn) {\n        authLogouts_.SignedIn();\n      } else {\n        authLogouts_.SignedOut();"));
   const std::string initialize = FunctionBody(host, "bool SdkHost::Initialize(");
   UR_EXPECT_TRUE(Before(initialize, "localState_ = asyncLocalState_->getLocalState();",
-                        "if (!localState_->getByClientJwt().empty()) authLogouts_.SignedIn();"));
+                        "if (hasClientJwt_.load()) authLogouts_.SignedIn();"));
   // ...and nowhere else moves signedOut_ without it
   for (size_t at = host.find("signedOut_.store("); at != std::string::npos;
        at = host.find("signedOut_.store(", at + 1)) {
@@ -111,6 +111,8 @@ UR_TEST(ApiSignOut_TheTrackerFollowsEverySignInAndSignOut) {
     UR_EXPECT_TRUE_MSG(host.substr(at, next - at), Contains(after, "authLogouts_.Signed"));
   }
   UR_EXPECT_EQ(3u, CountOf(host, "signedOut_.store("));
+  // The short auth-state lock orders logout with registration publication.
+  UR_EXPECT_EQ(0u, CountOf(host, "signedOut_.exchange("));
 }
 
 // The handler marshals the report to the main loop; there the first report of

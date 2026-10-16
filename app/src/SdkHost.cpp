@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "SdkHost.hpp"
+#include "MainRead.hpp"
 
 #include <urnetwork_sdk.h>
 
@@ -333,7 +334,58 @@ std::string DeviceAuthLogoutCause(uint64_t device) {
 
 }  // namespace
 
+bool SdkHost::OnMainLoop() { return g_main_context_is_owner(g_main_context_default()) != FALSE; }
+
+template <typename T>
+T SdkHost::ReadOnMain(const char* key, const std::function<T()>& readLocked) {
+  if (!OnMainLoop()) {
+    std::scoped_lock lock(mutex_);
+    return readLocked();
+  }
+  const auto epoch = signInEpoch_.load();
+  const bool busy = CommandsBusy();
+  std::unique_lock<std::mutex> lock(mutex_, std::defer_lock);
+  const bool lockFree = !busy && lock.try_lock();
+  if (main_read::SourceFor(/*onMainLoop=*/true, busy, lockFree) == main_read::Source::Snapshot) {
+    return mainReads_.Get<T>(key, epoch);
+  }
+  T value = readLocked();
+  if (epoch != signInEpoch_.load()) return T{};
+  mainReads_.Keep<T>(key, epoch, value);
+  return value;
+}
+
+template <typename T>
+void SdkHost::KeepOnMain(const char* key, T value) {
+  mainReads_.Keep<T>(key, signInEpoch_.load(), std::move(value));
+}
+
+SdkHost::SdkHost()
+    : commands_([](ConnectCommandQueue::Apply apply) { PostToMain(std::move(apply)); }) {
+  // The queue settled: the tap's held state hands back to the device's word,
+  // read on the worker after the last command. A reading from before a
+  // sign-out describes the account that left, so the default one goes instead.
+  commands_.SetSettledHandler([this] {
+    if (!onCommandsSettled_) return;
+    onCommandsSettled_(lastCommandReadingEpoch_ == signInEpoch_.load() ? lastCommandReading_
+                                                                       : ConnectReading{});
+  });
+  // The last connect or disconnect applied: the tap's state ends there, not
+  // after the device work queued behind it.
+  commands_.SetTapSettledHandler([this] {
+    if (!onTapSettled_) return;
+    onTapSettled_(lastCommandReadingEpoch_ == signInEpoch_.load() ? lastCommandReading_
+                                                                  : ConnectReading{});
+  });
+}
+
 SdkHost::~SdkHost() {
+  // A quit's teardown first: it holds `this` and takes mutex_, which a
+  // command may still hold. Unbounded, the trade the joins below make too.
+  if (shutdownWorker_.joinable()) shutdownWorker_.join();
+  // Then the connect commands' worker: its work holds `this` and takes
+  // mutex_. Queued commands are dropped, and the one running finishes.
+  commands_.Stop();
   // Leg 3 of the kill switch runs here and holds `this`. Stop it before any
   // member dies; it never takes mutex_ while the joiner holds it, so the join
   // cannot deadlock.
@@ -498,7 +550,8 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
     // a launch signed in (IsLoggedIn) is a sign-in the server can reject
-    if (!localState_->getByClientJwt().empty()) authLogouts_.SignedIn();
+    hasClientJwt_.store(!localState_->getByClientJwt().empty());
+    if (hasClientJwt_.load()) authLogouts_.SignedIn();
     // the SDK's client event queue over this network space: it persists,
     // batches and sends the product events (ClientEvents.hpp)
     events_ = std::make_unique<ClientEventQueue>(networkSpace_->handle(), UR_APP_VERSION,
@@ -540,13 +593,19 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
 }
 
 bool SdkHost::IsLoggedIn() {
-  std::scoped_lock lock(mutex_);
   // A sign-out is the answer at once: the stored jwt outlives it until the
-  // asynchronous local logout lands (Logout).
-  return !signedOut_.load() && localState_ && !localState_->getByClientJwt().empty();
+  // queued logout tail clears the local state (Logout). No lock: both halves are
+  // atomics, so the main loop never waits here on a command holding mutex_.
+  return !signedOut_.load() && hasClientJwt_.load();
 }
 
 // ---- auth (mirrors the Windows SdkHost) -----------------------------------
+
+uint64_t SdkHost::CaptureAuthEpoch() {
+  std::scoped_lock lock(authStateMutex_);
+  authAttemptSinceLogout_ = true;
+  return signInEpoch_.load();
+}
 
 // Account discovery for the email-first login flow (Windows SdkHost::StartLogin,
 // macOS LoginInitialViewModel + UrApiService.authLogin): authLogin{user_auth}
@@ -554,12 +613,14 @@ bool SdkHost::IsLoggedIn() {
 // the password step; another method only (e.g. SSO) -> IncorrectAuth with the
 // allowed list; nothing -> Create (sign-up).
 void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRouting)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthLoginArgs args;
   args.user_auth = userAuth;
-  api_->authLogin(args, [this, userAuth, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, userAuth, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                                std::optional<std::string> err) {
     LoginRouting routing;  // route defaults to Error
     routing.userAuth = userAuth;
+    if (!AuthEpochCurrent(authEpoch)) { routing.error = "superseded by signing out"; done(routing); return; }
     if (err) { routing.error = *err; done(routing); return; }
     if (!result) { routing.error = "no result"; done(routing); return; }
     if (result->user_auth && !result->user_auth->empty()) {
@@ -577,7 +638,7 @@ void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRo
         routed.route = r.ok ? LoginRoute::Login : LoginRoute::Error;
         routed.error = r.error;
         done(routed);
-      });
+      }, authEpoch);
       return;
     }
     if (result->auth_allowed && !result->auth_allowed->empty()) {
@@ -603,14 +664,16 @@ void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRo
 
 void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& password,
                                 std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthLoginWithPasswordArgs args;
   args.user_auth = userAuth;
   args.password = password;
   // an unverified account gets a NUMERIC code (the verify page's OTP entry),
   // matching the apple LoginPasswordViewModel
   args.verify_otp_numeric = true;
-  api_->authLoginWithPassword(args, [this, done](std::optional<urnet::AuthLoginWithPasswordResult> result,
+  api_->authLoginWithPassword(args, [this, done, authEpoch](std::optional<urnet::AuthLoginWithPasswordResult> result,
                                                  std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
@@ -619,7 +682,7 @@ void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& 
       return;
     }
     if (result->network && result->network->by_jwt) {
-      RegisterNetworkClient(*result->network->by_jwt, done);
+      RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
       return;
     }
     done({false, false, "login returned no network"});
@@ -627,14 +690,16 @@ void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& 
 }
 
 void SdkHost::LoginWithCode(const std::string& authCode, std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthCodeLoginArgs args;
   args.auth_code = authCode;
-  api_->authCodeLogin(args, [this, done](std::optional<urnet::AuthCodeLoginResult> result,
+  api_->authCodeLogin(args, [this, done, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
-    if (!result->by_jwt.empty()) { RegisterNetworkClient(result->by_jwt, done); return; }
+    if (!result->by_jwt.empty()) { RegisterNetworkClient(result->by_jwt, done, authEpoch); return; }
     done({false, false, "code login returned no jwt"});
   });
 }
@@ -664,12 +729,14 @@ std::string NormalizeSeedphrase(const std::string& raw) {
 
 void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
                                   std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthLoginArgs args;
   args.seedphrase = NormalizeSeedphrase(seedphrase);
   // NOTE: nothing on any path below may echo the args — an error log that
   // included the request would put the credential in a file on disk.
-  api_->authLogin(args, [this, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                      std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) {
@@ -678,7 +745,7 @@ void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     done({false, false, "seedphrase login returned no network"});
@@ -687,15 +754,17 @@ void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
 
 void SdkHost::CreateInstantAccount(const std::string& referralCode,
                                    std::function<void(InstantAccount)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   // NO user_auth, password, auth_jwt or wallet_auth: that combination is what
   // makes the server mint a seedphrase-secured network and return the phrase.
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.terms = true;  // the form's button is gated on the terms consent
   if (!referralCode.empty()) args.referral_code = referralCode;
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
     InstantAccount out;
+    if (!AuthEpochCurrent(authEpoch)) { out.error = "superseded by signing out"; if (done) done(out); return; }
     if (err || !result) {
       out.error = err ? *err : "no result";
       if (done) done(out);
@@ -726,8 +795,14 @@ void SdkHost::CreateInstantAccount(const std::string& referralCode,
     }
     {
       std::scoped_lock lock(mutex_);
-      pendingInstantJwt_ = *result->network->by_jwt;
+      if (!AuthEpochCurrent(authEpoch)) {
+        out.error = "superseded by signing out";
+      } else {
+        pendingInstantJwt_ = *result->network->by_jwt;
+        pendingInstantAuthEpoch_ = authEpoch;
+      }
     }
+    if (!out.error.empty()) { if (done) done(out); return; }
     out.ok = true;
     out.seedphrase = *result->seedphrase;
     if (done) done(out);
@@ -736,6 +811,7 @@ void SdkHost::CreateInstantAccount(const std::string& referralCode,
 
 void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
   std::string jwt;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!pendingInstantJwt_) {
@@ -743,9 +819,10 @@ void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
       return;
     }
     jwt = *pendingInstantJwt_;
+    authEpoch = pendingInstantAuthEpoch_;
     pendingInstantJwt_.reset();
   }
-  RegisterNetworkClient(jwt, done);
+  RegisterNetworkClient(jwt, done, authEpoch);
 }
 
 void SdkHost::DiscardInstantAccount() {
@@ -783,31 +860,40 @@ void SdkHost::RefreshAdvancedMode() {
 // ---- network server (iOS NetworkServerSheet / windows parity) ---------------
 
 SdkHost::NetworkServer SdkHost::CurrentNetworkServer() {
-  std::scoped_lock lock(mutex_);
-  NetworkServer out;
-  out.managerAvailable = spaceManager_.has_value();
-  // the same resolution the launch uses, so "Use default network" means the
-  // network this process was started against — never silently production
-  const LaunchOverride launchOverride = LaunchOverrideFromEnvironment();
-  out.defaultHostName = launchOverride.Active() ? launchOverride.host : std::string(kUrHostName);
-  if (!networkSpace_) return out;
-  try {
-    out.hostName = networkSpace_->getHostName();
-    out.apiUrl = networkSpace_->getApiUrl();
-    out.connectUrl = networkSpace_->getPlatformUrl();
-    out.configuredApiUrl = networkSpace_->getConfiguredApiUrl();
-    out.configuredConnectUrl = networkSpace_->getConfiguredPlatformUrl();
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] read network space failed: %s\n", e.what());
-  }
-  return out;
+  return ReadOnMain<SdkHost::NetworkServer>("CurrentNetworkServer", [&]() -> SdkHost::NetworkServer {
+    NetworkServer out;
+    out.managerAvailable = spaceManager_.has_value();
+    // the same resolution the launch uses, so "Use default network" means the
+    // network this process was started against — never silently production
+    const LaunchOverride launchOverride = LaunchOverrideFromEnvironment();
+    out.defaultHostName = launchOverride.Active() ? launchOverride.host : std::string(kUrHostName);
+    if (!networkSpace_) return out;
+    try {
+      out.hostName = networkSpace_->getHostName();
+      out.apiUrl = networkSpace_->getApiUrl();
+      out.connectUrl = networkSpace_->getPlatformUrl();
+      out.configuredApiUrl = networkSpace_->getConfiguredApiUrl();
+      out.configuredConnectUrl = networkSpace_->getConfiguredPlatformUrl();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] read network space failed: %s\n", e.what());
+    }
+    return out;
+  });
+}
+
+bool SdkHost::NetworkServerChangeAllowed() {
+  // The sheet runs on GTK. Keep the old space in place until its logout tail
+  // has cleared that space's credentials; a later retry can choose the new one.
+  return !OnMainLoop() || !commands_.SigningOut();
 }
 
 bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string& apiUrl,
                                  const std::string& connectUrl) {
+  if (!NetworkServerChangeAllowed()) return false;
   if (hostName.empty()) return false;
   bool ok = false;
   bool loggedIn = false;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!spaceManager_) return false;
@@ -870,6 +956,10 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       }
       networkNameVc_ = urnet::newNetworkNameValidationViewController(*api_);
       loggedIn = !localState_->getByClientJwt().empty();
+      std::scoped_lock authLock(authStateMutex_);
+      authEpoch = signInEpoch_.fetch_add(1) + 1;
+      authAttemptSinceLogout_ = false;
+      hasClientJwt_.store(loggedIn);
       // the new space's stored credential is the answer, not a sign-out made
       // in another space
       signedOut_.store(!loggedIn);
@@ -890,7 +980,7 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
   // The new space's stored auth decides what the window shows. Almost always
   // LoggedOut — a fresh server has no jwt — and saying so is the point: the
   // old session is genuinely gone.
-  if (onAuth_) onAuth_(loggedIn);
+  if (onAuth_) onAuth_(loggedIn, authEpoch);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
   // stop_tunnel retired the old server's provider-only device with the rest; a
   // space this device is already signed in to provides again on its own.
@@ -913,14 +1003,15 @@ std::string SdkHost::NetworkSpaceJson() {
 // Nothing here logs the settings: the user id is the server's credential.
 
 std::optional<urnet::VlessSettings> SdkHost::GetVlessSettings() {
-  std::scoped_lock lock(mutex_);
-  if (!networkSpace_) return std::nullopt;
-  try {
-    return networkSpace_->getVlessSettings();
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] getVlessSettings failed: %s\n", e.what());
-    return std::nullopt;
-  }
+  return ReadOnMain<std::optional<urnet::VlessSettings>>("GetVlessSettings", [&]() -> std::optional<urnet::VlessSettings> {
+    if (!networkSpace_) return std::nullopt;
+    try {
+      return networkSpace_->getVlessSettings();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] getVlessSettings failed: %s\n", e.what());
+      return std::nullopt;
+    }
+  });
 }
 
 std::optional<std::string> SdkHost::SetVlessSettings(const urnet::VlessSettings& settings) {
@@ -933,7 +1024,14 @@ std::optional<std::string> SdkHost::SetVlessSettings(const urnet::VlessSettings&
     // stay valid -- nothing to re-derive, unlike ApplyNetworkServer.
     std::optional<std::string> answer = networkSpace_->setVlessSettings(settings);
     // "" is a save; a provider-only device takes the new space now.
-    if (answer && answer->empty()) ReconcileProviderAfterSpaceChange("VLESS settings saved");
+    if (answer && answer->empty()) {
+      ReconcileProviderAfterSpaceChange("VLESS settings saved");
+      // a main-loop read before the queue settles says what was saved
+      if (OnMainLoop()) {
+        KeepOnMain<std::optional<urnet::VlessSettings>>("GetVlessSettings",
+                                                         networkSpace_->getVlessSettings());
+      }
+    }
     return answer;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] setVlessSettings failed: %s\n", e.what());
@@ -976,14 +1074,15 @@ std::string SdkHost::ValidateVlessSettings(const urnet::VlessSettings& settings)
 // they are.
 
 std::optional<std::vector<std::string>> SdkHost::GetControlDohUrls() {
-  std::scoped_lock lock(mutex_);
-  if (!networkSpace_) return std::nullopt;
-  try {
-    return networkSpace_->getControlDohUrls().value_or(urnet::StringList());
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] getControlDohUrls failed: %s\n", e.what());
-    return std::nullopt;
-  }
+  return ReadOnMain<std::optional<std::vector<std::string>>>("GetControlDohUrls", [&]() -> std::optional<std::vector<std::string>> {
+    if (!networkSpace_) return std::nullopt;
+    try {
+      return networkSpace_->getControlDohUrls().value_or(urnet::StringList());
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] getControlDohUrls failed: %s\n", e.what());
+      return std::nullopt;
+    }
+  });
 }
 
 std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::string>& urls) {
@@ -998,7 +1097,14 @@ std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::str
     std::optional<std::string> answer = networkSpace_->setControlDohUrls(urnet::StringList(urls));
     // "" is a save. The tunnel takes the servers at the next connect (the
     // section's note); a provider-only device takes them now.
-    if (answer && answer->empty()) ReconcileProviderAfterSpaceChange("DoH servers saved");
+    if (answer && answer->empty()) {
+      ReconcileProviderAfterSpaceChange("DoH servers saved");
+      // a main-loop read before the queue settles says what was saved
+      if (OnMainLoop()) {
+        KeepOnMain<std::optional<std::vector<std::string>>>(
+            "GetControlDohUrls", networkSpace_->getControlDohUrls().value_or(urnet::StringList()));
+      }
+    }
     return answer;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] setControlDohUrls failed: %s\n", e.what());
@@ -1022,7 +1128,9 @@ std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& coun
 void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult> result,
                                         std::optional<std::string> err,
                                         std::function<void(AuthResult)> done,
+                                        uint64_t authEpoch,
                                         const std::string& bittensorWalletId) {
+  if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
   if (err) { done({false, false, *err}); return; }
   if (!result) { done({false, false, "no result"}); return; }
   if (result->error && !result->error->message.empty()) {
@@ -1039,9 +1147,9 @@ void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult
   if (result->network && result->network->by_jwt) {
     {
       std::scoped_lock lock(mutex_);
-      pendingWalletAuth_.reset();  // consumed (only set on the wallet path)
+      if (pendingWalletAuthEpoch_ == authEpoch) pendingWalletAuth_.reset();  // consumed (only set on the wallet path)
     }
-    RegisterNetworkClient(*result->network->by_jwt, done);
+    RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
     return;
   }
   done({false, false, "network create returned no network"});
@@ -1050,6 +1158,7 @@ void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult
 void SdkHost::CreateNetwork(const std::string& networkName, const std::string& userAuth,
                             const std::string& password, const std::string& referralCode,
                             std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
@@ -1059,9 +1168,9 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
   args.terms = true;  // the page's continue button is gated on the terms switch
   args.verify_use_numeric = true;
   if (!referralCode.empty()) args.referral_code = referralCode;
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
-    HandleNetworkCreateResult(std::move(result), std::move(err), done);
+    HandleNetworkCreateResult(std::move(result), std::move(err), done, authEpoch);
   });
 }
 
@@ -1156,22 +1265,25 @@ void SdkHost::CreateNetworkWithPendingWallet(const std::string& networkName,
 }
 
 bool SdkHost::HasPendingWalletAuth() {
-  std::scoped_lock lock(mutex_);
-  return pendingWalletAuth_.has_value();
+  return ReadOnMain<bool>("HasPendingWalletAuth", [&]() -> bool {
+    return pendingWalletAuth_.has_value();
+  });
 }
 
 void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
                          std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthVerifyArgs args;
   args.user_auth = userAuth;
   args.verify_code = code;
-  api_->authVerify(args, [this, done](std::optional<urnet::AuthVerifyResult> result,
+  api_->authVerify(args, [this, done, authEpoch](std::optional<urnet::AuthVerifyResult> result,
                                       std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     done({false, false, "verify returned no network"});
@@ -1240,14 +1352,15 @@ void SdkHost::ValidateReferralCode(const std::string& referralCode,
 // ---- balance plumbing --------------------------------------------------------
 
 std::optional<urnet::ByJwt> SdkHost::ParseByJwt() {
-  std::scoped_lock lock(mutex_);
-  if (!localState_) return std::nullopt;
-  try {
-    return localState_->parseByJwt();
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] parse by jwt failed: %s\n", e.what());
-    return std::nullopt;
-  }
+  return ReadOnMain<std::optional<urnet::ByJwt>>("ParseByJwt", [&]() -> std::optional<urnet::ByJwt> {
+    if (!localState_) return std::nullopt;
+    try {
+      return localState_->parseByJwt();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] parse by jwt failed: %s\n", e.what());
+      return std::nullopt;
+    }
+  });
 }
 
 void SdkHost::RefreshJwt() {
@@ -1562,6 +1675,7 @@ void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
     std::scoped_lock lock(mutex_);
     walletFlows_.Begin();
     pendingWalletAuth_.reset();
+    walletAuthEpoch_ = CaptureAuthEpoch();
     walletAuthDone_ = std::move(done);
   }
   wallet_.Connect(provider);  // opens the browser; the rest continues on the deep-link callback
@@ -1576,6 +1690,7 @@ void SdkHost::SignInWithBittensor(const std::string& walletId,
     std::scoped_lock lock(mutex_);
     flow = walletFlows_.Begin();
     pendingWalletAuth_.reset();
+    walletAuthEpoch_ = CaptureAuthEpoch();
     walletAuthDone_ = std::move(done);
     bittensorWalletId_ = walletId;
   }
@@ -1748,6 +1863,7 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
     ssoState_ = state;
     ssoNonce_ = nonce;
     ssoOwner_ = addsignin::Owner::SignIn;
+    walletAuthEpoch_ = CaptureAuthEpoch();
     walletAuthDone_ = std::move(done);
     if (networkSpace_) apiUrl = networkSpace_->getApiUrl();
   }
@@ -1942,14 +2058,23 @@ void SdkHost::AddAuthMethod(const addsignin::Args& in, std::function<void(AddSig
 }
 
 void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& jwt) {
+  uint64_t authEpoch = 0;
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    authEpoch = walletAuthEpoch_;
+    flow = walletFlows_.Latest();
+  }
+  if (!AuthEpochCurrent(authEpoch)) return;
   urnet::AuthLoginArgs args;
   args.auth_jwt_type = provider;
   args.auth_jwt = jwt;
-  api_->authLogin(args, [this, provider, jwt](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, provider, jwt, authEpoch, flow](std::optional<urnet::AuthLoginResult> result,
                                               std::optional<std::string> err) {
     std::function<void(AuthResult)> done;
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
       done = std::move(walletAuthDone_);
       walletAuthDone_ = nullptr;
     }
@@ -1963,7 +2088,7 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& j
     if (!result) { fail("no result"); return; }
     if (result->error && !result->error->message.empty()) { fail(result->error->message); return; }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {}, authEpoch);
       return;
     }
     if (result->auth_allowed && !result->auth_allowed->empty()) {
@@ -1981,6 +2106,8 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& j
     // into the create-network page (the web's ssoCreateNetworkView).
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
+      pendingSsoAuthEpoch_ = authEpoch;
       pendingSsoAuth_ = true;
       pendingSsoType_ = provider;
       pendingSsoJwt_ = jwt;
@@ -1999,6 +2126,7 @@ void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
                                           std::function<void(AuthResult)> done) {
   std::string type;
   std::string jwt;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!pendingSsoAuth_) {
@@ -2007,7 +2135,9 @@ void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
     }
     type = pendingSsoType_;
     jwt = pendingSsoJwt_;
+    authEpoch = pendingSsoAuthEpoch_;
   }
+  if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
@@ -2016,23 +2146,26 @@ void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
   args.network_name = networkName;
   args.terms = true;  // the page's continue button is gated on the terms switch
   if (!referralCode.empty()) args.referral_code = referralCode;
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
-    HandleNetworkCreateResult(std::move(result), std::move(err), [this, done](AuthResult r) {
+    HandleNetworkCreateResult(std::move(result), std::move(err), [this, done, authEpoch](AuthResult r) {
       if (r.ok) {
         std::scoped_lock lock(mutex_);
-        pendingSsoAuth_ = false;
-        pendingSsoType_.clear();
-        pendingSsoJwt_.clear();
+        if (pendingSsoAuthEpoch_ == authEpoch) {
+          pendingSsoAuth_ = false;
+          pendingSsoType_.clear();
+          pendingSsoJwt_.clear();
+        }
       }
       done(r);
-    });
+    }, authEpoch);
   });
 }
 
 bool SdkHost::HasPendingSsoAuth() {
-  std::scoped_lock lock(mutex_);
-  return pendingSsoAuth_;
+  return ReadOnMain<bool>("HasPendingSsoAuth", [&]() -> bool {
+    return pendingSsoAuth_;
+  });
 }
 
 void SdkHost::RequestWalletChallenge(
@@ -2139,8 +2272,10 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
   std::optional<urnet::WalletAuthArgs> walletAuth;
   std::string networkName;
   std::string referralCode;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
+    authEpoch = pendingWalletAuthEpoch_;
     done = std::move(walletCreateDone_);
     walletCreateDone_ = nullptr;
     if (!done || !pendingWalletAuth_) return;
@@ -2157,6 +2292,7 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
       pendingWalletReferralCode_.clear();
     }
   }
+  if (!AuthEpochCurrent(authEpoch)) { if (done) done({false, false, "superseded by signing out"}); return; }
   if (!walletAuth) {
     done({false, false, "wallet account changed; use the same account to create the network"});
     return;
@@ -2178,11 +2314,11 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
     bittensorWalletId = bittensorWalletId_;
   }
   args.wallet_auth = walletAuth;
-  api_->networkCreate(args, [this, bittensorWalletId, done = std::move(done)](
+  api_->networkCreate(args, [this, bittensorWalletId, authEpoch, done = std::move(done)](
                                 std::optional<urnet::NetworkCreateResult> result,
                                 std::optional<std::string> err) mutable {
     HandleNetworkCreateResult(std::move(result), std::move(err), std::move(done),
-                              bittensorWalletId);
+                              authEpoch, bittensorWalletId);
   });
 }
 
@@ -2220,6 +2356,14 @@ void SdkHost::HandleDeepLink(const std::string& url) {
 
 void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string& signature,
                                   const std::string& message, const std::string& blockchain) {
+  uint64_t authEpoch = 0;
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    authEpoch = walletAuthEpoch_;
+    flow = walletFlows_.Latest();
+  }
+  if (!AuthEpochCurrent(authEpoch)) return;
   urnet::WalletAuthArgs w;
   w.wallet_address = address;  // base58 public key (solana) | ss58 address (TAO)
   w.wallet_signature = signature;
@@ -2235,13 +2379,14 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
     std::scoped_lock lock(mutex_);
     bittensorWalletId = bittensorWalletId_;
   }
-  api_->authLogin(args, [this, w, bittensorWalletId](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, w, bittensorWalletId, authEpoch, flow](std::optional<urnet::AuthLoginResult> result,
                                                      std::optional<std::string> err) {
     // SDK callback thread: consume walletAuthDone_ under the lock (it is set
     // on the UI thread; the wallet on_error path races this same slot)
     std::function<void(AuthResult)> done;
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
       done = std::move(walletAuthDone_);
       walletAuthDone_ = nullptr;
     }
@@ -2255,7 +2400,7 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {}, authEpoch);
       return;
     }
     // Wallet authenticated but isn't linked to a network yet. Keep the signed
@@ -2263,6 +2408,8 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
     // apple do the same): NetworkCreate{wallet_auth} works for solana AND TAO.
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
+      pendingWalletAuthEpoch_ = authEpoch;
       pendingWalletAuth_ = w;
     }
     if (done) {
@@ -2273,55 +2420,102 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
   });
 }
 
-void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done) {
-  {
-    // a new network jwt invalidates a running device (guest upgrade, verify
-    // after an upgrade): tear it down so the UI rebuilds under the new auth.
-    // Fresh sign-ins have no device and skip this. The daemon's tunnel runs
-    // under the old jwt, so stop it too; the UI restarts it under the new one.
-    std::scoped_lock lock(mutex_);
-    if (device_) {
-      TeardownDeviceLocked();
-      control_.StopTunnel();
-      EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
-    }
-  }
-  api_->setByJwt(byJwt);
-  // The jwt persists asynchronously — and a failed persist means a signed-out
-  // NEXT LAUNCH even though this session would appear to work, so a failure
-  // is surfaced as an auth error instead of being ignored: the user retries
-  // the sign-in rather than silently losing the session (for a guest network
-  // the jwt is the only credential there is).
-  asyncLocalState_->setByJwt(byJwt, [this, done](bool ok) {
-    if (!ok) {
-      std::fprintf(stderr, "[sdk] persist by_jwt failed (localState commit)\n");
-      done({false, false, "could not save session"});
+void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done,
+                                    uint64_t authEpoch) {
+  // The callback keeps the epoch from before its first auth request. Queueing
+  // on GTK orders all credential writes after any logout already admitted.
+  PostToMain([this, byJwt, done, authEpoch] {
+    if (!AuthEpochCurrent(authEpoch)) {
+      done({false, false, "superseded by signing out"});
       return;
     }
-    urnet::AuthNetworkClientArgs args;
-    args.description = UrDeviceDescription();
-    args.device_spec = UrDeviceSpec();
-    AuthNetworkClientWithLocale(args, [this, done](std::optional<urnet::AuthNetworkClientResult> result,
-                                                   std::optional<std::string> err) {
-      if (err) { done({false, false, *err}); return; }
-      if (!result) { done({false, false, "no result"}); return; }
-      if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
-      if (!result->by_client_jwt) { done({false, false, "no client jwt"}); return; }
-      // same contract as the by_jwt persist above: an unsaved client jwt is a
-      // broken next launch (no tunnel credential), never a silent success
-      asyncLocalState_->setByClientJwt(*result->by_client_jwt, [this, done](bool ok) {
-        if (!ok) {
-          std::fprintf(stderr, "[sdk] persist by_client_jwt failed (localState commit)\n");
-          done({false, false, "could not save session"});
+    auto failure = std::make_shared<std::optional<AuthResult>>();
+    RunCommand(ConnectCommandQueue::Kind::Device, [this, byJwt, done, authEpoch, failure] {
+      std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch)) {
+        *failure = AuthResult{false, false, "superseded by signing out"};
+        return;
+      }
+      try {
+        if (device_) {
+          TeardownDeviceLocked();
+          control_.StopTunnel();
+          EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
+        }
+        if (!AuthEpochCurrent(authEpoch)) {
+          *failure = AuthResult{false, false, "superseded by signing out"};
           return;
         }
-        // the stored credential is this sign-in's from here
-        signedOut_.store(false);
-        authLogouts_.SignedIn();
-        if (onAuth_) onAuth_(true);
-        done({true, false, ""});
-      });
+        api_->setByJwt(byJwt);
+        // Synchronous on the command worker: logout's later command cannot
+        // finish before this write, or erase a later account after its tail.
+        localState_->setByJwt(byJwt);
+        if (!AuthEpochCurrent(authEpoch)) {
+          *failure = AuthResult{false, false, "superseded by signing out"};
+          return;
+        }
+        urnet::AuthNetworkClientArgs args;
+        args.description = UrDeviceDescription();
+        args.device_spec = UrDeviceSpec();
+        AuthNetworkClientWithLocale(args, [this, done, authEpoch](
+            std::optional<urnet::AuthNetworkClientResult> result, std::optional<std::string> err) {
+          PostToMain([this, done, authEpoch, result, err] {
+            if (!AuthEpochCurrent(authEpoch)) {
+              done({false, false, "superseded by signing out"});
+              return;
+            }
+            if (err) { done({false, false, *err}); return; }
+            if (!result) { done({false, false, "no result"}); return; }
+            if (result->error && !result->error->message.empty()) {
+              done({false, false, result->error->message});
+              return;
+            }
+            if (!result->by_client_jwt) { done({false, false, "no client jwt"}); return; }
+            FinishNetworkClientRegistration(*result->by_client_jwt, done, authEpoch);
+          });
+        });
+      } catch (const std::exception&) {
+        *failure = AuthResult{false, false, "could not save session"};
+      }
+    }, [this, done, authEpoch, failure] {
+      if (!*failure) return;
+      done(AuthEpochCurrent(authEpoch) ? **failure
+                                      : AuthResult{false, false, "superseded by signing out"});
     });
+  });
+}
+
+void SdkHost::FinishNetworkClientRegistration(const std::string& byClientJwt,
+                                               std::function<void(AuthResult)> done,
+                                               uint64_t authEpoch) {
+  auto answer = std::make_shared<AuthResult>(AuthResult{false, false, "superseded by signing out"});
+  auto publishedEpoch = std::make_shared<uint64_t>(authEpoch);
+  RunCommand(ConnectCommandQueue::Kind::Device, [this, byClientJwt, authEpoch, answer, publishedEpoch] {
+    std::scoped_lock lock(mutex_);
+    if (!AuthEpochCurrent(authEpoch)) return;
+    try {
+      localState_->setByClientJwt(byClientJwt);
+    } catch (const std::exception&) {
+      *answer = AuthResult{false, false, "could not save session"};
+      return;
+    }
+    // Logout's UI half takes only this short lock. A logout during the disk
+    // write wins; its queued tail clears the old write before a new sign-in.
+    std::scoped_lock authLock(authStateMutex_);
+    if (!AuthEpochCurrent(authEpoch)) return;
+    *publishedEpoch = signInEpoch_.fetch_add(1) + 1;
+    authAttemptSinceLogout_ = false;
+    hasClientJwt_.store(true);
+    signedOut_.store(false);
+    authLogouts_.SignedIn();
+    *answer = AuthResult{true, false, ""};
+  }, [this, done, answer, publishedEpoch] {
+    if (!AuthEpochCurrent(*publishedEpoch)) {
+      done({false, false, "superseded by signing out"});
+      return;
+    }
+    if (answer->ok && onAuth_) onAuth_(true, *publishedEpoch);
+    done(*answer);
   });
 }
 
@@ -2352,7 +2546,7 @@ TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {
   // An owed sign-out first, at once: a Connect is a person asking (SignOut.hpp).
   SettleSignOutLocked("connect", /*userInitiated=*/true);
   // Signed out reads as no jwt: the stored one outlives a sign-out until its
-  // asynchronous local logout lands.
+  // queued logout tail clears the local state.
   const std::string clientJwt = signedOut_.load() ? std::string() : localState_->getByClientJwt();
   if (clientJwt.empty()) {
     lastTunnelError_ = "not signed in";
@@ -2766,8 +2960,10 @@ TunnelStartResult SdkHost::BindRemoteDeviceLocked(const std::string& clientJwt,
           "present its certificate (" +
           holdError + ")");
     }
+    deviceBound_.store(false);
     device_ = urnet::newDeviceRemoteWithDefaults(*networkSpace_, clientJwt,
                                                  session.instance_id);
+    deviceBound_.store(true);
     // setRpcServer BEFORE any listener registration or getter (windows
     // SdkHost.cpp:2027-2029), and exactly once per DeviceRemote instance — the
     // binding gives no re-entrancy contract for a second call and no way to
@@ -2800,13 +2996,17 @@ TunnelStartResult SdkHost::BindRemoteDeviceLocked(const std::string& clientJwt,
     // reconnects.
     subs_.push_back(device_->addRemoteChangeListener([this, rpcGeneration](bool connected) {
       if (!connected) return;
+      // On the command queue, behind the connect that follows a start: it
+      // takes mutex_, which that connect holds through its rpc, and the save
+      // talks to the Secret Service (the main loop waits on neither).
       PostToMain([this, rpcGeneration] {
-        std::scoped_lock lock(mutex_);
-        if (rpcGeneration != rpcSessionGeneration_.load()) return;  // a newer session owns it
-        if (rpcBindWatchId_ == 0) return;
-        g_source_remove(rpcBindWatchId_);
-        rpcBindWatchId_ = 0;
-        RememberSyncedSessionLocked();
+        RunCommand(ConnectCommandQueue::Kind::Device, [this, rpcGeneration] {
+          std::scoped_lock lock(mutex_);
+          if (rpcGeneration != rpcSessionGeneration_.load()) return;  // a newer session owns it
+          if (rpcBindWatchId_ == 0) return;
+          RemoveRpcBindWatchLocked();
+          RememberSyncedSessionLocked();
+        });
       });
     }));
 
@@ -2945,13 +3145,15 @@ void SdkHost::RememberSyncedSessionLocked() {
 }
 
 std::string SdkHost::LastTunnelError() {
-  std::scoped_lock lock(mutex_);
-  return lastTunnelError_;
+  return ReadOnMain<std::string>("LastTunnelError", [&]() -> std::string {
+    return lastTunnelError_;
+  });
 }
 
 std::string SdkHost::RpcHostPort() {
-  std::scoped_lock lock(mutex_);
-  return rpcHostPort_;
+  return ReadOnMain<std::string>("RpcHostPort", [&]() -> std::string {
+    return rpcHostPort_;
+  });
 }
 
 // ---- live stats (macOS parity: listener-push, not polling) ----------------
@@ -3114,6 +3316,14 @@ ConnectReading SdkHost::ReadConnectReading() {
             std::scoped_lock lock(self->degradeMutex_);
             self->degradeReevalId_ = 0;
           }
+          // on the main loop: not while connect commands hold the locks this
+          // read takes. Their settle reads the hold again, and with the
+          // armed time cleared that read arms the re-evaluation anew.
+          if (self->CommandsBusy()) {
+            std::scoped_lock lock(self->degradeMutex_);
+            self->degradeReevalAtMillis_ = 0;
+            return G_SOURCE_REMOVE;
+          }
           if (self->onReading_) self->onReading_(self->CurrentConnectReading());
           return G_SOURCE_REMOVE;
         },
@@ -3209,8 +3419,9 @@ void SdkHost::PublishConnectReading() {
 // reading now and one decision table over it (health::Render); this is simply
 // how a caller gets a fresh copy.
 ConnectReading SdkHost::CurrentConnectReading() {
-  std::scoped_lock lock(mutex_);
-  return ReadConnectReading();
+  return ReadOnMain<ConnectReading>("CurrentConnectReading", [&]() -> ConnectReading {
+    return ReadConnectReading();
+  });
 }
 
 LiveStats SdkHost::CurrentStats() { return ReadStats(); }
@@ -3406,17 +3617,32 @@ void SdkHost::ClosePresentationLocked() {
 }
 
 void SdkHost::SetPresentationActive(bool active) {
-  std::scoped_lock lock(mutex_);
-  if (presentationActive_ == active) return;
-  presentationActive_ = active;
-  if (!active) {
-    ClosePresentationLocked();
-    return;
-  }
-  if (!device_) return;
-  SubscribeStats();
-  SubscribeDrawer();
-  EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
+  // Behind the commands, on the worker (apple 852baf62): closing the
+  // controllers and their subs, and opening them with their listeners, take
+  // the device's state lock, which a command keeps through its rpc. A show
+  // then hands on the reading its own controller gives (re-read, never
+  // replayed: the window's last reading is from before the controller opened).
+  RunCommand(
+      ConnectCommandQueue::Kind::Device,
+      [this, active] {
+        std::scoped_lock lock(mutex_);
+        if (presentationActive_ == active) return;
+        presentationActive_ = active;
+        if (!active) {
+          ClosePresentationLocked();
+          return;
+        }
+        if (!device_) return;
+        SubscribeStats();
+        SubscribeDrawer();
+        EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
+      },
+      [this, active] {
+        // a show from before a sign-out reads the account that left
+        if (active && onReading_ && lastCommandReadingEpoch_ == signInEpoch_.load()) {
+          onReading_(lastCommandReading_);
+        }
+      });
 }
 
 // ---- this device's provider status (support part P008) ----------------------
@@ -3453,27 +3679,28 @@ void SdkHost::CloseProviderStatusLocked() {
 }
 
 SdkHost::ProviderStatusSnapshot SdkHost::ProviderStatusNow() {
-  std::scoped_lock lock(mutex_);
-  ProviderStatusSnapshot snapshot;
-  if (!providerStatusVc_) {
-    // No session: the controller the daemon runs on its provider-only device.
-    if (!device_ && daemonProviderStats_) return daemonProviderStats_->status;
+  return ReadOnMain<SdkHost::ProviderStatusSnapshot>("ProviderStatusNow", [&]() -> SdkHost::ProviderStatusSnapshot {
+    ProviderStatusSnapshot snapshot;
+    if (!providerStatusVc_) {
+      // No session: the controller the daemon runs on its provider-only device.
+      if (!device_ && daemonProviderStats_) return daemonProviderStats_->status;
+      return snapshot;
+    }
+    snapshot.open = true;
+    try {
+      snapshot.loaded = providerStatusVc_->getIsLoaded();
+      snapshot.lastFetchError = providerStatusVc_->getLastFetchError();
+      snapshot.status = providerStatusVc_->getProviderStatus();
+    } catch (const std::exception& e) {
+      // a malformed document must never take the page down: it reads as a
+      // failed poll
+      std::fprintf(stderr, "[sdk] read provider status failed: %s\n", e.what());
+      snapshot.loaded = false;
+      snapshot.lastFetchError = e.what();
+      snapshot.status.reset();
+    }
     return snapshot;
-  }
-  snapshot.open = true;
-  try {
-    snapshot.loaded = providerStatusVc_->getIsLoaded();
-    snapshot.lastFetchError = providerStatusVc_->getLastFetchError();
-    snapshot.status = providerStatusVc_->getProviderStatus();
-  } catch (const std::exception& e) {
-    // a malformed document must never take the page down: it reads as a
-    // failed poll
-    std::fprintf(stderr, "[sdk] read provider status failed: %s\n", e.what());
-    snapshot.loaded = false;
-    snapshot.lastFetchError = e.what();
-    snapshot.status.reset();
-  }
-  return snapshot;
+  });
 }
 
 // ---- the provider-only device's statistics (provider_stats) -----------------
@@ -3640,31 +3867,34 @@ void SdkHost::SetProviderStatusPolling(bool polling) {
 // ---- connect drawer accessors ----------------------------------------------
 
 std::optional<urnet::ConnectLocation> SdkHost::SelectedLocation() {
-  std::scoped_lock lock(mutex_);
-  // the controller keeps its selection when the connect location goes nil
-  if (connectVc_) return connectVc_->getSelectedLocation();
-  if (device_) {
-    if (auto location = device_->getConnectLocation()) return location;
-  }
-  if (localState_) {
-    if (auto location = localState_->getConnectLocation()) return location;
-    return localState_->getDefaultLocation();
-  }
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::ConnectLocation>>("SelectedLocation", [&]() -> std::optional<urnet::ConnectLocation> {
+    // the controller keeps its selection when the connect location goes nil
+    if (connectVc_) return connectVc_->getSelectedLocation();
+    if (device_) {
+      if (auto location = device_->getConnectLocation()) return location;
+    }
+    if (localState_) {
+      if (auto location = localState_->getConnectLocation()) return location;
+      return localState_->getDefaultLocation();
+    }
+    return std::nullopt;
+  });
 }
 
 std::optional<urnet::ConnectLocation> SdkHost::ConnectedLocation() {
-  std::scoped_lock lock(mutex_);
-  if (device_) return device_->getConnectLocation();
-  if (localState_) return localState_->getConnectLocation();
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::ConnectLocation>>("ConnectedLocation", [&]() -> std::optional<urnet::ConnectLocation> {
+    if (device_) return device_->getConnectLocation();
+    if (localState_) return localState_->getConnectLocation();
+    return std::nullopt;
+  });
 }
 
 std::optional<urnet::PerformanceProfile> SdkHost::GetPerformanceProfile() {
-  std::scoped_lock lock(mutex_);
-  if (device_) return device_->getPerformanceProfile();
-  if (localState_) return localState_->getPerformanceProfile();
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::PerformanceProfile>>("GetPerformanceProfile", [&]() -> std::optional<urnet::PerformanceProfile> {
+    if (device_) return device_->getPerformanceProfile();
+    if (localState_) return localState_->getPerformanceProfile();
+    return std::nullopt;
+  });
 }
 
 void SdkHost::SetPerformanceProfile(const std::optional<urnet::PerformanceProfile>& profile) {
@@ -3676,9 +3906,10 @@ void SdkHost::SetPerformanceProfile(const std::optional<urnet::PerformanceProfil
 }
 
 bool SdkHost::GetBlockerEnabled() {
-  std::scoped_lock lock(mutex_);
-  if (device_) return device_->getBlockerEnabled();
-  return localState_ && localState_->getBlockerEnabled();
+  return ReadOnMain<bool>("GetBlockerEnabled", [&]() -> bool {
+    if (device_) return device_->getBlockerEnabled();
+    return localState_ && localState_->getBlockerEnabled();
+  });
 }
 
 void SdkHost::SetBlockerEnabled(bool enabled) {
@@ -3693,9 +3924,10 @@ void SdkHost::SetBlockerEnabled(bool enabled) {
 }
 
 bool SdkHost::GetRouteLocal() {
-  std::scoped_lock lock(mutex_);
-  if (device_) return device_->getRouteLocal();
-  return !localState_ || localState_->getRouteLocal();  // default true (kill switch off)
+  return ReadOnMain<bool>("GetRouteLocal", [&]() -> bool {
+    if (device_) return device_->getRouteLocal();
+    return !localState_ || localState_->getRouteLocal();  // default true (kill switch off)
+  });
 }
 
 // ---- kill switch -----------------------------------------------------------
@@ -3738,17 +3970,19 @@ bool SdkHost::KillSwitchRequestedLocked() {
 }
 
 bool SdkHost::CurrentKillSwitch() {
-  std::scoped_lock lock(mutex_);
-  return KillSwitchRequestedLocked();
+  return ReadOnMain<bool>("CurrentKillSwitch", [&]() -> bool {
+    return KillSwitchRequestedLocked();
+  });
 }
 
 KillSwitchStatus SdkHost::CurrentKillSwitchStatus() {
-  std::scoped_lock lock(mutex_);
-  // The preference is always live; the installed half is whatever the last
-  // round trip reported (installed_known=false until one has happened, which
-  // is UNKNOWN and deliberately not "off").
-  killSwitchStatus_.requested = KillSwitchRequestedLocked();
-  return killSwitchStatus_;
+  return ReadOnMain<KillSwitchStatus>("CurrentKillSwitchStatus", [&]() -> KillSwitchStatus {
+    // The preference is always live; the installed half is whatever the last
+    // round trip reported (installed_known=false until one has happened, which
+    // is UNKNOWN and deliberately not "off").
+    killSwitchStatus_.requested = KillSwitchRequestedLocked();
+    return killSwitchStatus_;
+  });
 }
 
 void SdkHost::SetKillSwitch(bool on, KillSwitchDone done) {
@@ -3892,7 +4126,12 @@ void SdkHost::RunKillSwitchRequest(KillSwitchRequest request) {
 }
 
 std::optional<urnet::DnsResolverSettings> SdkHost::GetDnsResolverSettings() {
-  std::scoped_lock lock(mutex_);
+  return ReadOnMain<std::optional<urnet::DnsResolverSettings>>("GetDnsResolverSettings", [&]() -> std::optional<urnet::DnsResolverSettings> {
+    return GetDnsResolverSettingsLocked();
+  });
+}
+
+std::optional<urnet::DnsResolverSettings> SdkHost::GetDnsResolverSettingsLocked() {
   if (device_) return device_->getDnsResolverSettings();
   if (localState_) return localState_->getDnsResolverSettings();
   return std::nullopt;
@@ -3900,6 +4139,10 @@ std::optional<urnet::DnsResolverSettings> SdkHost::GetDnsResolverSettings() {
 
 void SdkHost::SetDnsResolverSettings(const urnet::DnsResolverSettings& settings) {
   std::scoped_lock lock(mutex_);
+  SetDnsResolverSettingsLocked(settings);
+}
+
+void SdkHost::SetDnsResolverSettingsLocked(const urnet::DnsResolverSettings& settings) {
   if (device_) {
     device_->setDnsResolverSettings(settings);  // applies to the live mux + persists
     return;
@@ -3907,65 +4150,113 @@ void SdkHost::SetDnsResolverSettings(const urnet::DnsResolverSettings& settings)
   if (localState_) localState_->setDnsResolverSettings(settings);
 }
 
-std::optional<urnet::ThroughputPointList> SdkHost::ThroughputPoints() {
+bool SdkHost::SetDnsResolverSettingsIf(
+    const std::function<bool(const std::optional<urnet::DnsResolverSettings>&)>& stillShown,
+    const urnet::DnsResolverSettings& settings,
+    std::optional<urnet::DnsResolverSettings>* current) {
   std::scoped_lock lock(mutex_);
-  if (!contractVc_) return std::nullopt;
-  return contractVc_->getThroughputPoints();
+  std::optional<urnet::DnsResolverSettings> now = GetDnsResolverSettingsLocked();
+  if (!stillShown(now)) {
+    if (current) *current = std::move(now);
+    return false;
+  }
+  SetDnsResolverSettingsLocked(settings);
+  if (current) *current = settings;
+  return true;
+}
+
+bool SdkHost::SetTransportSettingsIf(
+    bool provider,
+    const std::function<bool(const std::optional<urnet::TransportSettings>&)>& stillShown,
+    const urnet::TransportSettings& settings, std::optional<urnet::TransportSettings>* current) {
+  std::scoped_lock lock(mutex_);
+  std::optional<urnet::TransportSettings> now =
+      provider ? GetProviderTransportSettingsLocked() : GetTransportSettingsLocked();
+  if (!stillShown(now)) {
+    if (current) *current = std::move(now);
+    return false;
+  }
+  if (provider) {
+    SetProviderTransportSettingsLocked(settings);
+  } else {
+    SetTransportSettingsLocked(settings);
+  }
+  if (current) *current = settings;
+  return true;
+}
+
+std::optional<urnet::ThroughputPointList> SdkHost::ThroughputPoints() {
+  return ReadOnMain<std::optional<urnet::ThroughputPointList>>("ThroughputPoints", [&]() -> std::optional<urnet::ThroughputPointList> {
+    if (!contractVc_) return std::nullopt;
+    return contractVc_->getThroughputPoints();
+  });
 }
 
 int64_t SdkHost::ThroughputWindowSeconds() {
-  std::scoped_lock lock(mutex_);
-  return contractVc_ ? contractVc_->getWindowDurationSeconds() : 60;
+  return ReadOnMain<int64_t>("ThroughputWindowSeconds", [&]() -> int64_t {
+    return contractVc_ ? contractVc_->getWindowDurationSeconds() : 60;
+  });
 }
 
 std::optional<urnet::TransportDistribution> SdkHost::ClientTransportDistribution() {
-  std::scoped_lock lock(mutex_);
-  if (!contractVc_) return std::nullopt;
-  return contractVc_->getTransportDistribution();
+  return ReadOnMain<std::optional<urnet::TransportDistribution>>("ClientTransportDistribution", [&]() -> std::optional<urnet::TransportDistribution> {
+    if (!contractVc_) return std::nullopt;
+    return contractVc_->getTransportDistribution();
+  });
 }
 
 std::optional<urnet::TransportDistribution> SdkHost::ProviderTransportDistribution() {
-  std::scoped_lock lock(mutex_);
-  if (contractVc_) return contractVc_->getProviderTransportDistribution();
-  // no session: the provider-only device's, as the daemon last read it
-  if (!device_ && daemonProviderStats_) return daemonProviderStats_->providerDistribution;
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::TransportDistribution>>("ProviderTransportDistribution", [&]() -> std::optional<urnet::TransportDistribution> {
+    if (contractVc_) return contractVc_->getProviderTransportDistribution();
+    // no session: the provider-only device's, as the daemon last read it
+    if (!device_ && daemonProviderStats_) return daemonProviderStats_->providerDistribution;
+    return std::nullopt;
+  });
 }
 
 std::optional<urnet::ThroughputPointList> SdkHost::ProviderThroughputPoints() {
-  std::scoped_lock lock(mutex_);
-  if (contractVc_) return contractVc_->getProviderThroughputPoints();
-  if (!device_ && daemonProviderStats_) return daemonProviderStats_->providerPoints;
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::ThroughputPointList>>("ProviderThroughputPoints", [&]() -> std::optional<urnet::ThroughputPointList> {
+    if (contractVc_) return contractVc_->getProviderThroughputPoints();
+    if (!device_ && daemonProviderStats_) return daemonProviderStats_->providerPoints;
+    return std::nullopt;
+  });
 }
 
 std::optional<urnet::ThroughputPointList> SdkHost::ExtenderThroughputPoints() {
-  std::scoped_lock lock(mutex_);
-  if (contractVc_) return contractVc_->getExtenderThroughputPoints();
-  // no session: what the provider-only device's extender role relayed
-  if (!device_ && daemonProviderStats_) return daemonProviderStats_->extenderPoints;
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::ThroughputPointList>>("ExtenderThroughputPoints", [&]() -> std::optional<urnet::ThroughputPointList> {
+    if (contractVc_) return contractVc_->getExtenderThroughputPoints();
+    // no session: what the provider-only device's extender role relayed
+    if (!device_ && daemonProviderStats_) return daemonProviderStats_->extenderPoints;
+    return std::nullopt;
+  });
 }
 
 bool SdkHost::HasProviderStats() {
-  std::scoped_lock lock(mutex_);
-  if (contractVc_) return contractVc_->getProviderPacketStats().has_value();
-  return !device_ && daemonProviderStats_ && daemonProviderStats_->hasProviderStats;
+  return ReadOnMain<bool>("HasProviderStats", [&]() -> bool {
+    if (contractVc_) return contractVc_->getProviderPacketStats().has_value();
+    return !device_ && daemonProviderStats_ && daemonProviderStats_->hasProviderStats;
+  });
 }
 
 bool SdkHost::DeviceHasProviderStats() {
-  std::scoped_lock lock(mutex_);
-  if (!device_) return daemonProviderStats_ && daemonProviderStats_->hasProviderStats;
-  try {
-    return device_->getProviderPacketStats().has_value();
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] getProviderPacketStats failed: %s\n", e.what());
-    return false;
-  }
+  return ReadOnMain<bool>("DeviceHasProviderStats", [&]() -> bool {
+    if (!device_) return daemonProviderStats_ && daemonProviderStats_->hasProviderStats;
+    try {
+      return device_->getProviderPacketStats().has_value();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] getProviderPacketStats failed: %s\n", e.what());
+      return false;
+    }
+  });
 }
 
 std::optional<urnet::TransportSettings> SdkHost::GetTransportSettings() {
-  std::scoped_lock lock(mutex_);
+  return ReadOnMain<std::optional<urnet::TransportSettings>>("GetTransportSettings", [&]() -> std::optional<urnet::TransportSettings> {
+    return GetTransportSettingsLocked();
+  });
+}
+
+std::optional<urnet::TransportSettings> SdkHost::GetTransportSettingsLocked() {
   if (device_) {
     if (auto settings = device_->getTransportSettings(); settings) return settings;
   }
@@ -3975,6 +4266,10 @@ std::optional<urnet::TransportSettings> SdkHost::GetTransportSettings() {
 
 void SdkHost::SetTransportSettings(const urnet::TransportSettings& settings) {
   std::scoped_lock lock(mutex_);
+  SetTransportSettingsLocked(settings);
+}
+
+void SdkHost::SetTransportSettingsLocked(const urnet::TransportSettings& settings) {
   // apply live over the device rpc (the daemon persists it in its own local
   // state) AND mirror into the GUI local state: with the tunnel down the
   // mirror is the only copy, and StartTunnel seeds the device from it
@@ -3989,7 +4284,12 @@ void SdkHost::SetTransportSettings(const urnet::TransportSettings& settings) {
 }
 
 std::optional<urnet::TransportSettings> SdkHost::GetProviderTransportSettings() {
-  std::scoped_lock lock(mutex_);
+  return ReadOnMain<std::optional<urnet::TransportSettings>>("GetProviderTransportSettings", [&]() -> std::optional<urnet::TransportSettings> {
+    return GetProviderTransportSettingsLocked();
+  });
+}
+
+std::optional<urnet::TransportSettings> SdkHost::GetProviderTransportSettingsLocked() {
   if (device_) {
     if (auto settings = device_->getProviderTransportSettings(); settings) return settings;
   }
@@ -3999,6 +4299,10 @@ std::optional<urnet::TransportSettings> SdkHost::GetProviderTransportSettings() 
 
 void SdkHost::SetProviderTransportSettings(const urnet::TransportSettings& settings) {
   std::scoped_lock lock(mutex_);
+  SetProviderTransportSettingsLocked(settings);
+}
+
+void SdkHost::SetProviderTransportSettingsLocked(const urnet::TransportSettings& settings) {
   if (device_) device_->setProviderTransportSettings(settings);
   if (localState_) {
     try {
@@ -4014,32 +4318,37 @@ void SdkHost::SetProviderTransportSettings(const urnet::TransportSettings& setti
 }
 
 std::optional<urnet::TransportStatus> SdkHost::GetTransportStatus() {
-  std::scoped_lock lock(mutex_);
-  return device_ ? device_->getTransportStatus() : std::nullopt;
+  return ReadOnMain<std::optional<urnet::TransportStatus>>("GetTransportStatus", [&]() -> std::optional<urnet::TransportStatus> {
+    return device_ ? device_->getTransportStatus() : std::nullopt;
+  });
 }
 
 std::optional<urnet::TransportStatus> SdkHost::GetProviderTransportStatus() {
-  std::scoped_lock lock(mutex_);
-  return device_ ? device_->getProviderTransportStatus() : std::nullopt;
+  return ReadOnMain<std::optional<urnet::TransportStatus>>("GetProviderTransportStatus", [&]() -> std::optional<urnet::TransportStatus> {
+    return device_ ? device_->getProviderTransportStatus() : std::nullopt;
+  });
 }
 
 std::optional<urnet::BlockActionList> SdkHost::BlockActions() {
-  std::scoped_lock lock(mutex_);
-  if (!blockActionVc_) return std::nullopt;
-  return blockActionVc_->getBlockActions();
+  return ReadOnMain<std::optional<urnet::BlockActionList>>("BlockActions", [&]() -> std::optional<urnet::BlockActionList> {
+    if (!blockActionVc_) return std::nullopt;
+    return blockActionVc_->getBlockActions();
+  });
 }
 
 std::optional<urnet::BlockStats> SdkHost::BlockStatsSnapshot() {
-  std::scoped_lock lock(mutex_);
-  if (!blockActionVc_) return std::nullopt;
-  return blockActionVc_->getBlockStats();
+  return ReadOnMain<std::optional<urnet::BlockStats>>("BlockStatsSnapshot", [&]() -> std::optional<urnet::BlockStats> {
+    if (!blockActionVc_) return std::nullopt;
+    return blockActionVc_->getBlockStats();
+  });
 }
 
 std::optional<urnet::BlockActionOverrideList> SdkHost::BlockActionOverrides() {
-  std::scoped_lock lock(mutex_);
-  if (device_) return device_->getBlockActionOverrides();
-  if (localState_) return localState_->getBlockActionOverrides();
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::BlockActionOverrideList>>("BlockActionOverrides", [&]() -> std::optional<urnet::BlockActionOverrideList> {
+    if (device_) return device_->getBlockActionOverrides();
+    if (localState_) return localState_->getBlockActionOverrides();
+    return std::nullopt;
+  });
 }
 
 void SdkHost::AddBlockActionOverride(const urnet::BlockActionOverride& override_) {
@@ -4133,14 +4442,16 @@ void SdkHost::RemoveBlockActionOverride(const std::string& overrideId) {
 }
 
 std::string SdkHost::ClientId() {
-  std::scoped_lock lock(mutex_);
-  return device_ ? device_->getClientId() : std::string();
+  return ReadOnMain<std::string>("ClientId", [&]() -> std::string {
+    return device_ ? device_->getClientId() : std::string();
+  });
 }
 
 std::optional<urnet::ContractPeerRowList> SdkHost::ContractRows() {
-  std::scoped_lock lock(mutex_);
-  if (!clientContractDetailsVc_) return std::nullopt;
-  return clientContractDetailsVc_->getContractRows();
+  return ReadOnMain<std::optional<urnet::ContractPeerRowList>>("ContractRows", [&]() -> std::optional<urnet::ContractPeerRowList> {
+    if (!clientContractDetailsVc_) return std::nullopt;
+    return clientContractDetailsVc_->getContractRows();
+  });
 }
 
 void SdkHost::SetContractsAtTop(bool atTop) {
@@ -4152,14 +4463,16 @@ void SdkHost::SetContractsAtTop(bool atTop) {
 }
 
 int64_t SdkHost::ContractsPendingCount() {
-  std::scoped_lock lock(mutex_);
-  return clientContractDetailsVc_ ? clientContractDetailsVc_->pendingCount() : 0;
+  return ReadOnMain<int64_t>("ContractsPendingCount", [&]() -> int64_t {
+    return clientContractDetailsVc_ ? clientContractDetailsVc_->pendingCount() : 0;
+  });
 }
 
 std::optional<urnet::FilteredLocations> SdkHost::GetFilteredLocations() {
-  std::scoped_lock lock(mutex_);
-  if (locationsVc_) return locationsVc_->getFilteredLocations();
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::FilteredLocations>>("GetFilteredLocations", [&]() -> std::optional<urnet::FilteredLocations> {
+    if (locationsVc_) return locationsVc_->getFilteredLocations();
+    return std::nullopt;
+  });
 }
 
 void SdkHost::FilterLocations(const std::string& query) {
@@ -4168,45 +4481,50 @@ void SdkHost::FilterLocations(const std::string& query) {
 }
 
 std::string SdkHost::GetFilteredLocationState() {
-  std::scoped_lock lock(mutex_);
-  if (locationsVc_) return locationsVc_->getFilteredLocationState();
-  return std::string();
+  return ReadOnMain<std::string>("GetFilteredLocationState", [&]() -> std::string {
+    if (locationsVc_) return locationsVc_->getFilteredLocationState();
+    return std::string();
+  });
 }
 
 std::optional<urnet::NetworkPeerList> SdkHost::ConnectedProvidePeers() {
-  std::scoped_lock lock(mutex_);
-  if (peerVc_) return peerVc_->getPeers();
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::NetworkPeerList>>("ConnectedProvidePeers", [&]() -> std::optional<urnet::NetworkPeerList> {
+    if (peerVc_) return peerVc_->getPeers();
+    return std::nullopt;
+  });
 }
 
 int64_t SdkHost::ConnectedPeerCount() {
-  std::scoped_lock lock(mutex_);
-  // ALL connected peers, whether or not they provide — the "You have {n}
-  // other devices online" count (connecting still requires provide, which is
-  // what ConnectedProvidePeers captures)
-  if (peerVc_) return static_cast<int64_t>(peerVc_->getConnectedCount());
-  return 0;
+  return ReadOnMain<int64_t>("ConnectedPeerCount", [&]() -> int64_t {
+    // ALL connected peers, whether or not they provide — the "You have {n}
+    // other devices online" count (connecting still requires provide, which is
+    // what ConnectedProvidePeers captures)
+    if (peerVc_) return static_cast<int64_t>(peerVc_->getConnectedCount());
+    return 0;
+  });
 }
 
 // ---- post quantum identity (PQI) --------------------------------------------
 
 std::optional<urnet::ProviderIdentityList> SdkHost::ProviderIdentities() {
-  std::scoped_lock lock(mutex_);
-  if (!pqiVc_) return std::nullopt;
-  return pqiVc_->getProviderIdentities();
+  return ReadOnMain<std::optional<urnet::ProviderIdentityList>>("ProviderIdentities", [&]() -> std::optional<urnet::ProviderIdentityList> {
+    if (!pqiVc_) return std::nullopt;
+    return pqiVc_->getProviderIdentities();
+  });
 }
 
 // ---- connected provider locations --------------------------------------------
 
 std::optional<urnet::ConnectedProviderLocationList> SdkHost::ConnectedProviderLocations() {
-  std::scoped_lock lock(mutex_);
-  if (!device_ || !providerLocationsVc_) {
-    return std::nullopt;  // tunnel down: the sheet shows the unavailable state
-  }
-  // The view controller's window, not the device's: same providers, in the
-  // shared display order, and read from the controller so the rows and the
-  // selection always come from one snapshot.
-  return providerLocationsVc_->getProviderLocations();
+  return ReadOnMain<std::optional<urnet::ConnectedProviderLocationList>>("ConnectedProviderLocations", [&]() -> std::optional<urnet::ConnectedProviderLocationList> {
+    if (!device_ || !providerLocationsVc_) {
+      return std::nullopt;  // tunnel down: the sheet shows the unavailable state
+    }
+    // The view controller's window, not the device's: same providers, in the
+    // shared display order, and read from the controller so the rows and the
+    // selection always come from one snapshot.
+    return providerLocationsVc_->getProviderLocations();
+  });
 }
 
 void SdkHost::RemoveConnectedProvider(const std::string& clientId) {
@@ -4222,9 +4540,10 @@ void SdkHost::RemoveConnectedProvider(const std::string& clientId) {
 }
 
 std::string SdkHost::SelectedProviderClientId() {
-  std::scoped_lock lock(mutex_);
-  if (!providerLocationsVc_) return std::string();
-  return providerLocationsVc_->getSelectedClientId();
+  return ReadOnMain<std::string>("SelectedProviderClientId", [&]() -> std::string {
+    if (!providerLocationsVc_) return std::string();
+    return providerLocationsVc_->getSelectedClientId();
+  });
 }
 
 void SdkHost::SetSelectedProviderClientId(const std::string& clientId) {
@@ -4242,14 +4561,15 @@ void SdkHost::StepProviderSelection(int steps) {
 // ---- extenders (EXTENDER.md K4 to K8, N2 to N8) -----------------------------
 
 std::optional<urnet::ExtenderStatus> SdkHost::GetExtenderStatus() {
-  std::scoped_lock lock(mutex_);
-  if (!device_) return std::nullopt;  // no session: the panel reads disconnected
-  try {
-    return device_->getExtenderStatus();
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] getExtenderStatus failed: %s\n", e.what());
-    return std::nullopt;
-  }
+  return ReadOnMain<std::optional<urnet::ExtenderStatus>>("GetExtenderStatus", [&]() -> std::optional<urnet::ExtenderStatus> {
+    if (!device_) return std::nullopt;  // no session: the panel reads disconnected
+    try {
+      return device_->getExtenderStatus();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] getExtenderStatus failed: %s\n", e.what());
+      return std::nullopt;
+    }
+  });
 }
 
 std::optional<urnet::ExtenderProvideStatus> SdkHost::DeviceExtenderProvideStatusLocked() {
@@ -4275,40 +4595,43 @@ provide::ExtenderSwitchSource SdkHost::MeasurementsSwitchSourceLocked() const {
 }
 
 std::optional<urnet::ExtenderProvideStatus> SdkHost::GetExtenderProvideStatus() {
-  std::scoped_lock lock(mutex_);
-  switch (ExtenderSwitchSourceLocked()) {
-    case provide::ExtenderSwitchSource::Device:
-      return DeviceExtenderProvideStatusLocked();
-    case provide::ExtenderSwitchSource::Daemon:
-      // no session: the provider-only device's role, whose switch the daemon
-      // writes
-      return daemonProviderStats_->extenderProvideStatus;
-    case provide::ExtenderSwitchSource::None:
-      break;
-  }
-  return std::nullopt;  // nothing takes the switch's write: the row hides
+  return ReadOnMain<std::optional<urnet::ExtenderProvideStatus>>("GetExtenderProvideStatus", [&]() -> std::optional<urnet::ExtenderProvideStatus> {
+    switch (ExtenderSwitchSourceLocked()) {
+      case provide::ExtenderSwitchSource::Device:
+        return DeviceExtenderProvideStatusLocked();
+      case provide::ExtenderSwitchSource::Daemon:
+        // no session: the provider-only device's role, whose switch the daemon
+        // writes
+        return daemonProviderStats_->extenderProvideStatus;
+      case provide::ExtenderSwitchSource::None:
+        break;
+    }
+    return std::nullopt;  // nothing takes the switch's write: the row hides
+  });
 }
 
 std::optional<urnet::ExtenderProvideStatus> SdkHost::ProviderExtenderProvideStatus() {
-  std::scoped_lock lock(mutex_);
-  if (device_) return DeviceExtenderProvideStatusLocked();
-  // no session: the provider-only device's role, as the daemon last read it
-  if (daemonProviderStats_) return daemonProviderStats_->extenderProvideStatus;
-  return std::nullopt;
+  return ReadOnMain<std::optional<urnet::ExtenderProvideStatus>>("ProviderExtenderProvideStatus", [&]() -> std::optional<urnet::ExtenderProvideStatus> {
+    if (device_) return DeviceExtenderProvideStatusLocked();
+    // no session: the provider-only device's role, as the daemon last read it
+    if (daemonProviderStats_) return daemonProviderStats_->extenderProvideStatus;
+    return std::nullopt;
+  });
 }
 
 bool SdkHost::GetProvideExtender() {
-  std::scoped_lock lock(mutex_);
-  switch (ExtenderSwitchSourceLocked()) {
-    case provide::ExtenderSwitchSource::Device:
-      return device_->getProvideExtender();
-    case provide::ExtenderSwitchSource::Daemon:
-      return daemonProviderStats_->provideExtender;
-    case provide::ExtenderSwitchSource::None:
-      break;
-  }
-  // the setting's default (N4); the row is hidden then
-  return true;
+  return ReadOnMain<bool>("GetProvideExtender", [&]() -> bool {
+    switch (ExtenderSwitchSourceLocked()) {
+      case provide::ExtenderSwitchSource::Device:
+        return device_->getProvideExtender();
+      case provide::ExtenderSwitchSource::Daemon:
+        return daemonProviderStats_->provideExtender;
+      case provide::ExtenderSwitchSource::None:
+        break;
+    }
+    // the setting's default (N4); the row is hidden then
+    return true;
+  });
 }
 
 void SdkHost::SetProvideExtender(bool on) {
@@ -4336,22 +4659,24 @@ void SdkHost::SetProvideExtender(bool on) {
 }
 
 bool SdkHost::MeasurementsSwitchWritable() {
-  std::scoped_lock lock(mutex_);
-  return MeasurementsSwitchSourceLocked() != provide::ExtenderSwitchSource::None;
+  return ReadOnMain<bool>("MeasurementsSwitchWritable", [&]() -> bool {
+    return MeasurementsSwitchSourceLocked() != provide::ExtenderSwitchSource::None;
+  });
 }
 
 bool SdkHost::GetMeasurementsEnabled() {
-  std::scoped_lock lock(mutex_);
-  switch (MeasurementsSwitchSourceLocked()) {
-    case provide::ExtenderSwitchSource::Device:
-      return device_->getMeasurementsEnabled();
-    case provide::ExtenderSwitchSource::Daemon:
-      return daemonProviderStats_->measurementsEnabled;
-    case provide::ExtenderSwitchSource::None:
-      break;
-  }
-  // the setting's default (lag.dev/PLAN.md decision 18); the switch is hidden then
-  return true;
+  return ReadOnMain<bool>("GetMeasurementsEnabled", [&]() -> bool {
+    switch (MeasurementsSwitchSourceLocked()) {
+      case provide::ExtenderSwitchSource::Device:
+        return device_->getMeasurementsEnabled();
+      case provide::ExtenderSwitchSource::Daemon:
+        return daemonProviderStats_->measurementsEnabled;
+      case provide::ExtenderSwitchSource::None:
+        break;
+    }
+    // the setting's default (lag.dev/PLAN.md decision 18); the switch is hidden then
+    return true;
+  });
 }
 
 void SdkHost::SetMeasurementsEnabled(bool on) {
@@ -4379,14 +4704,15 @@ void SdkHost::SetMeasurementsEnabled(bool on) {
 }
 
 std::optional<urnet::ExtenderSettings> SdkHost::GetExtenderSettings() {
-  std::scoped_lock lock(mutex_);
-  if (!extenderVc_) return std::nullopt;
-  try {
-    return extenderVc_->getSettings();
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] extender getSettings failed: %s\n", e.what());
-    return std::nullopt;
-  }
+  return ReadOnMain<std::optional<urnet::ExtenderSettings>>("GetExtenderSettings", [&]() -> std::optional<urnet::ExtenderSettings> {
+    if (!extenderVc_) return std::nullopt;
+    try {
+      return extenderVc_->getSettings();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] extender getSettings failed: %s\n", e.what());
+      return std::nullopt;
+    }
+  });
 }
 
 std::optional<urnet::ExtenderSettings> SdkHost::SetExtenderSettings(
@@ -4399,7 +4725,13 @@ std::optional<urnet::ExtenderSettings> SdkHost::SetExtenderSettings(
     // bootstrap address), so it is sent as an empty list rather than as "no
     // opinion" -- passing nullopt would leave the previous list in place and
     // the form would silently refuse to clear.
-    return extenderVc_->setSettings(dnsName, gossipUrl, urnet::StringList(hosts));
+    std::optional<urnet::ExtenderSettings> settings =
+        extenderVc_->setSettings(dnsName, gossipUrl, urnet::StringList(hosts));
+    // a main-loop read before the queue settles says what was saved
+    if (settings && OnMainLoop()) {
+      KeepOnMain<std::optional<urnet::ExtenderSettings>>("GetExtenderSettings", settings);
+    }
+    return settings;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] extender setSettings failed: %s\n", e.what());
     return std::nullopt;
@@ -4442,14 +4774,15 @@ std::optional<urnet::ExtenderImportResult> SdkHost::ImportExtenderShare(const st
 }
 
 std::optional<urnet::NetExtender> SdkHost::GetPrivateExtender() {
-  std::scoped_lock lock(mutex_);
-  if (!networkSpace_) return std::nullopt;
-  try {
-    return networkSpace_->getNetExtender();
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "[sdk] getNetExtender failed: %s\n", e.what());
-    return std::nullopt;
-  }
+  return ReadOnMain<std::optional<urnet::NetExtender>>("GetPrivateExtender", [&]() -> std::optional<urnet::NetExtender> {
+    if (!networkSpace_) return std::nullopt;
+    try {
+      return networkSpace_->getNetExtender();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] getNetExtender failed: %s\n", e.what());
+      return std::nullopt;
+    }
+  });
 }
 
 bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secret) {
@@ -4509,6 +4842,11 @@ bool SdkHost::SetPrivateExtender(const std::string& ip, const std::string& secre
     }
     // a provider-only device takes the new space now
     ReconcileProviderAfterSpaceChange("private extender saved");
+    // a main-loop read before the queue settles says what was saved
+    if (OnMainLoop()) {
+      KeepOnMain<std::optional<urnet::NetExtender>>("GetPrivateExtender",
+                                                     networkSpace_->getNetExtender());
+    }
     return true;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "[sdk] set private extender failed: %s\n", e.what());
@@ -4787,9 +5125,70 @@ bool SdkHost::RequestSignSnFleetBinding(
       });
 }
 
+// ---- the connect commands ----------------------------------------------------
+// Each runs on the command queue's worker (ConnectCommandQueue.hpp), in the
+// order it was made. The work takes mutex_ itself, and the listeners a write
+// tells inline (the connect view controller's status, a DeviceRemote's
+// location) run there too, so their publishes make their device reads on the
+// worker. Once the work returns the worker reads the connection once more:
+// the reading the window gets when the queue settles.
+bool SdkHost::RunCommand(ConnectCommandQueue::Kind kind, std::function<void()> work,
+                         std::function<void()> apply) {
+  const uint64_t epoch = signInEpoch_.load();
+  return commands_.Enqueue(kind, [this, epoch, work = std::move(work),
+                                  apply = std::move(apply)]() -> ConnectCommandQueue::Apply {
+    if (work) work();
+    ConnectReading reading;
+    {
+      std::scoped_lock lock(mutex_);
+      reading = ReadConnectReading();
+    }
+    return [this, epoch, reading, apply] {
+      lastCommandReading_ = reading;
+      lastCommandReadingEpoch_ = epoch;
+      if (apply) apply();
+    };
+  });
+}
+
+bool SdkHost::StartAndConnect(const char* reason, const ConnectTarget& target,
+                              std::function<void(StartOutcome)> done) {
+  auto outcome = std::make_shared<StartOutcome>();
+  return RunCommand(
+      ConnectCommandQueue::Kind::Connect,
+      [this, reason, target, outcome] {
+        // the selection is read before the start, which may build a new device
+        const std::optional<urnet::ConnectLocation> location =
+            target.selection ? SelectedLocation() : target.location;
+        // only a verdict this start's own replies produced counts
+        const uint64_t replySerialBefore = control_.ReplySerial();
+        outcome->result = StartTunnel(reason);
+        outcome->authOutcome = control_.ReplySerial() != replySerialBefore
+                                   ? control_.LastAuthOutcome()
+                                   : DaemonAuthOutcome::None;
+        outcome->unreachableReason = control_.LastUnreachableReason();
+        outcome->lastError = LastTunnelError();
+        if (outcome->result != TunnelStartResult::Started) return;
+        if (IsBestAvailableSelected(location)) {
+          g_message("connect: no destination selected, choosing the best available");
+          ConnectBestAvailableNow();
+        } else {
+          g_message("connect: routing to the selected provider");
+          ConnectNow(location);
+        }
+      },
+      [outcome, done] {
+        if (done) done(*outcome);
+      });
+}
+
 void SdkHost::ConnectBestAvailable() {
   // a location pick or a press while out of balance starts nothing
   if (connectGate_ && connectGate_([this] { ConnectBestAvailable(); })) return;
+  RunCommand(ConnectCommandQueue::Kind::Connect, [this] { ConnectBestAvailableNow(); });
+}
+
+void SdkHost::ConnectBestAvailableNow() {
   // a deliberate connect: proof the last destination earned does not carry over
   NoteNewConnectAttempt();
   std::scoped_lock lock(mutex_);
@@ -4867,6 +5266,10 @@ void SdkHost::ConnectBestAvailable() {
 
 void SdkHost::Connect(const std::optional<urnet::ConnectLocation>& location) {
   if (connectGate_ && connectGate_([this, location] { Connect(location); })) return;
+  RunCommand(ConnectCommandQueue::Kind::Connect, [this, location] { ConnectNow(location); });
+}
+
+void SdkHost::ConnectNow(const std::optional<urnet::ConnectLocation>& location) {
   NoteNewConnectAttempt();
   std::scoped_lock lock(mutex_);
   if (connectVc_) {
@@ -4883,7 +5286,11 @@ void SdkHost::ConnectFromRow(const std::optional<urnet::ConnectLocation>& locati
   // SDK's selection is this row. A selection left over from before a
   // Disconnect is no session, and a failed one is driven nowhere, so either
   // row connects.
-  const bool driving = health::DrivesSelection(CurrentConnectReading().ToSignals(false)) &&
+  // Not read while connect commands are outstanding: both reads take the
+  // locks a queued command holds through its rpc. The click is then no
+  // repeat of a session still coming up, and settles like any other.
+  const bool driving = !CommandsBusy() &&
+                       health::DrivesSelection(CurrentConnectReading().ToSignals(false)) &&
                        IsTargetSelected(SelectedLocation(), location);
   if (rowConnectTimerId_ != 0) {
     g_source_remove(rowConnectTimerId_);
@@ -4940,38 +5347,52 @@ void SdkHost::RunRowConnect(const std::optional<urnet::ConnectLocation>& locatio
 
 void SdkHost::Disconnect() {
   CancelRowConnect("disconnect");
+  // The provider reconcile is device work of its own, queued once the
+  // disconnect has applied: the tap's "Disconnecting…" ends with the
+  // disconnect, not with the provider-only device the daemon builds after it.
+  RunCommand(ConnectCommandQueue::Kind::Disconnect, [this] { DisconnectNow(); }, [this] {
+    RunCommand(ConnectCommandQueue::Kind::Device,
+               [this] { ReconcileProvider("disconnect", /*userInitiated=*/true); });
+  });
+}
+
+void SdkHost::DisconnectNow() {
   NoteNewConnectAttempt();
-  std::scoped_lock lock(mutex_);
-  // Bring the daemon's tunnel down. Ending the provider session does not
-  // touch the tun device or the 31 capture routes — those are the daemon's,
-  // and they are removed only by an explicit stop_tunnel. Without this the
-  // user presses Disconnect and every packet keeps being routed into a tunnel
-  // with nothing on the other end: the machine loses its internet and the UI
-  // says "Disconnected". Best effort, exactly as Logout/Shutdown do it.
-  //
-  // First, as Windows does it: the routes, DNS and the filter come back before
-  // the SDK is asked anything, so a slow device rpc cannot hold the machine's
-  // network. The disconnect below then finds the daemon's device gone, and the
-  // DeviceRemote applies it locally (selection and connect state).
-  control_.StopTunnel();
-  if (connectVc_) {
-    connectVc_->disconnect();
-  } else if (device_) {
-    auto controller = device_->openConnectViewController();
-    controller.disconnect();
-    device_->closeConnectViewController(controller);
-  }
-  // Say so NOW rather than waiting for the connect-location listener: on a
-  // teardown the SDK can simply stop publishing, and a reading nobody
-  // refreshes is exactly how the row used to latch on its last word.
-  PublishConnectReading();
+  [this] {
+    std::scoped_lock lock(mutex_);
+    // Bring the daemon's tunnel down. Ending the provider session does not
+    // touch the tun device or the 31 capture routes — those are the daemon's,
+    // and they are removed only by an explicit stop_tunnel. Without this the
+    // user presses Disconnect and every packet keeps being routed into a tunnel
+    // with nothing on the other end: the machine loses its internet and the UI
+    // says "Disconnected". Best effort, exactly as Logout/Shutdown do it.
+    //
+    // First, as Windows does it: the routes, DNS and the filter come back
+    // before the SDK is asked anything, so a slow device rpc cannot hold the
+    // machine's network. The disconnect below then finds the daemon's device
+    // gone, and the DeviceRemote applies it locally (selection and connect
+    // state).
+    control_.StopTunnel();
+    if (connectVc_) {
+      connectVc_->disconnect();
+    } else if (device_) {
+      auto controller = device_->openConnectViewController();
+      controller.disconnect();
+      device_->closeConnectViewController(controller);
+    }
+    // Say so NOW rather than waiting for the connect-location listener: on a
+    // teardown the SDK can simply stop publishing, and a reading nobody
+    // refreshes is exactly how the row used to latch on its last word.
+    PublishConnectReading();
+  }();
   // And keep providing. stop_tunnel ended the daemon's DeviceLocal along with
   // the tunnel, which is how a Linux "Always" provider used to stop earning
   // the moment it disconnected. When the provide mode still provides while
   // disconnected, the provider-only device takes over — no tun, no routes, no
-  // DNS (ProvideLifecycle.hpp). Posted, so the window settles on Disconnected
-  // before the daemon builds it.
-  PostToMain([this] { ReconcileProvider("disconnect", /*userInitiated=*/true); });
+  // DNS (ProvideLifecycle.hpp). That reconcile is queued by Disconnect once
+  // this has applied, so the window settles on Disconnected before the daemon
+  // builds it, and it runs on the worker, so the main loop never waits on the
+  // daemon for it.
 }
 
 void SdkHost::SetProvideControlMode(const std::string& mode) {
@@ -5000,15 +5421,17 @@ void SdkHost::SetProvideControlMode(const std::string& mode) {
 }
 
 std::string SdkHost::GetProvideControlMode() {
-  std::scoped_lock lock(mutex_);
-  if (device_) return device_->getProvideControlMode();
-  if (localState_) return localState_->getProvideControlMode();
-  return "never";
+  return ReadOnMain<std::string>("GetProvideControlMode", [&]() -> std::string {
+    if (device_) return device_->getProvideControlMode();
+    if (localState_) return localState_->getProvideControlMode();
+    return "never";
+  });
 }
 
 bool SdkHost::ProvideEnabled() {
-  std::scoped_lock lock(mutex_);
-  return device_ && device_->getProvideEnabled();
+  return ReadOnMain<bool>("ProvideEnabled", [&]() -> bool {
+    return device_ && device_->getProvideEnabled();
+  });
 }
 
 void SdkHost::ReconcileProvider(const char* reason, bool userInitiated, bool settingsChanged) {
@@ -5046,7 +5469,7 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
   // Signed out, nothing provides: a provider the daemon still runs for this
   // user (a sign-out it missed) is stopped like any mode that does not
   // provide. signedOut_ first: the stored jwt outlives a sign-out until its
-  // asynchronous local logout lands.
+  // queued logout tail clears the local state.
   const bool signedIn = !signedOut_.load() && !clientJwt.empty() && !instanceId.empty();
   const std::string mode = signedIn ? localState_->getProvideControlMode() : std::string("never");
   const provide::ControlMode controlMode = provide::ControlModeFrom(mode);
@@ -5298,26 +5721,34 @@ void SdkHost::NoteDaemonProviderLocked(const ctl::StatusReply& status) {
 // connect time, nothing throws, and every screen simply stays empty forever.
 // This is the detector for that, and only that.
 
-void SdkHost::ArmRpcBindWatchdogLocked() {
-  if (rpcBindWatchId_ != 0) {
+// The watchdog's source, removed unless it has fired already: a fired one
+// removed itself, and its id may name another source by now.
+void SdkHost::RemoveRpcBindWatchLocked() {
+  if (rpcBindWatchId_ != 0 && rpcBindWatchId_ != rpcBindFiredId_.load()) {
     g_source_remove(rpcBindWatchId_);
-    rpcBindWatchId_ = 0;
   }
+  rpcBindWatchId_ = 0;
+}
+
+void SdkHost::ArmRpcBindWatchdogLocked() {
+  RemoveRpcBindWatchLocked();
   rpcBindWatchGeneration_ = rpcSessionGeneration_.load();
   rpcBindWatchId_ = g_timeout_add_seconds(
       kRpcBindDeadlineSeconds,
       [](gpointer data) -> gboolean {
-        static_cast<SdkHost*>(data)->OnRpcBindDeadline();
+        auto* self = static_cast<SdkHost*>(data);
+        // The deadline's reads, teardown, stop_tunnel and keyring forget run on
+        // the command queue, behind the commands: on the main loop they waited
+        // on mutex_ and the device's lock that a queued connect holds.
+        self->rpcBindFiredId_.store(g_source_get_id(g_main_current_source()));
+        self->RunCommand(ConnectCommandQueue::Kind::Device, [self] { self->OnRpcBindDeadline(); });
         return G_SOURCE_REMOVE;
       },
       this);
 }
 
 void SdkHost::CancelRpcBindWatchdogLocked() {
-  if (rpcBindWatchId_ != 0) {
-    g_source_remove(rpcBindWatchId_);
-    rpcBindWatchId_ = 0;
-  }
+  RemoveRpcBindWatchLocked();
   // Anything already queued against this session — the timeout that has
   // already fired and is waiting on mutex_, the remote-change marshal — is
   // stale from here on and must not act on the NEXT session.
@@ -5330,7 +5761,7 @@ void SdkHost::OnRpcBindDeadline() {
     std::scoped_lock lock(mutex_);
     // A newer session owns rpcBindWatchId_ now; leave its watchdog alone.
     if (rpcBindWatchGeneration_ != rpcSessionGeneration_.load()) return;
-    rpcBindWatchId_ = 0;  // this source is removing itself
+    rpcBindWatchId_ = 0;  // this source removed itself when it fired
     if (!device_) return;
     if (ReadGuarded<bool>(
             "device getRemoteConnected", [&] { return device_->getRemoteConnected(); },
@@ -5355,8 +5786,8 @@ void SdkHost::OnRpcBindDeadline() {
     TeardownDeviceLocked();
     RestoreApiAuthorizationLocked();
   }
-  // Blocking, on the main loop, bounded by the control client's receive
-  // timeout — the same trade StartTunnel's failure path already makes.
+  // Blocking, on the command queue's worker, bounded by the control client's
+  // receive timeout — the same trade StartTunnel's failure path makes.
   control_.StopTunnel();
   // The material is bound to nothing now; remembering it could only produce a
   // reattach that mismatches again. TeardownDeviceLocked above has already
@@ -5383,6 +5814,7 @@ void SdkHost::TeardownDeviceLocked() {
   // leaking them on every logout. The daemon's DeviceLocal, tun and IoLoop
   // are NOT touched here — stopping the tunnel is an explicit stop_tunnel on
   // the control channel, decided by the caller.
+  deviceBound_.store(false);
   if (device_) { device_->close(); device_.reset(); }
   provideHasNetworkKey_.store(false);
 }
@@ -5414,8 +5846,85 @@ void SdkHost::Shutdown() {
   DropDaemonProviderStatsLocked();
 }
 
-// See the contract in the header.
+void SdkHost::ShutdownOffMainLoop(std::function<void()> done) {
+  if (shutdownWorker_.joinable()) return;
+  shutdownWorker_ = std::thread([this, done = std::move(done)] {
+    // an escaping exception on a worker thread is std::terminate
+    try {
+      Shutdown();
+    } catch (const std::exception& e) {
+      g_warning("sdkhost: the quit's teardown threw: %s", e.what());
+    } catch (...) {
+      g_warning("sdkhost: the quit's teardown threw");
+    }
+    if (done) PostToMain(done);
+  });
+}
+
+urnet::DeviceRemote* SdkHost::LockedDevice(std::unique_lock<std::mutex>& lock) {
+  lock = std::unique_lock<std::mutex>(mutex_);
+  if (!device_ || deviceControlGeneration_ != control_.SessionGeneration()) {
+    lock.unlock();
+    return nullptr;
+  }
+  return &*device_;
+}
+
+bool SdkHost::LogoutIfStill(const auth_logout::Report& signIn) {
+  if (!authLogouts_.SignsOut(signIn)) {
+    g_message("sdkhost: sign-out for a sign-in that has ended (%s): nothing to do",
+              signIn.cause.c_str());
+    return false;
+  }
+  Logout();
+  return true;
+}
+
+// See the contract in the header. On the main loop it ends the session for
+// the app at once: a second sign-out is refused, the row click still settling
+// is dropped, no connect is admitted (apple 5c174fda), and the app reads
+// signed out. The rest closes the device, asks the daemon and logs the local
+// credentials out (LogoutNow), so it runs on the command queue behind the
+// commands already queued: the leaving account's disconnects reach the daemon
+// first, and the main loop never waits on the device's lock or the daemon
+// (apple 9e5468cb; APPLE_FIXES.md, the device close at sign-out).
 void SdkHost::Logout() {
+  // A sign-out already under way, or done, is this one: nothing is torn down
+  // twice, and a second one never reaches the account signed in next.
+  uint64_t authEpoch = 0;
+  {
+    std::scoped_lock authLock(authStateMutex_);
+    if (signedOut_.load() && !authAttemptSinceLogout_) {
+      return;
+    }
+    signedOut_.store(true);
+    authAttemptSinceLogout_ = false;
+    authEpoch = signInEpoch_.fetch_add(1) + 1;
+    authLogouts_.SignedOut();
+  }
+  // A second logout can retire an attempt started while this tail runs,
+  // without scheduling another tail that could reach a later account.
+  if (commands_.SigningOut()) {
+    if (onAuth_) onAuth_(false, authEpoch);
+    return;
+  }
+  // a row click still settling belongs to the leaving account (main loop)
+  CancelRowConnect("sign-out");
+  // From here no connect is admitted, and the leaving account's queued
+  // connects are skipped while its disconnects still run; a reading taken
+  // before this is never handed on as the next account's. The fence ends
+  // with the device, when LogoutNow has run: the next sign-in's commands
+  // carry the new generation and are never blocked by it.
+  commands_.BeginSignOut();
+  // ...and a sign-out the sdk reports for it from here signs nothing out
+  // again (AuthLogout.hpp)
+  RunCommand(
+      ConnectCommandQueue::Kind::Disconnect, [this] { LogoutNow(); },
+      [this] { commands_.EndSignOut(); });
+  if (onAuth_) onAuth_(false, authEpoch);
+}
+
+void SdkHost::LogoutNow() {
   // A sign-in method being added belongs to the account that is leaving: its
   // return, if it still comes, must not add it to the next account signed in.
   // Answered "superseded by ..." (bridge::IsSuperseded), so its sheet settles
@@ -5426,12 +5935,25 @@ void SdkHost::Logout() {
   // (bridge::RouteSignature), and its session a late return. Answered the same
   // way, outside mutex_; a challenge still being fetched for it opens no tab.
   std::function<void(WalletSignature)> signDone;
+  std::function<void(AuthResult)> authDone;
+  std::function<void(AuthResult)> createDone;
   {
     std::scoped_lock lock(mutex_);
+    const uint64_t authEpoch = signInEpoch_.load();
+    if (walletAuthEpoch_ < authEpoch) {
+      authDone = std::move(walletAuthDone_);
+      walletAuthDone_ = nullptr;
+    }
+    if (pendingWalletAuthEpoch_ < authEpoch) {
+      createDone = std::move(walletCreateDone_);
+      walletCreateDone_ = nullptr;
+    }
     signDone = std::move(walletSignDone_);
     walletSignDone_ = nullptr;
     if (signDone) walletFlows_.Begin();
   }
+  if (authDone) authDone({false, false, "superseded by signing out"});
+  if (createDone) createDone({false, false, "superseded by signing out"});
   if (signDone) {
     if (auto session = wallet_.bittensorSession()) {
       // a proof already accepted stays accepted; anything later is refused
@@ -5441,26 +5963,29 @@ void SdkHost::Logout() {
     out.error = "superseded by signing out";
     signDone(std::move(out));
   }
-  // and so is a row click still settling
-  CancelRowConnect("sign-out");
+  // (the row click, the fence and signedOut_, which keeps a posted
+  // reconcile, the health poll or a Connect from starting anything for the
+  // account that is leaving, were done on the main loop, in Logout)
   std::scoped_lock lock(mutex_);
-  // Signed out from here: a posted reconcile, the health poll or a Connect that
-  // runs after this starts nothing for the account that is leaving.
-  signedOut_.store(true);
-  // ...and a sign-out the sdk reports for it from here signs nothing out again
-  // (AuthLogout.hpp)
-  authLogouts_.SignedOut();
-  pendingWalletAuth_.reset();
+  const uint64_t authEpoch = signInEpoch_.load();
+  if (pendingWalletAuthEpoch_ < authEpoch) pendingWalletAuth_.reset();
   // so are sign-in flows left unfinished before this session (an sso identity
   // with no network, an instant account never confirmed): they belong to no
   // account, and the next sign-in starts clean (Windows' Logout drops them too)
-  pendingSsoAuth_ = false;
-  pendingSsoType_.clear();
-  pendingSsoJwt_.clear();
-  pendingInstantJwt_.reset();
+  if (pendingSsoAuthEpoch_ < authEpoch) {
+    pendingSsoAuth_ = false;
+    pendingSsoType_.clear();
+    pendingSsoJwt_.clear();
+  }
+  if (pendingInstantAuthEpoch_ < authEpoch) pendingInstantJwt_.reset();
   // The local credentials first, because nothing can hold them up: the app is
   // signed out on disk even if it is ended while the daemon is asked below.
-  if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+  try {
+    if (localState_) localState_->logout();
+  } catch (const std::exception&) {
+    g_warning("sdkhost: local logout could not persist");
+  }
+  hasClientJwt_.store(false);
   // and the credential the api attaches to its calls, which the next sign-in's
   // own calls would otherwise carry until it installs its own
   if (api_) api_->setByJwt("");
@@ -5491,7 +6016,6 @@ void SdkHost::Logout() {
   DropDaemonProviderStatsLocked();
   providerStateKnown_ = false;
   providerBackoff_.NoteSuccess();
-  if (onAuth_) onAuth_(false);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);  // drawer falls back to empty states
 }
 
