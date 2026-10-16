@@ -96,7 +96,7 @@ UR_TEST(MainReadWiring_IsLoggedInTakesNoLock) {
       "hasClientJwt_.store(!localState_->getByClientJwt().empty());"));
   UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(host, "bool SdkHost::ApplyNetworkServer("),
                                   "hasClientJwt_.store(loggedIn);"));
-  UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(host, "void SdkHost::RegisterNetworkClient("),
+  UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(host, "void SdkHost::FinishNetworkClientRegistration("),
                                   "hasClientJwt_.store(true);"));
   UR_EXPECT_TRUE(wiring::Contains(wiring::FunctionBody(host, "void SdkHost::LogoutNow() {"),
                                   "hasClientJwt_.store(false);"));
@@ -157,7 +157,7 @@ UR_TEST(MainReadSnapshots_FirstWriteAfterAccountChangeRetiresOtherKeys) {
 UR_TEST(MainReadWiring_AuthTransitionsRetireMirrors) {
   const auto host = wiring::ReadCode("SdkHost.cpp");
   for (const auto* signature : {"bool SdkHost::ApplyNetworkServer(",
-                               "void SdkHost::RegisterNetworkClient(",
+                               "void SdkHost::FinishNetworkClientRegistration(",
                                "void SdkHost::Logout() {"}) {
     UR_EXPECT_TRUE_MSG(signature, wiring::Contains(wiring::FunctionBody(host, signature),
                                                   "signInEpoch_.fetch_add(1)"));

@@ -398,7 +398,7 @@ class SdkHost {
   SdkHost();
   ~SdkHost();
 
-  using AuthStateHandler = std::function<void(bool loggedIn)>;
+  using AuthStateHandler = std::function<void(bool loggedIn, uint64_t epoch)>;
   // Fired when the sdk finds the stored auth is no longer valid on the server
   // (e.g. the client was removed, or this session was signed out from another
   // device): the sdk has already cleared its local auth state. The report
@@ -920,6 +920,7 @@ class SdkHost {
   void RefreshAdvancedMode();  // replay the current value to the handler
 
   void SetAuthStateHandler(AuthStateHandler h) { onAuth_ = std::move(h); }
+  bool AuthEpochCurrent(uint64_t epoch) const { return signInEpoch_.load() == epoch; }
   void SetAuthInvalidHandler(AuthInvalidHandler h) { onAuthInvalid_ = std::move(h); }
   // Whether a report the auth-invalid handler was given still signs the app
   // out: it was heard while signed in, and nothing has signed out or in since.
@@ -1458,12 +1459,18 @@ class SdkHost {
   // A listener's sign-out, with the cause it read: to the auth-invalid
   // handler, which marshals (an sdk thread).
   void ReportAuthLogout(std::string cause);
-  void RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done);
+  uint64_t CaptureAuthEpoch();
+  bool NetworkServerChangeAllowed();
+  void RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done,
+                             uint64_t authEpoch);
+  void FinishNetworkClientRegistration(const std::string& byClientJwt,
+                                        std::function<void(AuthResult)> done, uint64_t authEpoch);
   // Shared routing for NetworkCreateResult (sign-up + wallet sign-up).
   // `bittensorWalletId` is the Bittensor wallet that signed ("" for none).
   void HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult> result,
                                  std::optional<std::string> err,
                                  std::function<void(AuthResult)> done,
+                                 uint64_t authEpoch,
                                  const std::string& bittensorWalletId = std::string());
   // The body of StartTunnel(). Requires mutex_, so the recovery inside
   // ConnectBestAvailable can rebuild a session it has just discovered is dead
@@ -1694,6 +1701,10 @@ class SdkHost {
   // Advanced by each sign-out (Logout), so a reading taken before one is
   // never handed on as the next account's.
   std::atomic<uint64_t> signInEpoch_{0};
+  // Only fast in-memory auth publication belongs under this lock. Logout
+  // takes it on GTK's loop, so SDK calls, storage and callbacks stay outside.
+  std::mutex authStateMutex_;
+  bool authAttemptSinceLogout_ = false;  // guarded by authStateMutex_
 
   std::mutex mutex_;
   std::string initializeError_;  // InitializeError(); the main thread's alone
@@ -1950,10 +1961,12 @@ class SdkHost {
   // consumed on wallet deep-link and SDK callback threads (on_error /
   // AuthLoginWithWallet) — always taken under the lock, invoked outside it.
   std::function<void(AuthResult)> walletAuthDone_;
+  uint64_t walletAuthEpoch_ = 0;
   // Identity from a wallet sign-in with no network. Its first signature was
   // consumed by AuthLogin; CreateNetworkWithPendingWallet always fetches and
   // signs a new address-bound challenge before submitting it.
   std::optional<urnet::WalletAuthArgs> pendingWalletAuth_;
+  uint64_t pendingWalletAuthEpoch_ = 0;
   std::string pendingWalletNetworkName_;
   std::string pendingWalletReferralCode_;
   std::function<void(AuthResult)> walletCreateDone_;
@@ -1992,12 +2005,14 @@ class SdkHost {
   // Identity from an sso sign-in with no network: the token and its type,
   // consumed by CreateNetworkWithPendingSso.
   bool pendingSsoAuth_ = false;
+  uint64_t pendingSsoAuthEpoch_ = 0;
   std::string pendingSsoType_;
   std::string pendingSsoJwt_;
   void AuthLoginWithSso(const std::string& provider, const std::string& jwt);
   // The instant account's jwt, held between CreateInstantAccount and the
   // seedphrase sheet's confirm (guarded by mutex_; a secret — never log it).
   std::optional<std::string> pendingInstantJwt_;
+  uint64_t pendingInstantAuthEpoch_ = 0;
 
   // Advanced Mode standing state (D5): the atomic is the authority between
   // the disk read at startup and any later toggle.

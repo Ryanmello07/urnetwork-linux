@@ -870,6 +870,16 @@ urnetwork_tests = executable('urnetwork-tests',
   install : false)
 test('unit', urnetwork_tests, protocol : 'exitcode')
 
+# Execute the real auth/logout methods with controllable SDK, storage and GTK
+# boundaries; mutation controls prove the tests reject the original races.
+auth_session_python = find_program('python3')
+auth_session_regression = meson.current_source_dir() / 'tests/AuthSessionRegression.py'
+test('auth-session', auth_session_python, args : [auth_session_regression])
+test('auth-session-retired-epoch-control', auth_session_python,
+     args : [auth_session_regression, '--negative-control', 'epoch'])
+test('auth-session-async-logout-control', auth_session_python,
+     args : [auth_session_regression, '--negative-control', 'async-logout'])
+
 test('appimage-gsettings-schema-closure',
      find_program('../packaging/gsettings.test.sh'),
      protocol : 'exitcode')

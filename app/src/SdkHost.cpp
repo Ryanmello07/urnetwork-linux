@@ -594,12 +594,18 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
 
 bool SdkHost::IsLoggedIn() {
   // A sign-out is the answer at once: the stored jwt outlives it until the
-  // asynchronous local logout lands (Logout). No lock: both halves are
+  // queued logout tail clears the local state (Logout). No lock: both halves are
   // atomics, so the main loop never waits here on a command holding mutex_.
   return !signedOut_.load() && hasClientJwt_.load();
 }
 
 // ---- auth (mirrors the Windows SdkHost) -----------------------------------
+
+uint64_t SdkHost::CaptureAuthEpoch() {
+  std::scoped_lock lock(authStateMutex_);
+  authAttemptSinceLogout_ = true;
+  return signInEpoch_.load();
+}
 
 // Account discovery for the email-first login flow (Windows SdkHost::StartLogin,
 // macOS LoginInitialViewModel + UrApiService.authLogin): authLogin{user_auth}
@@ -607,12 +613,14 @@ bool SdkHost::IsLoggedIn() {
 // the password step; another method only (e.g. SSO) -> IncorrectAuth with the
 // allowed list; nothing -> Create (sign-up).
 void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRouting)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthLoginArgs args;
   args.user_auth = userAuth;
-  api_->authLogin(args, [this, userAuth, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, userAuth, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                                std::optional<std::string> err) {
     LoginRouting routing;  // route defaults to Error
     routing.userAuth = userAuth;
+    if (!AuthEpochCurrent(authEpoch)) { routing.error = "superseded by signing out"; done(routing); return; }
     if (err) { routing.error = *err; done(routing); return; }
     if (!result) { routing.error = "no result"; done(routing); return; }
     if (result->user_auth && !result->user_auth->empty()) {
@@ -630,7 +638,7 @@ void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRo
         routed.route = r.ok ? LoginRoute::Login : LoginRoute::Error;
         routed.error = r.error;
         done(routed);
-      });
+      }, authEpoch);
       return;
     }
     if (result->auth_allowed && !result->auth_allowed->empty()) {
@@ -656,14 +664,16 @@ void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRo
 
 void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& password,
                                 std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthLoginWithPasswordArgs args;
   args.user_auth = userAuth;
   args.password = password;
   // an unverified account gets a NUMERIC code (the verify page's OTP entry),
   // matching the apple LoginPasswordViewModel
   args.verify_otp_numeric = true;
-  api_->authLoginWithPassword(args, [this, done](std::optional<urnet::AuthLoginWithPasswordResult> result,
+  api_->authLoginWithPassword(args, [this, done, authEpoch](std::optional<urnet::AuthLoginWithPasswordResult> result,
                                                  std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
@@ -672,7 +682,7 @@ void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& 
       return;
     }
     if (result->network && result->network->by_jwt) {
-      RegisterNetworkClient(*result->network->by_jwt, done);
+      RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
       return;
     }
     done({false, false, "login returned no network"});
@@ -680,14 +690,16 @@ void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& 
 }
 
 void SdkHost::LoginWithCode(const std::string& authCode, std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthCodeLoginArgs args;
   args.auth_code = authCode;
-  api_->authCodeLogin(args, [this, done](std::optional<urnet::AuthCodeLoginResult> result,
+  api_->authCodeLogin(args, [this, done, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
-    if (!result->by_jwt.empty()) { RegisterNetworkClient(result->by_jwt, done); return; }
+    if (!result->by_jwt.empty()) { RegisterNetworkClient(result->by_jwt, done, authEpoch); return; }
     done({false, false, "code login returned no jwt"});
   });
 }
@@ -717,12 +729,14 @@ std::string NormalizeSeedphrase(const std::string& raw) {
 
 void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
                                   std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthLoginArgs args;
   args.seedphrase = NormalizeSeedphrase(seedphrase);
   // NOTE: nothing on any path below may echo the args — an error log that
   // included the request would put the credential in a file on disk.
-  api_->authLogin(args, [this, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                      std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) {
@@ -731,7 +745,7 @@ void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     done({false, false, "seedphrase login returned no network"});
@@ -740,15 +754,17 @@ void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
 
 void SdkHost::CreateInstantAccount(const std::string& referralCode,
                                    std::function<void(InstantAccount)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   // NO user_auth, password, auth_jwt or wallet_auth: that combination is what
   // makes the server mint a seedphrase-secured network and return the phrase.
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.terms = true;  // the form's button is gated on the terms consent
   if (!referralCode.empty()) args.referral_code = referralCode;
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
     InstantAccount out;
+    if (!AuthEpochCurrent(authEpoch)) { out.error = "superseded by signing out"; if (done) done(out); return; }
     if (err || !result) {
       out.error = err ? *err : "no result";
       if (done) done(out);
@@ -779,8 +795,14 @@ void SdkHost::CreateInstantAccount(const std::string& referralCode,
     }
     {
       std::scoped_lock lock(mutex_);
-      pendingInstantJwt_ = *result->network->by_jwt;
+      if (!AuthEpochCurrent(authEpoch)) {
+        out.error = "superseded by signing out";
+      } else {
+        pendingInstantJwt_ = *result->network->by_jwt;
+        pendingInstantAuthEpoch_ = authEpoch;
+      }
     }
+    if (!out.error.empty()) { if (done) done(out); return; }
     out.ok = true;
     out.seedphrase = *result->seedphrase;
     if (done) done(out);
@@ -789,6 +811,7 @@ void SdkHost::CreateInstantAccount(const std::string& referralCode,
 
 void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
   std::string jwt;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!pendingInstantJwt_) {
@@ -796,9 +819,10 @@ void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
       return;
     }
     jwt = *pendingInstantJwt_;
+    authEpoch = pendingInstantAuthEpoch_;
     pendingInstantJwt_.reset();
   }
-  RegisterNetworkClient(jwt, done);
+  RegisterNetworkClient(jwt, done, authEpoch);
 }
 
 void SdkHost::DiscardInstantAccount() {
@@ -857,11 +881,19 @@ SdkHost::NetworkServer SdkHost::CurrentNetworkServer() {
   });
 }
 
+bool SdkHost::NetworkServerChangeAllowed() {
+  // The sheet runs on GTK. Keep the old space in place until its logout tail
+  // has cleared that space's credentials; a later retry can choose the new one.
+  return !OnMainLoop() || !commands_.SigningOut();
+}
+
 bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string& apiUrl,
                                  const std::string& connectUrl) {
+  if (!NetworkServerChangeAllowed()) return false;
   if (hostName.empty()) return false;
   bool ok = false;
   bool loggedIn = false;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!spaceManager_) return false;
@@ -924,7 +956,9 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       }
       networkNameVc_ = urnet::newNetworkNameValidationViewController(*api_);
       loggedIn = !localState_->getByClientJwt().empty();
-      signInEpoch_.fetch_add(1);
+      std::scoped_lock authLock(authStateMutex_);
+      authEpoch = signInEpoch_.fetch_add(1) + 1;
+      authAttemptSinceLogout_ = false;
       hasClientJwt_.store(loggedIn);
       // the new space's stored credential is the answer, not a sign-out made
       // in another space
@@ -946,7 +980,7 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
   // The new space's stored auth decides what the window shows. Almost always
   // LoggedOut — a fresh server has no jwt — and saying so is the point: the
   // old session is genuinely gone.
-  if (onAuth_) onAuth_(loggedIn);
+  if (onAuth_) onAuth_(loggedIn, authEpoch);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
   // stop_tunnel retired the old server's provider-only device with the rest; a
   // space this device is already signed in to provides again on its own.
@@ -1094,7 +1128,9 @@ std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& coun
 void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult> result,
                                         std::optional<std::string> err,
                                         std::function<void(AuthResult)> done,
+                                        uint64_t authEpoch,
                                         const std::string& bittensorWalletId) {
+  if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
   if (err) { done({false, false, *err}); return; }
   if (!result) { done({false, false, "no result"}); return; }
   if (result->error && !result->error->message.empty()) {
@@ -1111,9 +1147,9 @@ void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult
   if (result->network && result->network->by_jwt) {
     {
       std::scoped_lock lock(mutex_);
-      pendingWalletAuth_.reset();  // consumed (only set on the wallet path)
+      if (pendingWalletAuthEpoch_ == authEpoch) pendingWalletAuth_.reset();  // consumed (only set on the wallet path)
     }
-    RegisterNetworkClient(*result->network->by_jwt, done);
+    RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
     return;
   }
   done({false, false, "network create returned no network"});
@@ -1122,6 +1158,7 @@ void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult
 void SdkHost::CreateNetwork(const std::string& networkName, const std::string& userAuth,
                             const std::string& password, const std::string& referralCode,
                             std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
@@ -1131,9 +1168,9 @@ void SdkHost::CreateNetwork(const std::string& networkName, const std::string& u
   args.terms = true;  // the page's continue button is gated on the terms switch
   args.verify_use_numeric = true;
   if (!referralCode.empty()) args.referral_code = referralCode;
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
-    HandleNetworkCreateResult(std::move(result), std::move(err), done);
+    HandleNetworkCreateResult(std::move(result), std::move(err), done, authEpoch);
   });
 }
 
@@ -1235,16 +1272,18 @@ bool SdkHost::HasPendingWalletAuth() {
 
 void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
                          std::function<void(AuthResult)> done) {
+  const uint64_t authEpoch = CaptureAuthEpoch();
   urnet::AuthVerifyArgs args;
   args.user_auth = userAuth;
   args.verify_code = code;
-  api_->authVerify(args, [this, done](std::optional<urnet::AuthVerifyResult> result,
+  api_->authVerify(args, [this, done, authEpoch](std::optional<urnet::AuthVerifyResult> result,
                                       std::optional<std::string> err) {
+    if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     done({false, false, "verify returned no network"});
@@ -1636,6 +1675,7 @@ void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
     std::scoped_lock lock(mutex_);
     walletFlows_.Begin();
     pendingWalletAuth_.reset();
+    walletAuthEpoch_ = CaptureAuthEpoch();
     walletAuthDone_ = std::move(done);
   }
   wallet_.Connect(provider);  // opens the browser; the rest continues on the deep-link callback
@@ -1650,6 +1690,7 @@ void SdkHost::SignInWithBittensor(const std::string& walletId,
     std::scoped_lock lock(mutex_);
     flow = walletFlows_.Begin();
     pendingWalletAuth_.reset();
+    walletAuthEpoch_ = CaptureAuthEpoch();
     walletAuthDone_ = std::move(done);
     bittensorWalletId_ = walletId;
   }
@@ -1822,6 +1863,7 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
     ssoState_ = state;
     ssoNonce_ = nonce;
     ssoOwner_ = addsignin::Owner::SignIn;
+    walletAuthEpoch_ = CaptureAuthEpoch();
     walletAuthDone_ = std::move(done);
     if (networkSpace_) apiUrl = networkSpace_->getApiUrl();
   }
@@ -2016,14 +2058,23 @@ void SdkHost::AddAuthMethod(const addsignin::Args& in, std::function<void(AddSig
 }
 
 void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& jwt) {
+  uint64_t authEpoch = 0;
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    authEpoch = walletAuthEpoch_;
+    flow = walletFlows_.Latest();
+  }
+  if (!AuthEpochCurrent(authEpoch)) return;
   urnet::AuthLoginArgs args;
   args.auth_jwt_type = provider;
   args.auth_jwt = jwt;
-  api_->authLogin(args, [this, provider, jwt](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, provider, jwt, authEpoch, flow](std::optional<urnet::AuthLoginResult> result,
                                               std::optional<std::string> err) {
     std::function<void(AuthResult)> done;
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
       done = std::move(walletAuthDone_);
       walletAuthDone_ = nullptr;
     }
@@ -2037,7 +2088,7 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& j
     if (!result) { fail("no result"); return; }
     if (result->error && !result->error->message.empty()) { fail(result->error->message); return; }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {}, authEpoch);
       return;
     }
     if (result->auth_allowed && !result->auth_allowed->empty()) {
@@ -2055,6 +2106,8 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& j
     // into the create-network page (the web's ssoCreateNetworkView).
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
+      pendingSsoAuthEpoch_ = authEpoch;
       pendingSsoAuth_ = true;
       pendingSsoType_ = provider;
       pendingSsoJwt_ = jwt;
@@ -2073,6 +2126,7 @@ void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
                                           std::function<void(AuthResult)> done) {
   std::string type;
   std::string jwt;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!pendingSsoAuth_) {
@@ -2081,7 +2135,9 @@ void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
     }
     type = pendingSsoType_;
     jwt = pendingSsoJwt_;
+    authEpoch = pendingSsoAuthEpoch_;
   }
+  if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();  // mac parity: always empty
@@ -2090,17 +2146,19 @@ void SdkHost::CreateNetworkWithPendingSso(const std::string& networkName,
   args.network_name = networkName;
   args.terms = true;  // the page's continue button is gated on the terms switch
   if (!referralCode.empty()) args.referral_code = referralCode;
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
-    HandleNetworkCreateResult(std::move(result), std::move(err), [this, done](AuthResult r) {
+    HandleNetworkCreateResult(std::move(result), std::move(err), [this, done, authEpoch](AuthResult r) {
       if (r.ok) {
         std::scoped_lock lock(mutex_);
-        pendingSsoAuth_ = false;
-        pendingSsoType_.clear();
-        pendingSsoJwt_.clear();
+        if (pendingSsoAuthEpoch_ == authEpoch) {
+          pendingSsoAuth_ = false;
+          pendingSsoType_.clear();
+          pendingSsoJwt_.clear();
+        }
       }
       done(r);
-    });
+    }, authEpoch);
   });
 }
 
@@ -2214,8 +2272,10 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
   std::optional<urnet::WalletAuthArgs> walletAuth;
   std::string networkName;
   std::string referralCode;
+  uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
+    authEpoch = pendingWalletAuthEpoch_;
     done = std::move(walletCreateDone_);
     walletCreateDone_ = nullptr;
     if (!done || !pendingWalletAuth_) return;
@@ -2232,6 +2292,7 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
       pendingWalletReferralCode_.clear();
     }
   }
+  if (!AuthEpochCurrent(authEpoch)) { if (done) done({false, false, "superseded by signing out"}); return; }
   if (!walletAuth) {
     done({false, false, "wallet account changed; use the same account to create the network"});
     return;
@@ -2253,11 +2314,11 @@ void SdkHost::FinishCreateNetworkWithWallet(const std::string& signature) {
     bittensorWalletId = bittensorWalletId_;
   }
   args.wallet_auth = walletAuth;
-  api_->networkCreate(args, [this, bittensorWalletId, done = std::move(done)](
+  api_->networkCreate(args, [this, bittensorWalletId, authEpoch, done = std::move(done)](
                                 std::optional<urnet::NetworkCreateResult> result,
                                 std::optional<std::string> err) mutable {
     HandleNetworkCreateResult(std::move(result), std::move(err), std::move(done),
-                              bittensorWalletId);
+                              authEpoch, bittensorWalletId);
   });
 }
 
@@ -2295,6 +2356,14 @@ void SdkHost::HandleDeepLink(const std::string& url) {
 
 void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string& signature,
                                   const std::string& message, const std::string& blockchain) {
+  uint64_t authEpoch = 0;
+  uint64_t flow = 0;
+  {
+    std::scoped_lock lock(mutex_);
+    authEpoch = walletAuthEpoch_;
+    flow = walletFlows_.Latest();
+  }
+  if (!AuthEpochCurrent(authEpoch)) return;
   urnet::WalletAuthArgs w;
   w.wallet_address = address;  // base58 public key (solana) | ss58 address (TAO)
   w.wallet_signature = signature;
@@ -2310,13 +2379,14 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
     std::scoped_lock lock(mutex_);
     bittensorWalletId = bittensorWalletId_;
   }
-  api_->authLogin(args, [this, w, bittensorWalletId](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, w, bittensorWalletId, authEpoch, flow](std::optional<urnet::AuthLoginResult> result,
                                                      std::optional<std::string> err) {
     // SDK callback thread: consume walletAuthDone_ under the lock (it is set
     // on the UI thread; the wallet on_error path races this same slot)
     std::function<void(AuthResult)> done;
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
       done = std::move(walletAuthDone_);
       walletAuthDone_ = nullptr;
     }
@@ -2330,7 +2400,7 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {}, authEpoch);
       return;
     }
     // Wallet authenticated but isn't linked to a network yet. Keep the signed
@@ -2338,6 +2408,8 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
     // apple do the same): NetworkCreate{wallet_auth} works for solana AND TAO.
     {
       std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch) || !walletFlows_.IsCurrent(flow)) return;
+      pendingWalletAuthEpoch_ = authEpoch;
       pendingWalletAuth_ = w;
     }
     if (done) {
@@ -2348,57 +2420,102 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
   });
 }
 
-void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done) {
-  {
-    // a new network jwt invalidates a running device (guest upgrade, verify
-    // after an upgrade): tear it down so the UI rebuilds under the new auth.
-    // Fresh sign-ins have no device and skip this. The daemon's tunnel runs
-    // under the old jwt, so stop it too; the UI restarts it under the new one.
-    std::scoped_lock lock(mutex_);
-    if (device_) {
-      TeardownDeviceLocked();
-      control_.StopTunnel();
-      EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
-    }
-  }
-  api_->setByJwt(byJwt);
-  // The jwt persists asynchronously — and a failed persist means a signed-out
-  // NEXT LAUNCH even though this session would appear to work, so a failure
-  // is surfaced as an auth error instead of being ignored: the user retries
-  // the sign-in rather than silently losing the session (for a guest network
-  // the jwt is the only credential there is).
-  asyncLocalState_->setByJwt(byJwt, [this, done](bool ok) {
-    if (!ok) {
-      std::fprintf(stderr, "[sdk] persist by_jwt failed (localState commit)\n");
-      done({false, false, "could not save session"});
+void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done,
+                                    uint64_t authEpoch) {
+  // The callback keeps the epoch from before its first auth request. Queueing
+  // on GTK orders all credential writes after any logout already admitted.
+  PostToMain([this, byJwt, done, authEpoch] {
+    if (!AuthEpochCurrent(authEpoch)) {
+      done({false, false, "superseded by signing out"});
       return;
     }
-    urnet::AuthNetworkClientArgs args;
-    args.description = UrDeviceDescription();
-    args.device_spec = UrDeviceSpec();
-    AuthNetworkClientWithLocale(args, [this, done](std::optional<urnet::AuthNetworkClientResult> result,
-                                                   std::optional<std::string> err) {
-      if (err) { done({false, false, *err}); return; }
-      if (!result) { done({false, false, "no result"}); return; }
-      if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
-      if (!result->by_client_jwt) { done({false, false, "no client jwt"}); return; }
-      // same contract as the by_jwt persist above: an unsaved client jwt is a
-      // broken next launch (no tunnel credential), never a silent success
-      asyncLocalState_->setByClientJwt(*result->by_client_jwt, [this, done](bool ok) {
-        if (!ok) {
-          std::fprintf(stderr, "[sdk] persist by_client_jwt failed (localState commit)\n");
-          done({false, false, "could not save session"});
+    auto failure = std::make_shared<std::optional<AuthResult>>();
+    RunCommand(ConnectCommandQueue::Kind::Device, [this, byJwt, done, authEpoch, failure] {
+      std::scoped_lock lock(mutex_);
+      if (!AuthEpochCurrent(authEpoch)) {
+        *failure = AuthResult{false, false, "superseded by signing out"};
+        return;
+      }
+      try {
+        if (device_) {
+          TeardownDeviceLocked();
+          control_.StopTunnel();
+          EmitDrawerEvent(DrawerEvent::DeviceLifecycle);
+        }
+        if (!AuthEpochCurrent(authEpoch)) {
+          *failure = AuthResult{false, false, "superseded by signing out"};
           return;
         }
-        // the stored credential is this sign-in's from here
-        signInEpoch_.fetch_add(1);
-        hasClientJwt_.store(true);
-        signedOut_.store(false);
-        authLogouts_.SignedIn();
-        if (onAuth_) onAuth_(true);
-        done({true, false, ""});
-      });
+        api_->setByJwt(byJwt);
+        // Synchronous on the command worker: logout's later command cannot
+        // finish before this write, or erase a later account after its tail.
+        localState_->setByJwt(byJwt);
+        if (!AuthEpochCurrent(authEpoch)) {
+          *failure = AuthResult{false, false, "superseded by signing out"};
+          return;
+        }
+        urnet::AuthNetworkClientArgs args;
+        args.description = UrDeviceDescription();
+        args.device_spec = UrDeviceSpec();
+        AuthNetworkClientWithLocale(args, [this, done, authEpoch](
+            std::optional<urnet::AuthNetworkClientResult> result, std::optional<std::string> err) {
+          PostToMain([this, done, authEpoch, result, err] {
+            if (!AuthEpochCurrent(authEpoch)) {
+              done({false, false, "superseded by signing out"});
+              return;
+            }
+            if (err) { done({false, false, *err}); return; }
+            if (!result) { done({false, false, "no result"}); return; }
+            if (result->error && !result->error->message.empty()) {
+              done({false, false, result->error->message});
+              return;
+            }
+            if (!result->by_client_jwt) { done({false, false, "no client jwt"}); return; }
+            FinishNetworkClientRegistration(*result->by_client_jwt, done, authEpoch);
+          });
+        });
+      } catch (const std::exception&) {
+        *failure = AuthResult{false, false, "could not save session"};
+      }
+    }, [this, done, authEpoch, failure] {
+      if (!*failure) return;
+      done(AuthEpochCurrent(authEpoch) ? **failure
+                                      : AuthResult{false, false, "superseded by signing out"});
     });
+  });
+}
+
+void SdkHost::FinishNetworkClientRegistration(const std::string& byClientJwt,
+                                               std::function<void(AuthResult)> done,
+                                               uint64_t authEpoch) {
+  auto answer = std::make_shared<AuthResult>(AuthResult{false, false, "superseded by signing out"});
+  auto publishedEpoch = std::make_shared<uint64_t>(authEpoch);
+  RunCommand(ConnectCommandQueue::Kind::Device, [this, byClientJwt, authEpoch, answer, publishedEpoch] {
+    std::scoped_lock lock(mutex_);
+    if (!AuthEpochCurrent(authEpoch)) return;
+    try {
+      localState_->setByClientJwt(byClientJwt);
+    } catch (const std::exception&) {
+      *answer = AuthResult{false, false, "could not save session"};
+      return;
+    }
+    // Logout's UI half takes only this short lock. A logout during the disk
+    // write wins; its queued tail clears the old write before a new sign-in.
+    std::scoped_lock authLock(authStateMutex_);
+    if (!AuthEpochCurrent(authEpoch)) return;
+    *publishedEpoch = signInEpoch_.fetch_add(1) + 1;
+    authAttemptSinceLogout_ = false;
+    hasClientJwt_.store(true);
+    signedOut_.store(false);
+    authLogouts_.SignedIn();
+    *answer = AuthResult{true, false, ""};
+  }, [this, done, answer, publishedEpoch] {
+    if (!AuthEpochCurrent(*publishedEpoch)) {
+      done({false, false, "superseded by signing out"});
+      return;
+    }
+    if (answer->ok && onAuth_) onAuth_(true, *publishedEpoch);
+    done(*answer);
   });
 }
 
@@ -2429,7 +2546,7 @@ TunnelStartResult SdkHost::StartTunnelLocked(const char* reason) {
   // An owed sign-out first, at once: a Connect is a person asking (SignOut.hpp).
   SettleSignOutLocked("connect", /*userInitiated=*/true);
   // Signed out reads as no jwt: the stored one outlives a sign-out until its
-  // asynchronous local logout lands.
+  // queued logout tail clears the local state.
   const std::string clientJwt = signedOut_.load() ? std::string() : localState_->getByClientJwt();
   if (clientJwt.empty()) {
     lastTunnelError_ = "not signed in";
@@ -5352,7 +5469,7 @@ void SdkHost::ReconcileProviderLocked(const char* reason, bool userInitiated,
   // Signed out, nothing provides: a provider the daemon still runs for this
   // user (a sign-out it missed) is stopped like any mode that does not
   // provide. signedOut_ first: the stored jwt outlives a sign-out until its
-  // asynchronous local logout lands.
+  // queued logout tail clears the local state.
   const bool signedIn = !signedOut_.load() && !clientJwt.empty() && !instanceId.empty();
   const std::string mode = signedIn ? localState_->getProvideControlMode() : std::string("never");
   const provide::ControlMode controlMode = provide::ControlModeFrom(mode);
@@ -5774,8 +5891,21 @@ bool SdkHost::LogoutIfStill(const auth_logout::Report& signIn) {
 void SdkHost::Logout() {
   // A sign-out already under way, or done, is this one: nothing is torn down
   // twice, and a second one never reaches the account signed in next.
-  if (signedOut_.exchange(true)) {
-    g_message("sdkhost: sign-out: already signed out; nothing more to do");
+  uint64_t authEpoch = 0;
+  {
+    std::scoped_lock authLock(authStateMutex_);
+    if (signedOut_.load() && !authAttemptSinceLogout_) {
+      return;
+    }
+    signedOut_.store(true);
+    authAttemptSinceLogout_ = false;
+    authEpoch = signInEpoch_.fetch_add(1) + 1;
+    authLogouts_.SignedOut();
+  }
+  // A second logout can retire an attempt started while this tail runs,
+  // without scheduling another tail that could reach a later account.
+  if (commands_.SigningOut()) {
+    if (onAuth_) onAuth_(false, authEpoch);
     return;
   }
   // a row click still settling belongs to the leaving account (main loop)
@@ -5786,13 +5916,12 @@ void SdkHost::Logout() {
   // with the device, when LogoutNow has run: the next sign-in's commands
   // carry the new generation and are never blocked by it.
   commands_.BeginSignOut();
-  signInEpoch_.fetch_add(1);
   // ...and a sign-out the sdk reports for it from here signs nothing out
   // again (AuthLogout.hpp)
-  authLogouts_.SignedOut();
   RunCommand(
       ConnectCommandQueue::Kind::Disconnect, [this] { LogoutNow(); },
       [this] { commands_.EndSignOut(); });
+  if (onAuth_) onAuth_(false, authEpoch);
 }
 
 void SdkHost::LogoutNow() {
@@ -5806,12 +5935,25 @@ void SdkHost::LogoutNow() {
   // (bridge::RouteSignature), and its session a late return. Answered the same
   // way, outside mutex_; a challenge still being fetched for it opens no tab.
   std::function<void(WalletSignature)> signDone;
+  std::function<void(AuthResult)> authDone;
+  std::function<void(AuthResult)> createDone;
   {
     std::scoped_lock lock(mutex_);
+    const uint64_t authEpoch = signInEpoch_.load();
+    if (walletAuthEpoch_ < authEpoch) {
+      authDone = std::move(walletAuthDone_);
+      walletAuthDone_ = nullptr;
+    }
+    if (pendingWalletAuthEpoch_ < authEpoch) {
+      createDone = std::move(walletCreateDone_);
+      walletCreateDone_ = nullptr;
+    }
     signDone = std::move(walletSignDone_);
     walletSignDone_ = nullptr;
     if (signDone) walletFlows_.Begin();
   }
+  if (authDone) authDone({false, false, "superseded by signing out"});
+  if (createDone) createDone({false, false, "superseded by signing out"});
   if (signDone) {
     if (auto session = wallet_.bittensorSession()) {
       // a proof already accepted stays accepted; anything later is refused
@@ -5825,17 +5967,24 @@ void SdkHost::LogoutNow() {
   // reconcile, the health poll or a Connect from starting anything for the
   // account that is leaving, were done on the main loop, in Logout)
   std::scoped_lock lock(mutex_);
-  pendingWalletAuth_.reset();
+  const uint64_t authEpoch = signInEpoch_.load();
+  if (pendingWalletAuthEpoch_ < authEpoch) pendingWalletAuth_.reset();
   // so are sign-in flows left unfinished before this session (an sso identity
   // with no network, an instant account never confirmed): they belong to no
   // account, and the next sign-in starts clean (Windows' Logout drops them too)
-  pendingSsoAuth_ = false;
-  pendingSsoType_.clear();
-  pendingSsoJwt_.clear();
-  pendingInstantJwt_.reset();
+  if (pendingSsoAuthEpoch_ < authEpoch) {
+    pendingSsoAuth_ = false;
+    pendingSsoType_.clear();
+    pendingSsoJwt_.clear();
+  }
+  if (pendingInstantAuthEpoch_ < authEpoch) pendingInstantJwt_.reset();
   // The local credentials first, because nothing can hold them up: the app is
   // signed out on disk even if it is ended while the daemon is asked below.
-  if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+  try {
+    if (localState_) localState_->logout();
+  } catch (const std::exception&) {
+    g_warning("sdkhost: local logout could not persist");
+  }
   hasClientJwt_.store(false);
   // and the credential the api attaches to its calls, which the next sign-in's
   // own calls would otherwise carry until it installs its own
@@ -5867,7 +6016,6 @@ void SdkHost::LogoutNow() {
   DropDaemonProviderStatsLocked();
   providerStateKnown_ = false;
   providerBackoff_.NoteSuccess();
-  if (onAuth_) onAuth_(false);
   EmitDrawerEvent(DrawerEvent::DeviceLifecycle);  // drawer falls back to empty states
 }
 

@@ -337,8 +337,10 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   });
 
   // Auth-state transitions are marshaled onto the GTK loop and flip the view.
-  host_.SetAuthStateHandler([this](bool loggedIn) {
-    PostToMain([this, loggedIn] { ApplyAuthState(loggedIn); });
+  host_.SetAuthStateHandler([this](bool loggedIn, uint64_t epoch) {
+    PostToMain([this, loggedIn, epoch] {
+      if (host_.AuthEpochCurrent(epoch)) ApplyAuthState(loggedIn);
+    });
   });
   // The server rejected the stored auth (e.g. the client was removed, or this
   // session was signed out from another device): log out and return to the

@@ -78,13 +78,15 @@ UR_TEST(SignOutWiring_LogoutStopsAsQuitThroughTheObligation) {
   const std::string host = ReadSignOutSource("SdkHost.cpp");
   // signed out at once on the main loop, then the teardown on the queue
   UR_EXPECT_TRUE(InOrder(SignOutBody(host, "void SdkHost::Logout() {"),
-                         {"if (signedOut_.exchange(true)) {", "RunCommand(", "LogoutNow();"}));
+                         {"signedOut_.store(true);", "signInEpoch_.fetch_add(1)", "RunCommand(", "LogoutNow();"}));
   const std::string logout = SignOutBody(host, "void SdkHost::LogoutNow() {");
   UR_EXPECT_TRUE(!logout.empty());
   UR_EXPECT_TRUE(InOrder(logout, {"std::scoped_lock lock(mutex_);",
-                                  "asyncLocalState_->logout(", "TeardownDeviceLocked();",
+                                  "localState_->logout();", "TeardownDeviceLocked();",
                                   "signOut_.Begin(SignOutDaemonLocked());", "ForgetRpcSession();",
-                                  "onAuth_(false);"}));
+                                  "DropDaemonProviderStatsLocked();"}));
+  UR_EXPECT_TRUE(SignOutHas(SignOutBody(host, "void SdkHost::Logout() {"),
+                           "onAuth_(false, authEpoch);"));
   UR_EXPECT_TRUE(SignOutHas(logout, "signOutBackoff_.NoteFailure("));
   for (const char* forbidden : {"control_.StopTunnel(", "control_.StartProvider(", "StartTunnel("}) {
     UR_EXPECT_TRUE_MSG(forbidden, !SignOutHas(logout, forbidden));
@@ -136,7 +138,7 @@ UR_TEST(SignOutWiring_LogoutCancelsTheAccountsAddAndItsApiCredential) {
   UR_EXPECT_TRUE(InOrder(logout, {"CancelPendingAddSignIn(\"superseded by signing out\");",
                                   "std::scoped_lock lock(mutex_);", "pendingWalletAuth_.reset();",
                                   "pendingSsoAuth_ = false;", "pendingSsoJwt_.clear();",
-                                  "pendingInstantJwt_.reset();", "asyncLocalState_->logout(",
+                                  "pendingInstantJwt_.reset();", "localState_->logout();",
                                   "if (api_) api_->setByJwt(\"\");",
                                   "signOut_.Begin(SignOutDaemonLocked());"}));
   // and the post-sign-up onboarding of a network created here goes with a
@@ -252,9 +254,9 @@ UR_TEST(SignOutWiring_AConnectDeliversFirstAndStartsNothingWhileOwed) {
 // space chosen with one, and the launch reads the marker.
 UR_TEST(SignOutWiring_TheSignOutEndsWithASignInAndOutlivesTheApp) {
   const std::string host = ReadSignOutSource("SdkHost.cpp");
-  const std::string registered = SignOutBody(host, "void SdkHost::RegisterNetworkClient(");
-  UR_EXPECT_TRUE(InOrder(registered, {"asyncLocalState_->setByClientJwt(",
-                                      "signedOut_.store(false);", "onAuth_(true);"}));
+  const std::string registered = SignOutBody(host, "void SdkHost::FinishNetworkClientRegistration(");
+  UR_EXPECT_TRUE(InOrder(registered, {"localState_->setByClientJwt(",
+                                      "signedOut_.store(false);", "onAuth_(true, *publishedEpoch);"}));
   const std::string server = SignOutBody(host, "bool SdkHost::ApplyNetworkServer(");
   UR_EXPECT_TRUE(InOrder(server, {"loggedIn = !localState_->getByClientJwt().empty();",
                                   "signedOut_.store(!loggedIn);"}));
