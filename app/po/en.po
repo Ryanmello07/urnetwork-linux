@@ -8550,6 +8550,11 @@ msgctxt "site_app_sign_and_connect"
 msgid "Sign and connect"
 msgstr "Sign and connect"
 
+#. ur.io: notice over the page when another tab signs in to another network; this page stops its work until the visitor refreshes it.
+msgctxt "site_app_stale_sign_in"
+msgid "This browser was signed in to another network in another tab. Refresh this page to continue."
+msgstr "This browser was signed in to another network in another tab. Refresh this page to continue."
+
 #. App settings: stay in touch section
 msgctxt "site_app_stay_in_touch"
 msgid "Stay in touch"
