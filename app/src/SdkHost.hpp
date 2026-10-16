@@ -20,6 +20,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <any>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -30,6 +31,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <urnetwork_sdk.hpp>
@@ -1437,6 +1439,13 @@ class SdkHost {
   bool DeviceSteady() { return !CommandsBusy() && hasDevice(); }
   // Only behind DeviceSteady() on the main loop (see there).
   urnet::DeviceRemote& device() { return *device_; }
+  // The bound device for a worker thread (the Developer page's bridge), with
+  // `lock` holding mutex_ for as long as the caller keeps it: no teardown on
+  // the command queue's worker closes or releases the device meanwhile, and a
+  // main-loop read answers its kept value instead of waiting (ReadOnMain).
+  // nullptr, with the lock released, when no device is bound. Off the main
+  // loop only; nothing under the lock may call back into SdkHost.
+  urnet::DeviceRemote* LockedDevice(std::unique_lock<std::mutex>& lock);
   // The daemon control channel, shared with the location-override writer
   // (DaemonGeoClueWriter) — one socket, one hello, one version check.
   ControlClient& Control() { return control_; }
@@ -1636,6 +1645,26 @@ class SdkHost {
   void SetTransportSettingsLocked(const urnet::TransportSettings& settings);
   std::optional<urnet::TransportSettings> GetProviderTransportSettingsLocked();
   void SetProviderTransportSettingsLocked(const urnet::TransportSettings& settings);
+
+  // ---- main-loop reads (MainRead.hpp) ----
+  // A read made on the main loop answers without waiting on mutex_ while a
+  // command may hold it across its rpc (main_read::SourceFor), with the last
+  // value it gave under `key`; off the main loop it reads under mutex_ as
+  // before. Every public getter that takes mutex_ goes through it.
+  template <typename T>
+  T ReadOnMain(const char* key, const std::function<T()>& readLocked);
+  // Keeps `value` as the main loop's answer for `key` until the next read
+  // under mutex_: an edit written or queued from the main loop, so a read
+  // before it applies says what it writes. Main loop.
+  template <typename T>
+  void KeepOnMain(const char* key, T value);
+  // The thread running the GTK main loop (the default context's owner).
+  static bool OnMainLoop();
+  // The values the main loop's reads last gave, by key. Main loop only.
+  std::unordered_map<std::string, std::any> mainReads_;
+  // The stored client jwt is non-empty: what IsLoggedIn reads besides
+  // signedOut_, without mutex_ (set where the jwt is stored or switched).
+  std::atomic<bool> hasClientJwt_{false};
 
   // A command for the queue: `work` on the worker, then the reading it takes
   // there (see SetCommandsSettledHandler), then `apply` on the main loop.
