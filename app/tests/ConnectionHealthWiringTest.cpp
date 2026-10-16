@@ -145,7 +145,7 @@ UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
        "health::TrayReading(view, signals, reading.statusObserved);",
        "const bool proven = health::Proven(tray);",
        "const std::string status = T_(tray.textKey, tray.textEnglish);",
-       "on_tray_state(connected_, proven, status);"}));
+       "on_tray_state(connected_, proven, status, signedIn_);"}));
   // observed means the presentation is open or the session latched a status
   const std::string host = ReadHealthWiringSource("SdkHost.cpp");
   const std::string facts = HealthWiringBody(host, "ConnectReading SdkHost::ReadConnectFacts() {");
@@ -156,7 +156,7 @@ UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
   UR_EXPECT_TRUE(HealthWiringHas(ReadHealthWiringSource("SdkHost.hpp"),
                                  "statusObserved == o.statusObserved"));
   UR_EXPECT_TRUE(HealthWiringHas(ReadHealthWiringSource("main.cpp"),
-                                 "if (tray) tray->SetState(sessionUp, proven, status);"));
+                                 "if (tray) tray->SetState(sessionUp, proven, status, hasStatus);"));
   const std::string tray = ReadHealthWiringSource("Tray.cpp");
   UR_EXPECT_TRUE(HealthWiringHas(tray, "self->provenForIcon() ? \"urnetwork-tray-connected\""));
   UR_EXPECT_TRUE(HealthWiringHas(tray, "ConnectLabel(self->sessionUp())"));
@@ -164,7 +164,7 @@ UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
   UR_EXPECT_TRUE(HealthWiringHas(tray, "self->statusForToolTip().c_str()"));
   UR_EXPECT_TRUE(HealthWiringInOrder(
       HealthWiringBody(tray, "void Tray::SetState(bool sessionUp, bool proven, "
-                             "const std::string& status) {"),
+                             "const std::string& status, bool hasStatus) {"),
       {"\"NewIcon\"", "\"NewToolTip\"", "EmitMenuLayoutUpdated();"}));
   UR_EXPECT_TRUE(HealthWiringHas(HealthWiringBody(tray, "void Tray::EmitMenuLayoutUpdated() {"),
                                  "\"LayoutUpdated\""));

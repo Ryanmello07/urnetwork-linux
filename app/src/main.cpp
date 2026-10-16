@@ -231,8 +231,9 @@ int main(int argc, char** argv) {
       app->release();
       app->quit();
     };
-    window->on_tray_state = [&](bool sessionUp, bool proven, const std::string& status) {
-      if (tray) tray->SetState(sessionUp, proven, status);
+    window->on_tray_state = [&](bool sessionUp, bool proven, const std::string& status,
+                                bool hasStatus) {
+      if (tray) tray->SetState(sessionUp, proven, status, hasStatus);
     };
     // The recovery items, for when the window holds no session
     // (failsafe_notice::TrayRecovery).

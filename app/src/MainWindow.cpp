@@ -2382,6 +2382,11 @@ void MainWindow::OnAuthLogout(const auth_logout::Report& report) {
 }
 
 void MainWindow::ApplyAuthState(bool loggedIn) {
+  // the tray offers its Connect/Disconnect only with a status to act on
+  if (signedIn_ != loggedIn) {
+    signedIn_ = loggedIn;
+    readingApplied_ = false;
+  }
   // Home's first entrance (windows homeRevealed_): the first time Home shows
   // in this window, a sign-in made in it crossfades the login flow into Home,
   // as the shell crossfades its destinations. Every other swap is instant: a
@@ -2470,6 +2475,9 @@ void MainWindow::ToggleConnect() {
   // two disagree for the whole connecting window: the menu said "Connect"
   // while pressing it disconnected. The page still gets its richer behaviour;
   // it passes its own intent explicitly through ToggleConnect(bool).
+  // Signed out there is no status, and the tray offers no item; a click on a
+  // menu fetched before it was withdrawn does nothing.
+  if (!signedIn_) return;
   ToggleConnect(connected_);
 }
 
@@ -2594,11 +2602,13 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
   const bool proven = health::Proven(tray);
   const std::string status = T_(tray.textKey, tray.textEnglish);
   if (on_tray_state && (connected_ != wasConnected || proven != trayProven_ ||
-                        status != trayStatus_ || !trayStatePushed_)) {
+                        status != trayStatus_ || signedIn_ != trayHasStatus_ ||
+                        !trayStatePushed_)) {
     trayStatePushed_ = true;
     trayProven_ = proven;
     trayStatus_ = status;
-    on_tray_state(connected_, proven, status);
+    trayHasStatus_ = signedIn_;
+    on_tray_state(connected_, proven, status, signedIn_);
   }
 }
 

@@ -85,7 +85,10 @@ class MainWindow : public Gtk::ApplicationWindow {
   Gtk::Window* PreviewSheet() const { return onboarding_ ? onboarding_.get() : nullptr; }
   // The tray: the session (its Connect/Disconnect item), whether a provider
   // is proven (its icon) and the state's words (its tooltip), on change.
-  std::function<void(bool sessionUp, bool proven, const std::string& status)> on_tray_state;
+  // `hasStatus`: signed in, so there is a connection status to act on; the
+  // tray offers no Connect/Disconnect without one (tray_policy::ConnectItemFor).
+  std::function<void(bool sessionUp, bool proven, const std::string& status, bool hasStatus)>
+      on_tray_state;
   // The tray's recovery items (failsafe_notice::TrayRecoveryFor), pushed from
   // the health poll when they change.
   std::function<void(failsafe_notice::TrayRecovery)> on_tray_recovery_change;
@@ -371,6 +374,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // Drawer events that arrived while commands were outstanding: their reads
   // would wait on the device's state lock, so they run once the queue settles.
   bool drawerEventsOwed_ = false;
+  // Signed in (ApplyAuthState): the tray's connection has a status.
+  bool signedIn_ = false;
+  bool trayHasStatus_ = false;  // what the tray was last told
   // Has a reading ever been applied / pushed to the tray? Without these the
   // FIRST reading — which for an idle app equals the default-constructed one —
   // would be skipped as "unchanged" and no surface would ever be seeded.
