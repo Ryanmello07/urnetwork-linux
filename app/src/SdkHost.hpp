@@ -9,8 +9,13 @@
 // Device interface exactly as before. This process never needs root and
 // degrades cleanly with no daemon present (TunnelStartResult below).
 //
-// Callbacks fire on SDK background threads; the UI marshals them onto the GTK
-// main loop.
+// Callbacks fire on SDK background threads, or inline on the thread that made
+// the write a device listener reports: a DeviceRemote tells its listeners a
+// connect or setting write from the setter itself (sdk
+// device_remote_connect_state.go, device_remote_setting_state.go), which here
+// is usually the GTK thread holding mutex_. So a listener callback never takes
+// mutex_, and the UI marshals the callbacks onto the GTK main loop
+// (PostToMain).
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -95,9 +100,11 @@ struct LoginRouting {
 };
 
 // Change notifications for the connect drawer (charts, block actions, dns,
-// blocker, contracts, connection controls). Fired on SDK listener threads —
-// and from StartTunnel/Logout for DeviceLifecycle — so the UI must marshal
-// onto the GTK loop and re-read through the SdkHost accessors.
+// blocker, contracts, connection controls). Fired on SDK listener threads, on
+// the GTK thread holding mutex_ for a write it made (the blocker, the kill
+// switch's routeLocal, a connect's location), and from StartTunnel/Logout for
+// DeviceLifecycle, so the UI must marshal onto the GTK loop and re-read
+// through the SdkHost accessors.
 enum class DrawerEvent {
   DeviceLifecycle,  // device (remote) created or destroyed
   Throughput,       // new throughput points (charts)
@@ -1441,7 +1448,10 @@ class SdkHost {
   void PublishStats();    // ReadStats() -> onStats_
   // Re-reads EVERY field from the live SDK getters. Takes no lock (same
   // contract as ReadStats): it is called from SDK listener threads, from the
-  // GTK loop, and from inside StartTunnelLocked with mutex_ already held.
+  // GTK loop, and with mutex_ already held, both by the locked paths that
+  // change the session (StartTunnelLocked, Connect, Disconnect, the teardowns)
+  // and by the listeners a connect write tells inline on the GTK thread (the
+  // connect view controller's status and grid, a DeviceRemote's location).
   // The reading's facts, then the degrade hold folded over them.
   ConnectReading ReadConnectReading();
   ConnectReading ReadConnectFacts();

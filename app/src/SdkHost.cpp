@@ -2956,8 +2956,14 @@ std::string SdkHost::RpcHostPort() {
 
 // ---- live stats (macOS parity: listener-push, not polling) ----------------
 // SubscribeStats runs under StartTunnel's lock; the callbacks (like the existing
-// connection-status listener) read the SDK getters without the lock — the getters
-// are thread-safe and Logout clears subs_ before resetting the objects.
+// connection-status listener) read the SDK getters without taking the lock — the
+// getters are thread-safe and Logout clears subs_ before resetting the objects.
+// They run on SDK threads, or inline on the GTK thread inside Connect,
+// ConnectBestAvailable and Disconnect, which hold the lock: the connect view
+// controller tells its status from the call, and a DeviceRemote tells a connect
+// write's listeners from the write (sdk device_remote_connect_state.go). Such a
+// publish runs its device rpcs on the GTK thread, as the page's own poll of
+// CurrentConnectReading already does.
 
 void SdkHost::SubscribeStats() {
   if (!device_ || connectVc_) return;
@@ -3211,9 +3217,14 @@ LiveStats SdkHost::CurrentStats() { return ReadStats(); }
 
 // ---- connect drawer feed ---------------------------------------------------
 // Same threading contract as the stats feed: SubscribeDrawer runs under
-// StartTunnel's lock; the listener callbacks fire on SDK threads and only emit
-// an event tag — the UI marshals onto the GTK loop and re-reads through the
-// locked accessors below.
+// StartTunnel's lock, and the listener callbacks only emit an event tag — the UI
+// marshals onto the GTK loop and re-reads through the locked accessors below.
+// They fire on SDK threads, or inline on the GTK thread while it holds mutex_:
+// a DeviceRemote tells a write's listeners from the setter (sdk
+// device_remote_setting_state.go, device_remote_connect_state.go), so
+// SetBlockerEnabled, the kill switch's ApplyRouteLocalLocked and a Connect's
+// location write emit their tags from inside the lock. A callback here must
+// never take mutex_.
 
 void SdkHost::EmitDrawerEvent(DrawerEvent event) {
   if (onDrawerEvent_) onDrawerEvent_(event);
