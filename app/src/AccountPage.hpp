@@ -341,6 +341,9 @@ class AccountPage : public Gtk::Box {
   AccountFieldState methodsState_ = AccountFieldState::NoSession;
   AccountFieldState codesState_ = AccountFieldState::NoSession;
   std::string userAuth_;          // NEVER survives a sign-out (see ResetForSignOut)
+  // where Update password mails its reset link: userAuth_ when the account
+  // has a password sign-in, else empty (PasswordSignIn.hpp). Same lifetime.
+  std::string passwordResetUserAuth_;
   bool userAuthVerified_ = false;
   bool needsNameClaim_ = false;   // claim (no cooldown) vs change (24h, server-side)
   std::string acknowledgedName_;  // the server-acknowledged name; the box is never truth
