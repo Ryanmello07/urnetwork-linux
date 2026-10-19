@@ -13,7 +13,7 @@ args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 source = (root / 'src/SdkHost.cpp').read_text()
 methods = []
-for name in ('CaptureAuthEpoch', 'StartLogin', 'LoginWithPassword', 'LoginWithCode',
+for name in ('CaptureAuthEpoch', 'NoteApiError', 'StartLogin', 'LoginWithPassword', 'LoginWithCode',
              'LoginWithSeedphrase', 'VerifyCode', 'CreateNetwork', 'CreateInstantAccount',
              'ConfirmInstantAccount', 'HandleNetworkCreateResult', 'AuthLoginWithSso',
              'AuthLoginWithWallet', 'RegisterNetworkClient', 'FinishNetworkClientRegistration',
@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='urnetwork-auth-session-') as temp:
     exe = Path(temp) / 'regression'
     cpp.write_text(fixture)
     subprocess.run([*shlex.split(os.environ.get('CXX', 'c++')), '-std=c++17', '-pthread',
-                    '-O0', str(cpp), '-o', str(exe)], check=True)
+                    '-O0', '-I', str(root / 'src'), str(cpp), '-o', str(exe)], check=True)
     result = subprocess.run([str(exe)], timeout=20)
     if args.negative_control:
         if result.returncode == 0:

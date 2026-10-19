@@ -15,6 +15,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "ConnectionRegion.hpp"
+
+namespace region = urnw::region;
 
 using Task = std::function<void()>;
 std::deque<Task> mainTasks, workerTasks, storageTasks;
@@ -116,6 +119,7 @@ struct SdkHost {
   Control control_;
   std::shared_ptr<Events> events_=std::make_shared<Events>();
   std::function<void(bool,uint64_t)> onAuth_;
+  std::function<void(const std::string&)> onApiUnreachable_;
   std::vector<urnet::AuthNetworkClientCallback> registrations;
   std::vector<std::string> registrationTokens;
   Wallet wallet_;
@@ -149,6 +153,7 @@ struct SdkHost {
     registrations.push_back(cb); registrationTokens.push_back(api_->jwt);
   }
   uint64_t CaptureAuthEpoch();
+  void NoteApiError(const std::optional<std::string>&);
   static bool OnMainLoop() { return true; }
   bool NetworkServerChangeAllowed();
   void StartLogin(const std::string&,std::function<void(LoginRouting)>);
@@ -193,15 +198,26 @@ void ExpectB(SdkHost& h,const std::string& why) {
 }
 template<class Result> void Respond(const urnet::Callback<Result>& callback,Result success,int outcome) {
   if(outcome==0) callback(success,std::nullopt);
-  if(outcome==1) callback(std::nullopt,std::string("old transport failure"));
+  if(outcome==1) callback(std::nullopt,std::string("dial tcp: connection refused"));
   if(outcome==2) callback(std::nullopt,std::nullopt);
   if(outcome==3) { success.error=urnet::Error{"old API failure",std::nullopt}; callback(success,std::nullopt); }
 }
 
 int main() {
   try {
+    {
+      Fresh(); SdkHost h; int unreachable=0; bool failed=false;
+      h.onApiUnreachable_=[&](const std::string&) { ++unreachable; };
+      h.LoginWithCode("current",[&](AuthResult r) { failed=!r.ok; });
+      h.api_->code.back()(std::nullopt,std::string("dial tcp: connection refused"));
+      Check(failed && unreachable==1,"current transport failure reports the connection-region prompt");
+      h.NoteApiError(std::nullopt);
+      h.NoteApiError(std::string("401 Unauthorized: sign-in refused"));
+      Check(unreachable==1,"successful calls and API refusals do not report an unreachable service");
+    }
     for (int kind=0;kind<6;++kind) for (int outcome=0;outcome<4;++outcome) {
-      Fresh(); SdkHost h; bool cancelled=false;
+      Fresh(); SdkHost h; bool cancelled=false; int unreachable=0;
+      h.onApiUnreachable_=[&](const std::string&) { ++unreachable; };
       auto done=[&](AuthResult r) { cancelled=!r.ok && r.error=="superseded by signing out"; };
       if(kind==0) h.LoginWithPassword("user","password",done);
       if(kind==1) h.LoginWithCode("code",done);
@@ -216,6 +232,7 @@ int main() {
       if(kind==3) Respond(h.api_->verify.front(),urnet::AuthVerifyResult{std::nullopt,urnet::Network{"A"}},outcome);
       if(kind==5) Respond(h.api_->create.front(),urnet::NetworkCreateResult{std::nullopt,urnet::OptionalNetwork{std::string("A")},std::nullopt,std::nullopt},outcome);
       Drain(); ExpectB(h,"late auth API response"); Check(cancelled,"retired auth attempt answers cancellation");
+      Check(unreachable==0,"retired auth failure cannot prompt a later account to change connection region");
     }
     {
       Fresh(); SdkHost h; bool cancelled=false;
