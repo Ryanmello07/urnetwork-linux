@@ -7,12 +7,14 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include <gtkmm.h>
 
+#include "ConnectionRegionSheet.hpp"
 #include "SdkHost.hpp"
 
 namespace urnw {
@@ -64,6 +66,12 @@ class DnsSheet : public Gtk::Window {
 
   static void Normalize(urnet::DnsResolverSettings& settings);
   std::string CountryDotMarkup(const std::string& countryCode) const;
+
+  // The connection region row (ingress dns), apart from the draft.
+  void RefreshConnectionRegion();
+  void OpenConnectionRegion();
+  Gtk::Button* connectionRegionBtn_ = nullptr;
+  std::unique_ptr<ConnectionRegionSheet> connectionRegionSheet_;
 
   SdkHost& host_;
   urnet::DnsResolverSettings draft_;

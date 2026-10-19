@@ -1207,6 +1207,11 @@ msgctxt "cancel"
 msgid "Cancel"
 msgstr "取消"
 
+#. Shown when the app cannot reach the URnetwork platform; tapping it opens the Connection region picker.
+msgctxt "cant_reach_urnetwork_choose_region"
+msgid "Can't reach URnetwork — choose where you're connecting from"
+msgstr "无法连接 URnetwork — 请选择你的连接位置"
+
 #. Error when the subnet RPC cannot be reached.
 msgctxt "chain_rpc_unreachable"
 msgid "The chain RPC is unreachable. Try again."
@@ -1703,6 +1708,11 @@ msgid "Connected to {} provider"
 msgid_plural "Connected to {} providers"
 msgstr[0] "已连接到 {} 个提供商"
 
+#. Login screen: the label of the small optional control showing the chosen connection region, followed by the region name (or Other / Undisclosed).
+msgctxt "connecting_from"
+msgid "Connecting from"
+msgstr "连接位置"
+
 #. Call to action
 msgctxt "connecting_status_indicator"
 msgid "Connecting to providers"
@@ -1717,6 +1727,36 @@ msgstr "正在连接钱包..."
 msgctxt "connection_mode"
 msgid "Connection Mode"
 msgstr "连接模式"
+
+#. Login screen and DNS settings: the picker of the region the user connects from, which only changes how the app reaches the URnetwork platform (ingress DNS).
+msgctxt "connection_region"
+msgid "Connection region"
+msgstr "连接地区"
+
+#. Connection region picker: shown when the chosen region uses only the default resolvers (Other / Undisclosed).
+msgctxt "connection_region_default_resolvers"
+msgid "Default resolvers"
+msgstr "默认解析器"
+
+#. DNS settings: one line under the Connection region picker explaining its scope.
+msgctxt "connection_region_description"
+msgid "Only affects how the app reaches URnetwork, not your traffic."
+msgstr "只影响应用连接 URnetwork 的方式，不影响你的流量。"
+
+#. Connection region picker: heading of the encrypted (DoH) resolvers the chosen region adds ahead of the defaults.
+msgctxt "connection_region_encrypted_resolvers"
+msgid "Encrypted resolvers"
+msgstr "加密解析器"
+
+#. Connection region picker: heading of the plain DNS servers used only as a last resort, only for URnetwork's own names, when every encrypted resolver fails.
+msgctxt "connection_region_fallback_resolvers"
+msgid "Unencrypted fallback (URnetwork names only)"
+msgstr "未加密的备用方式（仅限 URnetwork 名称）"
+
+#. Connection region picker: the default choice, any region without a recommendation or not saying, which uses the default resolvers.
+msgctxt "connection_region_undisclosed"
+msgid "Other / Undisclosed"
+msgstr "其他 / 不透露"
 
 #. Settings
 msgctxt "connections"
@@ -10481,6 +10521,11 @@ msgctxt "total_referrals_lld"
 msgid "Total Referrals: {}"
 msgstr "推荐总数：{}"
 
+#. DNS settings: heading of the existing egress DNS controls (the DNS used for the user's traffic through the tunnel), to tell them apart from the Connection region.
+msgctxt "traffic_dns"
+msgid "Traffic DNS"
+msgstr "流量 DNS"
+
 #. Call to action
 msgctxt "transaction"
 msgid "Transaction"
@@ -11406,6 +11451,11 @@ msgstr "取消关联推荐网络后，您将无法再从{}获得积分。"
 msgctxt "when_you_refer_a_friend"
 msgid "When you refer a friend:"
 msgstr "当你推荐朋友时："
+
+#. Title of the Connection region picker opened from the login screen or the can't-reach prompt.
+msgctxt "where_are_you_connecting_from"
+msgid "Where are you connecting from?"
+msgstr "你从哪里连接？"
 
 #. Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".
 msgctxt "widget_chart_peak"

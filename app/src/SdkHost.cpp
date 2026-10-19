@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "SdkHost.hpp"
 #include "MainRead.hpp"
+#include "ConnectionRegion.hpp"
 
 #include <urnetwork_sdk.h>
 
@@ -621,6 +622,7 @@ void SdkHost::StartLogin(const std::string& userAuth, std::function<void(LoginRo
     LoginRouting routing;  // route defaults to Error
     routing.userAuth = userAuth;
     if (!AuthEpochCurrent(authEpoch)) { routing.error = "superseded by signing out"; done(routing); return; }
+    NoteApiError(err);
     if (err) { routing.error = *err; done(routing); return; }
     if (!result) { routing.error = "no result"; done(routing); return; }
     if (result->user_auth && !result->user_auth->empty()) {
@@ -674,6 +676,7 @@ void SdkHost::LoginWithPassword(const std::string& userAuth, const std::string& 
   api_->authLoginWithPassword(args, [this, done, authEpoch](std::optional<urnet::AuthLoginWithPasswordResult> result,
                                                  std::optional<std::string> err) {
     if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
+    NoteApiError(err);
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
@@ -696,6 +699,7 @@ void SdkHost::LoginWithCode(const std::string& authCode, std::function<void(Auth
   api_->authCodeLogin(args, [this, done, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
     if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
+    NoteApiError(err);
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
@@ -737,6 +741,7 @@ void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
   api_->authLogin(args, [this, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                      std::optional<std::string> err) {
     if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
+    NoteApiError(err);
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) {
@@ -765,6 +770,7 @@ void SdkHost::CreateInstantAccount(const std::string& referralCode,
                                          std::optional<std::string> err) {
     InstantAccount out;
     if (!AuthEpochCurrent(authEpoch)) { out.error = "superseded by signing out"; if (done) done(out); return; }
+    NoteApiError(err);
     if (err || !result) {
       out.error = err ? *err : "no result";
       if (done) done(out);
@@ -1121,6 +1127,69 @@ std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& coun
   }
 }
 
+// ---- connection region (ingress country) ------------------------------------
+
+std::string SdkHost::GetIngressCountryCode() {
+  return ReadOnMain<std::string>("GetIngressCountryCode", [&]() -> std::string {
+    if (!networkSpace_) return std::string();
+    try {
+      return networkSpace_->getIngressCountryCode();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "[sdk] getIngressCountryCode failed: %s\n", e.what());
+      return std::string();
+    }
+  });
+}
+
+std::string SdkHost::SetIngressCountryCode(const std::string& countryCode) {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::string();
+  try {
+    // The space's own setter: it normalizes (a code without a recommendation
+    // is undisclosed) and applies in place (sdk updateInPlaceValues), so api_
+    // and everything else derived from networkSpace_ stay valid and take the
+    // region at their next lookup. The egress dns is not touched.
+    std::string stored = networkSpace_->setIngressCountryCode(countryCode);
+    // a main-loop read before the queue settles says what was saved
+    if (OnMainLoop()) KeepOnMain<std::string>("GetIngressCountryCode", stored);
+    return stored;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] setIngressCountryCode failed: %s\n", e.what());
+    return std::string();
+  }
+}
+
+namespace {
+std::vector<std::string> StringsOrEmpty(const char* name,
+                                        const std::function<std::optional<urnet::StringList>()>& read) {
+  try {
+    return read().value_or(urnet::StringList());
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "[sdk] %s failed: %s\n", name, e.what());
+    return {};
+  }
+}
+}  // namespace
+
+std::vector<std::string> SdkHost::IngressCountryCodes() {
+  return StringsOrEmpty("ingressCountryCodes", [] { return urnet::ingressCountryCodes(); });
+}
+
+std::vector<std::string> SdkHost::IngressDohUrls(const std::string& countryCode) {
+  return StringsOrEmpty("ingressDohUrls", [&] { return urnet::ingressDohUrls(countryCode); });
+}
+
+std::vector<std::string> SdkHost::IngressPlainDnsServers(const std::string& countryCode) {
+  return StringsOrEmpty("ingressPlainDnsServers",
+                        [&] { return urnet::ingressPlainDnsServers(countryCode); });
+}
+
+void SdkHost::NoteApiError(const std::optional<std::string>& err) {
+  if (!err || !region::IsCantReachError(*err)) return;
+  g_message("sdkhost: a call to URnetwork got no answer: %s", err->c_str());
+  if (onApiUnreachable_) onApiUnreachable_(*err);
+}
+
 // ---- sign-up / verify / password reset (Phase 3) ----------------------------
 
 // NetworkCreateResult routing shared by the password and wallet sign-ups:
@@ -1131,6 +1200,7 @@ void SdkHost::HandleNetworkCreateResult(std::optional<urnet::NetworkCreateResult
                                         uint64_t authEpoch,
                                         const std::string& bittensorWalletId) {
   if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
+  NoteApiError(err);
   if (err) { done({false, false, *err}); return; }
   if (!result) { done({false, false, "no result"}); return; }
   if (result->error && !result->error->message.empty()) {
@@ -1279,6 +1349,7 @@ void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
   api_->authVerify(args, [this, done, authEpoch](std::optional<urnet::AuthVerifyResult> result,
                                       std::optional<std::string> err) {
     if (!AuthEpochCurrent(authEpoch)) { done({false, false, "superseded by signing out"}); return; }
+    NoteApiError(err);
     if (err) { done({false, false, *err}); return; }
     if (!result) { done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) { done({false, false, result->error->message}); return; }
@@ -1298,8 +1369,9 @@ void SdkHost::ResendVerifyCode(const std::string& userAuth,
   // a rate limit or failed send comes back as result->error (with the retry
   // time) instead of an HTTP 429 / 502
   args.result_errors = true;
-  api_->authVerifySend(args, [done](std::optional<urnet::AuthVerifySendResult> result,
+  api_->authVerifySend(args, [this, done](std::optional<urnet::AuthVerifySendResult> result,
                                     std::optional<std::string> err) {
+    NoteApiError(err);
     if (err || !result) {
       done(DecideVerifySendNotice(true, "", "", 0));
       return;
@@ -1315,8 +1387,9 @@ void SdkHost::SendPasswordResetLink(const std::string& userAuth,
   // a rate limit or failed send comes back as result->error (with the retry
   // time) instead of an HTTP 429 / 502; it used to be read as sent
   args.result_errors = true;
-  api_->authPasswordReset(args, [done](std::optional<urnet::AuthPasswordResetResult> result,
+  api_->authPasswordReset(args, [this, done](std::optional<urnet::AuthPasswordResetResult> result,
                                        std::optional<std::string> err) {
+    NoteApiError(err);
     if (err || !result) {
       done(DecideVerifySendNotice(true, "", "", 0));
       return;
@@ -1802,6 +1875,7 @@ void SdkHost::StartBittensorSession(
                                        std::optional<urnet::AuthWalletChallengeResult> result,
                                        std::optional<std::string> err) mutable {
     std::string error;
+    NoteApiError(err);
     if (err) {
       error = *err;
     } else if (!result) {
@@ -2084,6 +2158,7 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& j
       r.sso = true;
       if (done) done(r);
     };
+    NoteApiError(err);
     if (err) { fail(*err); return; }
     if (!result) { fail("no result"); return; }
     if (result->error && !result->error->message.empty()) { fail(result->error->message); return; }
@@ -2390,6 +2465,7 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
       done = std::move(walletAuthDone_);
       walletAuthDone_ = nullptr;
     }
+    NoteApiError(err);
     if (err) { if (done) done({false, false, *err}); return; }
     if (!result) { if (done) done({false, false, "no result"}); return; }
     if (result->error && !result->error->message.empty()) {
@@ -2464,6 +2540,7 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt, std::function<void
               done({false, false, "superseded by signing out"});
               return;
             }
+            NoteApiError(err);
             if (err) { done({false, false, *err}); return; }
             if (!result) { done({false, false, "no result"}); return; }
             if (result->error && !result->error->message.empty()) {

@@ -1216,6 +1216,11 @@ msgctxt "cancel"
 msgid "Cancel"
 msgstr "ביטול"
 
+#. Shown when the app cannot reach the URnetwork platform; tapping it opens the Connection region picker.
+msgctxt "cant_reach_urnetwork_choose_region"
+msgid "Can't reach URnetwork — choose where you're connecting from"
+msgstr "אין גישה ל-URnetwork — בחר מאיפה אתה מתחבר"
+
 #. Error when the subnet RPC cannot be reached.
 msgctxt "chain_rpc_unreachable"
 msgid "The chain RPC is unreachable. Try again."
@@ -1715,6 +1720,11 @@ msgstr[1] "מחובר ל-{} ספקים"
 msgstr[2] "מחובר ל-{} ספקים"
 msgstr[3] "מחובר ל-{} ספקים"
 
+#. Login screen: the label of the small optional control showing the chosen connection region, followed by the region name (or Other / Undisclosed).
+msgctxt "connecting_from"
+msgid "Connecting from"
+msgstr "מתחבר מ"
+
 #. Call to action
 msgctxt "connecting_status_indicator"
 msgid "Connecting to providers"
@@ -1729,6 +1739,36 @@ msgstr "מתחבר לארנק..."
 msgctxt "connection_mode"
 msgid "Connection Mode"
 msgstr "מצב חיבור"
+
+#. Login screen and DNS settings: the picker of the region the user connects from, which only changes how the app reaches the URnetwork platform (ingress DNS).
+msgctxt "connection_region"
+msgid "Connection region"
+msgstr "אזור החיבור"
+
+#. Connection region picker: shown when the chosen region uses only the default resolvers (Other / Undisclosed).
+msgctxt "connection_region_default_resolvers"
+msgid "Default resolvers"
+msgstr "שרתי DNS ברירת מחדל"
+
+#. DNS settings: one line under the Connection region picker explaining its scope.
+msgctxt "connection_region_description"
+msgid "Only affects how the app reaches URnetwork, not your traffic."
+msgstr "משפיע רק על האופן שבו האפליקציה מגיעה ל-URnetwork, לא על התעבורה שלך."
+
+#. Connection region picker: heading of the encrypted (DoH) resolvers the chosen region adds ahead of the defaults.
+msgctxt "connection_region_encrypted_resolvers"
+msgid "Encrypted resolvers"
+msgstr "שרתי DNS מוצפנים"
+
+#. Connection region picker: heading of the plain DNS servers used only as a last resort, only for URnetwork's own names, when every encrypted resolver fails.
+msgctxt "connection_region_fallback_resolvers"
+msgid "Unencrypted fallback (URnetwork names only)"
+msgstr "גיבוי לא מוצפן (שמות URnetwork בלבד)"
+
+#. Connection region picker: the default choice, any region without a recommendation or not saying, which uses the default resolvers.
+msgctxt "connection_region_undisclosed"
+msgid "Other / Undisclosed"
+msgstr "אחר / לא צוין"
 
 #. Settings
 msgctxt "connections"
@@ -9291,6 +9331,11 @@ msgctxt "total_referrals_lld"
 msgid "Total Referrals: {}"
 msgstr "סך ההפניות: {}"
 
+#. DNS settings: heading of the existing egress DNS controls (the DNS used for the user's traffic through the tunnel), to tell them apart from the Connection region.
+msgctxt "traffic_dns"
+msgid "Traffic DNS"
+msgstr "DNS לתעבורה"
+
 #. Call to action
 msgctxt "transaction"
 msgid "Transaction"
@@ -10219,6 +10264,11 @@ msgstr "בעת ניתוק רשת ההפניות שלך, לא תוכל עוד ל�
 msgctxt "when_you_refer_a_friend"
 msgid "When you refer a friend:"
 msgstr "כשאתה ממליץ על חבר:"
+
+#. Title of the Connection region picker opened from the login screen or the can't-reach prompt.
+msgctxt "where_are_you_connecting_from"
+msgid "Where are you connecting from?"
+msgstr "מאיפה אתה מתחבר?"
 
 #. Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".
 msgctxt "widget_chart_peak"

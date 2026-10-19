@@ -18,6 +18,7 @@ src/IpFamilyStatusRow.cpp
 src/ExtenderPanel.cpp
 src/ExtenderSection.cpp
 src/ControlDohSection.cpp
+src/ConnectionRegionSheet.cpp
 src/ExtenderShareSheet.cpp
 src/ExtenderImportSheet.cpp
 src/ConnectPage.cpp

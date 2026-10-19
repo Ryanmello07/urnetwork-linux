@@ -90,9 +90,22 @@ DnsSheet::DnsSheet(Gtk::Window& parent, SdkHost& host) : host_(host) {
 bool DnsSheet::Open() {
   auto settings = host_.GetDnsResolverSettings();
   if (!settings) return false;  // the card shows "DNS settings unavailable"
+  RefreshConnectionRegion();
   Seed(*settings);
   present();
   return true;
+}
+
+void DnsSheet::RefreshConnectionRegion() {
+  connectionRegionBtn_->set_label(ConnectionRegionName(host_) + " ▾");
+}
+
+void DnsSheet::OpenConnectionRegion() {
+  if (!connectionRegionSheet_) {
+    connectionRegionSheet_ = std::make_unique<ConnectionRegionSheet>(*this, host_);
+    connectionRegionSheet_->on_changed = [this](const std::string&) { RefreshConnectionRegion(); };
+  }
+  connectionRegionSheet_->Open();
 }
 
 void DnsSheet::Seed(urnet::DnsResolverSettings settings) {
@@ -131,6 +144,30 @@ void DnsSheet::BuildUi() {
   auto* form = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 16);
   form->set_margin(16);
   scroller->set_child(*form);
+
+  // Connection region (ConnectionRegion.hpp): how the app reaches URnetwork,
+  // the ingress dns. Its own stored value, saved at once from the picker and
+  // never by Update; the controls under "Traffic DNS" are the tunnel's.
+  form->append(*MakeCaption(T_("connection_region", "Connection region")));
+  auto* regionCard = MakeCard(10);
+  connectionRegionBtn_ = Gtk::make_managed<Gtk::Button>();
+  connectionRegionBtn_->set_halign(Gtk::Align::FILL);
+  connectionRegionBtn_->signal_clicked().connect([this] { OpenConnectionRegion(); });
+  regionCard->append(*connectionRegionBtn_);
+  auto* regionFooter = Gtk::make_managed<Gtk::Label>(T_(
+      "connection_region_description", "Only affects how the app reaches URnetwork, not your traffic."));
+  regionFooter->add_css_class("dim-label");
+  regionFooter->add_css_class("caption");
+  regionFooter->set_wrap(true);
+  regionFooter->set_xalign(0);
+  regionCard->append(*regionFooter);
+  form->append(*regionCard);
+
+  auto* trafficHeading = Gtk::make_managed<Gtk::Label>(T_("traffic_dns", "Traffic DNS"));
+  trafficHeading->add_css_class("heading");
+  trafficHeading->set_xalign(0);
+  trafficHeading->set_margin_top(8);
+  form->append(*trafficHeading);
 
   // recommendation / most-secure-default panel (content rebuilt per state)
   panelBox_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 12);
