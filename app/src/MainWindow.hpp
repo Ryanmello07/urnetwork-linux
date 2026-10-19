@@ -33,6 +33,8 @@
 #include "LocationsSheet.hpp"
 #include "LoginCarousel.hpp"
 #include "NetworkServerSheet.hpp"
+#include "ConnectionRegion.hpp"
+#include "ConnectionRegionSheet.hpp"
 #include "Onboarding.hpp"
 #include "ProviderLocationsSheet.hpp"
 #include "RedeemCodeSheet.hpp"
@@ -192,6 +194,15 @@ class MainWindow : public Gtk::ApplicationWindow {
   static void OnToplevelActiveChanged(GObject* window, GParamSpec* pspec, gpointer self);
   // one label, two voices: a coral inline error vs a muted progress notice
   void SetLoginError(const Glib::ustring& text);
+  // ---- connection region (ConnectionRegion.hpp) ----------------------------
+  // The picker, from the login control, the can't-reach prompt or its toast.
+  void OpenConnectionRegion();
+  // The login control's "Connecting from: <region>" from the stored value.
+  void RefreshConnectionRegionControl();
+  // SdkHost's ApiUnreachableHandler, on the main loop: the login screen shows
+  // the prompt under its error, a signed-in window a toast. Never changes the
+  // region.
+  void OnApiUnreachable(const std::string& error);
   void SetLoginNotice(const Glib::ustring& text);
   // the signed-out Hero Bloom (motion-overhaul §2.1): hero spring + ripple
   void RunSignedOutReveal();
@@ -305,6 +316,11 @@ class MainWindow : public Gtk::ApplicationWindow {
   std::unique_ptr<SeedphraseSheet> seedphraseSheet_;
   std::unique_ptr<BittensorManualSheet> bittensorManualSheet_;
   std::unique_ptr<NetworkServerSheet> networkServerSheet_;
+  std::unique_ptr<ConnectionRegionSheet> connectionRegionSheet_;
+  Gtk::Button* connectionRegionBtn_ = nullptr;   // "Connecting from: <region>"
+  Gtk::Button* cantReachBtn_ = nullptr;          // the can't-reach prompt
+  region::CantReachPrompt cantReach_;
+  ToastSlot cantReachToast_;
   // The user auth the discovery routed to the password step (normalized echo);
   // the password sign-in, forgot-password, and reset flows all key off it.
   std::string loginUserAuth_;

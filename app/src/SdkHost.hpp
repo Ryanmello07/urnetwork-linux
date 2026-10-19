@@ -537,6 +537,28 @@ class SdkHost {
   // v4 first; empty when there is none or the call threw. No host state.
   static std::vector<std::string> RegionalControlDohUrls(const std::string& countryCode);
 
+  // ---- connection region (sdk control_doh_ui.go, ConnectionRegion.hpp) -------
+  // The space's ingress country: how this app resolves URnetwork's own names,
+  // never the tunnel's (egress) dns. Login screen and Custom DNS both edit it
+  // here; a save applies in place from the next lookup (the Api the sign-in
+  // calls go through is the space's own, so they use it at once), and it stays
+  // on this device. "" is Other / Undisclosed, and is also the answer with no
+  // space or when the call threw.
+  std::string GetIngressCountryCode();
+  // Answers the stored value: a code without a recommendation stores "".
+  std::string SetIngressCountryCode(const std::string& countryCode);
+  // The regions with a recommendation, lower case, in the SDK's order; the
+  // resolvers a region uses (encrypted DoH ahead of the defaults, and the plain
+  // last resort for URnetwork's names). Empty when none or the call threw.
+  static std::vector<std::string> IngressCountryCodes();
+  static std::vector<std::string> IngressDohUrls(const std::string& countryCode);
+  static std::vector<std::string> IngressPlainDnsServers(const std::string& countryCode);
+  // A call to URnetwork failed at the network level (region::IsCantReachError):
+  // the handler runs, off the main loop, with the error. The window offers the
+  // connection region picker; nothing changes the region by itself.
+  using ApiUnreachableHandler = std::function<void(const std::string& error)>;
+  void SetApiUnreachableHandler(ApiUnreachableHandler h) { onApiUnreachable_ = std::move(h); }
+
   // Sign in with a Solana wallet (Phantom/Solflare) via the ur.io/wallet-connect
   // browser bridge: connect -> sign a challenge -> authLogin{wallet_auth}. The
   // urnetwork:// callback must be routed back in via HandleDeepLink.
@@ -2031,6 +2053,10 @@ class SdkHost {
   void RunRowConnect(const std::optional<urnet::ConnectLocation>& location);
   AuthInvalidHandler onAuthInvalid_;
   JwtRefreshedHandler onJwtRefreshed_;
+  ApiUnreachableHandler onApiUnreachable_;
+  // Hands a failed call's transport error to onApiUnreachable_ when it is a
+  // network-level failure (region::IsCantReachError).
+  void NoteApiError(const std::optional<std::string>& err);
   ConnectReadingHandler onReading_;
   // The last KNOWN connect-controller status of the CURRENT session, held as
   // the enum's integer value. A controller reopened on window re-show reports

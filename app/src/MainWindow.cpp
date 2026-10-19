@@ -348,6 +348,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   host_.SetAuthInvalidHandler([this](auth_logout::Report report) {
     PostToMain([this, report] { OnAuthLogout(report); });
   });
+  host_.SetApiUnreachableHandler([this](const std::string& error) {
+    PostToMain([this, error] { OnApiUnreachable(error); });
+  });
   host_.SetJwtRefreshedHandler([this] {
     PostToMain([this] { balance_.OnJwtRefreshed(); });
   });
@@ -900,6 +903,29 @@ void MainWindow::BuildLogin() {
   loginError_.set_xalign(0);
   loginPanel_->append(loginError_);
 
+  // The can't-reach prompt (ConnectionRegion.hpp): shown under the error when
+  // a call got no answer from URnetwork; it opens the picker and never
+  // switches the region itself.
+  cantReachBtn_ = Gtk::make_managed<Gtk::Button>(
+      T_("cant_reach_urnetwork_choose_region",
+         "Can't reach URnetwork — choose where you're connecting from"));
+  cantReachBtn_->add_css_class("ur-quiet-link");
+  cantReachBtn_->set_halign(Gtk::Align::START);
+  if (auto* label = dynamic_cast<Gtk::Label*>(cantReachBtn_->get_child())) label->set_wrap(true);
+  cantReachBtn_->set_visible(false);
+  cantReachBtn_->signal_clicked().connect([this] { OpenConnectionRegion(); });
+  loginPanel_->append(*cantReachBtn_);
+
+  // "Connecting from: <region>" -- small and optional, never a step: the
+  // connection region only picks how the app resolves URnetwork's own names.
+  connectionRegionBtn_ = Gtk::make_managed<Gtk::Button>();
+  connectionRegionBtn_->add_css_class("ur-quiet-link");
+  connectionRegionBtn_->set_halign(Gtk::Align::START);
+  connectionRegionBtn_->set_margin_top(8);
+  connectionRegionBtn_->signal_clicked().connect([this] { OpenConnectionRegion(); });
+  loginPanel_->append(*connectionRegionBtn_);
+  RefreshConnectionRegionControl();
+
   // "Change Network API" — the very last thing on the screen, bottom LEFT,
   // small and muted, reading as plain text rather than another pill: it is a
   // developer/fork affordance, not a sign-in option. A real button (windows:
@@ -919,6 +945,7 @@ void MainWindow::BuildLogin() {
       email_.set_text("");
       loginError_.set_text("");
       loginUserAuth_.clear();
+      RefreshConnectionRegionControl();  // the new space's own region
       stack_.set_visible_child("login");
     };
     networkServerSheet_->present();
@@ -1330,6 +1357,40 @@ void MainWindow::SettleReveal() {
                                  orBin_, walletBin_, secondaryBin_}) {
     if (bin) bin->settle();
   }
+}
+
+// ---- connection region --------------------------------------------------------
+
+void MainWindow::OpenConnectionRegion() {
+  cantReach_.Dismiss();
+  cantReachBtn_->set_visible(false);
+  cantReachToast_.Dismiss();
+  if (!connectionRegionSheet_) {
+    connectionRegionSheet_ = std::make_unique<ConnectionRegionSheet>(*this, host_);
+    connectionRegionSheet_->on_changed = [this](const std::string&) {
+      RefreshConnectionRegionControl();
+    };
+  }
+  connectionRegionSheet_->Open();
+}
+
+void MainWindow::RefreshConnectionRegionControl() {
+  if (!connectionRegionBtn_) return;
+  connectionRegionBtn_->set_label(Format("{}: {} ▾", T_("connecting_from", "Connecting from"),
+                                         ConnectionRegionName(host_)));
+}
+
+void MainWindow::OnApiUnreachable(const std::string& error) {
+  cantReach_.OnFailure(error);
+  if (!cantReach_.visible()) return;
+  const Glib::ustring prompt = T_("cant_reach_urnetwork_choose_region",
+                                  "Can't reach URnetwork — choose where you're connecting from");
+  if (stack_.get_visible_child_name() != "home") {
+    cantReachBtn_->set_visible(true);
+    return;
+  }
+  cantReachToast_.Show(stack_, prompt, T_("connection_region", "Connection region"),
+                       [this] { OpenConnectionRegion(); });
 }
 
 // One label, two voices (windows: the muted "Opening your wallet..." progress
@@ -2406,6 +2467,11 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
                              motion::ShouldAnimate() &&
                              stack_.get_visible_child_name() != "home";
   if (loggedIn) homeRevealed_ = true;
+  // the login control reads the stored region again (Custom DNS or a network
+  // switch may have changed it); a prompt from the login screen ends with it
+  if (loggedIn) cantReach_.Dismiss();
+  if (loggedIn && cantReachBtn_) cantReachBtn_->set_visible(false);
+  if (!loggedIn) RefreshConnectionRegionControl();
   stack_.set_visible_child(loggedIn ? "home" : "login",
                            firstEntrance ? Gtk::StackTransitionType::CROSSFADE
                                          : Gtk::StackTransitionType::NONE);
