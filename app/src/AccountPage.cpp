@@ -21,6 +21,7 @@
 #include "BittensorWalletFlow.hpp"
 #include "WalletBridgeRoute.hpp"
 #include "DeleteAccountOutcome.hpp"
+#include "PasswordSignIn.hpp"
 #include "DisplayText.hpp"
 #include "Formatters.hpp"
 #include "GuestConversionSheet.hpp"
@@ -1720,6 +1721,7 @@ void AccountPage::SettleNoSession() {
   // password reset mails a link to it, so a leftover value would mail the
   // PREVIOUS owner.
   userAuth_.clear();
+  passwordResetUserAuth_.clear();
   userAuthVerified_ = false;
   needsNameClaim_ = false;
   acknowledgedName_.clear();
@@ -2419,7 +2421,7 @@ void AccountPage::ApplyAccountState(AccountFieldState state) {
   nameRow_.root->set_sensitive(loaded);
   nameBox_->set_sensitive(loaded);
   saveNameButton_->set_sensitive(loaded && !savingName_);
-  sendResetButton_->set_sensitive(loaded && !userAuth_.empty() && !sendingReset_ &&
+  sendResetButton_->set_sensitive(loaded && !passwordResetUserAuth_.empty() && !sendingReset_ &&
                                   resetRateLimit_.CanResend(MonotonicSeconds()));
   // if the state leaves Loaded while the editor is open, the editor is forced
   // closed — an editor over a field nobody can save is a trap
@@ -2454,6 +2456,7 @@ void AccountPage::LoadAccount() {
   accountFlow_.Abandon();
   if (!CanCallApi()) {
     userAuth_.clear();
+    passwordResetUserAuth_.clear();
     userAuthVerified_ = false;
     needsNameClaim_ = false;
     ApplyNetworkName({});
@@ -2500,6 +2503,8 @@ void AccountPage::LoadAccount() {
           }
           const urnet::NetworkUser& user = *result->network_user;
           userAuth_ = user.user_auth.value_or(std::string());
+          passwordResetUserAuth_ =
+              urnw::account::PasswordResetUserAuth(user.user_auth, user.auth_type, user.auth_types);
           userAuthVerified_ = user.verified;
           needsNameClaim_ = ComputeNeedsNameClaim(user);
           ApplyNetworkName(user.network_name);
@@ -2627,14 +2632,14 @@ void AccountPage::FinishNameSave(bool ok, const std::string& acceptedName,
 // ---- §3.1.2 password reset ---------------------------------------------------
 
 void AccountPage::SendPasswordReset() {
-  if (sendingReset_ || userAuth_.empty() || !CanCallApi() ||
+  if (sendingReset_ || passwordResetUserAuth_.empty() || !CanCallApi() ||
       !resetRateLimit_.CanResend(MonotonicSeconds())) {
     return;
   }
   sendingReset_ = true;
   sendResetButton_->set_sensitive(false);
 
-  const std::string target = userAuth_;
+  const std::string target = passwordResetUserAuth_;
 
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
@@ -2643,7 +2648,7 @@ void AccountPage::SendPasswordReset() {
   const uint32_t flow = resetFlow_.Begin(kApiTimeoutMs, [this] {
     sendingReset_ = false;
     sendResetButton_->set_sensitive(accountState_ == AccountFieldState::Loaded &&
-                                    !userAuth_.empty());
+                                    !passwordResetUserAuth_.empty());
     ApplySupporting(*statusLine_,
                     T_("error_sending_password_reset_link",
                        "Error sending password reset link"),
@@ -2695,7 +2700,7 @@ void AccountPage::SendPasswordReset() {
 // Send stays off while a reset rate limit lasts.
 void AccountPage::ApplyResetRateLimit() {
   sendResetButton_->set_sensitive(accountState_ == AccountFieldState::Loaded &&
-                                  !userAuth_.empty() && !sendingReset_ &&
+                                  !passwordResetUserAuth_.empty() && !sendingReset_ &&
                                   resetRateLimit_.CanResend(MonotonicSeconds()));
 }
 
