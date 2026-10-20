@@ -369,6 +369,16 @@ class EgressSocketMarker {
   std::string detail_;
 };
 
+// THE SDK'S ROUTE, MEASURED: the source address the kernel binds for a socket
+// this process creates right now, in `family` (AF_INET or AF_INET6), or "" when
+// that family has no route at all. It is the egress witness's treatment socket
+// (VerifyEgressWitness) and sends nothing: connect() on a datagram socket runs
+// the route lookup and binds the address. Born in this process's cgroup, it
+// carries whatever mark the session's sockets carry -- none without a session
+// -- so it takes exactly the route the SDK's next dial would. The reaper's
+// network-path snapshot reads it every tick (TunnelHost ReadNetworkPath).
+std::string ProbeEgressSource(int family);
+
 // ---- constants shared by the routes and the firewall -----------------------
 
 // fwmark carried by the daemon's own sockets. "URNW" as a u32; distinctive
@@ -1119,10 +1129,19 @@ class Tunnel {
   // address without putting a packet on the wire, so the witness needs no
   // permit anywhere in the kill-switch floor and cannot itself leak.
   //
+  // A FAMILY WITH NO ROUTE AT ALL IS NOT A FAILURE (WitnessTreatmentVerdict,
+  // TunnelPolicy.hpp): a marked socket the kernel cannot route anywhere cannot
+  // enter the tunnel either. That is a machine between networks, or on an
+  // IPv6-only one, and the post-connect gate and the re-check pass it, so a
+  // session waits out a network switch instead of being torn down as
+  // unprotected. `requireOffTunnelRoute` is the bring-up gate's extra demand: at
+  // least one family must bind an off-tunnel source, and a Connect on a machine
+  // with no network at all fails as kCodeNoNetwork, saying so.
+  //
   // `when` is a short tag for the message ("bring-up", "connected", "recheck").
   // Cheap enough for the reaper tick: one `nft` read, two sockets, no name
   // resolution, no network round trip, nothing that can block.
-  bool VerifyEgressWitness(const char* when, TunnelError* err);
+  bool VerifyEgressWitness(const char* when, bool requireOffTunnelRoute, TunnelError* err);
 
  private:
   Tunnel() = default;

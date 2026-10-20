@@ -10,7 +10,8 @@
 // unprotected and told so; with it on the machine stays blocked behind the
 // armed floor. It never reconnects, so it cannot thrash.
 //
-// Three rules, any one of which ends the session, behind one veto:
+// Three rules, any one of which ends the session, behind one veto (every time
+// here is a DeadTunnelSettings default):
 //   the carrying veto  a packet back out of the tunnel in the last 20 s means
 //                      it carries, and nothing fires (a measurement outranks
 //                      every claim below it)
@@ -22,6 +23,18 @@
 // an idle machine never trips NoInbound (it sends nothing), a suspend or a
 // stalled daemon rebases every window rather than judging time nobody watched,
 // and a new destination window gets its own clock while it forms.
+//
+// AND A MACHINE WITH NO NETWORK IS NOT A DEAD TUNNEL. While the reaper's path
+// tracker (NetworkQuality.hpp) finds no usable physical path in any family,
+// nothing could prove an exit or carry a packet back, so the two no-exit rules
+// (NoInbound, NoExit) hold, and the time spent offline is excluded from the
+// windows they measure. Back on a network after a real stretch
+// (DeadTunnelSettings::offlineRebaseMillis), every window starts again, as
+// after a suspend: the session gets the normal window to re-prove an exit on
+// the new network rather than being stopped the moment it returns. A shorter
+// blip rebases nothing; its seconds are only left out, so a link that keeps
+// flapping cannot keep a dead tunnel alive.
+// SdkUnresponsive is not about the network, and keeps watching throughout.
 //
 // Pure, so every rule is a table test: TunnelHost reads the tun's packet
 // counters and the exit sampler's last readings once a second on its reaper,
@@ -38,52 +51,118 @@
 
 namespace urnw::watchdog {
 
-// ---- the thresholds ---------------------------------------------------------
+// ---- the settings -------------------------------------------------------------
 
-// NoInbound's window. Above the longest honest machine-wide inbound gap (a DNS
-// client's schedule across a server list runs about 13 s; a black-holed TCP
-// connect stalls one flow, not all of them), and below the 30 s after which a
-// person has decided the internet is broken.
-inline constexpr int64_t kDeadFastMillis = 20000;
-// Packets into the tunnel it takes to arm NoInbound: a machine that is trying
-// retransmits this many in well under a second, and an idle one never sends
-// them. An idle blocked machine looks like an idle working one, so it is never
-// judged.
-inline constexpr uint64_t kDeadFastOutboundPackets = 8;
-// NoExit's window: about 2.5 times one honest cold attempt after a roam (DNS,
-// TCP and the handshake, about 35 s), so a roam that recovers on its second
-// attempt is never ended.
-inline constexpr int64_t kDeadSlowMillis = 90000;
-// SdkUnresponsive's window: 15 missed samples. A call into the SDK that has not
-// returned in 30 s is wedged, not slow, and this is the one rule that needs
-// nothing from the SDK to fire.
-inline constexpr int64_t kSdkUnresponsiveMillis = 30000;
-// How overdue a sample must be before its countdown is worth showing; below it
-// is the normal cadence.
-inline constexpr int64_t kSdkUnresponsiveArmMillis = 10000;
-// How close a verdict must be before the app is told a countdown runs
-// (StatusReply::failsafe_armed), so a teardown is never a surprise and a warning
-// is never noise.
-inline constexpr int64_t kFailsafeNoticeMillis = 30000;
-// How often the exit sampler asks the SDK, and how often the verdict is
-// reached. The verdict runs on the reaper, which makes no call on a watched
-// session's device: the sampler makes them all, the network-change kicks
-// included, so a wedged device stops the sampler and cannot keep the verdict
-// from being reached.
-inline constexpr int64_t kSdkSampleIntervalMillis = 2000;
-inline constexpr int64_t kEvaluateIntervalMillis = 1000;
-// A tick this late means nothing watched the session in between: a suspend, a
-// stopped process, a main loop held by a long stop. The session is owed a fresh
-// grace period then, not a verdict. Five intervals is far beyond scheduling
-// jitter and far below the shortest window above.
-inline constexpr int64_t kEvaluatorFrozenMillis = 5 * kEvaluateIntervalMillis;
+// Every timing the failsafe reads, each with its default here. The daemon builds
+// its watch and its sampler from one instance (HostSettings.hpp), so a caller
+// or a test can change any of them, and nothing that judges a session reads a
+// timing from anywhere else. Times are milliseconds on the watch's clock.
+struct DeadTunnelSettings {
+  // ---- the cadence ----------------------------------------------------------
+  // Between two ticks of the watch, the cadence its windows are counted in. The
+  // daemon ticks it on the reaper, so it must equal
+  // HostSettings::reaper_interval_seconds (TunnelHost logs a mismatch). 1000:
+  // fine against the shortest window, for one sysfs read and one atomic
+  // snapshot a tick. It paces nothing itself; it is the unit the freeze bar's
+  // default is counted in. First, so DeadTunnelSettings{500} is the instance
+  // for a half-second tick, freezing at 2.5 s; 0 there makes the freeze bar 0,
+  // which turns the failsafe off.
+  int64_t evaluateIntervalMillis = 1000;
+  // Between two samples of the SDK (its window status and exits), taken by the
+  // exit sampler's thread, which makes every call on a watched session's device
+  // -- the network-change kicks included -- so a wedged device stops the
+  // sampler and cannot keep the verdict from being reached. 2000: fifteen
+  // samples fit in sdkUnresponsiveMillis, so one slow call is never a wedge. 0
+  // (or less) is read as the default (SampleIntervalMillis): a sampler that
+  // asked back to back would spin on the device's state lock.
+  int64_t sdkSampleIntervalMillis = 2000;
+  // A tick this late or later means nothing watched the session in between: a
+  // suspend, a stopped process, a main loop held by a long stop. The session
+  // is owed a fresh grace period then, not a verdict. Five evaluate ticks (5 s
+  // by default): far beyond scheduling jitter, far below the shortest rule
+  // window. 0 makes every tick a freeze, so no verdict is ever reached: the
+  // failsafe is off.
+  int64_t evaluatorFrozenMillis = 5 * evaluateIntervalMillis;
 
-static_assert(kSdkUnresponsiveMillis > kSdkUnresponsiveArmMillis);
-static_assert(kSdkUnresponsiveMillis >= 10 * kSdkSampleIntervalMillis);
-static_assert(kEvaluatorFrozenMillis < kDeadFastMillis);
+  // ---- the rules ------------------------------------------------------------
+  // SdkUnresponsive's window: fifteen missed samples. A call into the SDK that
+  // has not returned in 30 s is wedged, not slow, and this is the one rule that
+  // needs nothing from the SDK to fire. 0 turns the rule off.
+  int64_t sdkUnresponsiveMillis = 30000;
+  // How overdue a sample must be before SdkUnresponsive's countdown is worth
+  // showing; below 10 s is the normal cadence. 0 counts it down from every
+  // sample, so with the default notice the app is always told one runs.
+  int64_t sdkUnresponsiveArmMillis = 10000;
+  // How close a verdict must be before the app is told a countdown runs
+  // (StatusReply::failsafe_armed): 30 s, so a teardown is never a surprise and
+  // a warning is never noise. 0 never warns ahead of a stop.
+  int64_t failsafeNoticeMillis = 30000;
+  // NoInbound's window, and the carrying veto's: a packet back within it means
+  // the tunnel carries. 20 s: above the longest honest machine-wide inbound gap
+  // (a DNS client's schedule across a server list runs about 13 s; a black-holed
+  // TCP connect stalls one flow, not all of them), and below the 30 s after
+  // which a person has decided the internet is broken. 0 turns NoInbound off,
+  // and the veto with it.
+  int64_t deadFastMillis = 20000;
+  // Packets into the tunnel it takes to arm NoInbound: a machine that is trying
+  // retransmits 8 in well under a second, and an idle one never sends them. An
+  // idle blocked machine looks like an idle working one, so it is never judged.
+  // 0 asks for no commitment, and an idle machine with nothing proven is judged.
+  uint64_t deadFastOutboundPackets = 8;
+  // NoExit's window: 90 s, about 2.5 times one honest cold attempt after a roam
+  // (DNS, TCP and the handshake, about 35 s), so a roam that recovers on its
+  // second attempt is never ended. 0 turns NoExit off.
+  int64_t deadSlowMillis = 90000;
+  // An offline stretch this long is owed a fresh grace when the network
+  // returns, for the reason a freeze is: what was measured before it describes
+  // another network. The freeze's bar by default, so a one-tick blip never
+  // rebases. 0 rebases on every return, a blip included.
+  int64_t offlineRebaseMillis = evaluatorFrozenMillis;
+};
 
-inline constexpr bool EvaluatorFroze(int64_t tickGapMillis) {
-  return tickGapMillis >= kEvaluatorFrozenMillis;
+// The relations the defaults were chosen by.
+static_assert(DeadTunnelSettings{}.evaluatorFrozenMillis ==
+              5 * DeadTunnelSettings{}.evaluateIntervalMillis);
+static_assert(DeadTunnelSettings{}.sdkUnresponsiveMillis >
+              DeadTunnelSettings{}.sdkUnresponsiveArmMillis);
+static_assert(DeadTunnelSettings{}.sdkUnresponsiveMillis >=
+              10 * DeadTunnelSettings{}.sdkSampleIntervalMillis);
+static_assert(DeadTunnelSettings{}.evaluatorFrozenMillis < DeadTunnelSettings{}.deadFastMillis);
+static_assert(DeadTunnelSettings{}.offlineRebaseMillis < DeadTunnelSettings{}.deadFastMillis);
+
+// The sampler's interval as `settings` asks for it, a nonpositive one read as
+// the default.
+inline constexpr int64_t SampleIntervalMillis(const DeadTunnelSettings& settings) {
+  return settings.sdkSampleIntervalMillis > 0 ? settings.sdkSampleIntervalMillis
+                                              : DeadTunnelSettings{}.sdkSampleIntervalMillis;
+}
+
+inline constexpr bool EvaluatorFroze(int64_t tickGapMillis, const DeadTunnelSettings& settings) {
+  return tickGapMillis >= settings.evaluatorFrozenMillis;
+}
+
+// What one tick's network state does to the no-exit rules (see the file
+// comment): `wasOffline` is the last tick's reading, `offline` this one's, and
+// `offlineStretchMillis` how long the machine has been offline up to now.
+enum class OfflineStep {
+  // Online, as at the last tick: every clock runs.
+  Online,
+  // No usable path: the no-exit rules hold and their clocks do not run.
+  Offline,
+  // Online again after less than the rebase stretch: the stretch stays
+  // excluded and nothing rebases.
+  BackFromBlip,
+  // Online again after the rebase stretch or more: every window starts again.
+  BackRebased,
+};
+
+inline constexpr OfflineStep StepOffline(bool wasOffline, bool offline,
+                                         int64_t offlineStretchMillis,
+                                         const DeadTunnelSettings& settings) {
+  if (offline) return OfflineStep::Offline;
+  if (!wasOffline) return OfflineStep::Online;
+  return offlineStretchMillis >= settings.offlineRebaseMillis ? OfflineStep::BackRebased
+                                                              : OfflineStep::BackFromBlip;
 }
 
 // A stamp from before `sessionStartMillis` is no evidence about this session;
@@ -96,13 +175,14 @@ inline constexpr int64_t StampInSession(int64_t stampMillis, int64_t sessionStar
 
 enum class DeadTunnelReason {
   None,
-  // No proven exit for kDeadSlowMillis: nothing to carry traffic to.
+  // No proven exit for DeadTunnelSettings::deadSlowMillis: nothing to carry
+  // traffic to.
   NoExit,
-  // Committed traffic in and nothing back for kDeadFastMillis: the hole,
-  // measured rather than inferred.
+  // Committed traffic in and nothing back for DeadTunnelSettings::deadFastMillis:
+  // the hole, measured rather than inferred.
   NoInbound,
-  // The SDK has not answered for kSdkUnresponsiveMillis. The other two read
-  // the SDK, so this outranks them.
+  // The SDK has not answered for DeadTunnelSettings::sdkUnresponsiveMillis.
+  // The other two read the SDK, so this outranks them.
   SdkUnresponsive,
 };
 
@@ -147,12 +227,19 @@ struct DeadTunnelSignals {
   // and how many went in since (or since the traffic clock began).
   int64_t lastInboundMillis = -1;
   uint64_t outboundSinceInbound = 0;
+
+  // No usable physical path in any family: the no-exit rules hold. And the
+  // time spent offline inside the two windows those rules measure (since the
+  // last proven exit, since the last packet back), which they leave out.
+  bool offline = false;
+  int64_t provenOfflineMillis = 0;
+  int64_t inboundOfflineMillis = 0;
 };
 
 struct DeadTunnelVerdict {
   DeadTunnelReason reason = DeadTunnelReason::None;
-  // A countdown runs and is within kFailsafeNoticeMillis of firing
-  // (StatusReply::failsafe_armed).
+  // A countdown runs and is within DeadTunnelSettings::failsafeNoticeMillis of
+  // firing (StatusReply::failsafe_armed).
   bool armed = false;
   // Until the earliest deadline, while armed; 0 otherwise.
   int64_t millisToFailsafe = 0;
@@ -163,11 +250,16 @@ namespace detail {
 inline constexpr int64_t AgeSince(int64_t stampMillis, int64_t startMillis, int64_t nowMillis) {
   return nowMillis - (stampMillis < 0 ? startMillis : stampMillis);
 }
+// An age with the time spent offline inside it left out.
+inline constexpr int64_t OnlineAge(int64_t ageMillis, int64_t offlineMillis) {
+  return ageMillis > offlineMillis ? ageMillis - offlineMillis : 0;
+}
 }  // namespace detail
 
-// The verdict. Recovery is one-sided and immediate: one inbound packet or one
-// proven exit clears every countdown that depends on it.
-inline DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s, int64_t nowMillis) {
+// The verdict, under `settings`. Recovery is one-sided and immediate: one
+// inbound packet or one proven exit clears every countdown that depends on it.
+inline DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s, int64_t nowMillis,
+                                  const DeadTunnelSettings& settings) {
   DeadTunnelVerdict v;
   if (!s.tunnelUp || !s.routesInstalled || s.upSinceMillis <= 0) return v;
 
@@ -184,7 +276,7 @@ inline DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s, int64_t nowMillis)
   // the SDK answering, and neither may overrule it. It cannot mask NoInbound,
   // which needs the same window of silence, nor a wedge that stops the SDK's
   // packet path too, which delivers nothing and lets the veto lapse within
-  // kDeadFastMillis.
+  // that window.
   //
   // Its known hole (docs/linux_agent_help.md 6.4, open task #44): the tun's
   // counters cannot tell a provider's packet from one the SDK writes itself.
@@ -193,39 +285,56 @@ inline DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s, int64_t nowMillis)
   // machine whose apps keep resolving can hold the veto with every provider
   // dead, and then none of the three rules below fires. Closing it needs an
   // SDK count of the packets it wrote that no provider sent.
-  if (s.lastInboundMillis >= 0 && inboundAge < kDeadFastMillis) return v;
+  if (s.lastInboundMillis >= 0 && inboundAge < settings.deadFastMillis) return v;
 
-  if (sampleAge >= kSdkUnresponsiveMillis) {
+  // A rule whose window is 0 is off (DeadTunnelSettings).
+  const bool unresponsiveApplies = settings.sdkUnresponsiveMillis > 0;
+  if (unresponsiveApplies && sampleAge >= settings.sdkUnresponsiveMillis) {
     v.reason = DeadTunnelReason::SdkUnresponsive;
     return v;
   }
 
-  const bool fastApplies = s.providerWindowReady && s.provenCount == 0 &&
-                           s.outboundSinceInbound >= kDeadFastOutboundPackets;
-  if (fastApplies && inboundAge >= kDeadFastMillis && provenAge >= kDeadFastMillis) {
+  // The two no-exit rules measure online time only, and hold while offline:
+  // with no physical path nothing could prove an exit or answer a packet. The
+  // veto above and SdkUnresponsive read the raw ages, so being offline neither
+  // extends the veto nor hides a wedged SDK.
+  const int64_t provenOnlineAge = detail::OnlineAge(provenAge, s.provenOfflineMillis);
+  const int64_t inboundOnlineAge = detail::OnlineAge(inboundAge, s.inboundOfflineMillis);
+  const bool fastApplies = settings.deadFastMillis > 0 && !s.offline &&
+                           s.providerWindowReady && s.provenCount == 0 &&
+                           s.outboundSinceInbound >= settings.deadFastOutboundPackets;
+  if (fastApplies && inboundOnlineAge >= settings.deadFastMillis &&
+      provenOnlineAge >= settings.deadFastMillis) {
     v.reason = DeadTunnelReason::NoInbound;
     return v;
   }
 
   // Only once the sampler has answered: never having a reading is
   // SdkUnresponsive's question, not this rule's.
-  if (s.provenCount == 0 && s.lastSampleMillis >= 0 && provenAge >= kDeadSlowMillis) {
+  const bool slowApplies =
+      settings.deadSlowMillis > 0 && !s.offline && s.provenCount == 0 && s.lastSampleMillis >= 0;
+  if (slowApplies && provenOnlineAge >= settings.deadSlowMillis) {
     v.reason = DeadTunnelReason::NoExit;
     return v;
   }
 
   // Nothing fired: is a countdown accumulating, and how close is it? The
   // unresponsive one counts only once overdue, the fast one only while its
-  // traffic holds.
+  // traffic holds, and neither no-exit one while offline.
   int64_t soonest = -1;
   auto consider = [&soonest](int64_t remaining) {
     if (remaining < 0) remaining = 0;
     if (soonest < 0 || remaining < soonest) soonest = remaining;
   };
-  if (sampleAge >= kSdkUnresponsiveArmMillis) consider(kSdkUnresponsiveMillis - sampleAge);
-  if (fastApplies) consider(kDeadFastMillis - (inboundAge < provenAge ? inboundAge : provenAge));
-  if (s.provenCount == 0 && s.lastSampleMillis >= 0) consider(kDeadSlowMillis - provenAge);
-  if (soonest >= 0 && soonest <= kFailsafeNoticeMillis) {
+  if (unresponsiveApplies && sampleAge >= settings.sdkUnresponsiveArmMillis) {
+    consider(settings.sdkUnresponsiveMillis - sampleAge);
+  }
+  if (fastApplies) {
+    consider(settings.deadFastMillis -
+             (inboundOnlineAge < provenOnlineAge ? inboundOnlineAge : provenOnlineAge));
+  }
+  if (slowApplies) consider(settings.deadSlowMillis - provenOnlineAge);
+  if (soonest >= 0 && soonest <= settings.failsafeNoticeMillis) {
     v.armed = true;
     v.millisToFailsafe = soonest;
   }
@@ -272,9 +381,9 @@ class TrafficTracker {
 // What one reading of the SDK's window status changes. A new destination
 // generation (another location, or a reconnect to the same one) restarts every
 // clock; its window first being satisfied restarts only NoInbound's traffic
-// clock, so a replacement window may honestly take longer than kDeadFastMillis
-// to form without inheriting the old one's silence, and without a second
-// kDeadSlowMillis of grace once it has formed.
+// clock, so a replacement window may honestly take longer than NoInbound's
+// window to form without inheriting the old one's silence, and without a second
+// NoExit window of grace once it has formed.
 struct ConnectionEpochUpdate {
   bool verdictClockReset = false;
   bool trafficClockReset = false;
@@ -341,32 +450,44 @@ struct WatchInputs {
   // first sample, taken at the up edge, sets the level, so the session's own
   // generation is never read as a new one.
   bool windowSampled = true;
+  // The reaper's path tracker finds no usable physical path in any family.
+  bool offline = false;
 };
 
 struct WatchTick {
   DeadTunnelVerdict verdict;
-  // The tick came kEvaluatorFrozenMillis or more after the one before it, so
-  // every window was rebased and no verdict was reached.
+  // The tick came DeadTunnelSettings::evaluatorFrozenMillis or more after the
+  // one before it, so every window was rebased and no verdict was reached.
   bool froze = false;
   int64_t tickGapMillis = 0;
   bool verdictClockReset = false;
   bool trafficClockReset = false;
+  // What this tick's network state did (StepOffline), whether it is the first
+  // offline tick, and how long the stretch that just ended (or still runs) has
+  // lasted. BackRebased rebases every window, like a freeze, and reaches no
+  // verdict on that tick.
+  OfflineStep offlineStep = OfflineStep::Online;
+  bool wentOffline = false;
+  int64_t offlineStretchMillis = 0;
   // The verdict's inputs, for the log line of a teardown.
   DeadTunnelSignals signals;
 };
 
-// The evaluator of one Up session: the freeze rebase, the destination clocks
-// and the traffic edges around Evaluate, ticked once a second.
+// The evaluator of one Up session: the freeze rebase, the destination clocks,
+// the offline hold and the traffic edges around Evaluate, ticked every
+// evaluateIntervalMillis, every timing read from the settings it was built with.
 class DeadTunnelWatch {
  public:
+  DeadTunnelWatch() = default;
+  explicit DeadTunnelWatch(const DeadTunnelSettings& settings) : settings_(settings) {}
+
+  const DeadTunnelSettings& settings() const { return settings_; }
+
   // The session's up edge.
   void Start(const WatchInputs& in) {
-    sessionStartMillis_ = in.nowMillis;
-    trafficStartMillis_ = in.nowMillis;
     lastTickMillis_ = in.nowMillis;
-    traffic_.Reset(in.outboundPackets, in.inboundPackets);
     epoch_ = ConnectionEpochTracker();
-    if (in.windowSampled) epoch_.Observe(in.connectionGeneration, in.providerWindowMinSatisfied);
+    Rebase(in);
   }
 
   WatchTick Tick(const WatchInputs& in) {
@@ -374,15 +495,27 @@ class DeadTunnelWatch {
     const int64_t now = in.nowMillis;
     tick.tickGapMillis = now - lastTickMillis_;
     lastTickMillis_ = now;
-    if (EvaluatorFroze(tick.tickGapMillis)) {
+    if (EvaluatorFroze(tick.tickGapMillis, settings_)) {
       // Nothing watched the session in that gap: every age would be the length
       // of the gap, not of a failure. Rebase, and take the current readings as
       // the new baseline.
       tick.froze = true;
-      sessionStartMillis_ = now;
-      trafficStartMillis_ = now;
-      traffic_.Reset(in.outboundPackets, in.inboundPackets);
-      if (in.windowSampled) epoch_.Observe(in.connectionGeneration, in.providerWindowMinSatisfied);
+      Rebase(in);
+      return tick;
+    }
+    // The time since the last tick was spent offline when the last tick found
+    // the machine offline; the stretch is the run of such time.
+    const int64_t offlineGap = offline_ ? tick.tickGapMillis : 0;
+    offlineStretchMillis_ += offlineGap;
+    tick.offlineStep = StepOffline(offline_, in.offline, offlineStretchMillis_, settings_);
+    tick.wentOffline = !offline_ && in.offline;
+    tick.offlineStretchMillis = offlineStretchMillis_;
+    offline_ = in.offline;
+    if (!in.offline) offlineStretchMillis_ = 0;
+    if (tick.offlineStep == OfflineStep::BackRebased) {
+      // Back on a network after long enough that everything measured before
+      // describes another one: a fresh grace, exactly as after a freeze.
+      Rebase(in);
       return tick;
     }
     // The first sampled reading is the baseline, never a change.
@@ -398,6 +531,20 @@ class DeadTunnelWatch {
     }
     traffic_.Observe(in.outboundPackets, in.inboundPackets, now);
 
+    // The offline time inside each no-exit window: grown by an interval spent
+    // offline, and started over whenever the evidence the window is measured
+    // from moves (a new proven exit, a packet back, a clock that restarted).
+    provenOfflineMillis_ += offlineGap;
+    inboundOfflineMillis_ += offlineGap;
+    if (update.verdictClockReset || in.lastProvenMillis != provenSeenMillis_) {
+      provenOfflineMillis_ = 0;
+    }
+    provenSeenMillis_ = in.lastProvenMillis;
+    if (update.trafficClockReset || traffic_.lastInboundMillis() != inboundSeenMillis_) {
+      inboundOfflineMillis_ = 0;
+    }
+    inboundSeenMillis_ = traffic_.lastInboundMillis();
+
     DeadTunnelSignals& s = tick.signals;
     s.tunnelUp = in.tunnelUp;
     s.routesInstalled = in.routesInstalled;
@@ -410,7 +557,10 @@ class DeadTunnelWatch {
     s.lastSampleMillis = StampInSession(in.lastSampleMillis, sessionStartMillis_);
     s.lastInboundMillis = traffic_.lastInboundMillis();
     s.outboundSinceInbound = traffic_.outboundSinceInbound();
-    tick.verdict = Evaluate(s, now);
+    s.offline = in.offline;
+    s.provenOfflineMillis = provenOfflineMillis_;
+    s.inboundOfflineMillis = inboundOfflineMillis_;
+    tick.verdict = Evaluate(s, now, settings_);
     return tick;
   }
 
@@ -418,11 +568,36 @@ class DeadTunnelWatch {
   int64_t trafficStartMillis() const { return trafficStartMillis_; }
 
  private:
+  // Every window starts again from `in`: the up edge, a freeze, and a return
+  // from a long offline stretch. Nothing measured before it is evidence now.
+  void Rebase(const WatchInputs& in) {
+    sessionStartMillis_ = in.nowMillis;
+    trafficStartMillis_ = in.nowMillis;
+    traffic_.Reset(in.outboundPackets, in.inboundPackets);
+    if (in.windowSampled) epoch_.Observe(in.connectionGeneration, in.providerWindowMinSatisfied);
+    offline_ = in.offline;
+    offlineStretchMillis_ = 0;
+    provenOfflineMillis_ = 0;
+    inboundOfflineMillis_ = 0;
+    provenSeenMillis_ = in.lastProvenMillis;
+    inboundSeenMillis_ = traffic_.lastInboundMillis();
+  }
+
+  DeadTunnelSettings settings_;
   int64_t sessionStartMillis_ = 0;
   int64_t trafficStartMillis_ = 0;
   int64_t lastTickMillis_ = 0;
   TrafficTracker traffic_;
   ConnectionEpochTracker epoch_;
+  // The offline hold: the last tick's reading, the stretch it is part of, the
+  // offline time inside the proven and inbound windows, and the evidence those
+  // windows were last measured from.
+  bool offline_ = false;
+  int64_t offlineStretchMillis_ = 0;
+  int64_t provenOfflineMillis_ = 0;
+  int64_t inboundOfflineMillis_ = 0;
+  int64_t provenSeenMillis_ = -1;
+  int64_t inboundSeenMillis_ = -1;
 };
 
 }  // namespace urnw::watchdog

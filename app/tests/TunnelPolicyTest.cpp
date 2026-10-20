@@ -12,6 +12,7 @@
 
 #include "Tunnel.hpp"
 #include "TunnelPolicy.hpp"
+#include "daemon/HostSettings.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -47,6 +48,9 @@ static_assert(urnw::Ipv6PrefixContains("fc00::/7", "fd00::1"));
 static_assert(urnw::IsIpv6UniqueLocal("fd00::1"));
 static_assert(urnw::CaptureV6Claims("2001:db8::1"));
 static_assert(!urnw::CaptureV6Claims("fe80::1"));
+static_assert(urnw::WitnessTreatmentVerdict(/*bound=*/false, "", ENETUNREACH, true, 0x55524e57u,
+                                            0x55524e57u, "169.254.2.1") ==
+              urnw::WitnessTreatment::Unroutable);
 
 }  // namespace
 
@@ -576,6 +580,87 @@ UR_TEST(nftCgroupPolicyDoesNotWeakenFloorOrHelperDns) {
                  urnw::NftCgroupMode::Refuse);
 }
 
+// ---- the egress witness's treatment leg ------------------------------------
+
+namespace {
+
+struct TreatmentRow {
+  const char* what;
+  bool bound;
+  const char* source;
+  int connectErrno;
+  bool markKnown;
+  std::uint32_t mark;
+  urnw::WitnessTreatment expected;
+};
+
+}  // namespace
+
+// Every outcome of the one socket the treatment leg reads, in both families:
+// the tunnel's own addresses are the yardsticks.
+UR_TEST(witnessTreatmentVerdictReadsEveryOutcomeOfTheTreatmentSocket) {
+  using urnw::WitnessTreatment;
+  constexpr std::uint32_t kMark = urnw::kEgressMark;
+  const char* const kTun4 = "169.254.2.1";
+  const char* const kTun6 = "fd00:7572:6e65:ffff::2";
+  const TreatmentRow v4[] = {
+      {"bound a physical source with the mark", true, "192.168.1.20", 0, true, kMark,
+       WitnessTreatment::Escaped},
+      {"no route at all, with the mark (between networks, or IPv6-only)", false, "",
+       ENETUNREACH, true, kMark, WitnessTreatment::Unroutable},
+      {"an unreachable route, with the mark", false, "", EHOSTUNREACH, true, kMark,
+       WitnessTreatment::Unroutable},
+      {"no source address left, with the mark", false, "", EADDRNOTAVAIL, true, kMark,
+       WitnessTreatment::Unroutable},
+      {"bound the tun's own address", true, kTun4, 0, true, kMark,
+       WitnessTreatment::Captured},
+      {"bound the tun's own address unmarked", true, kTun4, 0, true, 0,
+       WitnessTreatment::Captured},
+      {"escaped without the mark", true, "192.168.1.20", 0, true, 0,
+       WitnessTreatment::Unmarked},
+      {"escaped with another tool's mark", true, "192.168.1.20", 0, true, urnw::kBypassMark,
+       WitnessTreatment::Unmarked},
+      {"escaped with an unreadable mark", true, "192.168.1.20", 0, false, kMark,
+       WitnessTreatment::Unmarked},
+      {"no route WITHOUT the mark", false, "", ENETUNREACH, true, 0,
+       WitnessTreatment::Unmarked},
+      {"no route with an unreadable mark", false, "", ENETUNREACH, false, kMark,
+       WitnessTreatment::Unmarked},
+      {"refused by a prohibit route", false, "", EACCES, true, kMark,
+       WitnessTreatment::Failed},
+      {"socket() or getsockname() failed before connect()", false, "", 0, true, kMark,
+       WitnessTreatment::Failed},
+  };
+  for (const auto& row : v4) {
+    if (urnw::WitnessTreatmentVerdict(row.bound, row.source, row.connectErrno, row.markKnown,
+                                      row.mark, kMark, kTun4) != row.expected) {
+      UR_FAIL(std::string("v4, ") + row.what);
+    }
+  }
+  // The v6 half reads the same table against its own yardstick, the no-route
+  // rows included: the mark is required there too now.
+  UR_EXPECT_TRUE(urnw::WitnessTreatmentVerdict(true, "2001:db8:1::20", 0, true, kMark, kMark,
+                                               kTun6) == WitnessTreatment::Escaped);
+  UR_EXPECT_TRUE(urnw::WitnessTreatmentVerdict(false, "", ENETUNREACH, true, kMark, kMark,
+                                               kTun6) == WitnessTreatment::Unroutable);
+  UR_EXPECT_TRUE(urnw::WitnessTreatmentVerdict(false, "", ENETUNREACH, true, 0, kMark, kTun6) ==
+                 WitnessTreatment::Unmarked);
+  UR_EXPECT_TRUE(urnw::WitnessTreatmentVerdict(true, kTun6, 0, true, kMark, kMark, kTun6) ==
+                 WitnessTreatment::Captured);
+  // A v4 yardstick never matches a v6 source: the halves stay apart.
+  UR_EXPECT_TRUE(urnw::WitnessTreatmentVerdict(true, kTun6, 0, true, kMark, kMark, kTun4) ==
+                 WitnessTreatment::Escaped);
+}
+
+UR_TEST(onlyTheNoRouteErrnosMeanNoRoute) {
+  UR_EXPECT_TRUE(urnw::IsNoRouteErrno(ENETUNREACH));
+  UR_EXPECT_TRUE(urnw::IsNoRouteErrno(EHOSTUNREACH));
+  UR_EXPECT_TRUE(urnw::IsNoRouteErrno(EADDRNOTAVAIL));
+  for (const int other : {0, EACCES, EPERM, EINVAL, ECONNREFUSED, EAFNOSUPPORT}) {
+    if (urnw::IsNoRouteErrno(other)) UR_FAIL("errno " + std::to_string(other) + " is not no-route");
+  }
+}
+
 // ---- the call site ---------------------------------------------------------
 
 namespace {
@@ -953,4 +1038,325 @@ UR_TEST(theLauncherUsesTheDaemonsSliceAndSliceList) {
   const std::string modes =
       "\"${root}/usr/bin/urnetwork-exclude\" \"${root}/usr/lib/urnetwork/urnetworkd\"";
   UR_EXPECT_TRUE_MSG("the installed launcher is executable", Contains(common, modes));
+}
+
+// ---- the egress witness's call sites ----------------------------------------
+
+namespace {
+
+size_t CountOf(const std::string& text, const std::string& needle) {
+  size_t count = 0;
+  for (size_t at = text.find(needle); at != std::string::npos; at = text.find(needle, at + 1)) {
+    ++count;
+  }
+  return count;
+}
+
+}  // namespace
+
+// Both treatment legs read their socket through the one verdict, so neither can
+// drift back to its own reading of a socket with no route; only the bring-up
+// gate demands somewhere to go, after leg 3, under its own code.
+UR_TEST(bothWitnessTreatmentLegsUseTheVerdictAndOnlyBringUpDemandsARoute) {
+  const std::string tunnel = ReadTunnelSource();
+  const std::string witness = FunctionBody(tunnel, "bool Tunnel::VerifyEgressWitness(");
+  if (witness.empty()) {
+    UR_FAIL("Tunnel::VerifyEgressWitness was not found in Tunnel.cpp");
+    return;
+  }
+  UR_EXPECT_TRUE_MSG("both families' treatment sockets go through WitnessTreatmentVerdict",
+                     CountOf(witness, "WitnessTreatmentVerdict(") == 2);
+  UR_EXPECT_TRUE_MSG("the v4 leg reads its socket through the verdict",
+                     Contains(witness, "WitnessTreatmentVerdict(daemonBound, daemon.source, "
+                                       "daemon.connect_errno,"));
+  UR_EXPECT_TRUE_MSG("the v6 leg reads its socket through the verdict",
+                     Contains(witness, "WitnessTreatmentVerdict(daemon6Bound, daemon6.source, "
+                                       "daemon6.connect_errno,"));
+  // The v6 leg's old private no-route pass, which never looked at the mark.
+  UR_EXPECT_FALSE(Contains(witness, "daemon6.connect_errno == ENETUNREACH"));
+  // Leg 3 (a marked packet in the tun) outranks "no network".
+  const size_t legThree = witness.find("if (counters.tun != 0) {");
+  const size_t demand = witness.find("if (requireOffTunnelRoute && !offTunnelRoute) {");
+  UR_EXPECT_TRUE(legThree != std::string::npos && demand != std::string::npos &&
+                 legThree < demand);
+  UR_EXPECT_TRUE(Contains(witness, "err->code = kCodeNoNetwork;"));
+  UR_EXPECT_TRUE(Contains(tunnel, "constexpr const char* kCodeNoNetwork = \"no_network\";"));
+  UR_EXPECT_TRUE(Contains(ReadAppSource("ControlProtocol.hpp"),
+                          "inline constexpr const char* kCodeNoNetwork = \"no_network\";"));
+  UR_EXPECT_TRUE_MSG("the bring-up gate demands a route off the tunnel",
+                     Contains(tunnel, "VerifyEgressWitness(\"bring-up\", "
+                                      "/*requireOffTunnelRoute=*/true, err)"));
+  const std::string host = ReadAppSource("daemon/TunnelHost.cpp");
+  UR_EXPECT_TRUE_MSG("the post-connect gate accepts a machine between networks",
+                     Contains(host, "VerifyEgressWitness(\"connected\", "
+                                    "/*requireOffTunnelRoute=*/false,"));
+  UR_EXPECT_TRUE_MSG("the re-check accepts a machine between networks",
+                     Contains(host, "VerifyEgressWitness(\"recheck\", "
+                                    "/*requireOffTunnelRoute=*/false,"));
+  UR_EXPECT_TRUE(CountOf(tunnel + host, "VerifyEgressWitness(\"") == 3);
+}
+
+// ---- the direct-file DNS tier across a network switch ----------------------
+
+UR_TEST(resolvConfNameserversAreReadTheWayGlibcReadsThem) {
+  const std::string content =
+      "# Generated by NetworkManager\n"
+      "search lan\n"
+      "nameserver 192.168.12.1\n"
+      "nameserver\tfe80::1%2\n"
+      "nameserver 10.0.0.1 trailing words ignored\r\n"
+      "; nameserver 1.1.1.1\n"
+      "# nameserver 8.8.8.8\n"
+      " nameserver 9.9.9.9\n"
+      "nameserver10.0.0.2\n"
+      "nameserver\n"
+      "nameserver   \n";
+  const std::vector<std::string> servers = urnw::ResolvConfNameservers(content);
+  const std::vector<std::string> expected = {"192.168.12.1", "fe80::1%2", "10.0.0.1"};
+  UR_EXPECT_TRUE(servers == expected);
+  UR_EXPECT_TRUE(urnw::ResolvConfNameservers("").empty());
+  UR_EXPECT_TRUE(urnw::ResolvConfNameservers("nameserver 1.1.1.1").size() == 1);
+}
+
+UR_TEST(aReapplyAdoptsOnlyAnotherWritersUsableFile) {
+  using urnw::ResolvConfReapply;
+  const std::string marker =
+      "# Managed by urnetworkd (URnetwork): the tunnel owns this file while it is up.";
+  const std::vector<std::string> tunnelResolvers = {"169.254.169.253", "fd00::53"};
+  // Ours: never backed up, or the user's original is lost (the double takeover).
+  UR_EXPECT_TRUE(urnw::DecideResolvConfReapply(marker + "\nnameserver 169.254.169.253\n", marker,
+                                               tunnelResolvers) == ResolvConfReapply::KeepBackup);
+  // The marker anywhere in the file is ours, whatever else it names.
+  UR_EXPECT_TRUE(urnw::DecideResolvConfReapply("nameserver 192.168.1.1\n" + marker + "\n", marker,
+                                               tunnelResolvers) == ResolvConfReapply::KeepBackup);
+  // NetworkManager's rewrite at a network switch: the newest truth, kept.
+  UR_EXPECT_TRUE(urnw::DecideResolvConfReapply(
+                     "# Generated by NetworkManager\nnameserver 10.20.0.1\n", marker,
+                     tunnelResolvers) == ResolvConfReapply::AdoptAsBackup);
+  // A writer caught mid-write, or a file with nothing in it to resolve with.
+  UR_EXPECT_TRUE(urnw::DecideResolvConfReapply("", marker, tunnelResolvers) ==
+                 ResolvConfReapply::KeepBackup);
+  UR_EXPECT_TRUE(urnw::DecideResolvConfReapply("# Generated by NetworkManager\nsearch lan\n",
+                                               marker,
+                                               tunnelResolvers) == ResolvConfReapply::KeepBackup);
+  UR_EXPECT_TRUE(urnw::DecideResolvConfReapply("nameserver10.0.0.1\n", marker,
+                                               tunnelResolvers) == ResolvConfReapply::KeepBackup);
+  // A copy of ours without the marker would put the tunnel's resolver back
+  // after the tunnel is gone.
+  UR_EXPECT_TRUE(urnw::DecideResolvConfReapply("nameserver 10.20.0.1\nnameserver fd00::53\n",
+                                               marker,
+                                               tunnelResolvers) == ResolvConfReapply::KeepBackup);
+}
+
+UR_TEST(theDnsRepairFollowsANetworkSwitchWithoutChurningTheFloor) {
+  const std::string host = ReadAppSource("daemon/TunnelHost.cpp");
+  const std::string maintain = FunctionBody(host, "void TunnelHost::MaintainDnsLocked() {");
+  if (maintain.empty()) {
+    UR_FAIL("TunnelHost::MaintainDnsLocked was not found");
+    return;
+  }
+  // Every tick for the file tiers while nothing fails and nothing contests the
+  // file; the slower interval otherwise: both from the host's settings, through
+  // the decisions HostSettings.hpp tests.
+  UR_EXPECT_TRUE(Contains(maintain, "const int verifyInterval = DnsVerifyIntervalTicks("));
+  UR_EXPECT_TRUE(Contains(
+      maintain, "/*forkingCheck=*/tunnel_->dnsBackend() == DnsBackend::SystemdResolved"));
+  UR_EXPECT_TRUE(Contains(maintain, "/*repairFailing=*/dnsVerifyFailures_ != 0, dnsContested_"));
+  UR_EXPECT_TRUE(
+      Contains(maintain, "dnsContested_ = DnsRepairContested(settings_, dnsTicksSinceRepair_);"));
+  UR_EXPECT_TRUE(Contains(maintain, "if (++dnsVerifyTicks_ < verifyInterval) return;"));
+  UR_EXPECT_TRUE(Contains(maintain, "dnsVerifyFailures_ < settings_.dns_repair_attempts"));
+  // A repair that changed nothing the floor pins returns before the nft swap;
+  // the decision reads the floor actually in force.
+  const size_t current = maintain.find("const bool floorCurrent =");
+  const size_t skip = maintain.find("floorCurrent) {", current);
+  const size_t rebuild = maintain.find("ApplyFilterLocked(FilterState::Connected, &ignored);");
+  UR_EXPECT_TRUE(current != std::string::npos && skip != std::string::npos &&
+                 rebuild != std::string::npos && skip < rebuild);
+  UR_EXPECT_TRUE(
+      Contains(maintain, "inForce.block_offtunnel_dns == tunnel_->report().dns_applied"));
+  UR_EXPECT_TRUE(Contains(maintain, "inForce.tunnel_resolvers == tunnel_->resolvers()"));
+
+  // The direct-file re-apply decides on the file it finds before it overwrites
+  // it, and writes an adopted backup's bytes before the record naming them.
+  const std::string direct =
+      FunctionBody(ReadTunnelSource(), "bool Tunnel::ApplyDnsViaDirectFile(");
+  const size_t decide =
+      direct.find("DecideResolvConfReapply(current, kResolvConfMarker, dnsServers_)");
+  const size_t backup = direct.find("WriteFileAtomic(kResolvConfBackupPath, current, next.mode,");
+  const size_t record = direct.find("WriteTakeoverState(next, &adoptError)");
+  const size_t rewrite = direct.find("WriteFileAtomic(kResolvConfPath, content, mode,");
+  UR_EXPECT_TRUE(decide != std::string::npos && backup != std::string::npos &&
+                 record != std::string::npos && rewrite != std::string::npos);
+  UR_EXPECT_TRUE(decide < backup && backup < record && record < rewrite);
+}
+
+// ---- the network-switch path's timings (daemon/HostSettings.hpp) ------------
+
+// The defaults, read where they are set, and the watchers' own defaults carried
+// in unchanged.
+UR_TEST(hostSettingsDefaultsArePinned) {
+  const urnw::HostSettings settings;
+  UR_EXPECT_EQ(1u, settings.reaper_interval_seconds);
+  UR_EXPECT_EQ(5, settings.filter_verify_interval_ticks);
+  UR_EXPECT_EQ(12, settings.filter_verify_log_every);
+  UR_EXPECT_EQ(1, settings.dns_file_verify_interval_ticks);
+  UR_EXPECT_EQ(10, settings.dns_verify_interval_ticks);
+  UR_EXPECT_EQ(10, settings.dns_contested_window_ticks);
+  UR_EXPECT_EQ(3, settings.dns_repair_attempts);
+  UR_EXPECT_EQ(30, settings.egress_witness_interval_ticks);
+  UR_EXPECT_EQ(2, settings.egress_witness_failures_to_stop);
+  UR_EXPECT_EQ(urnw::LinuxNetworkPathSettings{}.holdoff_millis,
+               settings.network_path.holdoff_millis);
+  UR_EXPECT_EQ(urnw::LinuxSuspendSettings{}.threshold_millis, settings.suspend.threshold_millis);
+  UR_EXPECT_EQ(urnw::watchdog::DeadTunnelSettings{}.deadSlowMillis,
+               settings.dead_tunnel.deadSlowMillis);
+  UR_EXPECT_EQ(urnw::watchdog::DeadTunnelSettings{}.sdkSampleIntervalMillis,
+               settings.dead_tunnel.sdkSampleIntervalMillis);
+  // The reaper ticks the failsafe at the interval the failsafe counts in.
+  UR_EXPECT_EQ(static_cast<int64_t>(settings.reaper_interval_seconds) * 1000,
+               settings.dead_tunnel.evaluateIntervalMillis);
+}
+
+// The reaper's interval, and which failures of the nftables re-check are
+// logged, with what 0 means for each: a reaper interval of 0 is one second
+// (a reaper that never waited would spin the main loop), and a log rate of 0
+// or less logs every failure (and never divides by it).
+UR_TEST(hostSettingsDecideTheReaperAndFilterCadence) {
+  const urnw::HostSettings defaults;
+  UR_EXPECT_EQ(1u, urnw::ReaperIntervalSeconds(defaults));
+  urnw::HostSettings slow;
+  slow.reaper_interval_seconds = 3;
+  UR_EXPECT_EQ(3u, urnw::ReaperIntervalSeconds(slow));
+  slow.reaper_interval_seconds = 0;
+  UR_EXPECT_EQ(1u, urnw::ReaperIntervalSeconds(slow));
+
+  // The first failure of a run, then one in twelve.
+  int logged = 0;
+  for (int failures = 0; failures < 36; ++failures) {
+    if (urnw::FilterFailureLogged(defaults, failures)) ++logged;
+  }
+  UR_EXPECT_EQ(3, logged);
+  UR_EXPECT_TRUE(urnw::FilterFailureLogged(defaults, 0));
+  UR_EXPECT_FALSE(urnw::FilterFailureLogged(defaults, 11));
+  UR_EXPECT_TRUE(urnw::FilterFailureLogged(defaults, 12));
+  urnw::HostSettings chatty;
+  chatty.filter_verify_log_every = 3;
+  UR_EXPECT_TRUE(urnw::FilterFailureLogged(chatty, 3));
+  UR_EXPECT_FALSE(urnw::FilterFailureLogged(chatty, 4));
+  for (const int every : {0, 1, -4}) {
+    chatty.filter_verify_log_every = every;
+    for (int failures = 0; failures < 5; ++failures) {
+      if (!urnw::FilterFailureLogged(chatty, failures)) {
+        UR_FAIL("a log rate of " + std::to_string(every) + " skipped a failure");
+      }
+    }
+  }
+}
+
+// When the next DNS check runs: every tick for a healthy, uncontested file
+// check, the slower interval for anything else; and the same decisions under
+// settings that are not the defaults.
+UR_TEST(hostSettingsDecideTheDnsCadence) {
+  struct Row {
+    bool forking;
+    bool failing;
+    bool contested;
+    int ticks;
+  };
+  const urnw::HostSettings defaults;
+  const Row rows[] = {
+      {false, false, false, 1},  {true, false, false, 10}, {false, true, false, 10},
+      {false, false, true, 10},  {true, true, true, 10},
+  };
+  int index = 0;
+  for (const Row& row : rows) {
+    if (urnw::DnsVerifyIntervalTicks(defaults, row.forking, row.failing, row.contested) !=
+        row.ticks) {
+      UR_FAIL("dns cadence row " + std::to_string(index) + " read wrong");
+    }
+    ++index;
+  }
+  UR_EXPECT_TRUE(urnw::DnsRepairContested(defaults, 9));
+  UR_EXPECT_FALSE(urnw::DnsRepairContested(defaults, 10));
+
+  urnw::HostSettings custom;
+  custom.dns_file_verify_interval_ticks = 3;
+  custom.dns_verify_interval_ticks = 60;
+  custom.dns_contested_window_ticks = 120;
+  UR_EXPECT_EQ(3, urnw::DnsVerifyIntervalTicks(custom, false, false, false));
+  UR_EXPECT_EQ(60, urnw::DnsVerifyIntervalTicks(custom, true, false, false));
+  UR_EXPECT_TRUE(urnw::DnsRepairContested(custom, 119));
+  UR_EXPECT_FALSE(urnw::DnsRepairContested(custom, 120));
+}
+
+// The host reads every one of them from the settings it was built with, and
+// none of the constants they replaced survives anywhere on this path.
+UR_TEST(theNetworkSwitchPathReadsItsTimingsFromSettings) {
+  const std::string hostHeader = ReadAppSource("daemon/TunnelHost.hpp");
+  UR_EXPECT_TRUE(Contains(hostHeader, "explicit TunnelHost(std::string storageRoot, "
+                                      "HostSettings settings = HostSettings());"));
+  UR_EXPECT_TRUE(Contains(hostHeader, "const HostSettings settings_;"));
+  UR_EXPECT_TRUE(Contains(hostHeader, "deadTunnelWatch_{settings_.dead_tunnel};"));
+  UR_EXPECT_TRUE(Contains(hostHeader, "networkQualityTracker_{settings_.network_path};"));
+  UR_EXPECT_TRUE(Contains(hostHeader, "suspendDetector_{settings_.suspend};"));
+  // Built first, so every member that takes a timing is built from it.
+  UR_EXPECT_TRUE(hostHeader.find("const HostSettings settings_;") <
+                 hostHeader.find("std::string storageRoot_;"));
+
+  const std::string host = ReadAppSource("daemon/TunnelHost.cpp");
+  const std::string witness = FunctionBody(host, "bool TunnelHost::CheckEgressWitnessLocked() {");
+  UR_EXPECT_TRUE(
+      Contains(witness, "if (++egressWitnessTicks_ < settings_.egress_witness_interval_ticks)"));
+  UR_EXPECT_TRUE(
+      Contains(witness, "if (egressWitnessFailures_ < settings_.egress_witness_failures_to_stop)"));
+  const std::string message = FunctionBody(host, "std::string DeadTunnelMessage(");
+  UR_EXPECT_TRUE(Contains(message, "seconds(settings.deadFastMillis)"));
+  UR_EXPECT_TRUE(Contains(message, "seconds(settings.deadSlowMillis)"));
+  UR_EXPECT_TRUE(Contains(message, "seconds(settings.sdkUnresponsiveMillis)"));
+  const std::string watchStart =
+      FunctionBody(host, "void TunnelHost::StartDeadTunnelWatchLocked() {");
+  UR_EXPECT_TRUE(Contains(watchStart, "deadTunnelWatch_.settings().sdkUnresponsiveMillis / 1000"));
+  // The reaper's own cadence, and the nftables re-check it runs.
+  UR_EXPECT_TRUE(Contains(host, "g_timeout_add_seconds(ReaperIntervalSeconds(settings_), "
+                                "&TunnelHost::OnReaperTick, this);"));
+  const std::string filter = FunctionBody(host, "void TunnelHost::MaintainFilterLocked() {");
+  UR_EXPECT_TRUE(Contains(filter, "excludeRetryTicks_ = settings_.filter_verify_interval_ticks;"));
+  UR_EXPECT_TRUE(
+      Contains(filter, "if (FilterFailureLogged(settings_, excludeRetryFailures_++)) {"));
+  UR_EXPECT_TRUE(Contains(filter, "if (++filterVerifyTicks_ < "
+                                  "settings_.filter_verify_interval_ticks) return;"));
+  UR_EXPECT_TRUE(Contains(filter, "const bool loud = FilterFailureLogged(settings_, "
+                                  "filterVerifyFailures_);"));
+
+  const std::string watchdog = ReadAppSource("TunnelWatchdog.hpp");
+  const std::string quality = ReadAppSource("NetworkQuality.hpp");
+  const std::string hostSettings = ReadAppSource("daemon/HostSettings.hpp");
+  const std::string sampler =
+      ReadAppSource("daemon/ExitSampler.hpp") + ReadAppSource("daemon/ExitSampler.cpp");
+  UR_EXPECT_TRUE(!hostSettings.empty() && !sampler.empty());
+  for (const char* retired :
+       {"kDeadFastMillis", "kDeadSlowMillis", "kDeadFastOutboundPackets", "kOfflineRebaseMillis",
+        "kLinuxPathHoldoffMillis", "kLinuxSuspendThresholdMillis", "kDnsVerifyIntervalSeconds",
+        "kDnsRepairAttempts", "kEgressWitnessIntervalSeconds", "kSdkUnresponsiveMillis",
+        "kSdkUnresponsiveArmMillis", "kFailsafeNoticeMillis", "kSdkSampleIntervalMillis",
+        "kEvaluateIntervalMillis", "kEvaluatorFrozenMillis", "kReaperIntervalSeconds",
+        "kFilterVerifyIntervalSeconds", "kFilterVerifyLogEvery"}) {
+    for (const std::string* source : {&host, &hostHeader, &watchdog, &quality, &hostSettings,
+                                      &sampler}) {
+      if (Contains(*source, retired)) {
+        UR_FAIL(std::string(retired) + " is back: its value belongs to a settings struct");
+      }
+    }
+  }
+  UR_EXPECT_TRUE(Contains(watchdog, "tick.verdict = Evaluate(s, now, settings_);"));
+  UR_EXPECT_TRUE(Contains(watchdog, "if (EvaluatorFroze(tick.tickGapMillis, settings_)) {"));
+  UR_EXPECT_TRUE(Contains(watchdog, "sampleAge >= settings.sdkUnresponsiveMillis"));
+  UR_EXPECT_TRUE(Contains(watchdog, "sampleAge >= settings.sdkUnresponsiveArmMillis"));
+  UR_EXPECT_TRUE(Contains(watchdog, "soonest <= settings.failsafeNoticeMillis"));
+  // The freeze bar's default is five evaluate ticks, in the struct itself.
+  UR_EXPECT_TRUE(
+      Contains(watchdog, "int64_t evaluatorFrozenMillis = 5 * evaluateIntervalMillis;"));
+  UR_EXPECT_TRUE(Contains(quality, "holdUntilMillis_ = nowMillis + settings_.holdoff_millis;"));
+  UR_EXPECT_TRUE(Contains(quality, "suspendedMillis - last_ >= settings_.threshold_millis;"));
 }

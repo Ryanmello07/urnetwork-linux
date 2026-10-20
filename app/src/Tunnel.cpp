@@ -43,11 +43,12 @@ constexpr const char* kEgressProbeAddress = "192.0.2.1";
 // RESOLVED by the witness, never sent to.
 constexpr const char* kEgressProbeAddressV6 = "2001:db8::1";
 
-// Byte-identical to ctl::kCodeEgressUnprotected / ctl::kCodeRouteInstallFailed.
-// Literals and not an include, exactly like kFilterCode* in the header: this
-// file stays free of ControlProtocol.hpp (and of nlohmann).
+// Byte-identical to ctl::kCodeEgressUnprotected / ctl::kCodeRouteInstallFailed /
+// ctl::kCodeNoNetwork. Literals and not an include, exactly like kFilterCode* in
+// the header: this file stays free of ControlProtocol.hpp (and of nlohmann).
 constexpr const char* kCodeEgressUnprotected = "egress_unprotected";
 constexpr const char* kCodeRouteInstallFailed = "route_install_failed";
+constexpr const char* kCodeNoNetwork = "no_network";
 
 std::string Trim(std::string s) {
   while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ' ||
@@ -2585,7 +2586,9 @@ bool Tunnel::Configure(const TunnelConfig& cfg, TunnelError* err) {
   // and the capture routes go with the interface — the machine is back to where
   // it started before any user traffic could touch it.
   if (cfg.require_egress_protection) {
-    if (!VerifyEgressWitness("bring-up", err)) return false;
+    // The one gate that also insists on a route off the tunnel: a Connect on a
+    // machine with no network is refused as that, not brought up over nothing.
+    if (!VerifyEgressWitness("bring-up", /*requireOffTunnelRoute=*/true, err)) return false;
   } else {
     std::fprintf(stderr,
                  "[tun] URNETWORK_ALLOW_UNPROTECTED_EGRESS is set: the daemon's own sockets "
@@ -3035,7 +3038,15 @@ bool BindWitnessSocket(int family, bool clearMark, SocketBinding* out, std::stri
 
 }  // namespace
 
-bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
+std::string ProbeEgressSource(int family) {
+  SocketBinding binding;
+  std::string ignored;
+  if (!BindWitnessSocket(family, /*clearMark=*/false, &binding, &ignored)) return std::string();
+  return binding.source;
+}
+
+bool Tunnel::VerifyEgressWitness(const char* when, bool requireOffTunnelRoute,
+                                 TunnelError* err) {
   const std::string tag = std::string("[tun] egress witness (") + (when == nullptr ? "" : when) +
                           ")";
   // `code` is the machine-readable half, and the two values are NOT
@@ -3121,54 +3132,85 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
   // cgroup and the SAME syscall sequence one line later — differing only in the
   // mark. Legs 1 and 2 must come out OPPOSITE. Two greens that agree are a
   // broken instrument, not a passing tunnel.
+  //
+  // ONE OTHER OUTCOME IS LEGAL, in both halves: a marked socket with no route
+  // at all, which WitnessTreatmentVerdict (TunnelPolicy.hpp) calls Unroutable.
+  // It is this machine between networks, or on an IPv6-only network, and the v4
+  // half used to read it as unprotected: two re-checks thirty seconds apart
+  // stopped a session that had nothing to be protected from and was waiting
+  // for the next network. Whether ANY family must have somewhere to go is the
+  // bring-up gate's question alone, asked after leg 3.
   SocketBinding daemon;
-  if (!BindWitnessSocket(AF_INET, /*clearMark=*/false, &daemon, &bindError)) {
-    return fail(kCodeEgressUnprotected,
-                "a socket created exactly as the SDK's are could not be established or routed, "
-                "so this daemon's own egress path cannot be characterised at all: " +
-                    bindError);
-  }
-  if (daemon.source == localAddr_) {
-    // THE ROOT CAUSE OF 2026-08-15, CAUGHT AT THE LAYER IT HAPPENS ON. No
-    // output-hook mark can repair this: ip_route_me_harder() re-runs the route
-    // lookup but sets FLOWI_FLAG_ANYSRC for an RTN_LOCAL source and REUSES the
-    // address connect() already bound. Whether the packet then goes into the
-    // tun (the amplification loop) or leaves the NIC sourced from the tunnel's
-    // address (a socket that can never be answered), the daemon is broken.
-    return fail(kCodeEgressUnprotected,
-                "a socket this daemon just opened was bound to the tunnel's own address (" +
-                    daemon.source +
-                    "), so it resolved the capture table before anything could steer it away. "
-                    "The mark is not reaching this process's sockets at creation time, and no "
-                    "mark applied after connect() can undo it");
-  }
-  if (!daemon.mark_known || daemon.mark != kEgressMark) {
-    // CONTRADICTORY EVIDENCE IS A FAILURE, NOT A PASS, AND THIS IS WHERE THE
-    // OLD "belt only" GREEN LIVED. The previous cut passed here with a warning
-    // whenever the socket carried no mark but had escaped the capture table
-    // anyway — a combination that has no honest explanation. If the mark is
-    // absent, the `ip rule` cannot have steered this socket, so something else
-    // did, and the next socket the SDK dials has no reason to be as lucky. The
-    // nftables belt cannot fill this gap: it acts at NF_INET_LOCAL_OUT, after
-    // the source address is bound.
-    char buf[320];
-    std::snprintf(buf, sizeof(buf),
-                  "a socket this daemon just opened escaped the capture table WITHOUT carrying "
-                  "mark 0x%08x (it reads 0x%08x%s). Nothing this daemon installed explains "
-                  "that, so the next connection the SDK dials cannot be assumed to escape too",
-                  kEgressMark, daemon.mark, daemon.mark_known ? "" : ", unreadable");
-    return fail(kCodeEgressUnprotected, buf);
+  const bool daemonBound = BindWitnessSocket(AF_INET, /*clearMark=*/false, &daemon, &bindError);
+  // A family that bound an off-tunnel source, which is what the bring-up gate
+  // requires of at least one.
+  bool offTunnelRoute = false;
+  std::string v4Detail;
+  switch (WitnessTreatmentVerdict(daemonBound, daemon.source, daemon.connect_errno,
+                                  daemon.mark_known, daemon.mark, kEgressMark, localAddr_)) {
+    case WitnessTreatment::Escaped: {
+      char buf[160];
+      std::snprintf(buf, sizeof(buf),
+                    "v4: daemon socket bound %s with mark 0x%08x, so it is steered around it",
+                    daemon.source.c_str(), daemon.mark);
+      v4Detail = buf;
+      offTunnelRoute = true;
+      break;
+    }
+    case WitnessTreatment::Unroutable:
+      v4Detail = "v4: the daemon socket carries the mark and has no IPv4 route off the tunnel (" +
+                 std::string(std::strerror(daemon.connect_errno)) + "), so it cannot enter it";
+      break;
+    case WitnessTreatment::Captured:
+      // THE ROOT CAUSE OF 2026-08-15, CAUGHT AT THE LAYER IT HAPPENS ON. No
+      // output-hook mark can repair this: ip_route_me_harder() re-runs the route
+      // lookup but sets FLOWI_FLAG_ANYSRC for an RTN_LOCAL source and REUSES the
+      // address connect() already bound. Whether the packet then goes into the
+      // tun (the amplification loop) or leaves the NIC sourced from the tunnel's
+      // address (a socket that can never be answered), the daemon is broken.
+      return fail(kCodeEgressUnprotected,
+                  "a socket this daemon just opened was bound to the tunnel's own address (" +
+                      daemon.source +
+                      "), so it resolved the capture table before anything could steer it "
+                      "away. The mark is not reaching this process's sockets at creation time, "
+                      "and no mark applied after connect() can undo it");
+    case WitnessTreatment::Unmarked: {
+      // CONTRADICTORY EVIDENCE IS A FAILURE, NOT A PASS, AND THIS IS WHERE THE
+      // OLD "belt only" GREEN LIVED. The previous cut passed here with a warning
+      // whenever the socket carried no mark but had escaped the capture table
+      // anyway — a combination that has no honest explanation. If the mark is
+      // absent, the `ip rule` cannot have steered this socket, so something else
+      // did, and the next socket the SDK dials has no reason to be as lucky. The
+      // nftables belt cannot fill this gap: it acts at NF_INET_LOCAL_OUT, after
+      // the source address is bound. A socket that found NO route without the
+      // mark is the same contradiction: unmarked, it should have bound the tun.
+      char buf[320];
+      std::snprintf(buf, sizeof(buf),
+                    "a socket this daemon just opened %s WITHOUT carrying mark 0x%08x (it reads "
+                    "0x%08x%s). Nothing this daemon installed explains that, so the next "
+                    "connection the SDK dials cannot be assumed to escape too",
+                    daemonBound ? "escaped the capture table" : "found no route off the tunnel",
+                    kEgressMark, daemon.mark, daemon.mark_known ? "" : ", unreadable");
+      return fail(kCodeEgressUnprotected, buf);
+    }
+    case WitnessTreatment::Failed:
+      return fail(kCodeEgressUnprotected,
+                  "a socket created exactly as the SDK's are could not be established or "
+                  "routed, so this daemon's own egress path cannot be characterised at all: " +
+                      bindError);
   }
 
   // ---- LEGS 1v6 / 2v6: THE SAME TWO MEASUREMENTS FOR THE v6 HALF ----------
   // Only when the v6 half is installed; a host with IPv6 disabled has nothing
   // to measure and nothing that can leak. The control leg is identical to v4:
-  // an unmarked socket must bind the tun's own ULA. The treatment leg has ONE
-  // extra legal outcome: a host whose IPv6 is enabled but has NO v6 uplink (an
-  // IPv4-only ISP, the common case) has no route at all for a socket steered
-  // OUT of the capture table, so connect() answers ENETUNREACH — the kernel
-  // saying "not through the tun, and nowhere else either", which is exactly
-  // the escape this leg exists to prove. Any other failure is a fault.
+  // an unmarked socket must bind the tun's own ULA. The treatment leg reads
+  // exactly as v4's does, through the same verdict: a host whose IPv6 is enabled
+  // but has NO v6 uplink (an IPv4-only ISP, the common case) has no route at all
+  // for a socket steered OUT of the capture table, so connect() answers
+  // ENETUNREACH — the kernel saying "not through the tun, and nowhere else
+  // either", which is exactly the escape this leg exists to prove, PROVIDED the
+  // socket carries the mark. It once passed without asking; it asks now, as v4
+  // always has for a socket that escaped.
   std::string v6Detail = "v6 half not installed";
   if (ipv6Captured_) {
     if (localAddr6_.empty()) {
@@ -3191,21 +3233,23 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
                       ", so IPv6 traffic is leaving around this tunnel");
     }
     SocketBinding daemon6;
-    if (!BindWitnessSocket(AF_INET6, /*clearMark=*/false, &daemon6, &bindError)) {
-      if (daemon6.connect_errno == ENETUNREACH || daemon6.connect_errno == EHOSTUNREACH ||
-          daemon6.connect_errno == EADDRNOTAVAIL) {
+    const bool daemon6Bound =
+        BindWitnessSocket(AF_INET6, /*clearMark=*/false, &daemon6, &bindError);
+    switch (WitnessTreatmentVerdict(daemon6Bound, daemon6.source, daemon6.connect_errno,
+                                    daemon6.mark_known, daemon6.mark, kEgressMark,
+                                    localAddr6_)) {
+      case WitnessTreatment::Escaped:
         v6Detail = "v6: control socket bound " + control6.source +
-                   " = the tunnel; the daemon socket has no IPv6 route off the tunnel (" +
+                   " = the tunnel, daemon socket bound " + daemon6.source + " with the mark";
+        offTunnelRoute = true;
+        break;
+      case WitnessTreatment::Unroutable:
+        v6Detail = "v6: control socket bound " + control6.source +
+                   " = the tunnel; the daemon socket carries the mark and has no IPv6 route off "
+                   "the tunnel (" +
                    std::strerror(daemon6.connect_errno) + "), so it cannot enter it";
-      } else {
-        return fail(kCodeEgressUnprotected,
-                    "a v6 socket created exactly as the SDK's are could not be established "
-                    "or routed, so this daemon's own IPv6 egress path cannot be "
-                    "characterised: " +
-                        bindError);
-      }
-    } else {
-      if (daemon6.source == localAddr6_) {
+        break;
+      case WitnessTreatment::Captured:
         return fail(kCodeEgressUnprotected,
                     "a v6 socket this daemon just opened was bound to the tunnel's own "
                     "address (" +
@@ -3213,18 +3257,21 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
                         "), so it resolved the capture table before anything could steer it "
                         "away. The mark is not reaching this process's IPv6 sockets at "
                         "creation time");
-      }
-      if (!daemon6.mark_known || daemon6.mark != kEgressMark) {
+      case WitnessTreatment::Unmarked: {
         char buf[320];
         std::snprintf(buf, sizeof(buf),
-                      "a v6 socket this daemon just opened escaped the capture table WITHOUT "
-                      "carrying mark 0x%08x (it reads 0x%08x%s). Nothing this daemon "
-                      "installed explains that",
+                      "a v6 socket this daemon just opened %s WITHOUT carrying mark 0x%08x (it "
+                      "reads 0x%08x%s). Nothing this daemon installed explains that",
+                      daemon6Bound ? "escaped the capture table" : "found no route off the tunnel",
                       kEgressMark, daemon6.mark, daemon6.mark_known ? "" : ", unreadable");
         return fail(kCodeEgressUnprotected, buf);
       }
-      v6Detail = "v6: control socket bound " + control6.source +
-                 " = the tunnel, daemon socket bound " + daemon6.source + " with the mark";
+      case WitnessTreatment::Failed:
+        return fail(kCodeEgressUnprotected,
+                    "a v6 socket created exactly as the SDK's are could not be established "
+                    "or routed, so this daemon's own IPv6 egress path cannot be "
+                    "characterised: " +
+                        bindError);
     }
   }
 
@@ -3264,20 +3311,45 @@ bool Tunnel::VerifyEgressWitness(const char* when, TunnelError* err) {
     return fail(kCodeEgressUnprotected, buf);
   }
 
+  // ---- AND SOMEWHERE TO GO, AT BRING-UP ONLY -------------------------------
+  // Unroutable in every family measured is not a leak, so it is not refused as
+  // one. At bring-up it is a machine with no network: nothing could carry the
+  // session, and a start that came up over nothing would only be ended by the
+  // dead-tunnel failsafe a minute and a half later. It fails here, as what it is,
+  // under its own code and without the R4 wording `fail` carries. The
+  // post-connect gate and the re-check accept it: by then it is a network
+  // switch in progress, and the session waits for the next network.
+  if (requireOffTunnelRoute && !offTunnelRoute) {
+    const std::string measured = v4Detail + "; " + v6Detail;
+    report_.egress_protected = false;
+    report_.egress_detail = "no route off the tunnel in any family: " + measured;
+    if (err != nullptr) {
+      err->code = kCodeNoNetwork;
+      err->message =
+          "this computer is not connected to a network right now: it has no route outside "
+          "the tunnel, so there is nothing to carry the connection. Connect again once it is "
+          "back on a network";
+    }
+    std::fprintf(stderr, "%s refused: no network (%s)\n", tag.c_str(), measured.c_str());
+    return false;
+  }
+
   // ---- PASS. Four legs, none of them a routing hypothetical, none of them
   // capable of being green while the capture policy is absent. Say what was
   // measured, so the answer is on a surface a human reads instead of inferred
-  // from silence.
+  // from silence: each family's treatment says whether it was steered around
+  // the tunnel or had nowhere to go at all.
   report_.egress_mechanism =
       "socket mark set at creation (cgroup-bpf sock_create), proven differentially against an "
       "unmarked control socket";
-  char detail[640];
+  char detail[768];
   std::snprintf(detail, sizeof(detail),
-                "control socket (mark 0) bound %s = the tunnel, so capture is in force; daemon "
-                "socket bound %s with mark 0x%08x, so it is steered around it; %s; 0 marked "
-                "daemon packets have entered %s and %llu have left via a physical interface",
-                control.source.c_str(), daemon.source.c_str(), daemon.mark, v6Detail.c_str(),
-                name_.c_str(), static_cast<unsigned long long>(counters.phy));
+                "control socket (mark 0) bound %s = the tunnel, so capture is in force; %s; %s; "
+                "0 marked daemon packets have entered %s and %llu have left via a physical "
+                "interface%s",
+                control.source.c_str(), v4Detail.c_str(), v6Detail.c_str(), name_.c_str(),
+                static_cast<unsigned long long>(counters.phy),
+                offTunnelRoute ? "" : "; no family has a route off the tunnel right now");
   report_.egress_detail = detail;
   report_.egress_protected = true;
   std::fprintf(stderr, "%s passed: %s\n", tag.c_str(), detail);
@@ -3722,25 +3794,83 @@ bool Tunnel::ApplyDnsViaDirectFile(const DnsHostProbe& probe, std::string* reaso
   const std::string content = BuildResolvConf(name_, dnsServers_);
 
   // A RE-APPLY (resolved restarted, or the reaper re-pushed) MUST NOT BACK UP
-  // AGAIN. The second backup would capture OUR OWN generated file and the
-  // user's original would be gone for good — the classic double-takeover bug.
+  // OUR OWN FILE. That second backup would capture the tunnel's generated file
+  // and the user's original would be gone for good — the classic
+  // double-takeover bug. What it may back up is SOMEONE ELSE'S file: the
+  // network switch that made NetworkManager or dhcpcd rewrite /etc/resolv.conf
+  // left their new file there, and it, not the bring-up copy of the network
+  // this machine has left, is what a disconnect must put back
+  // (DecideResolvConfReapply, TunnelPolicy.hpp).
   if (dnsBackend_ == DnsBackend::DirectFile) {
     struct stat ls {};
-    const bool nowSymlink = ::lstat(kResolvConfPath, &ls) == 0 && S_ISLNK(ls.st_mode);
+    const bool present = ::lstat(kResolvConfPath, &ls) == 0;
+    const bool nowSymlink = present && S_ISLNK(ls.st_mode);
     // The mode comes from the record, not from a literal: re-applying must not
     // quietly change the permissions the first takeover chose from the user's
     // own file.
     DnsTakeoverState recorded;
-    const mode_t mode =
-        (ReadTakeoverState(&recorded) && recorded.mode != 0) ? recorded.mode : 0644;
+    const bool haveRecord = ReadTakeoverState(&recorded);
+    mode_t mode = (haveRecord && recorded.mode != 0) ? recorded.mode : 0644;
+    std::string current;
+    std::string adopted;
+    if (haveRecord && present && ReadWholeFile(kResolvConfPath, &current) &&
+        DecideResolvConfReapply(current, kResolvConfMarker, dnsServers_) ==
+            ResolvConfReapply::AdoptAsBackup) {
+      DnsTakeoverState next = recorded;
+      std::string adoptError;
+      if (nowSymlink) {
+        // A link back to the writer's own file: recreating THAT link is the
+        // whole undo, and it follows every later rewrite by itself.
+        char buf[4096];
+        const ssize_t n = ::readlink(kResolvConfPath, buf, sizeof(buf) - 1);
+        if (n > 0 && std::string(buf, static_cast<size_t>(n)).find('\n') == std::string::npos) {
+          next.kind = "symlink";
+          next.target.assign(buf, static_cast<size_t>(n));
+          if (struct stat through {}; ::stat(kResolvConfPath, &through) == 0) {
+            next.mode = through.st_mode & 07777;
+          }
+          adopted = "the symlink to " + next.target + " that replaced it";
+        }
+      } else if (S_ISREG(ls.st_mode)) {
+        next.kind = "file";
+        next.target.clear();
+        next.mode = ls.st_mode & 07777;
+        // The bytes first, the record second: a crash between the two leaves
+        // the old record over a backup that is merely newer, never a record
+        // naming a backup that was not written.
+        if (WriteFileAtomic(kResolvConfBackupPath, current, next.mode,
+                            /*inPlaceFallbackOk=*/false, &adoptError)) {
+          adopted = "the newer file another writer left there";
+        }
+      }
+      if (!adopted.empty() && WriteTakeoverState(next, &adoptError)) {
+        if (next.mode != 0) mode = next.mode;
+        std::fprintf(stderr,
+                     "[dns] %s was rewritten by another writer (a network change, usually); "
+                     "%s is now what a disconnect restores\n",
+                     kResolvConfPath, adopted.c_str());
+      } else {
+        // Not adopted: the re-apply below still runs under the old record. If
+        // only the record failed, the backup it names already holds the newer
+        // bytes, which a restore of kind "file" puts back as intended and the
+        // other kinds never read.
+        if (!adopted.empty() || !adoptError.empty()) {
+          std::fprintf(stderr, "[dns] the rewritten %s could not be kept for disconnect: %s\n",
+                       kResolvConfPath, adoptError.empty() ? "unrecorded" : adoptError.c_str());
+        }
+        adopted.clear();
+      }
+    }
     std::string error;
     if (!WriteFileAtomic(kResolvConfPath, content, mode, /*inPlaceFallbackOk=*/!nowSymlink,
                          &error)) {
       return no("direct /etc/resolv.conf: could not re-write it: " + error);
     }
-    report_.dns_detail = "DNS is on the tunnel through " + std::string(kResolvConfPath) +
-                         " (re-applied; the original is still saved at " +
-                         kResolvConfBackupPath + ")";
+    report_.dns_detail =
+        "DNS is on the tunnel through " + std::string(kResolvConfPath) +
+        (adopted.empty() ? " (re-applied; the original is still saved at " +
+                               std::string(kResolvConfBackupPath) + ")"
+                         : " (re-applied; " + adopted + " is what disconnect restores)");
     return true;
   }
 

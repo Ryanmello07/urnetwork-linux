@@ -14,6 +14,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -598,6 +599,132 @@ constexpr bool CaptureV6Claims(std::string_view address) {
     if (Ipv6PrefixContains(prefix, address)) return true;
   }
   return false;
+}
+
+// ---- the egress witness's treatment leg ------------------------------------
+//
+// Tunnel::VerifyEgressWitness connect()s a socket created exactly as the SDK's
+// are (the TREATMENT) right after an unmarked control socket proved the capture
+// policy in force, once per family. Everything the leg decides from that one
+// socket is decided here, so every outcome is a table test.
+//
+// ONE OUTCOME IS NEITHER A PASS NOR A FAULT: a socket the kernel could not route
+// anywhere. connect() answers ENETUNREACH because this family has no physical
+// uplink right now -- a network switch in progress, an IPv6-only network for the
+// v4 half, an IPv4-only ISP for the v6 half. That is not a leak. An unmarked
+// socket would have resolved the capture table and bound the tun (the control
+// leg has just proven it), so a socket with no route at all is one that did not
+// resolve that table, and cannot enter it. It proves that only when the socket
+// carries the egress mark: without the mark nothing this daemon installed
+// explains the escape, which is the same contradiction as a socket that bound a
+// physical address unmarked. The v4 half used to fail on it outright, so a
+// machine that spent a minute between networks, or joined an IPv6-only one, had
+// its session torn down as "unprotected" two re-checks later.
+enum class WitnessTreatment {
+  // Bound an off-tunnel source while carrying the mark: steered around it.
+  Escaped,
+  // No route off the tunnel for this family, carrying the mark: it cannot
+  // enter the tunnel either.
+  Unroutable,
+  // Bound the tun's own address: the capture table claimed the daemon.
+  Captured,
+  // Escaped, or found no route, WITHOUT the mark: contradictory evidence.
+  Unmarked,
+  // Anything else: this family's egress path cannot be characterised.
+  Failed,
+};
+
+// The errnos with which connect() says "no route for this family": none at all
+// (ENETUNREACH), an unreachable one (EHOSTUNREACH), or a route with no source
+// address left to use (EADDRNOTAVAIL: still in DAD, or removed mid-switch).
+constexpr bool IsNoRouteErrno(int error) {
+  return error == ENETUNREACH || error == EHOSTUNREACH || error == EADDRNOTAVAIL;
+}
+
+// `bound`: connect() and getsockname() both succeeded, and `source` is the
+// address the kernel bound. `connectErrno`: why connect() failed (0 when it did
+// not get that far). `markKnown` and `mark`: SO_MARK as the socket was born
+// with it, read before connect(), so it is known on a failed connect() too.
+constexpr WitnessTreatment WitnessTreatmentVerdict(bool bound, std::string_view source,
+                                                   int connectErrno, bool markKnown,
+                                                   std::uint32_t mark, std::uint32_t egressMark,
+                                                   std::string_view tunnelAddress) {
+  const bool marked = markKnown && mark == egressMark;
+  if (!bound) {
+    if (!IsNoRouteErrno(connectErrno)) return WitnessTreatment::Failed;
+    return marked ? WitnessTreatment::Unroutable : WitnessTreatment::Unmarked;
+  }
+  // Before the mark, as the measurement has always read: a socket bound to the
+  // tun is captured whatever it carries.
+  if (source == tunnelAddress) return WitnessTreatment::Captured;
+  return marked ? WitnessTreatment::Escaped : WitnessTreatment::Unmarked;
+}
+
+// ---- the direct-file DNS tier: re-applying over a rewrite ------------------
+//
+// Tier 3 owns /etc/resolv.conf and keeps what was there before in a backup for
+// the disconnect to put back. NetworkManager's dns=default plugin and dhcpcd
+// rewrite the file at every network switch, and the reaper puts the tunnel's
+// file back over theirs (TunnelHost::MaintainDnsLocked). That re-apply used to
+// keep the backup taken at bring-up, which defeated the restore's own guard
+// against putting back "a stale copy of a state the machine has already left":
+// once the reaper had re-applied, the marker was ours again, so a disconnect
+// after a network switch restored the PREVIOUS network's resolvers.
+//
+// What the re-apply finds decides it. Our own file (it carries the marker) is
+// rewritten with the backup untouched: backing up our own file is the
+// double-takeover bug. Someone else's file naming a real resolver is the newest
+// truth about this machine's DNS and becomes the backup. Someone else's file
+// naming no resolver at all (a writer caught mid-write, an emptied file), or
+// naming one of the tunnel's own resolvers (a copy of ours), is never what a
+// disconnect may put back, so the older backup stays.
+enum class ResolvConfReapply {
+  KeepBackup,
+  AdoptAsBackup,
+};
+
+// The `nameserver` addresses in resolv.conf content, in order, read the way
+// glibc reads them: the keyword in the first column, a space or tab, then the
+// address, with anything after it ignored. Comment lines (`#`, `;`) and a
+// keyword with no separator ("nameserver10.0.0.1", which glibc ignores) are not
+// nameservers.
+inline std::vector<std::string> ResolvConfNameservers(std::string_view content) {
+  constexpr std::string_view kKeyword = "nameserver";
+  std::vector<std::string> servers;
+  for (std::size_t at = 0; at < content.size();) {
+    std::size_t end = content.find('\n', at);
+    if (end == std::string_view::npos) end = content.size();
+    const std::string_view line = content.substr(at, end - at);
+    at = end + 1;
+    if (line.substr(0, kKeyword.size()) != kKeyword) continue;
+    std::size_t pos = kKeyword.size();
+    if (pos >= line.size() || (line[pos] != ' ' && line[pos] != '\t')) continue;
+    while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t')) ++pos;
+    std::size_t stop = pos;
+    while (stop < line.size() && line[stop] != ' ' && line[stop] != '\t' && line[stop] != '\r') {
+      ++stop;
+    }
+    if (stop > pos) servers.emplace_back(line.substr(pos, stop - pos));
+  }
+  return servers;
+}
+
+// `current`: what /etc/resolv.conf holds now. `ownMarker`: the marker line in
+// every file tier 3 writes. `tunnelResolvers`: the resolvers those files name.
+inline ResolvConfReapply DecideResolvConfReapply(std::string_view current,
+                                                 std::string_view ownMarker,
+                                                 const std::vector<std::string>& tunnelResolvers) {
+  if (!ownMarker.empty() && current.find(ownMarker) != std::string_view::npos) {
+    return ResolvConfReapply::KeepBackup;
+  }
+  const std::vector<std::string> servers = ResolvConfNameservers(current);
+  if (servers.empty()) return ResolvConfReapply::KeepBackup;
+  for (const auto& server : servers) {
+    for (const auto& own : tunnelResolvers) {
+      if (server == own) return ResolvConfReapply::KeepBackup;
+    }
+  }
+  return ResolvConfReapply::AdoptAsBackup;
 }
 
 // ---- per-app split tunnel: urnetwork-exclude --------------------------------
