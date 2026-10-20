@@ -8744,10 +8744,10 @@ msgctxt "site_app_top200_manifest_hash_mismatch"
 msgid "This manifest does not match the commitment_sha256 pasted with it."
 msgstr "Этот манифест не совпадает со вставленным вместе с ним commitment_sha256."
 
-#. App top200: how to get the fleet manifest and where an app shows its member entry
+#. App top200: how to create and publish the fleet manifest and where an app shows its member entry
 msgctxt "site_app_top200_manifest_hint"
-msgid "Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
-msgstr "Вставьте манифест парка (JSON, который выводит provider fleet manifest) и эпохи действия, чтобы создать привязку для каждого устройства. Приложение показывает запись участника своего устройства для манифеста в разделе Заработок › Топ-200 › Подписать привязку парка."
+msgid "Write the fleet manifest on a provider device with provider fleet init (the command below, filled in for this deployment; add each other device with --member=<client_id>:<client_key>), then publish its commitment from your hotkey with provider fleet publish. Publishing on mainnet opens once the mainnet fleet runtime is approved. Paste the manifest here with the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
+msgstr "Создайте манифест парка на устройстве провайдера командой provider fleet init (команда ниже, уже заполненная для этого развёртывания; каждое другое устройство добавьте через --member=<client_id>:<client_key>), затем опубликуйте его коммитмент со своего хоткея командой provider fleet publish. Публикация в mainnet откроется, когда будет одобрена среда выполнения парка для mainnet. Вставьте манифест сюда вместе с эпохами действия, чтобы создать привязку для каждого устройства. Приложение показывает запись участника своего устройства для манифеста в разделе Заработок › Топ-200 › Подписать привязку парка."
 
 #. App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1
 msgctxt "site_app_top200_manifest_hotkey_mismatch"
