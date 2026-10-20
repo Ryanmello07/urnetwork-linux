@@ -8831,10 +8831,10 @@ msgctxt "site_app_top200_manifest_hash_mismatch"
 msgid "This manifest does not match the commitment_sha256 pasted with it."
 msgstr "هذا البيان لا يطابق قيمة commitment_sha256 الملصقة معه."
 
-#. App top200: how to get the fleet manifest and where an app shows its member entry
+#. App top200: how to create and publish the fleet manifest and where an app shows its member entry
 msgctxt "site_app_top200_manifest_hint"
-msgid "Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
-msgstr "الصق بيان أسطولك (JSON الذي يطبعه provider fleet manifest) وحقب الصلاحية لإنشاء ربط كل جهاز. يعرض التطبيق إدخال العضو الخاص بجهازه للبيان في الأرباح › أفضل 200 › توقيع ربط الأسطول."
+msgid "Write the fleet manifest on a provider device with provider fleet init (the command below, filled in for this deployment; add each other device with --member=<client_id>:<client_key>), then publish its commitment from your hotkey with provider fleet publish. Publishing on mainnet opens once the mainnet fleet runtime is approved. Paste the manifest here with the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
+msgstr "اكتب بيان الأسطول على جهاز مزوّد باستخدام provider fleet init (الأمر أدناه، مملوءًا لهذا النشر؛ أضف كل جهاز آخر باستخدام --member=<client_id>:<client_key>)، ثم انشر التزامه من مفتاحك الساخن باستخدام provider fleet publish. يُفتح النشر على الشبكة الرئيسية بمجرد اعتماد بيئة تشغيل الأسطول على الشبكة الرئيسية. الصق البيان هنا مع حقب الصلاحية لإنشاء ربط كل جهاز. يعرض التطبيق إدخال العضو الخاص بجهازه للبيان في الأرباح › أفضل 200 › توقيع ربط الأسطول."
 
 #. App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1
 msgctxt "site_app_top200_manifest_hotkey_mismatch"

@@ -8715,10 +8715,10 @@ msgctxt "site_app_top200_manifest_hash_mismatch"
 msgid "This manifest does not match the commitment_sha256 pasted with it."
 msgstr "Este manifiesto no coincide con el commitment_sha256 pegado con él."
 
-#. App top200: how to get the fleet manifest and where an app shows its member entry
+#. App top200: how to create and publish the fleet manifest and where an app shows its member entry
 msgctxt "site_app_top200_manifest_hint"
-msgid "Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
-msgstr "Pega tu manifiesto de flota (el JSON que imprime provider fleet manifest) y las épocas de validez para generar la vinculación de cada dispositivo. La app muestra la entrada de miembro de su dispositivo para el manifiesto en Ganancias › Top 200 › Firmar vinculación de flota."
+msgid "Write the fleet manifest on a provider device with provider fleet init (the command below, filled in for this deployment; add each other device with --member=<client_id>:<client_key>), then publish its commitment from your hotkey with provider fleet publish. Publishing on mainnet opens once the mainnet fleet runtime is approved. Paste the manifest here with the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
+msgstr "Crea el manifiesto de flota en un dispositivo proveedor con provider fleet init (el comando de abajo, ya completado para este despliegue; añade cada otro dispositivo con --member=<client_id>:<client_key>) y luego publica su compromiso desde tu hotkey con provider fleet publish. La publicación en mainnet se abrirá cuando se apruebe el runtime de flota de mainnet. Pega aquí el manifiesto con las épocas de validez para generar la vinculación de cada dispositivo. La app muestra la entrada de miembro de su dispositivo para el manifiesto en Ganancias › Top 200 › Firmar vinculación de flota."
 
 #. App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1
 msgctxt "site_app_top200_manifest_hotkey_mismatch"

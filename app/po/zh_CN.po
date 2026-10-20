@@ -8686,10 +8686,10 @@ msgctxt "site_app_top200_manifest_hash_mismatch"
 msgid "This manifest does not match the commitment_sha256 pasted with it."
 msgstr "此清单与一同粘贴的 commitment_sha256 不一致。"
 
-#. App top200: how to get the fleet manifest and where an app shows its member entry
+#. App top200: how to create and publish the fleet manifest and where an app shows its member entry
 msgctxt "site_app_top200_manifest_hint"
-msgid "Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
-msgstr "粘贴您的设备群清单（provider fleet manifest 输出的 JSON）和有效纪元，即可为每台设备生成绑定。应用会在 收益 › 前 200 名 › 签署设备群绑定 中显示其设备用于清单的成员条目。"
+msgid "Write the fleet manifest on a provider device with provider fleet init (the command below, filled in for this deployment; add each other device with --member=<client_id>:<client_key>), then publish its commitment from your hotkey with provider fleet publish. Publishing on mainnet opens once the mainnet fleet runtime is approved. Paste the manifest here with the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding."
+msgstr "在一台提供方设备上用 provider fleet init 生成设备群清单（即下方已为此部署填好的命令；其他每台设备用 --member=<client_id>:<client_key> 添加），然后用 provider fleet publish 从您的热键发布其承诺。主网的发布将在主网设备群运行时获批后开放。将清单与有效纪元一起粘贴到此处，即可为每台设备生成绑定。应用会在 收益 › 前 200 名 › 签署设备群绑定 中显示其设备用于清单的成员条目。"
 
 #. App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1
 msgctxt "site_app_top200_manifest_hotkey_mismatch"
