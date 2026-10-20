@@ -2199,6 +2199,16 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "As ações são solicitações: confirme o efeito nas medições e nas linhas de saídas, que se atualizam abaixo."
 
+#. Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.
+msgctxt "dev_affinity_max_time"
+msgid "Maximum affinity age"
+msgstr "Idade máxima da afinidade"
+
+#. Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.
+msgctxt "dev_affinity_max_time_detail"
+msgid "For ordinary new connections, reuse only a healthy IP/domain exit while the original connection's age since creation is below this limit. Default: 1 minute. Zero or negative disables reuse. Warned or unhealthy exits always race. Existing connections and explicit pins are unchanged."
+msgstr "Para novas conexões comuns, reutilize apenas uma saída IP/domínio saudável se o tempo desde a criação da conexão original for inferior a este limite. Padrão: 1 minuto. Zero ou um valor negativo desativa a reutilização. Saídas com avisos ou sem saúde sempre iniciam uma corrida. Conexões existentes e fixações explícitas não mudam."
+
 #. Developer tools screen (reliability surface): performance-aware affinity control label.
 msgctxt "dev_affinity_performance"
 msgid "Performance-aware affinity"
@@ -2206,8 +2216,8 @@ msgstr "Afinidade por desempenho"
 
 #. Developer tools screen: explanatory subtext under the performance-aware affinity control.
 msgctxt "dev_affinity_performance_detail"
-msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
-msgstr "Pondera as novas corridas TLS pela taxa máxima de bytes confirmados de cada provedor em relação à largura de banda anunciada. Com a afinidade estrita ativada, provedores com medições baixas cedem à corrida. Conexões existentes e fixações explícitas não mudam"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. Within the affinity age limit, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "Pondera as novas corridas TLS pela taxa máxima de bytes confirmados de cada provedor em relação à largura de banda anunciada. Dentro do limite de idade da afinidade, provedores com medições baixas cedem à corrida. Conexões existentes e fixações explícitas não mudam"
 
 #. Developer tools screen (reliability surface): affinity sticky control label.
 msgctxt "dev_affinity_sticky"
@@ -2681,20 +2691,15 @@ msgctxt "dev_formation_poll_detail"
 msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
 msgstr "Com que frequência um fluxo em conexão verifica de novo uma janela vazia, para que a primeira solicitação saia logo que a primeira saída chega. Desativado espera o ritmo de nova tentativa de 2 s"
 
-#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
-msgctxt "dev_fresh_flow_affinity"
-msgid "Hard fresh-flow affinity"
-msgstr "Afinidade estrita para novos fluxos"
-
-#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
-msgctxt "dev_fresh_flow_affinity_detail"
-msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
-msgstr "Atribui cada nova conexão à saída que seu IP ou domínio já usa. Desativado é o padrão: toda nova conexão comum chega à corrida de provedores. Conexões existentes e fixações explícitas nunca mudam"
-
 #. Developer tools screen (reliability surface): group follow control label.
 msgctxt "dev_group_follow"
 msgid "Follow benched exits"
 msgstr "Seguir saídas no banco"
+
+#. Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.
+msgctxt "dev_group_follow_compat_detail"
+msgid "Legacy compatibility setting, not a health override. Ordinary new connections never reuse warned or unhealthy exits; they always enter a fresh provider race. Existing connections and explicit pins are unchanged."
+msgstr "Configuração de compatibilidade antiga, não uma exceção à verificação de saúde. Novas conexões comuns nunca reutilizam saídas com avisos ou sem saúde; sempre iniciam uma nova corrida de provedores. Conexões existentes e fixações explícitas não mudam."
 
 #. Developer tools screen: explanatory subtext under the 'group follow' control.
 msgctxt "dev_group_follow_detail"
@@ -2705,11 +2710,6 @@ msgstr "Uma saída em quarentena mantém as novas conexões dos seus próprios s
 msgctxt "dev_group_follow_window"
 msgid "Follow window"
 msgstr "Janela de acompanhamento"
-
-#. Developer tools screen: explanatory subtext under the 'group follow window' control.
-msgctxt "dev_group_follow_window_detail"
-msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
-msgstr "Por quanto tempo, já no banco, as novas conexões de um site continuam seguindo sua saída — bancos iniciais costumam ser alarmes falsos; um que se prolonga tende à remoção e deixa de receber fluxos. Desativado dispersa imediatamente"
 
 #. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
 msgctxt "dev_group_follow_window_ms_detail"

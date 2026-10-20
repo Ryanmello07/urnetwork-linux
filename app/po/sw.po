@@ -2199,6 +2199,16 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "Vitendo ni maombi: thibitisha matokeo yake kwenye vipimo na safu za njia za kutoka, zinazojisasisha hapa chini."
 
+#. Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.
+msgctxt "dev_affinity_max_time"
+msgid "Maximum affinity age"
+msgstr "Umri wa juu wa mshikamano"
+
+#. Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.
+msgctxt "dev_affinity_max_time_detail"
+msgid "For ordinary new connections, reuse only a healthy IP/domain exit while the original connection's age since creation is below this limit. Default: 1 minute. Zero or negative disables reuse. Warned or unhealthy exits always race. Existing connections and explicit pins are unchanged."
+msgstr "Kwa miunganisho mipya ya kawaida, tumia tena njia ya kutoka ya IP/kikoa iliyo salama tu ikiwa muda tangu kuundwa kwa muunganisho wa awali ni chini ya kikomo hiki. Chaguomsingi: dakika 1. Sifuri au thamani hasi huzima utumiaji tena. Njia zilizoonywa au zisizo salama daima huanzisha mashindano. Miunganisho iliyopo na ubanaji wazi havibadiliki."
+
 #. Developer tools screen (reliability surface): performance-aware affinity control label.
 msgctxt "dev_affinity_performance"
 msgid "Performance-aware affinity"
@@ -2206,8 +2216,8 @@ msgstr "Mshikamano unaozingatia utendaji"
 
 #. Developer tools screen: explanatory subtext under the performance-aware affinity control.
 msgctxt "dev_affinity_performance_detail"
-msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
-msgstr "Pima mashindano mapya ya TLS kwa kasi ya juu ya baiti zilizothibitishwa za kila mtoa huduma ikilinganishwa na kipimo data alichotangaza. Mshikamano mkali ukiwashwa, watoa huduma wenye vipimo vya chini hupisha mashindano. Miunganisho iliyopo na ubanaji uliowekwa wazi hubaki vilevile"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. Within the affinity age limit, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "Pima mashindano mapya ya TLS kwa kasi ya juu ya baiti zilizothibitishwa za kila mtoa huduma ikilinganishwa na kipimo data alichotangaza. Ndani ya kikomo cha umri wa mshikamano, watoa huduma wenye vipimo vya chini hupisha mashindano. Miunganisho iliyopo na ubanaji uliowekwa wazi hubaki vilevile"
 
 #. Developer tools screen (reliability surface): affinity sticky control label.
 msgctxt "dev_affinity_sticky"
@@ -2681,20 +2691,15 @@ msgctxt "dev_formation_poll_detail"
 msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
 msgstr "Mara ngapi mtiririko unaounganika hukagua upya dirisha tupu, ili ombi la kwanza liondoke mara tu njia ya kwanza ya kutoka inapofika. Kuzima kunasubiri mwendo wa kujaribu tena wa sekunde 2"
 
-#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
-msgctxt "dev_fresh_flow_affinity"
-msgid "Hard fresh-flow affinity"
-msgstr "Mshikamano mkali wa mitiririko mipya"
-
-#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
-msgctxt "dev_fresh_flow_affinity_detail"
-msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
-msgstr "Panga kila muunganisho mpya kwenye njia ya kutoka ambayo IP au kikoa chake tayari kinatumia. Chaguomsingi ni kuzimwa: kila muunganisho mpya wa kawaida hufika kwenye mashindano ya watoa huduma. Miunganisho iliyopo na ubanaji uliowekwa wazi hubaki vilevile kila wakati"
-
 #. Developer tools screen (reliability surface): group follow control label.
 msgctxt "dev_group_follow"
 msgid "Follow benched exits"
 msgstr "Fuata njia za kutoka zilizowekwa benchi"
+
+#. Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.
+msgctxt "dev_group_follow_compat_detail"
+msgid "Legacy compatibility setting, not a health override. Ordinary new connections never reuse warned or unhealthy exits; they always enter a fresh provider race. Existing connections and explicit pins are unchanged."
+msgstr "Mpangilio wa zamani wa uoanifu, si kupuuza ukaguzi wa afya. Miunganisho mipya ya kawaida haitumii tena njia zilizoonywa au zisizo salama; daima huanza mashindano mapya ya watoa huduma. Miunganisho iliyopo na ubanaji wazi havibadiliki."
 
 #. Developer tools screen: explanatory subtext under the 'group follow' control.
 msgctxt "dev_group_follow_detail"
@@ -2705,11 +2710,6 @@ msgstr "Njia ya kutoka iliyotengwa huendelea kupokea miunganisho mipya ya tovuti
 msgctxt "dev_group_follow_window"
 msgid "Follow window"
 msgstr "Dirisha la kufuata"
-
-#. Developer tools screen: explanatory subtext under the 'group follow window' control.
-msgctxt "dev_group_follow_window_detail"
-msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
-msgstr "Muda ambao miunganisho mipya ya tovuti huendelea kufuata njia yake ya kutoka tangu ianze kukaa benchi — benchi za mapema mara nyingi ni kengele za uongo; inayodumu huelekea kuondolewa na huacha kupokea mitiririko. Kuzima kunatawanya mara moja"
 
 #. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
 msgctxt "dev_group_follow_window_ms_detail"

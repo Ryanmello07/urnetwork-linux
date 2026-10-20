@@ -2194,6 +2194,16 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "操作只是請求：請在下方會更新的量度和出口行中確認其效果。"
 
+#. Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.
+msgctxt "dev_affinity_max_time"
+msgid "Maximum affinity age"
+msgstr "親和性最長時效"
+
+#. Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.
+msgctxt "dev_affinity_max_time_detail"
+msgid "For ordinary new connections, reuse only a healthy IP/domain exit while the original connection's age since creation is below this limit. Default: 1 minute. Zero or negative disables reuse. Warned or unhealthy exits always race. Existing connections and explicit pins are unchanged."
+msgstr "對於一般新連線，僅在原始連線建立至今的時間未達此上限時，重用健康的 IP／網域出口。預設：1 分鐘。零或負值停用重用。出現警告或不健康的出口一律觸發重新競速。現有連線和明確固定不變。"
+
 #. Developer tools screen (reliability surface): performance-aware affinity control label.
 msgctxt "dev_affinity_performance"
 msgid "Performance-aware affinity"
@@ -2201,8 +2211,8 @@ msgstr "效能感知親和性"
 
 #. Developer tools screen: explanatory subtext under the performance-aware affinity control.
 msgctxt "dev_affinity_performance_detail"
-msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
-msgstr "按各供應商的峰值已確認位元組速率相對其聲稱頻寬的比例，為新的 TLS 競速加權。啟用強親和性時，量度值低的供應商會讓位於競速。現有連線和明確固定保持不變"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. Within the affinity age limit, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "按各供應商的峰值已確認位元組速率相對其聲稱頻寬的比例，為新的 TLS 競速加權。在親和性時效上限內，量度值低的供應商會讓位於競速。現有連線和明確固定保持不變"
 
 #. Developer tools screen (reliability surface): affinity sticky control label.
 msgctxt "dev_affinity_sticky"
@@ -2675,20 +2685,15 @@ msgctxt "dev_formation_poll_detail"
 msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
 msgstr "正在連接的流重新檢查空視窗的頻率，讓第一個請求在首個出口就緒後立即發出。關閉時按 2 秒的重試節奏等待"
 
-#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
-msgctxt "dev_fresh_flow_affinity"
-msgid "Hard fresh-flow affinity"
-msgstr "新流強親和性"
-
-#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
-msgctxt "dev_fresh_flow_affinity_detail"
-msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
-msgstr "將每個新連線分配給其 IP 或網域已在使用的出口。預設關閉：每個一般的新連線都會進入供應商競速。現有連線和明確固定一律保持不變"
-
 #. Developer tools screen (reliability surface): group follow control label.
 msgctxt "dev_group_follow"
 msgid "Follow benched exits"
 msgstr "跟隨被隔離的出口"
+
+#. Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.
+msgctxt "dev_group_follow_compat_detail"
+msgid "Legacy compatibility setting, not a health override. Ordinary new connections never reuse warned or unhealthy exits; they always enter a fresh provider race. Existing connections and explicit pins are unchanged."
+msgstr "此為舊版相容設定，不會繞過健康檢查。一般新連線絕不重用出現警告或不健康的出口，而是一律啟動新的供應商競速。現有連線和明確固定不變。"
 
 #. Developer tools screen: explanatory subtext under the 'group follow' control.
 msgctxt "dev_group_follow_detail"
@@ -2699,11 +2704,6 @@ msgstr "被隔離的出口在隔離初期（此時判定最不可靠）仍會承
 msgctxt "dev_group_follow_window"
 msgid "Follow window"
 msgstr "跟隨視窗"
-
-#. Developer tools screen: explanatory subtext under the 'group follow window' control.
-msgctxt "dev_group_follow_window_detail"
-msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
-msgstr "隔離開始後，網站的新連線繼續跟隨其出口的時長——早期隔離通常是誤報；持續的隔離則趨向移除，並停止接收新流。關閉時立即分散"
 
 #. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
 msgctxt "dev_group_follow_window_ms_detail"

@@ -2204,6 +2204,16 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "Действия — это запросы: проверяйте их результат в измерениях и строках выходов, которые обновляются ниже."
 
+#. Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.
+msgctxt "dev_affinity_max_time"
+msgid "Maximum affinity age"
+msgstr "Максимальный возраст привязки"
+
+#. Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.
+msgctxt "dev_affinity_max_time_detail"
+msgid "For ordinary new connections, reuse only a healthy IP/domain exit while the original connection's age since creation is below this limit. Default: 1 minute. Zero or negative disables reuse. Warned or unhealthy exits always race. Existing connections and explicit pins are unchanged."
+msgstr "Для обычных новых соединений повторно используйте только исправный выход IP/домена, если с момента создания исходного соединения прошло меньше времени, чем этот предел. По умолчанию: 1 минута. Ноль или отрицательное значение отключает повторное использование. Выходы с предупреждением или неисправные выходы всегда запускают гонку. Существующие соединения и явные закрепления не меняются."
+
 #. Developer tools screen (reliability surface): performance-aware affinity control label.
 msgctxt "dev_affinity_performance"
 msgid "Performance-aware affinity"
@@ -2211,8 +2221,8 @@ msgstr "Привязка с учётом производительности"
 
 #. Developer tools screen: explanatory subtext under the performance-aware affinity control.
 msgctxt "dev_affinity_performance_detail"
-msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
-msgstr "Взвешивает новые TLS-гонки по пиковой скорости подтверждённых байтов каждого провайдера относительно его заявленной пропускной способности. При включённой жёсткой привязке провайдеры с низкими замерами уступают гонке. Существующие соединения и явные закрепления остаются без изменений"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. Within the affinity age limit, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "Взвешивает новые TLS-гонки по пиковой скорости подтверждённых байтов каждого провайдера относительно его заявленной пропускной способности. В пределах ограничения возраста привязки провайдеры с низкими замерами уступают гонке. Существующие соединения и явные закрепления остаются без изменений"
 
 #. Developer tools screen (reliability surface): affinity sticky control label.
 msgctxt "dev_affinity_sticky"
@@ -2687,20 +2697,15 @@ msgctxt "dev_formation_poll_detail"
 msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
 msgstr "Как часто подключающийся поток перепроверяет пустое окно, чтобы первый запрос ушёл сразу после появления первого выхода. Если выключено, используется интервал повтора 2 с"
 
-#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
-msgctxt "dev_fresh_flow_affinity"
-msgid "Hard fresh-flow affinity"
-msgstr "Жёсткая привязка новых потоков"
-
-#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
-msgctxt "dev_fresh_flow_affinity_detail"
-msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
-msgstr "Назначает каждое новое соединение на выход, который уже использует его IP или домен. По умолчанию выключено: каждое обычное новое соединение попадает в гонку провайдеров. Существующие соединения и явные закрепления всегда остаются без изменений"
-
 #. Developer tools screen (reliability surface): group follow control label.
 msgctxt "dev_group_follow"
 msgid "Follow benched exits"
 msgstr "Следовать за отстранёнными выходами"
+
+#. Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.
+msgctxt "dev_group_follow_compat_detail"
+msgid "Legacy compatibility setting, not a health override. Ordinary new connections never reuse warned or unhealthy exits; they always enter a fresh provider race. Existing connections and explicit pins are unchanged."
+msgstr "Устаревшая настройка совместимости, не отменяющая проверку исправности. Обычные новые соединения никогда не используют повторно выходы с предупреждением или неисправные выходы; они всегда запускают новую гонку провайдеров. Существующие соединения и явные закрепления не меняются."
 
 #. Developer tools screen: explanatory subtext under the 'group follow' control.
 msgctxt "dev_group_follow_detail"
@@ -2711,11 +2716,6 @@ msgstr "Выход на карантине сохраняет новые сое�
 msgctxt "dev_group_follow_window"
 msgid "Follow window"
 msgstr "Окно следования"
-
-#. Developer tools screen: explanatory subtext under the 'group follow window' control.
-msgctxt "dev_group_follow_window_detail"
-msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
-msgstr "Как долго после начала отстранения новые соединения сайта продолжают следовать за своим выходом — ранние отстранения обычно оказываются ложными тревогами; затянувшееся ведёт к удалению, и выход перестаёт принимать потоки. Если выключено, соединения сразу распределяются"
 
 #. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
 msgctxt "dev_group_follow_window_ms_detail"

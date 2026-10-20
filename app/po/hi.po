@@ -2199,6 +2199,16 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "कार्रवाइयाँ अनुरोध हैं: उनका असर माप और एग्ज़िट की पंक्तियों में जाँचें, जो नीचे रीफ़्रेश होती हैं।"
 
+#. Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.
+msgctxt "dev_affinity_max_time"
+msgid "Maximum affinity age"
+msgstr "एफ़िनिटी की अधिकतम उम्र"
+
+#. Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.
+msgctxt "dev_affinity_max_time_detail"
+msgid "For ordinary new connections, reuse only a healthy IP/domain exit while the original connection's age since creation is below this limit. Default: 1 minute. Zero or negative disables reuse. Warned or unhealthy exits always race. Existing connections and explicit pins are unchanged."
+msgstr "सामान्य नए कनेक्शन के लिए केवल स्वस्थ IP/डोमेन एग्ज़िट का दोबारा उपयोग करें, यदि मूल कनेक्शन बनने के बाद बीता समय इस सीमा से कम हो। डिफ़ॉल्ट: 1 मिनट। शून्य या ऋणात्मक मान दोबारा उपयोग बंद करता है। चेतावनी वाले या अस्वस्थ एग्ज़िट हमेशा नई रेस करवाते हैं। मौजूदा कनेक्शन और स्पष्ट पिन नहीं बदलते।"
+
 #. Developer tools screen (reliability surface): performance-aware affinity control label.
 msgctxt "dev_affinity_performance"
 msgid "Performance-aware affinity"
@@ -2206,8 +2216,8 @@ msgstr "प्रदर्शन-आधारित एफ़िनिटी"
 
 #. Developer tools screen: explanatory subtext under the performance-aware affinity control.
 msgctxt "dev_affinity_performance_detail"
-msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
-msgstr "नई TLS रेस को हर प्रदाता की पुष्टि किए गए बाइट की अधिकतम दर के आधार पर, उसकी घोषित बैंडविड्थ के अनुपात में तौलें। हार्ड एफ़िनिटी चालू होने पर कम मापे गए प्रदाता रेस को रास्ता देते हैं। मौजूदा कनेक्शन और स्पष्ट पिन नहीं बदलते"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. Within the affinity age limit, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "नई TLS रेस को हर प्रदाता की पुष्टि किए गए बाइट की अधिकतम दर के आधार पर, उसकी घोषित बैंडविड्थ के अनुपात में तौलें। एफ़िनिटी की उम्र सीमा के भीतर कम मापे गए प्रदाता रेस को रास्ता देते हैं। मौजूदा कनेक्शन और स्पष्ट पिन नहीं बदलते"
 
 #. Developer tools screen (reliability surface): affinity sticky control label.
 msgctxt "dev_affinity_sticky"
@@ -2681,20 +2691,15 @@ msgctxt "dev_formation_poll_detail"
 msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
 msgstr "कनेक्ट हो रहा फ़्लो खाली विंडो को कितनी बार दोबारा जाँचता है, ताकि पहला अनुरोध पहले एग्ज़िट के आते ही निकल जाए। बंद करने पर 2 सेकंड की पुनःप्रयास गति का इंतज़ार होता है"
 
-#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
-msgctxt "dev_fresh_flow_affinity"
-msgid "Hard fresh-flow affinity"
-msgstr "नए फ़्लो के लिए हार्ड एफ़िनिटी"
-
-#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
-msgctxt "dev_fresh_flow_affinity_detail"
-msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
-msgstr "हर नए कनेक्शन को उसी एग्ज़िट पर लगाएँ जिसे उसका IP या डोमेन पहले से इस्तेमाल कर रहा है। डिफ़ॉल्ट रूप से बंद: हर सामान्य नया कनेक्शन प्रदाता रेस तक पहुँचता है। मौजूदा कनेक्शन और स्पष्ट पिन हमेशा वैसे ही रहते हैं"
-
 #. Developer tools screen (reliability surface): group follow control label.
 msgctxt "dev_group_follow"
 msgid "Follow benched exits"
 msgstr "बेंच पर बैठे एग्ज़िट का पीछा करें"
+
+#. Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.
+msgctxt "dev_group_follow_compat_detail"
+msgid "Legacy compatibility setting, not a health override. Ordinary new connections never reuse warned or unhealthy exits; they always enter a fresh provider race. Existing connections and explicit pins are unchanged."
+msgstr "पुरानी संगतता सेटिंग, स्वास्थ्य जाँच को दरकिनार करने का विकल्प नहीं। सामान्य नए कनेक्शन चेतावनी वाले या अस्वस्थ एग्ज़िट का दोबारा उपयोग कभी नहीं करते; वे हमेशा नई प्रदाता रेस शुरू करते हैं। मौजूदा कनेक्शन और स्पष्ट पिन नहीं बदलते।"
 
 #. Developer tools screen: explanatory subtext under the 'group follow' control.
 msgctxt "dev_group_follow_detail"
@@ -2705,11 +2710,6 @@ msgstr "क्वारंटीन में रखा एग्ज़िट �
 msgctxt "dev_group_follow_window"
 msgid "Follow window"
 msgstr "पीछा करने की विंडो"
-
-#. Developer tools screen: explanatory subtext under the 'group follow window' control.
-msgctxt "dev_group_follow_window_detail"
-msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
-msgstr "बेंच की शुरुआत से कितनी देर तक किसी साइट के नए कनेक्शन अपने एग्ज़िट का पीछा करते रहते हैं — शुरुआती बेंच अक्सर झूठे अलार्म होते हैं; जो बेंच लंबी चलती है वह निष्कासन की ओर बढ़ती है और फ़्लो लेना बंद कर देती है। बंद करने पर तुरंत बिखराव होता है"
 
 #. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
 msgctxt "dev_group_follow_window_ms_detail"

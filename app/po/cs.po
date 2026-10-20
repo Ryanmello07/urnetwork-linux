@@ -2204,6 +2204,16 @@ msgctxt "dev_actions_are_requests"
 msgid "Actions are requests: confirm them in the measurements and exit rows, which refresh underneath."
 msgstr "Akce jsou požadavky: ověřte jejich účinek v měřeních a řádcích výstupů, které se níže obnovují."
 
+#. Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.
+msgctxt "dev_affinity_max_time"
+msgid "Maximum affinity age"
+msgstr "Maximální stáří afinity"
+
+#. Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.
+msgctxt "dev_affinity_max_time_detail"
+msgid "For ordinary new connections, reuse only a healthy IP/domain exit while the original connection's age since creation is below this limit. Default: 1 minute. Zero or negative disables reuse. Warned or unhealthy exits always race. Existing connections and explicit pins are unchanged."
+msgstr "U běžných nových připojení znovu použijte jen zdravý výstup IP/domény, pokud je stáří původního připojení od jeho vytvoření pod tímto limitem. Výchozí: 1 minuta. Nula nebo záporná hodnota opětovné použití vypne. Výstupy s varováním nebo nezdravé výstupy vždy přejdou do závodu. Stávající připojení a explicitní připnutí se nemění."
+
 #. Developer tools screen (reliability surface): performance-aware affinity control label.
 msgctxt "dev_affinity_performance"
 msgid "Performance-aware affinity"
@@ -2211,8 +2221,8 @@ msgstr "Afinita podle výkonu"
 
 #. Developer tools screen: explanatory subtext under the performance-aware affinity control.
 msgctxt "dev_affinity_performance_detail"
-msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. With hard affinity enabled, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
-msgstr "Váží nové závody TLS podle špičkové rychlosti potvrzených bajtů každého poskytovatele vzhledem k jeho inzerované šířce pásma. Se zapnutou pevnou afinitou ustupují poskytovatelé s nízkým naměřeným výkonem závodu. Stávající připojení a explicitní připnutí zůstávají beze změny"
+msgid "Weight new TLS races by each provider's peak acknowledged-byte rate relative to its advertised bandwidth. Within the affinity age limit, low measured donors yield to the race. Existing connections and explicit pins stay fixed"
+msgstr "Váží nové závody TLS podle špičkové rychlosti potvrzených bajtů každého poskytovatele vzhledem k jeho inzerované šířce pásma. V rámci limitu stáří afinity ustupují poskytovatelé s nízkým naměřeným výkonem závodu. Stávající připojení a explicitní připnutí zůstávají beze změny"
 
 #. Developer tools screen (reliability surface): affinity sticky control label.
 msgctxt "dev_affinity_sticky"
@@ -2687,20 +2697,15 @@ msgctxt "dev_formation_poll_detail"
 msgid "How often a connecting flow re-checks an empty window, so the first request leaves right after the first exit lands. Off waits the 2s retry pace"
 msgstr "Jak často připojující se tok znovu zkontroluje prázdné okno, aby první požadavek odešel hned, jak dorazí první výstup. Vypnuto čeká 2s tempo opakování"
 
-#. Developer tools screen (reliability surface): hard fresh-flow affinity control label.
-msgctxt "dev_fresh_flow_affinity"
-msgid "Hard fresh-flow affinity"
-msgstr "Pevná afinita nových toků"
-
-#. Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.
-msgctxt "dev_fresh_flow_affinity_detail"
-msgid "Assign each new connection to the exit its IP or domain already uses. Off is the default: every ordinary fresh connection reaches the provider race. Existing connections and explicit pins always stay fixed"
-msgstr "Přiřadí každé nové připojení výstupu, který už používá jeho IP nebo doména. Výchozí je vypnuto: každé běžné nové připojení se dostane do závodu poskytovatelů. Stávající připojení a explicitní připnutí zůstávají vždy beze změny"
-
 #. Developer tools screen (reliability surface): group follow control label.
 msgctxt "dev_group_follow"
 msgid "Follow benched exits"
 msgstr "Sledovat výstupy na lavičce"
+
+#. Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.
+msgctxt "dev_group_follow_compat_detail"
+msgid "Legacy compatibility setting, not a health override. Ordinary new connections never reuse warned or unhealthy exits; they always enter a fresh provider race. Existing connections and explicit pins are unchanged."
+msgstr "Starší nastavení kompatibility, nikoli obejití kontroly zdraví. Běžná nová připojení nikdy znovu nepoužijí výstupy s varováním nebo nezdravé výstupy; vždy zahájí nový závod poskytovatelů. Stávající připojení a explicitní připnutí se nemění."
 
 #. Developer tools screen: explanatory subtext under the 'group follow' control.
 msgctxt "dev_group_follow_detail"
@@ -2711,11 +2716,6 @@ msgstr "Výstup v karanténě si ponechá nová připojení svých vlastních we
 msgctxt "dev_group_follow_window"
 msgid "Follow window"
 msgstr "Okno sledování"
-
-#. Developer tools screen: explanatory subtext under the 'group follow window' control.
-msgctxt "dev_group_follow_window_detail"
-msgid "How long into a bench a site's new connections keep following their exit — early benches are usually false alarms; one that lasts is trending toward removal and stops collecting flows. Off scatters immediately"
-msgstr "Jak dlouho od začátku pobytu na lavičce nová připojení webu dál sledují svůj výstup — rané lavičky bývají plané poplachy; ta, která trvá, směřuje k odstranění a přestane přijímat toky. Vypnuto rozptýlí okamžitě"
 
 #. Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.
 msgctxt "dev_group_follow_window_ms_detail"
