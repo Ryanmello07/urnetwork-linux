@@ -68,6 +68,7 @@
 #include "Tunnel.hpp"
 #include "TunnelWatchdog.hpp"
 #include "daemon/ExitSampler.hpp"
+#include "daemon/HostSettings.hpp"
 
 namespace urnw {
 
@@ -75,8 +76,9 @@ class TunnelHost {
  public:
   // storageRoot: the daemon state dir (normally /var/lib/urnetwork). Key
   // material lives directly in it; the SDK network-space storage in
-  // storageRoot/sdk.
-  explicit TunnelHost(std::string storageRoot);
+  // storageRoot/sdk. settings: every timing of the network-switch path
+  // (HostSettings.hpp), defaults unless a caller says otherwise.
+  explicit TunnelHost(std::string storageRoot, HostSettings settings = HostSettings());
   ~TunnelHost();
 
   // Take ownership of a kill-switch floor installed by NetFilter's static
@@ -466,7 +468,7 @@ class TunnelHost {
   // True when it ended the session.
   bool CheckDeadTunnelLocked();
   ExitSampler exitSampler_;
-  watchdog::DeadTunnelWatch deadTunnelWatch_;
+  watchdog::DeadTunnelWatch deadTunnelWatch_{settings_.dead_tunnel};
   bool deadTunnelWatching_ = false;
 
   // R4's primary mechanism: marks every socket this process creates with
@@ -518,6 +520,8 @@ class TunnelHost {
   // status_ mutators (take statusMutex_ themselves)
   void PublishError(const std::string& message, const std::string& code);
 
+  // First, so every member below that takes a timing can be built from it.
+  const HostSettings settings_;
   std::string storageRoot_;
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
   std::optional<urnet::NetworkSpace> networkSpace_;
@@ -702,9 +706,23 @@ class TunnelHost {
   // single transient (resolved mid-restart, a momentary unreadable
   // /etc/resolv.conf) does not tear down a working tunnel.
   int dnsVerifyFailures_ = 0;
+  // Ticks since the override was last repaired (saturating at the contested
+  // window, HostSettings::dns_contested_window_ticks), and whether the last
+  // repair came within that window of the one before it: a file a writer keeps
+  // rewriting over us, checked at the slower interval rather than every tick
+  // (MaintainDnsLocked).
+  int dnsTicksSinceRepair_ = 0;
+  bool dnsContested_ = false;
   int filterVerifyFailures_ = 0;
 
-  LinuxNetworkQualityTracker networkQualityTracker_;
+  // The live device's network path (NetworkQuality.hpp): rebased right after
+  // every NewDeviceLocked, observed by the reaper, under opMutex_.
+  LinuxNetworkQualityTracker networkQualityTracker_{settings_.network_path};
+  // A suspend, measured at the top of every reaper tick before anything can
+  // return early (main loop only), and the kick it owes until a tick holding
+  // opMutex_ hands it to the tracker.
+  LinuxSuspendDetector suspendDetector_{settings_.suspend};
+  bool resumePending_ = false;
 
   guint reaperId_ = 0;
   guint resolvedWatchId_ = 0;

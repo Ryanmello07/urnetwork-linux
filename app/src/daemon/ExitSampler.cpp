@@ -12,7 +12,6 @@
 
 #include <urnetwork_sdk.hpp>
 
-#include "TunnelWatchdog.hpp"
 #include "daemon/DaemonLog.hpp"
 
 namespace urnw {
@@ -28,6 +27,7 @@ struct ExitSampler::Channel {
   std::atomic<bool> cancelled{false};
   uint64_t deviceHandle = 0;
   Clock clock = nullptr;
+  int64_t sampleIntervalMillis = 0;
   // Guarded by mutex.
   Kick kick = Kick::None;
 
@@ -63,12 +63,13 @@ void NoteSampleFailure(const char* what, const char* error) {
 
 ExitSampler::~ExitSampler() { Stop(); }
 
-bool ExitSampler::Start(uint64_t deviceHandle, Clock clock) {
+bool ExitSampler::Start(uint64_t deviceHandle, Clock clock, int64_t sampleIntervalMillis) {
   Stop();
-  if (deviceHandle == 0 || clock == nullptr) return false;
+  if (deviceHandle == 0 || clock == nullptr || sampleIntervalMillis <= 0) return false;
   auto channel = std::make_shared<Channel>();
   channel->deviceHandle = deviceHandle;
   channel->clock = clock;
+  channel->sampleIntervalMillis = sampleIntervalMillis;
   try {
     // Detached: Stop never waits for it (see the header).
     std::thread([channel] { Run(channel); }).detach();
@@ -149,7 +150,7 @@ void ExitSampler::Run(const std::shared_ptr<Channel>& channel) {
       }
       if (channel->cancelled.load()) return;
       if (channel->clock() < nextSampleMillis) continue;
-      nextSampleMillis = channel->clock() + watchdog::kSdkSampleIntervalMillis;
+      nextSampleMillis = channel->clock() + channel->sampleIntervalMillis;
 
       std::optional<urnet::WindowStatus> window;
       try {

@@ -140,8 +140,15 @@ UR_TEST(DeadTunnelWiring_TheSamplerNeverTouchesTheDeviceObject) {
                                "channel->lastSampleMillis.store(now);"}));
   const std::string host = ReadDeadTunnelSource("daemon/TunnelHost.cpp");
   const std::string watch = DeadTunnelBody(host, "void TunnelHost::StartDeadTunnelWatchLocked() {");
+  // At the interval the watch's own settings ask for, nonpositive read as the
+  // default, so the sampler never spins and never paces off a constant.
   UR_EXPECT_TRUE(
-      DeadTunnelHas(watch, "if (!exitSampler_.Start(device_->handle(), &WatchdogMillis))"));
+      DeadTunnelHas(watch, "if (!exitSampler_.Start(device_->handle(), &WatchdogMillis,"));
+  UR_EXPECT_TRUE(
+      DeadTunnelHas(watch, "watchdog::SampleIntervalMillis(deadTunnelWatch_.settings())"));
+  UR_EXPECT_TRUE(DeadTunnelHas(run, "channel->clock() + channel->sampleIntervalMillis;"));
+  UR_EXPECT_FALSE(DeadTunnelHas(sampler, "kSdkSampleIntervalMillis"));
+  UR_EXPECT_TRUE(DeadTunnelHas(sampler, "sampleIntervalMillis <= 0) return false;"));
   // The up edge's level comes from the sampler's first sample: the bring-up
   // makes no call on the device for it.
   UR_EXPECT_FALSE(DeadTunnelHas(watch, "device_->get"));
@@ -172,6 +179,101 @@ UR_TEST(DeadTunnelWiring_NetworkChangesReachTheSessionThroughTheSampler) {
                                "urnet_device_get_window_status(channel->deviceHandle)"}));
   // A kick wakes the sampler's wait.
   UR_EXPECT_TRUE(DeadTunnelHas(run, "channel->kick != Channel::Kick::None"));
+}
+
+// What the kicks are decided on (NetworkQuality.hpp): the SDK's own route per
+// family, read with the egress witness's probe socket, against a baseline each
+// device takes where it is created. A suspend is read off the suspend clock
+// before the reaper's try-lock can return, and owed as a forced kick.
+UR_TEST(DeadTunnelWiring_TheReaperKicksOnTheMeasuredPathAndAfterASuspend) {
+  const std::string host = ReadDeadTunnelSource("daemon/TunnelHost.cpp");
+  const std::string reap = DeadTunnelBody(host, "void TunnelHost::Reap() {");
+  UR_EXPECT_TRUE(InOrder(reap, {"suspendDetector_.Observe(SuspendedMillis())",
+                                "resumePending_ = true;", "opMutex_, std::try_to_lock"}));
+  UR_EXPECT_TRUE(InOrder(reap, {"if (resumePending_ && liveDevice != nullptr) {",
+                                "networkQualityTracker_.ForceKickOnNextPath();",
+                                "resumePending_ = false;",
+                                "networkQualityTracker_.Observe(ReadNetworkPath(tunnelInterface), "
+                                "WatchdogMillis())"}));
+  const std::string clock = DeadTunnelBody(host, "std::int64_t SuspendedMillis() {");
+  UR_EXPECT_TRUE(DeadTunnelHas(clock, "CLOCK_BOOTTIME") && DeadTunnelHas(clock, "CLOCK_MONOTONIC"));
+
+  const std::string read =
+      DeadTunnelBody(host, "LinuxNetworkQualitySnapshot ReadNetworkPath(const std::string& "
+                           "tunnelInterface) {");
+  UR_EXPECT_TRUE(InOrder(read, {"ReadFamilyPath(AF_INET, interfaces, tunnelInterface)",
+                                "ReadFamilyPath(AF_INET6, interfaces, tunnelInterface)"}));
+  const std::string family = DeadTunnelBody(host, "LinuxFamilyPath ReadFamilyPath(");
+  UR_EXPECT_TRUE(InOrder(family, {"ProbeEgressSource(family)", "LinuxSourceLeavesTheLink(source)",
+                                  "iface == tunnelInterface", "LinuxIpv6Prefix64(source)",
+                                  "\"/proc/net/ipv6_route\"", "\"/proc/net/route\"",
+                                  "ReadCarrierUps(iface)"}));
+  const std::string ups = DeadTunnelBody(host, "std::uint64_t ReadCarrierUps(");
+  UR_EXPECT_TRUE(InOrder(ups, {"\"carrier_up_count\"", "\"carrier_changes\""}));
+  const std::string tunnel = ReadDeadTunnelSource("Tunnel.cpp");
+  const std::string probe = DeadTunnelBody(tunnel, "std::string ProbeEgressSource(int family) {");
+  UR_EXPECT_TRUE(DeadTunnelHas(probe, "BindWitnessSocket(family, /*clearMark=*/false,"));
+
+  // A baseline per device, taken right where each is created.
+  const std::string start = DeadTunnelBody(host, "void TunnelHost::RunStart(");
+  UR_EXPECT_TRUE(
+      InOrder(start, {"device_ = NewDeviceLocked(",
+                      "networkQualityTracker_.Rebase(ReadNetworkPath(PlannedTunName()));",
+                      "device_->setRpcServer("}));
+  const std::string provider =
+      DeadTunnelBody(host, "TunnelHost::ProviderStartResult TunnelHost::StartProvider(");
+  UR_EXPECT_TRUE(
+      InOrder(provider, {"providerDevice_ = NewDeviceLocked(",
+                         "networkQualityTracker_.Rebase(ReadNetworkPath(std::string()));",
+                         "providerDevice_->setProvideControlMode("}));
+}
+
+// A machine with no network is not a dead tunnel: the reaper hands the path
+// tracker's offline reading to the failsafe at the up edge and on every tick,
+// and the watch holds its no-exit rules on it and rebases on the way back.
+UR_TEST(DeadTunnelWiring_TheFailsafeHoldsWhileOfflineAndRebasesOnTheReturn) {
+  const std::string host = ReadDeadTunnelSource("daemon/TunnelHost.cpp");
+  const std::string start =
+      DeadTunnelBody(host, "void TunnelHost::StartDeadTunnelWatchLocked() {");
+  UR_EXPECT_TRUE(InOrder(start, {"inputs.offline = networkQualityTracker_.offline();",
+                                 "deadTunnelWatch_.Start(inputs);"}));
+  const std::string check = DeadTunnelBody(host, "bool TunnelHost::CheckDeadTunnelLocked() {");
+  UR_EXPECT_TRUE(InOrder(check, {"inputs.offline = networkQualityTracker_.offline();",
+                                 "deadTunnelWatch_.Tick(inputs)",
+                                 "tick.offlineStep == watchdog::OfflineStep::BackRebased"}));
+  // The reaper judges, then reads the path: the failsafe holds on the reading
+  // of the tick before, which the tracker keeps.
+  const std::string reap = DeadTunnelBody(host, "void TunnelHost::Reap() {");
+  UR_EXPECT_TRUE(InOrder(reap, {"if (CheckDeadTunnelLocked()) return;",
+                                "networkQualityTracker_.Observe("}));
+  const std::string quality = ReadDeadTunnelSource("NetworkQuality.hpp");
+  UR_EXPECT_TRUE(
+      DeadTunnelHas(quality, "bool offline() const { return initialized_ && !last_.online(); }"));
+  // The watch: the step is decided before anything else in the tick, a long
+  // stretch rebases and reaches no verdict, and the verdict is told it is
+  // offline and how much offline time each no-exit window holds.
+  const std::string watchdog = ReadDeadTunnelSource("TunnelWatchdog.hpp");
+  const std::string tick = DeadTunnelBody(watchdog, "WatchTick Tick(const WatchInputs& in) {");
+  UR_EXPECT_TRUE(
+      InOrder(tick, {"StepOffline(offline_, in.offline, offlineStretchMillis_, settings_)",
+                     "if (tick.offlineStep == OfflineStep::BackRebased) {", "Rebase(in);",
+                     "return tick;", "epoch_.Observe(", "s.offline = in.offline;",
+                     "s.provenOfflineMillis = provenOfflineMillis_;",
+                     "s.inboundOfflineMillis = inboundOfflineMillis_;",
+                     "tick.verdict = Evaluate(s, now, settings_);"}));
+  const std::string evaluate =
+      DeadTunnelBody(watchdog, "inline DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,");
+  // Each no-exit rule holds offline, and is off with a window of 0.
+  UR_EXPECT_TRUE(DeadTunnelHas(
+      evaluate, "const bool fastApplies = settings.deadFastMillis > 0 && !s.offline &&"));
+  UR_EXPECT_TRUE(DeadTunnelHas(evaluate, "settings.deadSlowMillis > 0 && !s.offline &&"));
+  UR_EXPECT_TRUE(DeadTunnelHas(
+      evaluate, "const bool unresponsiveApplies = settings.sdkUnresponsiveMillis > 0;"));
+  // The rules' windows are the settings', never a constant of their own.
+  UR_EXPECT_TRUE(DeadTunnelHas(evaluate, "inboundAge < settings.deadFastMillis"));
+  UR_EXPECT_TRUE(DeadTunnelHas(evaluate, "provenOnlineAge >= settings.deadSlowMillis"));
+  UR_EXPECT_TRUE(
+      DeadTunnelHas(evaluate, "s.outboundSinceInbound >= settings.deadFastOutboundPackets"));
 }
 
 // The countdown's end is logged for the reason it ended: never "carrying

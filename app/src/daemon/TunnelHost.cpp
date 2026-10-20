@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "TunnelHost.hpp"
 
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -40,44 +45,11 @@ constexpr const char* kClientKeySeedFile = "client_key_seed.bin";
 constexpr const char* kProvideCertFile = "provide_cert.pem";
 constexpr const char* kProvideKeyFile = "provide_key.pem";
 
-// How often the main-loop reaper runs. It does three jobs, all of which have
-// to happen somewhere the session objects can safely be destroyed: notice a
-// dead IoLoop, arm the kill switch after an UNEXPECTED drop, and enforce the
-// orphan timeout.
-constexpr guint kReaperIntervalSeconds = 1;
-
-// How often the reaper asks the kernel whether our table is still there.
-// nftables has no tamper callback, so a poll is the entire mitigation for a
-// foreign `nft flush ruleset` — and on Fedora/Bazzite the shipped
-// /etc/sysconfig/nftables.conf BEGINS with `flush ruleset`, so a
-// `systemctl restart nftables` destroys `table inet urnetwork` silently.
-// Every poll is one `nft list table` fork/exec, so it is deliberately NOT on
-// every 1 s tick: 5 s bounds the tamper window at 5 s for ~17k execs a day
-// instead of 86k.
-constexpr int kFilterVerifyIntervalSeconds = 5;
-// A Verify/re-install that keeps failing (nft uninstalled underneath us) must
-// not turn the journal into a 5 s heartbeat. Log the first failure, then one
-// in this many.
-constexpr int kFilterVerifyLogEvery = 12;  // ~once a minute
-// The live egress witness costs one nft read + one socket + four datagrams and
-// no network round trip, so it is cheap — but it does emit packets, so it does
-// not belong on every tick either. 30 s means two consecutive failures cap the
-// exposure at ~60 s. The comparison that sets the bar: the incident this
-// exists for ran for forty minutes.
-constexpr int kEgressWitnessIntervalSeconds = 30;
-
-// How often the DNS override is re-checked mid-session. NetworkManager's
-// dns=default plugin and dhcpcd rewrite /etc/resolv.conf on EVERY connectivity
-// change, so the direct-file tier can be silently displaced seconds after it is
-// applied — and the resolvectl tier can be displaced by a resolved restart. 10s
-// is a compromise: the check is one file read (tiers 2/3) or one resolvectl fork
-// (tier 1), and the window it leaves is bounded by the DNS floor, which turns a
-// displaced override into an outage rather than a leak.
-constexpr int kDnsVerifyIntervalSeconds = 10;
-
-// Consecutive failed re-applies before the session is stopped. Three ticks of
-// kDnsVerifyIntervalSeconds ~= 30s of unprotected names, bounded by the floor.
-constexpr int kDnsRepairAttempts = 3;
+// The main-loop reaper does the jobs that have to happen somewhere the session
+// objects can safely be destroyed: notice a dead IoLoop, arm the kill switch
+// after an UNEXPECTED drop, enforce the orphan timeout, and every re-check of
+// the machine the session changed. Its cadence and every re-check's take their
+// timings from the TunnelHost's HostSettings (daemon/HostSettings.hpp).
 
 int64_t UnixMillis() { return g_get_real_time() / 1000; }
 int64_t MonotonicSeconds() { return g_get_monotonic_time() / G_USEC_PER_SEC; }
@@ -269,10 +241,16 @@ bool WriteStopRecord(const selfrestart::StopRecord& record, std::string* error) 
 // ctl::RpcPortFromHostPort, which is the same function the shared validator
 // uses, so the reply's rpc_port is a trustworthy cross-check.
 
+// The network path the reaper watches (defined with the reaper's other
+// readers, below): needed here too, where a device is created and the
+// tracker takes the network that device starts on as its baseline.
+LinuxNetworkQualitySnapshot ReadNetworkPath(const std::string& tunnelInterface);
+
 }  // namespace
 
-TunnelHost::TunnelHost(std::string storageRoot)
-    : storageRoot_(std::move(storageRoot)),
+TunnelHost::TunnelHost(std::string storageRoot, HostSettings settings)
+    : settings_(std::move(settings)),
+      storageRoot_(std::move(storageRoot)),
       logUploadFlight_(std::make_shared<logupload::Flight>(UnixMillis())) {
   cgroup_ = SelfCgroupV2();
   // urnetwork-exclude needs the unified hierarchy alone; ReportPreflight says
@@ -287,7 +265,17 @@ TunnelHost::TunnelHost(std::string storageRoot)
       env != nullptr && *env != '\0' && std::string(env) != "0") {
     allowUnprotectedEgress_ = true;
   }
-  reaperId_ = g_timeout_add_seconds(kReaperIntervalSeconds, &TunnelHost::OnReaperTick, this);
+  // The reaper ticks the dead-tunnel watch, whose windows and freeze bar are
+  // counted in the interval it was told it would be ticked at.
+  if (static_cast<int64_t>(ReaperIntervalSeconds(settings_)) * 1000 !=
+      settings_.dead_tunnel.evaluateIntervalMillis) {
+    DaemonLogf("[tunnel] WARNING: the reaper ticks every %us but the failsafe was set up for a "
+               "tick every %lldms; its freeze bar is counted in the latter\n",
+               ReaperIntervalSeconds(settings_),
+               static_cast<long long>(settings_.dead_tunnel.evaluateIntervalMillis));
+  }
+  reaperId_ =
+      g_timeout_add_seconds(ReaperIntervalSeconds(settings_), &TunnelHost::OnReaperTick, this);
   // systemd-resolved forgets every per-link setting across a restart, and a
   // DHCP search domain can beat our `~.` default-route domain afterwards
   // (docs/linux_agent_help.md R5). Watching the bus name is the cheap,
@@ -585,7 +573,7 @@ bool TunnelHost::InstallFilterLocked(FilterState state, bool floor, std::string*
           "[tunnel] ERROR: the firewall teardown did not complete: %s. This machine may still "
           "be filtered by URnetwork. It will be retried every %ds; to lift it by hand run: %s\n",
           error != nullptr && !error->empty() ? error->c_str() : filter_.lastError().c_str(),
-          static_cast<int>(kReaperIntervalSeconds), NetFilter::RecoveryCommand());
+          static_cast<int>(ReaperIntervalSeconds(settings_)), NetFilter::RecoveryCommand());
     }
   } else if (ok) {
     // We own a table again, and it is the one we intended.
@@ -937,6 +925,11 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // newSecurityPolicyMonitor(ctx, device, settings.Verbose), which returns
       // nil immediately because DefaultDeviceLocalSettings sets Verbose=false.
       device_ = NewDeviceLocked(config.by_jwt, config.instance_id, config.app_version);
+      // The network this device's first dials go out on, so the reaper's first
+      // tick after the bring-up kicks it only for a path that has moved since
+      // — a switch during the bring-up included, which a baseline taken on that
+      // first tick would have swallowed.
+      networkQualityTracker_.Rebase(ReadNetworkPath(PlannedTunName()));
 
       // --- 4) device-RPC mTLS pinning (windows TunnelController parity) -----
       // MANDATORY. Both halves pin the SAME generated material; the SDK
@@ -1104,6 +1097,9 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       dnsProtectionExpected_ = tunnel_->report().dns_applied;
       dnsVerifyTicks_ = 0;
       dnsVerifyFailures_ = 0;
+      // No repair yet this session: the first one is never "contested".
+      dnsTicksSinceRepair_ = settings_.dns_contested_window_ticks;
+      dnsContested_ = false;
       if (killSwitchRequested_.load() && !tunnel_->report().dns_applied) {
         // The kill switch closes off-tunnel :53. Coming up with the DNS
         // override not in force would leave the machine unable to resolve at
@@ -1180,7 +1176,8 @@ void TunnelHost::RunStart(ctl::StartTunnelRequest config) {
       // datagrams, instead of whenever a human happens to look.
       if (!allowUnprotectedEgress_) {
         TunnelError witnessError;
-        if (!tunnel_->VerifyEgressWitness("connected", &witnessError)) {
+        if (!tunnel_->VerifyEgressWitness("connected", /*requireOffTunnelRoute=*/false,
+                                          &witnessError)) {
           PublishError(witnessError.message, ctl::kCodeEgressUnprotected);
           throw std::runtime_error(witnessError.message);
         }
@@ -1773,6 +1770,10 @@ TunnelHost::ProviderStartResult TunnelHost::StartProvider(
     // device's sockets follow the main routing table like any process's.
     LoadNetworkSpaceLocked(request.network_space_json);
     providerDevice_ = NewDeviceLocked(request.by_jwt, request.instance_id, request.app_version);
+    // Its own baseline, not whatever the tracker last saw: a provider retired
+    // and started again later must not inherit the network of the one before
+    // it and be kicked within a second of its first dial.
+    networkQualityTracker_.Rebase(ReadNetworkPath(std::string()));
     if (!request.provider_transport_settings_json.empty()) {
       providerDevice_->setProviderTransportSettings(
           nlohmann::json::parse(request.provider_transport_settings_json)
@@ -2421,8 +2422,8 @@ void TunnelHost::MaintainFilterLocked() {
       } else {
         // The tamper repair's cadence and log rate: an nft that keeps failing
         // is not worth a fork every second.
-        excludeRetryTicks_ = kFilterVerifyIntervalSeconds;
-        if ((excludeRetryFailures_++ % kFilterVerifyLogEvery) == 0) {
+        excludeRetryTicks_ = settings_.filter_verify_interval_ticks;
+        if (FilterFailureLogged(settings_, excludeRetryFailures_++)) {
           DaemonLogf("[tunnel] could not update the per-app exclusion: %s\n",
                      excludeError.c_str());
         }
@@ -2439,7 +2440,7 @@ void TunnelHost::MaintainFilterLocked() {
   //    Polling Verify() here is the entire mitigation, and re-installing the
   //    SAME config (floor included) is the entire repair.
   if (!filter_.installed()) return;
-  if (++filterVerifyTicks_ < kFilterVerifyIntervalSeconds) return;
+  if (++filterVerifyTicks_ < settings_.filter_verify_interval_ticks) return;
   filterVerifyTicks_ = 0;
 
   std::string error;
@@ -2447,7 +2448,7 @@ void TunnelHost::MaintainFilterLocked() {
     filterVerifyFailures_ = 0;
     return;
   }
-  const bool loud = (filterVerifyFailures_ % kFilterVerifyLogEvery) == 0;
+  const bool loud = FilterFailureLogged(settings_, filterVerifyFailures_);
   ++filterVerifyFailures_;
   if (loud) {
     DaemonLogf(
@@ -2488,12 +2489,22 @@ void TunnelHost::MaintainDnsLocked() {
   // says "Connected" is precisely the failure a tester cannot diagnose.
   if (tunnel_ == nullptr) return;
   if (!dnsProtectionExpected_) return;  // the session opted out at bring-up
-  if (++dnsVerifyTicks_ < kDnsVerifyIntervalSeconds) return;
+  // Every tick where the check is a file read and nothing is failing; the
+  // slower interval where it forks resolvectl, where a repair has just failed,
+  // and where the file is contested (HostSettings.hpp says why each).
+  if (DnsRepairContested(settings_, dnsTicksSinceRepair_)) ++dnsTicksSinceRepair_;
+  const int verifyInterval = DnsVerifyIntervalTicks(
+      settings_, /*forkingCheck=*/tunnel_->dnsBackend() == DnsBackend::SystemdResolved,
+      /*repairFailing=*/dnsVerifyFailures_ != 0, dnsContested_);
+  if (++dnsVerifyTicks_ < verifyInterval) return;
   dnsVerifyTicks_ = 0;
 
   std::string detail;
   if (tunnel_->VerifyDnsStillApplied(&detail)) {
     dnsVerifyFailures_ = 0;
+    // A whole contested window in force since the last repair: no longer
+    // contested.
+    if (!DnsRepairContested(settings_, dnsTicksSinceRepair_)) dnsContested_ = false;
     return;
   }
   ++dnsVerifyFailures_;
@@ -2502,6 +2513,8 @@ void TunnelHost::MaintainDnsLocked() {
 
   // REPAIR FIRST, the same order MaintainFilterLocked uses: re-applying is
   // almost always enough, because the displacing write is a one-shot.
+  const DnsBackend backendBefore = tunnel_->dnsBackend();
+  const std::vector<std::string> resolversBefore = tunnel_->resolvers();
   const bool applied = tunnel_->ApplyDns();
   {
     std::scoped_lock statusLock(statusMutex_);
@@ -2511,10 +2524,26 @@ void TunnelHost::MaintainDnsLocked() {
   support::LogDnsOverride("lost", applied, tunnel_->dnsBackend());
   if (applied) {
     dnsVerifyFailures_ = 0;
+    dnsContested_ = DnsRepairContested(settings_, dnsTicksSinceRepair_);
+    dnsTicksSinceRepair_ = 0;
     DaemonLogf("[tunnel] the DNS override has been re-applied (%s)\n",
                tunnel_->report().dns_detail.c_str());
     // The floor pins the resolvers the override just (re)published, so it has
-    // to be rebuilt from the new report rather than left naming the old ones.
+    // to be rebuilt from the new report rather than left naming the old ones —
+    // unless nothing it pins changed: the same backend and the same resolvers,
+    // under a Connected floor that already closes off-tunnel DNS around exactly
+    // those. A writer that rewrites /etc/resolv.conf at every network switch
+    // would otherwise cost an nft table swap per rewrite, and every swap starts
+    // the egress witness's counters over. A floor an EARLIER failed repair
+    // lifted (block_offtunnel_dns false) is rebuilt, never assumed current.
+    const FilterConfig& inForce = filter_.appliedConfig();
+    const bool floorCurrent = filter_.state() == FilterState::Connected &&
+                              inForce.block_offtunnel_dns == tunnel_->report().dns_applied &&
+                              inForce.tunnel_resolvers == tunnel_->resolvers();
+    if (tunnel_->dnsBackend() == backendBefore && tunnel_->resolvers() == resolversBefore &&
+        floorCurrent) {
+      return;
+    }
     std::string ignored;
     ApplyFilterLocked(FilterState::Connected, &ignored);
     return;
@@ -2527,9 +2556,9 @@ void TunnelHost::MaintainDnsLocked() {
   // about the leak at connect time than it is one second later.
   std::string ignored;
   ApplyFilterLocked(FilterState::Connected, &ignored);
-  if (dnsVerifyFailures_ < kDnsRepairAttempts) {
+  if (dnsVerifyFailures_ < settings_.dns_repair_attempts) {
     DaemonLogf("[tunnel] the DNS override could not be re-applied (attempt %d of %d): %s\n",
-               dnsVerifyFailures_, kDnsRepairAttempts,
+               dnsVerifyFailures_, settings_.dns_repair_attempts,
                tunnel_->report().dns_detail.c_str());
     return;
   }
@@ -2554,15 +2583,83 @@ uint64_t ReadIfaceCounter(const std::string& iface, const char* which) {
   return 0;
 }
 
-// /proc/net/route, /proc/net/wireless and the default route's sysfs carrier and
-// speed, which a Wi-Fi or link-down interface answers with EINVAL
-// (TextFile.hpp): never a throw out of the reaper tick.
+// /proc/net/route, /proc/net/ipv6_route, /proc/net/wireless and the path
+// interface's sysfs carrier, carrier counters and speed, which a Wi-Fi or
+// link-down interface answers with EINVAL (TextFile.hpp): never a throw out of
+// the reaper tick.
 std::string ReadTextFile(const std::string& path) { return textfile::ReadAll(path); }
 
-LinuxNetworkQualitySnapshot ReadNetworkQuality(const std::string& tunnelInterface) {
+// The interface holding `address` in `family`, from getifaddrs; "" when none
+// does (an address removed between the probe and this read).
+std::string InterfaceOwningAddress(const ifaddrs* interfaces, int family,
+                                   const std::string& address) {
+  for (const ifaddrs* ifa = interfaces; ifa != nullptr; ifa = ifa->ifa_next) {
+    if (ifa->ifa_addr == nullptr || ifa->ifa_name == nullptr) continue;
+    if (ifa->ifa_addr->sa_family != family) continue;
+    char text[INET6_ADDRSTRLEN] = {0};
+    const void* raw = nullptr;
+    if (family == AF_INET6) {
+      raw = &reinterpret_cast<const sockaddr_in6*>(ifa->ifa_addr)->sin6_addr;
+    } else {
+      raw = &reinterpret_cast<const sockaddr_in*>(ifa->ifa_addr)->sin_addr;
+    }
+    if (::inet_ntop(family, raw, text, sizeof(text)) != nullptr && address == text) {
+      return ifa->ifa_name;
+    }
+  }
+  return std::string();
+}
+
+// How many times `iface`'s carrier has come up: carrier_up_count (4.16+), else
+// carrier_changes (3.15+, which counts both edges and grows the same way); 0
+// when neither is readable.
+std::uint64_t ReadCarrierUps(const std::string& iface) {
+  for (const char* file : {"carrier_up_count", "carrier_changes"}) {
+    std::istringstream value(ReadTextFile("/sys/class/net/" + iface + "/" + file));
+    std::uint64_t count = 0;
+    if (value >> count) return count;
+  }
+  return 0;
+}
+
+// One family's way off the tunnel, as the SDK's next dial would take it (see
+// NetworkQuality.hpp): the probe's source address, the interface holding it,
+// that interface's default next hop and its carrier counter. Empty when the
+// family has no route, when only a link-local or loopback source is left, and
+// when the probe landed on the tun itself -- a missing mark, the egress
+// witness's to report, and never a way off the tunnel.
+LinuxFamilyPath ReadFamilyPath(int family, const ifaddrs* interfaces,
+                               const std::string& tunnelInterface) {
+  LinuxFamilyPath path;
+  const std::string source = ProbeEgressSource(family);
+  if (source.empty() || !LinuxSourceLeavesTheLink(source)) return path;
+  const std::string iface = InterfaceOwningAddress(interfaces, family, source);
+  if (iface.empty() || iface == tunnelInterface) return path;
+  path.interface_name = iface;
+  if (family == AF_INET6) {
+    path.source = LinuxIpv6Prefix64(source);
+    path.gateway = LinuxDefaultRouteGatewayV6(ReadTextFile("/proc/net/ipv6_route"), iface);
+  } else {
+    path.source = source;
+    path.gateway = LinuxDefaultRouteGateway(ReadTextFile("/proc/net/route"), iface);
+  }
+  if (path.source.empty()) return LinuxFamilyPath();
+  path.carrier_ups = ReadCarrierUps(iface);
+  return path;
+}
+
+// The reaper's network-path snapshot: both families' ways off the tunnel, and
+// the quality readings of the interface IPv4 leaves through (IPv6's when IPv4
+// has none). Two probe sockets, two /proc reads and a getifaddrs per tick.
+LinuxNetworkQualitySnapshot ReadNetworkPath(const std::string& tunnelInterface) {
   LinuxNetworkQualitySnapshot snapshot;
-  snapshot.interface_name = LinuxDefaultRouteInterface(
-      ReadTextFile("/proc/net/route"), tunnelInterface);
+  ifaddrs* interfaces = nullptr;
+  if (::getifaddrs(&interfaces) != 0) interfaces = nullptr;
+  snapshot.v4 = ReadFamilyPath(AF_INET, interfaces, tunnelInterface);
+  snapshot.v6 = ReadFamilyPath(AF_INET6, interfaces, tunnelInterface);
+  if (interfaces != nullptr) ::freeifaddrs(interfaces);
+  snapshot.interface_name =
+      snapshot.v4.present() ? snapshot.v4.interface_name : snapshot.v6.interface_name;
   if (snapshot.interface_name.empty()) return snapshot;
 
   const std::string prefix = "/sys/class/net/" + snapshot.interface_name + "/";
@@ -2580,6 +2677,22 @@ LinuxNetworkQualitySnapshot ReadNetworkQuality(const std::string& tunnelInterfac
   snapshot.wireless_signal_level = LinuxWirelessSignalLevel(
       ReadTextFile("/proc/net/wireless"), snapshot.interface_name);
   return snapshot;
+}
+
+// CLOCK_BOOTTIME minus CLOCK_MONOTONIC: the time this machine has spent
+// suspended since it booted (LinuxSuspendDetector). 0 on a macOS dev build,
+// which has no suspend clock to read.
+std::int64_t SuspendedMillis() {
+#if defined(CLOCK_BOOTTIME)
+  timespec boot{};
+  timespec monotonic{};
+  ::clock_gettime(CLOCK_BOOTTIME, &boot);
+  ::clock_gettime(CLOCK_MONOTONIC, &monotonic);
+  return (static_cast<std::int64_t>(boot.tv_sec) - monotonic.tv_sec) * 1000 +
+         (static_cast<std::int64_t>(boot.tv_nsec) - monotonic.tv_nsec) / 1000000;
+#else
+  return 0;
+#endif
 }
 
 }  // namespace
@@ -2659,11 +2772,13 @@ bool TunnelHost::CheckEgressWitnessLocked() {
     egressWitnessTicks_ = 0;
     return false;
   }
-  if (++egressWitnessTicks_ < kEgressWitnessIntervalSeconds) return false;
+  if (++egressWitnessTicks_ < settings_.egress_witness_interval_ticks) return false;
   egressWitnessTicks_ = 0;
 
+  // No route off the tunnel is a pass here: a network switch in progress, or an
+  // IPv6-only network, is not a session to stop (Tunnel::VerifyEgressWitness).
   TunnelError witnessError;
-  if (tunnel_->VerifyEgressWitness("recheck", &witnessError)) {
+  if (tunnel_->VerifyEgressWitness("recheck", /*requireOffTunnelRoute=*/false, &witnessError)) {
     egressWitnessFailures_ = 0;
     {
       std::scoped_lock lock(statusMutex_);
@@ -2677,18 +2792,21 @@ bool TunnelHost::CheckEgressWitnessLocked() {
     std::scoped_lock lock(statusMutex_);
     status_.egress_protected = false;
   }
-  if (egressWitnessFailures_ < 2) {
+  if (egressWitnessFailures_ < settings_.egress_witness_failures_to_stop) {
     DaemonLogf(
-        "[tunnel] WARNING: the egress witness failed (%s). Re-checking in %ds; two in a row "
+        "[tunnel] WARNING: the egress witness failed (%s). Re-checking in %ds; %d in a row "
         "tears this tunnel down.\n",
-        witnessError.message.c_str(), static_cast<int>(kEgressWitnessIntervalSeconds));
+        witnessError.message.c_str(),
+        settings_.egress_witness_interval_ticks *
+            static_cast<int>(ReaperIntervalSeconds(settings_)),
+        settings_.egress_witness_failures_to_stop);
     return false;
   }
 
   DaemonLogf(
       "[tunnel] STOPPING: this daemon's own traffic is no longer demonstrably outside its own "
-      "tunnel, twice running. %s\n",
-      witnessError.message.c_str());
+      "tunnel, %d checks running. %s\n",
+      egressWitnessFailures_, witnessError.message.c_str());
   egressWitnessFailures_ = 0;
   // NOT StopInternalLocked("egress_unprotected"). That published nothing (its
   // tail clears the error) and lifted the kill-switch floor on the strength of
@@ -2707,19 +2825,26 @@ bool TunnelHost::CheckEgressWitnessLocked() {
 
 namespace {
 
-// The sentence a failsafe teardown leads its `error` with. StopUnsafeSessionLocked
-// adds whether this machine is now blocked.
-const char* DeadTunnelMessage(watchdog::DeadTunnelReason reason) {
+// The sentence a failsafe teardown leads its `error` with, naming the window the
+// watch was built with. StopUnsafeSessionLocked adds whether this machine is now
+// blocked.
+std::string DeadTunnelMessage(watchdog::DeadTunnelReason reason,
+                              const watchdog::DeadTunnelSettings& settings) {
+  const auto seconds = [](int64_t millis) { return std::to_string(millis / 1000); };
   switch (reason) {
     case watchdog::DeadTunnelReason::NoInbound:
       return "The connection was stopped because it carried nothing: this computer kept "
-             "sending into the tunnel and nothing came back for 20 seconds.";
+             "sending into the tunnel and nothing came back for " +
+             seconds(settings.deadFastMillis) + " seconds.";
     case watchdog::DeadTunnelReason::NoExit:
       return "The connection was stopped because it carried nothing: no provider could carry "
-             "its traffic for 90 seconds.";
+             "its traffic for " +
+             seconds(settings.deadSlowMillis) + " seconds.";
     case watchdog::DeadTunnelReason::SdkUnresponsive:
       return "The connection was stopped because it carried nothing: the URnetwork engine "
-             "stopped answering for 30 seconds, so the URnetwork service restarted itself.";
+             "stopped answering for " +
+             seconds(settings.sdkUnresponsiveMillis) +
+             " seconds, so the URnetwork service restarted itself.";
     case watchdog::DeadTunnelReason::None:
       break;
   }
@@ -2733,21 +2858,25 @@ void TunnelHost::StartDeadTunnelWatchLocked() {
   // The window's level at the up edge comes from the sampler's first sample,
   // taken at once on its own thread, so the first destination the app picks
   // reads as the new generation it is. Nothing here waits on the device.
-  if (!exitSampler_.Start(device_->handle(), &WatchdogMillis)) return;
+  if (!exitSampler_.Start(device_->handle(), &WatchdogMillis,
+                          watchdog::SampleIntervalMillis(deadTunnelWatch_.settings()))) {
+    return;
+  }
   watchdog::WatchInputs inputs;
   inputs.nowMillis = WatchdogMillis();
   const std::string iface = tunnel_->name();
   inputs.outboundPackets = ReadIfaceCounter(iface, "tx_packets");
   inputs.inboundPackets = ReadIfaceCounter(iface, "rx_packets");
   inputs.windowSampled = false;
+  inputs.offline = networkQualityTracker_.offline();
   deadTunnelWatch_.Start(inputs);
   deadTunnelWatching_ = true;
   DaemonLogf("[tunnel] failsafe: watching this tunnel. It is stopped if it carries nothing: no "
              "proven exit for %llds, %llds of sending with nothing coming back, or %llds of "
              "sdk silence. Nothing reconnects afterwards.\n",
-             static_cast<long long>(watchdog::kDeadSlowMillis / 1000),
-             static_cast<long long>(watchdog::kDeadFastMillis / 1000),
-             static_cast<long long>(watchdog::kSdkUnresponsiveMillis / 1000));
+             static_cast<long long>(deadTunnelWatch_.settings().deadSlowMillis / 1000),
+             static_cast<long long>(deadTunnelWatch_.settings().deadFastMillis / 1000),
+             static_cast<long long>(deadTunnelWatch_.settings().sdkUnresponsiveMillis / 1000));
 }
 
 void TunnelHost::StopDeadTunnelWatchLocked() {
@@ -2779,8 +2908,25 @@ bool TunnelHost::CheckDeadTunnelLocked() {
   inputs.connectionGeneration = sample.connectionGeneration;
   inputs.providerWindowMinSatisfied = sample.providerWindowMinSatisfied;
   inputs.windowSampled = sample.sampled;
+  // Whether this machine has a network at all, as the path tracker last read it
+  // (on the tick before this one: the reaper reads the path after this check).
+  // Offline, the no-exit rules hold and their windows leave the time out; back
+  // after a real stretch, every window starts again (TunnelWatchdog.hpp).
+  inputs.offline = networkQualityTracker_.offline();
 
   const watchdog::WatchTick tick = deadTunnelWatch_.Tick(inputs);
+  if (tick.wentOffline) {
+    DaemonLogf("[tunnel] failsafe: this computer has no network; the no-exit rules wait for "
+               "one, and the time offline is not counted\n");
+  } else if (tick.offlineStep == watchdog::OfflineStep::BackRebased) {
+    DaemonLogf("[tunnel] failsafe: back on a network after %llds offline, so every window "
+               "starts again from now\n",
+               static_cast<long long>(tick.offlineStretchMillis / 1000));
+  } else if (tick.offlineStep == watchdog::OfflineStep::BackFromBlip) {
+    DaemonLogf("[tunnel] failsafe: back on a network after %lldms offline; that time is not "
+               "counted\n",
+               static_cast<long long>(tick.offlineStretchMillis));
+  }
   if (tick.froze) {
     DaemonLogf("[tunnel] failsafe: nothing watched this tunnel for %lldms (a suspend, or a "
                "stalled daemon), so every window starts again from now\n",
@@ -2793,7 +2939,7 @@ bool TunnelHost::CheckDeadTunnelLocked() {
     DaemonLogf("[tunnel] failsafe: destination generation %lld formed its window; the %llds "
                "no-inbound window starts now\n",
                static_cast<long long>(sample.connectionGeneration),
-               static_cast<long long>(watchdog::kDeadFastMillis / 1000));
+               static_cast<long long>(deadTunnelWatch_.settings().deadFastMillis / 1000));
   }
   bool armedChanged = false;
   {
@@ -2812,6 +2958,10 @@ bool TunnelHost::CheckDeadTunnelLocked() {
                static_cast<long long>(tick.verdict.millisToFailsafe / 1000));
   } else if (armedChanged && tick.froze) {
     DaemonLogf("[tunnel] failsafe: the rebase reset the countdown\n");
+  } else if (armedChanged && tick.offlineStep == watchdog::OfflineStep::Offline) {
+    DaemonLogf("[tunnel] failsafe: the countdown waits while this computer has no network\n");
+  } else if (armedChanged && tick.offlineStep == watchdog::OfflineStep::BackRebased) {
+    DaemonLogf("[tunnel] failsafe: the return to a network reset the countdown\n");
   } else if (armedChanged && (tick.verdictClockReset || tick.trafficClockReset)) {
     DaemonLogf("[tunnel] failsafe: the new destination's clocks reset the countdown\n");
   } else if (armedChanged && tick.verdict.reason == watchdog::DeadTunnelReason::None) {
@@ -2838,14 +2988,21 @@ bool TunnelHost::CheckDeadTunnelLocked() {
   // kill switch was asked for, no table otherwise, the outcome checked and
   // said, and everything published last.
   StopUnsafeSessionLocked(watchdog::StopReasonOf(tick.verdict.reason),
-                          DeadTunnelMessage(tick.verdict.reason), ctl::kCodeTunnelDead,
-                          "because it carried nothing",
+                          DeadTunnelMessage(tick.verdict.reason, deadTunnelWatch_.settings()),
+                          ctl::kCodeTunnelDead, "because it carried nothing",
                           /*sdkWedged=*/tick.verdict.reason ==
                               watchdog::DeadTunnelReason::SdkUnresponsive);
   return true;
 }
 
 void TunnelHost::Reap() {
+  // A SUSPEND IS MEASURED FIRST, before the try-lock below can return: a
+  // bring-up holding opMutex_ through the first ticks after a resume must not
+  // hide it, and the measure is the suspend clock itself, not a gap between
+  // ticks, so a stall of this loop (a long nft run, that same bring-up) never
+  // reads as one (LinuxSuspendDetector). The kick it owes waits in
+  // resumePending_ for the first tick that holds the lock.
+  if (suspendDetector_.Observe(SuspendedMillis())) resumePending_ = true;
   // Try-locked, as every main-loop callback here is. A bring-up holds opMutex_
   // for the whole of its run, and waiting for it here froze the control loop,
   // `status` included, from the first tick of an async start to its end. The
@@ -2875,12 +3032,28 @@ void TunnelHost::Reap() {
   // (never both): a provider's transports follow a path change too.
   urnet::DeviceLocal* liveDevice =
       device_ ? &*device_ : (providerDevice_ ? &*providerDevice_ : nullptr);
+  // The kick a suspend owes: every connection the transports held may have
+  // died in it with nothing about the network to show, so the next tick with a
+  // path kicks. With no device there is nobody to tell, and the next one is
+  // rebased on whatever network it finds.
+  if (resumePending_ && liveDevice != nullptr) {
+    DaemonLogf("[tunnel] resumed from a suspend; refreshing transports on the next network "
+               "path\n");
+    networkQualityTracker_.ForceKickOnNextPath();
+  }
+  resumePending_ = false;
   if (liveDevice != nullptr) {
     const std::string tunnelInterface = tunnel_ ? tunnel_->name() : std::string();
+    // The SDK's own route per family, measured (ReadNetworkPath), against the
+    // path the transports were last kicked onto; the tracker decides when a
+    // difference is worth a kick (NetworkQuality.hpp), so a carrier blip, a
+    // family that only appears and a burst inside one switch do not each cost
+    // a dial.
     const LinuxNetworkChange networkChange =
-        networkQualityTracker_.Observe(ReadNetworkQuality(tunnelInterface));
+        networkQualityTracker_.Observe(ReadNetworkPath(tunnelInterface), WatchdogMillis());
     if (networkChange == LinuxNetworkChange::Path) {
-      DaemonLogf("[tunnel] physical network path changed; refreshing transports\n");
+      DaemonLogf("[tunnel] physical network path changed (%s); refreshing transports\n",
+                 DescribeLinuxNetworkPath(networkQualityTracker_.kicked()).c_str());
       support::LogConnectivity("path-change");
     } else if (networkChange == LinuxNetworkChange::Quality) {
       DaemonLogf("[tunnel] physical network quality changed; remeasuring transfer pacing\n");
@@ -3033,7 +3206,9 @@ void TunnelHost::OnResolvedAppeared(GDBusConnection*, const gchar*, const gchar*
     // times and then stops the session with a reason the user can act on.
     DaemonLogf("[tunnel] the DNS override did not survive the systemd-resolved restart: %s\n",
                report.dns_detail.c_str());
-    self->dnsVerifyTicks_ = kDnsVerifyIntervalSeconds;  // check on the next tick
+    // Check on the next tick, whichever interval that check runs at.
+    self->dnsVerifyTicks_ = std::max(self->settings_.dns_verify_interval_ticks,
+                                     self->settings_.dns_file_verify_interval_ticks);
   }
 }
 

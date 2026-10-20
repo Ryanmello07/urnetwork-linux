@@ -1,7 +1,8 @@
 // The dead-tunnel failsafe's view of the SDK (TunnelWatchdog.hpp): a thread of
 // its own that asks a session's device for its exits and its window status
-// every kSdkSampleIntervalMillis, publishes what the last completed sample
-// said, and tells the device when the physical network changed.
+// every sample interval (DeadTunnelSettings::sdkSampleIntervalMillis, handed to
+// Start), publishes what the last completed sample said, and tells the device
+// when the physical network changed.
 //
 // A thread, not the reaper, because every one of those calls can block on the
 // device's state lock while the reaper runs on the main loop that answers
@@ -52,10 +53,12 @@ class ExitSampler {
   ExitSampler& operator=(const ExitSampler&) = delete;
 
   // Samples the device behind `deviceHandle` at once and then every
-  // kSdkSampleIntervalMillis, stamping on `clock`, until Stop. Stops a previous
-  // sampler first. False when no thread could be started: then nothing samples,
-  // and the caller must not judge the session on the silence.
-  bool Start(uint64_t deviceHandle, Clock clock);
+  // `sampleIntervalMillis` (positive: the caller passes
+  // watchdog::SampleIntervalMillis), stamping on `clock`, until Stop. Stops a
+  // previous sampler first. False when no thread could be started, or for a
+  // nonpositive interval: then nothing samples, and the caller must not judge
+  // the session on the silence.
+  bool Start(uint64_t deviceHandle, Clock clock, int64_t sampleIntervalMillis);
   // Cancels without waiting. Idempotent.
   void Stop();
   // The physical network changed: the sampler tells the device before its next

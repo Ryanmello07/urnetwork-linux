@@ -1969,6 +1969,12 @@ inline constexpr const char* kCodeRouteInstallFailed = "route_install_failed";
 // Never start in this state — a tunnel that comes up and carries nothing is
 // worse than a start that says why it refused.
 inline constexpr const char* kCodeEgressUnprotected = "egress_unprotected";
+// A Connect found no route off the tunnel in either family: this machine is
+// not on a network, so nothing could carry the session. NOT the R4 refusal --
+// the egress witness proved the exclusion and simply found nowhere to go.
+// Bring-up only: a session that loses every route later (a network switch in
+// progress) stays up and waits for the next network.
+inline constexpr const char* kCodeNoNetwork = "no_network";
 // The nftables floor the kill switch needs could not be installed. Only fatal
 // when the client asked for the kill switch: a protection that is not in force
 // must never be reported as on.
