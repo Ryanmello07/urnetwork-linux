@@ -378,7 +378,8 @@ egress_index4/6        int64 ifIndex the SERVICE pinned its own SDK egress to; t
                        its second SDK instance to the same physical interface (0 = do not bind)
 stop_reason            "" | "user" | "failsafe_no_exit" | "failsafe_no_inbound" |
                        "failsafe_sdk_unresponsive"   (spellings owned by TunnelWatchdog.h:207-211)
-failsafe_armed         bool — dead-tunnel countdown within kFailsafeNoticeMillis=30000 of firing
+failsafe_armed         bool — dead-tunnel countdown within DeadTunnelSettings.failsafeNoticeMillis
+                       (30000) of firing
 ```
 
 Shared predicates the whole product uses (`Protocol.h`):
@@ -961,30 +962,37 @@ urnetwork` plus a startup sweep deleting any leftover table by name (the analogu
 
 ### 6.4 Dead-tunnel failsafe (TunnelWatchdog)
 
+Every interval and count below is a settings field, shown with its default. Linux keeps them in
+`DeadTunnelSettings` (`app/src/TunnelWatchdog.hpp`); Windows splits them between
+`TunnelWatchdogSettings` and `DeadTunnelSettings` (`Service/TunnelWatchdogSettings.h`), where
+the sampler interval is `sampleIntervalMillis` and the freeze bar is `frozenMillis`.
+
 Two threads per Up session sharing a `WatchdogChannel` (shared_ptr block so abandoned threads
 never touch freed members): a **sampler** (`device->getExits()` every
-`kSdkSampleIntervalMillis = 2000`, publishes proven-exit count + completion timestamps into
+`sdkSampleIntervalMillis` (2000), publishes proven-exit count + completion timestamps into
 atomics; also delivers coalesced `networkChanged()` kicks) and an **evaluator** (every
-`kEvaluateIntervalMillis = 1000`, calls the pure `Evaluate(DeadTunnelSignals, now)`).
+`evaluateIntervalMillis` (1000), calls the pure `Evaluate(DeadTunnelSignals, now)`).
 
 Verdicts in precedence order:
-0. **The carrying veto** — any inbound packet within `kDeadFastMillis` vetoes everything
+0. **The carrying veto** — any inbound packet within `deadFastMillis` vetoes everything
    (measurement outranks claims). Known open issue: the SDK's own DNS answers can fool it
    (task #44).
-1. `SdkUnresponsive` — no completed `getExits()` for `kSdkUnresponsiveMillis = 30000` (15
+1. `SdkUnresponsive` — no completed `getExits()` for `sdkUnresponsiveMillis` (30000; 15
    missed samples).
-2. `NoInbound` (DEAD_FAST) — `provenCount == 0` AND ≥ `kDeadFastOutboundPackets = 8` outbound
-   since last inbound AND no inbound/proven for `kDeadFastMillis = 20000`.
-3. `NoExit` (DEAD_SLOW) — zero proven exits for `kDeadSlowMillis = 90000` with at least one
+2. `NoInbound` (DEAD_FAST) — `provenCount == 0` AND ≥ `deadFastOutboundPackets` (8) outbound
+   since last inbound AND no inbound/proven for `deadFastMillis` (20000).
+3. `NoExit` (DEAD_SLOW) — zero proven exits for `deadSlowMillis` (90000) with at least one
    completed sample.
 
-`armed`/`millisToFailsafe` surface to the UI within `kFailsafeNoticeMillis = 30000` of firing
+`armed`/`millisToFailsafe` surface to the UI within `failsafeNoticeMillis` (30000) of firing
 (never a surprise teardown). **Freeze detection:** an evaluator tick gap
-≥ `kEvaluatorFrozenMillis = 5000` (Modern Standby resume, suspended VM) **rebases** the session
-and stamps stale evidence out instead of firing a false UNRESPONSIVE. Linux note: the same
-freeze problem exists with suspend; choose `CLOCK_BOOTTIME` vs `CLOCK_MONOTONIC` deliberately
-(CLOCK_MONOTONIC stops during suspend on Linux, mostly giving the desired behavior free, but
-port the rebase logic anyway).
+≥ `evaluatorFrozenMillis` (5000, five evaluator ticks) (Modern Standby resume, suspended VM)
+**rebases** the session and stamps stale evidence out instead of firing a false UNRESPONSIVE.
+Linux ports the rebase (`EvaluatorFroze`) and adds two things. A suspend detector
+(`LinuxSuspendDetector`, `LinuxSuspendSettings.threshold_millis` 1000) watches
+`CLOCK_BOOTTIME − CLOCK_MONOTONIC` grow and forces a kick on the next path. And while the path
+tracker reports the machine offline, the NoInbound and NoExit windows pause (`StepOffline`); a
+return after `offlineRebaseMillis` (5000) or more offline restarts every window.
 
 On fire: `FailsafeStop(reason)` runs the **same** `StopLocked` as a user disconnect (no second
 unwind path), with `finalDisarm = !killSwitchOn` (switch off ⇒ internet back in the clear; on
@@ -992,15 +1000,23 @@ unwind path), with `finalDisarm = !killSwitchOn` (switch off ⇒ internet back i
 structurally impossible. Stop reasons on the wire: `""`, `"user"`, `"failsafe_no_exit"`,
 `"failsafe_no_inbound"`, `"failsafe_sdk_unresponsive"`.
 
-Network-change inputs (`EgressMonitor`): two callbacks with different semantics — `SetOnChange`
-fires only when the bound egress index *moves*; `SetOnNetworkEvent` fires on every observation
-→ `NotifyCoalescer` (fixed-window trailing fire, `kNetworkNotifyDebounceMillis = 750`,
-deliberately NOT a re-extending debounce so a flapping link cannot starve it) → one
+Network-change inputs on Windows (`EgressMonitor`): two callbacks with different semantics —
+`SetOnChange` fires only when the bound egress index *moves*; `SetOnNetworkEvent` fires on every
+observation → `NotifyCoalescer` (fixed-window trailing fire, `NetworkNotifySettings.windowMillis`
+(750), deliberately NOT a re-extending debounce so a flapping link cannot starve it) → one
 `device->networkChanged()` per burst. Route-change callback is filtered to prefix-length-0
 routes not on the tun (else each bring-up burst of 31 routes would kick the SDK 31 times).
-`DiscoverEgress` retains the last good index when the link drops. Linux: one netlink monitor
-socket (`RTMGRP_LINK | RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE | RTMGRP_IPV4_IFADDR`) replaces
-both notification APIs; the coalescer and the both-callback split port unchanged.
+`DiscoverEgress` retains the last good index when the link drops.
+
+Linux does not port these callbacks. Each reaper tick (`HostSettings.reaper_interval_seconds`, 1)
+measures the SDK's own route per family with `ReadNetworkPath`: the interface, the default
+route's next hop, and the source the kernel would bind, read from a connect()ed probe socket
+that sends nothing. `LinuxNetworkQualityTracker` (`app/src/NetworkQuality.hpp`) decides when a
+difference is a kick: loss never kicks, a new or moved path kicks at once, a family that only
+appears beside an unchanged one rides along, a same-identity rejoin whose carrier came back up
+(`carrier_up_count`) kicks, and a holdoff (`LinuxNetworkPathSettings.holdoff_millis`, 2000)
+follows every kick, so a flapping link costs one kick per holdoff. A netlink trigger that would
+wake the tick on `RTMGRP_*` events instead of waiting up to a second is deferred.
 
 ### 6.5 Teardown: two phases, budgets, latches
 
@@ -1126,7 +1142,7 @@ Linux UI until an implementation exists.
 | WFP dynamic session, 2 sublayers, ALE filters | one `table inet urnetwork`, two chains, atomic `nft -f` swap; app-id permits → SO_MARK / skuid / cgroup |
 | `IP_UNICAST_IF` egress bind (R1) | `SO_MARK` + `ip rule suppress_prefixlength 0` policy routing, or `SO_BINDTODEVICE` (must be implemented — currently a no-op, §5.8) |
 | SplitTunnel.sys ALE_BIND_REDIRECT driver | cgroup v2 + fwmark + `ip rule` (no driver) |
-| `NotifyIpInterfaceChange` + `NotifyRouteChange2` | one netlink monitor socket (`RTMGRP_LINK\|RTMGRP_IPV4_ROUTE\|RTMGRP_IPV6_ROUTE\|RTMGRP_IPV4_IFADDR`) |
+| `NotifyIpInterfaceChange` + `NotifyRouteChange2` | the reaper tick's measured path (`ReadNetworkPath` + `LinuxNetworkQualityTracker`, §6.4); a netlink wake-up is deferred |
 | Named pipe + SDDL | Unix socket `/run/urnetwork/control.sock` 0660 root:urnetwork + `SO_PEERCRED` (+ polkit for privileged verbs) |
 | UAC `ShellExecuteEx runas` one-click install | pkexec/polkit first-run flow; package-manager scriptlets for deb/rpm |
 | Registry `Environment` on service key (GOTRACEBACK) | `Environment=` line in the unit |
@@ -1135,7 +1151,7 @@ Linux UI until an implementation exists.
 | HKCU placement REG_BINARY blob | settings file; note Wayland forbids global positioning anyway |
 | `Shell_NotifyIcon` tray + `WM_APP+1` NIN_SELECT reopen | StatusNotifierItem over D-Bus (linux: implements SNI + `com.canonical.dbusmenu` over raw GDBus, no libappindicator); GNOME needs the appindicator extension (§10.6) |
 | `AppInstance::FindOrRegisterForKey` single instance | GApplication uniqueness / D-Bus name |
-| Modern Standby freeze rebase | same rebase; prefer CLOCK_BOOTTIME-aware logic |
+| Modern Standby freeze rebase | same rebase, plus a suspend detector (`LinuxSuspendDetector`: growth of `CLOCK_BOOTTIME − CLOCK_MONOTONIC`) that forces a kick on the next path |
 
 ---
 
@@ -2413,7 +2429,8 @@ selftests (NetPolicy complement static_assert 31, Evaluate, NotifyCoalescer,
 DecideConsoleStop, BuildFilterSet analogue, heartbeat format); implement two-phase teardown
 with the budgets and both latches; nftables state machine + startup sweep + `ExecStopPost`;
 **implement R4 egress self-exclusion (SO_MARK + ip rule) — nothing tunnel-real ships before
-this**; netlink monitor + coalescer; heartbeat file; `revert` verb.
+this**; network path tracker on the reaper tick (§6.4; a netlink trigger is deferred); heartbeat
+file; `revert` verb.
 *Verify:* daemon selftest suite green; `urnetworkd console --stop-after=N` for N=1..8 applies
 and reverts exactly the logged state at each fence; kill -9 during Up leaves no routes, no
 `table inet urnetwork`, restored DNS after the startup sweep runs; `systemd-analyze security`
