@@ -7707,6 +7707,16 @@ msgctxt "sent_thanks_for_your_feedback"
 msgid "Sent! Thanks for your feedback."
 msgstr "보냈습니다! 피드백 감사합니다."
 
+#. Shown at launch when the app couldn't restore the stored sign-in (a retryable failure); above the retry hint and the Try again button.
+msgctxt "session_restore_failed"
+msgid "Couldn't restore your session"
+msgstr "세션을 복원하지 못했습니다"
+
+#. Under the launch-time session restore failure title, above the Try again button.
+msgctxt "session_restore_failed_retry_hint"
+msgid "Try again to continue."
+msgstr "계속하려면 다시 시도하세요."
+
 #. Sessions screen (Account > Sessions): shown on a row when signing its session out failed.
 msgctxt "sessions_action_failed"
 msgid "Couldn't sign out this session. Try again."

@@ -7735,6 +7735,16 @@ msgctxt "sent_thanks_for_your_feedback"
 msgid "Sent! Thanks for your feedback."
 msgstr "Verzonden! Bedankt voor je feedback."
 
+#. Shown at launch when the app couldn't restore the stored sign-in (a retryable failure); above the retry hint and the Try again button.
+msgctxt "session_restore_failed"
+msgid "Couldn't restore your session"
+msgstr "Je sessie kon niet worden hersteld"
+
+#. Under the launch-time session restore failure title, above the Try again button.
+msgctxt "session_restore_failed_retry_hint"
+msgid "Try again to continue."
+msgstr "Probeer het opnieuw om verder te gaan."
+
 #. Sessions screen (Account > Sessions): shown on a row when signing its session out failed.
 msgctxt "sessions_action_failed"
 msgid "Couldn't sign out this session. Try again."
