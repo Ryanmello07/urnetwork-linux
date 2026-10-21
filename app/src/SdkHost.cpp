@@ -28,6 +28,8 @@
 
 #include "AppPrefs.hpp"
 #include "Config.hpp"
+#include "CryptoInvoiceHost.hpp"
+#include "CryptoInvoiceStorage.hpp"
 #include "LocationSelection.hpp"
 #include "NetworkSpaceConfig.hpp"
 // The Secret Service backend for the remembered rpc session. GUI-ONLY: this is
@@ -363,6 +365,8 @@ void SdkHost::KeepOnMain(const char* key, T value) {
 
 SdkHost::SdkHost()
     : commands_([](ConnectCommandQueue::Apply apply) { PostToMain(std::move(apply)); }) {
+  // the crypto invoice holds nothing until a sign-in opens its controller
+  cryptoInvoice_ = std::make_unique<CryptoInvoiceHost>(*this);
   // The queue settled: the tap's held state hands back to the device's word,
   // read on the worker after the last command. A reading from before a
   // sign-out describes the account that left, so the default one goes instead.
@@ -546,6 +550,10 @@ bool SdkHost::Initialize(const std::string& storageDir, const std::string& logDi
       g_message("sdkhost: restored the network space this client was last pointed at: '%s'",
                 hostName.c_str());
     }
+    // where the crypto invoice is saved (CryptoInvoiceStorageDir); Initialize
+    // runs on the main loop, before any window
+    storageRoot_ = storageDir;
+    activeSpaceHost_ = networkSpace_->getHostName();
     api_ = networkSpace_->getApi();
     AdoptSpaceApiLocked();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
@@ -983,6 +991,10 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
     }
   }
   if (!ok) return false;
+  // the crypto invoice of the new server is saved apart from the old one's
+  // (CryptoInvoiceStorageDir); the network server sheet calls this on the
+  // main loop, which is the only reader
+  activeSpaceHost_ = hostName;
   // The new space's stored auth decides what the window shows. Almost always
   // LoggedOut — a fresh server has no jwt — and saying so is the point: the
   // old session is genuinely gone.
@@ -992,6 +1004,10 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
   // space this device is already signed in to provides again on its own.
   ReconcileProviderAfterSpaceChange("network server changed");
   return true;
+}
+
+std::string SdkHost::CryptoInvoiceStorageDir() const {
+  return crypto_pay::StorageDir(storageRoot_, activeSpaceHost_);
 }
 
 std::string SdkHost::NetworkSpaceJson() {
@@ -5987,6 +6003,9 @@ void SdkHost::Logout() {
   }
   // a row click still settling belongs to the leaving account (main loop)
   CancelRowConnect("sign-out");
+  // so does a crypto payment saved on this device: its controller ends, and
+  // the saved invoice and the remembered method are cleared (main loop)
+  cryptoInvoice_->SignOut();
   // From here no connect is admitted, and the leaving account's queued
   // connects are skipped while its disconnects still run; a reading taken
   // before this is never handed on as the next account's. The fence ends

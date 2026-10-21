@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "AccountPage.hpp"
 #include "AccountPlanRows.hpp"
+#include "CryptoPay.hpp"
 
 #include "ReferralRoyalty.hpp"
 
@@ -1774,6 +1775,24 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
   // network, or a store or crypto subscription, got the portal's raw error
   if (portalRow_) portalRow_->set_visible(ShowsManageSubscription(balance_.subscriptionStoreFamily));
 
+  // A one-time crypto year never renews (mmm/ZCASH-CONTRACT.md §6.2): once its paid term
+  // has ended and until its grace does, the notice with Renew; before that,
+  // "does not renew". Never a system notification.
+  const bool termNotice = balance_.cryptoTermNotice && !balance_.guest;
+  if (cryptoTermRow_) {
+    if (termNotice) {
+      cryptoTermLine_->set_text(
+          Format(T_("crypto_term_ended_notice",
+                    "Your paid year of Pro has ended. Renew by {} to keep Pro."),
+                 balance_.cryptoTermRenewBy));
+    }
+    cryptoTermRow_->set_visible(termNotice);
+  }
+  if (doesNotRenewRow_) {
+    doesNotRenewRow_->set_visible(!termNotice && balance_.isPro &&
+                                  crypto_pay::StoreDoesNotRenew(balance_.subscriptionStoreFamily));
+  }
+
   // 2. the confirmation ring: active AND visible exactly while the poll runs.
   planRing_->set_visible(balance_.confirming);
   if (balance_.confirming) {
@@ -1886,6 +1905,39 @@ void AccountPage::BuildPlanPane() {
     content->append(*row.root);
   }
 
+  // 1b. a one-time crypto year (ApplyBalance): its renewal notice with Renew
+  //     once the paid term has ended, or "does not renew" before that
+  {
+    auto row = MakePaddedRow(kProsePadY);
+    cryptoTermLine_ = Gtk::make_managed<Gtk::Label>();
+    cryptoTermLine_->add_css_class("ur-caption");
+    cryptoTermLine_->set_xalign(0);
+    cryptoTermLine_->set_wrap(true);
+    row.content->append(*cryptoTermLine_);
+    auto* renew = Gtk::make_managed<Gtk::Button>(T_("crypto_term_renew", "Renew"));
+    renew->add_css_class("ur-pane-primary");
+    renew->set_halign(Gtk::Align::START);
+    renew->set_margin_top(8);
+    renew->signal_clicked().connect([this] {
+      if (on_open_upgrade) {
+        on_open_upgrade();
+        return;
+      }
+      g_warning("account: upgrade route unbound; Renew opened nothing");
+    });
+    row.content->append(*renew);
+    cryptoTermRow_ = row.root;
+    cryptoTermRow_->set_visible(false);
+    content->append(*row.root);
+  }
+  {
+    auto row = MakeProseRow(T_("crypto_does_not_renew", "Does not renew. Pay again when it ends."),
+                            kProsePadY);
+    doesNotRenewRow_ = row.root;
+    doesNotRenewRow_->set_visible(false);
+    content->append(*row.root);
+  }
+
   // 2. the usage bar + legend.
   {
     auto row = MakePaddedRow(kProsePadY);
@@ -1907,6 +1959,24 @@ void AccountPage::BuildPlanPane() {
     g_warning("account: upgrade route unbound; the button opened nothing");
   });
   content->append(*upgradeButton_);
+
+  // 3b. a crypto payment that is not paid yet: opens its invoice (the window
+  //     relays the invoice, ApplyCryptoInvoice)
+  {
+    auto row = kit::MakePaneTwoLineRowButton(
+        T_("crypto_payment_in_progress", "Payment in progress"), {}, kRowTall);
+    paymentInProgressRow_ = row.root;
+    paymentInProgressNote_ = row.note;
+    paymentInProgressRow_->signal_clicked().connect([this] {
+      if (on_open_crypto_invoice) {
+        on_open_crypto_invoice();
+        return;
+      }
+      g_warning("account: crypto invoice route unbound; the row opened nothing");
+    });
+    paymentInProgressRow_->set_visible(false);
+    content->append(*row.root);
+  }
 
   // 4. the data-usage group. Its info button, right above the daily balance,
   //    opens "About your data": what Used, Pending and Available mean and when
@@ -1998,6 +2068,19 @@ void AccountPage::BuildPlanPane() {
     portalRow_->signal_clicked().connect([this] { OpenCustomerPortal(); });
     content->append(*row.root);
   }
+}
+
+void AccountPage::ApplyCryptoInvoice(bool inProgress, const Glib::ustring& network) {
+  if (!paymentInProgressRow_) return;
+  if (inProgress) {
+    // under the title, the network the payment is sent on ("Monero")
+    kit::SetTextOrCollapse(*paymentInProgressNote_, network);
+    // the kit's own naming of a two-line row: "title. note"
+    kit::SetAccessibleLabel(*paymentInProgressRow_,
+                            Glib::ustring(T_("crypto_payment_in_progress", "Payment in progress")) +
+                                (network.empty() ? Glib::ustring() : ". " + network));
+  }
+  paymentInProgressRow_->set_visible(inProgress);
 }
 
 void AccountPage::OpenCustomerPortal() {

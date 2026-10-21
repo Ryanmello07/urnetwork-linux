@@ -27,6 +27,9 @@ namespace urnw {
 struct PlanCardTexts {
   std::string yearlyPrice;       // "$40/year" | "$30 for your first year"
   std::string yearlySecondary;   // "Save 33%" | "then $40/year"
+  // the secondary is the offer's renewal price ("then $40/year"), which a coin
+  // never pays: hidden while one is selected (crypto_pay::YearlyCardLines)
+  bool yearlySecondaryRenews = false;
   std::string yearlyEquivalent;  // "≈ $3.34/month · billed once a year" or ""
   std::string yearlyTrial;       // "Includes 14 day free trial"
   std::string monthlyPrice;      // "$5/month"
@@ -44,10 +47,15 @@ class OfferCard : public Gtk::Box {
  public:
   explicit OfferCard(bool compact = false);
   void Update(const OfferView& offer, const PriceTierView& tier, int64_t trialDays);
+  // The trial timeline and the terms describe the card subscription (a trial,
+  // then a charge, then renewals); a coin buys the first year once
+  // (CryptoPay.hpp), so while one is chosen only the deadline stays.
+  void SetCardTermsShown(bool shown);
 
  private:
   bool compact_;
   Gtk::Label* deadline_ = nullptr;
+  Gtk::Box* timeline_ = nullptr;  // the full card only
   Gtk::Label* chargeLine_ = nullptr;
   Gtk::Label* terms_ = nullptr;
 };

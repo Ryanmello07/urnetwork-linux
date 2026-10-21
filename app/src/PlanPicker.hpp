@@ -44,6 +44,14 @@ class PlanPicker : public Gtk::Box {
   // balance store's feed; the picker starts on the standard tier.
   void SetPrices(const PriceTierView& tier, const OfferView& offer);
   void SetTexts(const PlanCardTexts& texts);
+  // The payment method's rules (CryptoPay.hpp, CONTRACT §6.1): a coin greys
+  // the monthly card out with "Monthly is card only" in place of its card
+  // terms (the host moves the selection to yearly), and the yearly card drops
+  // its free-trial line and the offer's renewal line ("then $40/year"): a coin
+  // buys one year once, with no trial and no renewal. Both cards keep their
+  // height.
+  void SetMonthlyAllowed(bool allowed);
+  void SetCardTermsShown(bool shown);
 
   // Fired on a tap, after the selection changed.
   std::function<void(bool yearly)> on_select;
@@ -57,6 +65,9 @@ class PlanPicker : public Gtk::Box {
   Gtk::Label* monthlyDot_ = nullptr;
   Gtk::Label* monthlyText_ = nullptr;
   Gtk::Label* monthlyLine_ = nullptr;
+  // "Monthly is card only", under the monthly lines while a coin is chosen
+  Gtk::Label* monthlyNote_ = nullptr;
+  bool monthlyAllowed_ = true;
   std::vector<Gtk::Label*> reservedLines_;  // sizes the monthly card like the yearly
 };
 

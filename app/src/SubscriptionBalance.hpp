@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -101,7 +102,8 @@ class SubscriptionBalanceStore {
   bool IsPro() const { return isPro_; }
   bool IsGuest() const { return isGuest_; }
   // the current subscription's store family (urnet::classifySubscriptionStore:
-  // "stripe", "apple", "google", "other"), "" without a subscription
+  // "stripe", "apple", "google", "crypto" for a one-time USDC, Zcash or
+  // Monero year, which never renews, or "other"), "" without a subscription
   const std::string& SubscriptionStoreFamily() const { return subscriptionStoreFamily_; }
   // Set once when a free -> paid upgrade is first detected (mac
   // didDetectUpgradeToPro), so the app can reset provide mode to never at the
@@ -143,6 +145,18 @@ class SubscriptionBalanceStore {
   // A freshly issued offer (POST /onboarding/offer/issue) lands here so every
   // plan surface prints it before the next poll.
   void SetOffer(const urnet::OnboardingOffer& offer);
+
+  // The payment methods a plan surface offers (mmm/ZCASH-CONTRACT.md §6.1): the SDK's
+  // urnet::paymentMethods over the balance result's crypto_assets, for the
+  // one plan a coin would buy there (crypto_pay::CoinPlan). Just Card before
+  // the first fetch, from a server that lists no coin, and on an SDK error.
+  std::vector<std::string> PaymentMethods(const std::string& plan) const;
+  // The renewal notice of a one-time crypto year is due now
+  // (urnet::cryptoTermNoticeDue over the balance result's crypto_term:
+  // term_end_time <= now < grace_end_time), and the grace's end it names
+  // (RFC 3339, "" without a term).
+  bool CryptoTermNoticeDue() const;
+  std::string CryptoTermGraceEnd() const;
 
   void SetChangedHandler(ChangedHandler h) { onChanged_ = std::move(h); }
   // Fired on the GTK main loop when the referral poll observes new referrals
@@ -210,6 +224,9 @@ class SubscriptionBalanceStore {
   PriceTierView tier_;
   OfferView offer_;
   std::vector<urnet::ExperimentAssignment> experiments_;
+  // the balance result's crypto payment fields, as the server sent them
+  std::optional<urnet::CryptoPaymentAssetList> cryptoAssets_;
+  std::optional<urnet::CryptoTerm> cryptoTerm_;
 
   // polling (mac: backgroundPollingTimer / pollingTimer / pollingDeadline).
   // The gate holds whether a confirmation runs and its budget, which only

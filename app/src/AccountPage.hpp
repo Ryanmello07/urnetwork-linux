@@ -119,8 +119,13 @@ struct AccountBalance {
   int64_t startBalanceByteCount = 0;
   bool isPro = false;
   bool guest = false;
-  // SubscriptionStoreFamily: Manage Subscription shows only for "stripe"
+  // SubscriptionStoreFamily: Manage Subscription shows only for "stripe", and
+  // "crypto" (a one-time crypto year) reads "does not renew"
   std::string subscriptionStoreFamily;
+  // A one-time crypto year's renewal notice is due (CryptoTermNoticeDue), and
+  // the local date its grace ends, which the notice names.
+  bool cryptoTermNotice = false;
+  std::string cryptoTermRenewBy;
   bool loaded = false;      // HasFetched: a snapshot has landed at least once
   bool confirming = false;  // IsPolling: the post-checkout confirmation poll
   bool timedOut = false;    // PurchaseConfirmationTimedOut (relayed for parity)
@@ -177,8 +182,16 @@ class AccountPage : public Gtk::Box {
 
   // ---- window-level routing --------------------------------------------------
   // The plan pane's primary action. Guests get the sign-out-and-create-account
-  // offer, everyone else the UpgradeSheet the window/drawer owns.
+  // offer, everyone else the UpgradeSheet the window/drawer owns. A crypto
+  // year's notice offers Renew, which opens the same sheet.
   std::function<void()> on_open_upgrade;
+  // "Payment in progress": the window opens the saved crypto invoice
+  // (UpgradeSheet::OpenInvoice).
+  std::function<void()> on_open_crypto_invoice;
+  // The signed-in network's crypto invoice, relayed by the window
+  // (CryptoInvoiceHost): an unpaid one shows the "Payment in progress" row,
+  // with the network it is paid on under it.
+  void ApplyCryptoInvoice(bool inProgress, const Glib::ustring& network);
   // The data-usage group's info button: the "About your data" sheet the
   // window owns (it needs the balance store).
   std::function<void()> on_open_data_info;
@@ -297,6 +310,13 @@ class AccountPage : public Gtk::Box {
   Gtk::Label* planValue_ = nullptr;
   AccountUsageBar* usageBar_ = nullptr;
   Gtk::Button* upgradeButton_ = nullptr;
+  // a one-time crypto year: the renewal notice with Renew, or "does not renew"
+  Gtk::Widget* cryptoTermRow_ = nullptr;
+  Gtk::Label* cryptoTermLine_ = nullptr;
+  Gtk::Widget* doesNotRenewRow_ = nullptr;
+  // the saved crypto invoice that is not paid yet
+  Gtk::Button* paymentInProgressRow_ = nullptr;
+  Gtk::Label* paymentInProgressNote_ = nullptr;
   Gtk::Label* dailyValue_ = nullptr;
   // the usage bar's three figures, which its legend only colours
   Gtk::Label* usedValue_ = nullptr;

@@ -262,6 +262,10 @@ executable('urnetwork-gui',
     'src/RedeemCodeSheet.cpp',
     'src/DataInfoSheet.cpp',
     'src/UpgradeSheet.cpp',
+    # the payment-method toggle and the native crypto invoice
+    'src/PaymentMethodRow.cpp',
+    'src/CryptoInvoiceView.cpp',
+    'src/CryptoInvoiceHost.cpp',
     'src/Onboarding.cpp',
     'src/PlanPicker.cpp',
     'src/ProCelebration.cpp',
@@ -750,6 +754,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/EditorSafetyWiringTest.cpp',
     'tests/DeleteAccountSignOutTest.cpp',
     'tests/MainReadTest.cpp',
+    'tests/CryptoPayTest.cpp',
+    'tests/CryptoPayWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -757,8 +763,10 @@ urnetwork_tests = executable('urnetwork-tests',
     'src/RpcSessionStore.cpp',
     'src/ExcludeLauncher.cpp',
     'src/ConnectCommandQueue.cpp',
+    # the crypto invoice's QR (src/PaymentQr.hpp), encoded by the tests too
+    'third_party/qrcodegen/qrcodegen.cpp',
   ],
-  include_directories : include_directories('src', 'tests'),
+  include_directories : [include_directories('src', 'tests'), qrcodegen_inc],
   dependencies : [json],
   cpp_args : ['-DUR_ASSETS_DIR="' + meson.project_source_root() / 'assets' + '"',
               # CatalogLookupTest reads every GUI source, po/urnetwork.pot and
@@ -869,6 +877,10 @@ urnetwork_tests = executable('urnetwork-tests',
               # RelativeTimeSpanTest reads RelativeTime's words the same way, and
               # SessionsWiringTest the Sessions page, its Account row, the window's
               # navigation and the rail; SessionsPresentationTest reads po/en.po.
+              # CryptoPayWiringTest reads the payment-method row, the crypto
+              # invoice and its host, the upgrade sheet, the onboarding, the
+              # Account plan pane, the window, meson.build and the Flatpak
+              # manifest the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

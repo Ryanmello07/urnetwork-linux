@@ -9,6 +9,7 @@
 
 #include "AppPrefs.hpp"
 #include "ClientEvents.hpp"
+#include "CryptoInvoiceHost.hpp"
 #include "Formatters.hpp"
 #include "I18n.hpp"
 #include "PaneKit.hpp"
@@ -358,6 +359,9 @@ void OnboardingWindow::Open() {
   connectorVisible_ = false;
   if (route_) route_->SetDrawConnector(true);
   ApplyPrices();
+  // the method this device chose last, while the server still offers it
+  methodPicked_ = false;
+  ApplyMethods(/*remembered=*/true);
   ShowStep(1);
   balance_.FetchNow();
   RefreshBalance();
@@ -367,6 +371,8 @@ void OnboardingWindow::Open() {
     RefreshBalance();
     RefreshReferral();
     ApplyPrices();
+    // the coins arrive with the balance, and the offer decides their plan
+    ApplyMethods(/*remembered=*/false);
     // the experiment assignment can land after the first paint (the balance
     // store fetches in the background): take the holdout out of the offer
     if (offerEnabled_ && !OfferPageEnabled(balance_.ExperimentVariant(kOfferExperimentSurface))) {
@@ -400,10 +406,13 @@ void OnboardingWindow::OpenOffer() {
   connectorInHeader_ = true;
   connectorVisible_ = false;
   ApplyPrices();
+  methodPicked_ = false;
+  ApplyMethods(/*remembered=*/true);
   ShowStep(kOnboardingStepOffer);
   balancePoll_.disconnect();
   balancePoll_ = Glib::signal_timeout().connect([this] {
     ApplyPrices();
+    ApplyMethods(/*remembered=*/false);
     return true;
   }, 2000);
   present();
@@ -466,12 +475,7 @@ void OnboardingWindow::ApplyPrices() {
         Format(T_("includes_free_trial_days", "Includes {} day free trial"), kFreeTrialDays));
   }
   if (offerCard_) offerCard_->Update(offer, tier, kFreeTrialDays);
-  if (offerCta_) {
-    offerCta_->set_label(Format(
-        TN_("offer_cta_start_trial_months_free", "Start free trial with {} month free",
-            "Start free trial with {} months free", static_cast<unsigned long>(offer.monthsFree)),
-        offer.monthsFree));
-  }
+  if (offerCta_) offerCta_->set_label(OfferCtaLabel());
   // the intro surface's shown event, once the offer is actually on the page
   if (showOffer && step_ == kOnboardingStepWelcome && !introOfferShown_) {
     introOfferShown_ = true;
@@ -502,8 +506,10 @@ void OnboardingWindow::IssueOffer() {
 }
 
 void OnboardingWindow::StartCheckout(bool yearly, const char* surface) {
-  if (offerEnabled_ && balance_.OfferActive() && yearly) {
-    host_.events().OfferCtaTapped(PlanName(true), "stripe");
+  const bool coin = crypto_pay::IsCoin(method_);
+  if (offerEnabled_ && balance_.OfferActive() && (yearly || coin)) {
+    // the method's store: stripe for the card, the coin's market for a coin
+    host_.events().OfferCtaTapped(PlanName(true), crypto_pay::EventStore(method_));
   }
   (void)surface;
   if (!checkout_) {
@@ -514,6 +520,12 @@ void OnboardingWindow::StartCheckout(bool yearly, const char* surface) {
       hide();
       if (on_guest_sign_in_required) on_guest_sign_in_required();
     };
+  }
+  if (coin) {
+    // the invoice, not the checkout: the yearly plan, or the welcome offer
+    // while these pages show it
+    checkout_->OpenCryptoCheckout(method_, crypto_pay::CoinPlan(ShowsOffer()));
+    return;
   }
   checkout_->OpenCheckout(yearly);
 }
@@ -614,6 +626,16 @@ void OnboardingWindow::BuildWelcome() {
   welcomeOffer_->set_visible(false);
   top->append(*welcomeOffer_);
 
+  // Card · USDC · Zcash · Monero above the button (hidden with no coin listed)
+  welcomeMethods_ = Gtk::make_managed<PaymentMethodRow>();
+  welcomeMethods_->set_margin_top(20);
+  welcomeMethods_->on_select = [this](const std::string& method) {
+    methodPicked_ = true;
+    host_.CryptoInvoice().SetPaymentMethod(method);  // remembered on this device
+    SelectMethod(method);
+  };
+  top->append(*welcomeMethods_);
+
   startButton_ = Gtk::make_managed<Gtk::Button>(PlanPicker::CtaLabel(true));
   auto* start = startButton_;
   start->add_css_class("ur-btn-primary");
@@ -621,6 +643,14 @@ void OnboardingWindow::BuildWelcome() {
   start->set_margin_top(20);
   start->signal_clicked().connect([this] { StartCheckout(yearly_, "intro_step"); });
   top->append(*start);
+  welcomeFinePrint_ = MakeLabel(
+      T_("crypto_fine_print_yearly",
+         "A one-time payment for a year of Pro. It doesn't renew, and there's no free trial."),
+      "ur-onb-body");
+  welcomeFinePrint_->add_css_class("ur-onb-muted");
+  welcomeFinePrint_->set_margin_top(8);
+  welcomeFinePrint_->set_visible(false);
+  top->append(*welcomeFinePrint_);
   page->append(*top);
 
   // the other ways in, as quiet links at the bottom
@@ -651,9 +681,80 @@ void OnboardingWindow::BuildWelcome() {
 
 void OnboardingWindow::SelectPlan(bool yearly) {
   yearly_ = yearly;
-  // only the yearly plan carries the trial: the button says what the click does
-  if (startButton_) startButton_->set_label(PlanPicker::CtaLabel(yearly));
   if (plans_ && plans_->Yearly() != yearly) plans_->Select(yearly);
+  // only the yearly plan carries the trial, and a coin pays: the button says
+  // what the click does
+  if (startButton_) startButton_->set_label(StartLabel());
+}
+
+// ---- the payment method (mmm/ZCASH-CONTRACT.md §6.1, §6.3) ------------------------------
+
+bool OnboardingWindow::ShowsOffer() const { return offerEnabled_ && balance_.Offer().active; }
+
+void OnboardingWindow::ApplyMethods(bool remembered) {
+  const std::vector<std::string> methods =
+      balance_.PaymentMethods(crypto_pay::CoinPlan(ShowsOffer()));
+  bool changed = false;
+  for (PaymentMethodRow* row : {welcomeMethods_, offerMethods_}) {
+    if (row && row->SetMethods(methods)) changed = true;
+  }
+  if (!changed && !remembered) return;
+  // the method picked in this open while it is still offered, else the
+  // device's last one, else Card
+  SelectMethod(methodPicked_ ? method_ : host_.CryptoInvoice().PaymentMethod());
+}
+
+void OnboardingWindow::SelectMethod(const std::string& method) {
+  // one choice, shown on both pages
+  for (PaymentMethodRow* row : {welcomeMethods_, offerMethods_}) {
+    if (row) row->Select(method);
+  }
+  method_ = welcomeMethods_ ? welcomeMethods_->Selected() : std::string(crypto_pay::kMethodCard);
+  ApplyMethod();
+}
+
+void OnboardingWindow::ApplyMethod() {
+  const bool coin = crypto_pay::IsCoin(method_);
+  if (plans_) {
+    // Monthly is card only: a coin greys it out and buys the yearly plan,
+    // once, with no trial and no renewal (no such wording while it is chosen)
+    plans_->SetMonthlyAllowed(!coin);
+    plans_->SetCardTermsShown(!coin);
+  }
+  if (coin && !yearly_) {
+    SelectPlan(true);
+  } else if (startButton_) {
+    startButton_->set_label(StartLabel());
+  }
+  // The card's trial timeline and terms, and the offer page's renewal and
+  // trial lines, do not describe a coin's payment (CONTRACT §6.1): its
+  // first-year price stays, as the price the coin pays for the year. The
+  // page's CTA sits under a spacer, so the card shrinking moves nothing else.
+  if (welcomeOffer_) welcomeOffer_->SetCardTermsShown(!coin);
+  if (offerCard_) offerCard_->SetCardTermsShown(!coin);
+  if (offerThen_) offerThen_->set_visible(!coin);
+  if (offerTrial_) offerTrial_->set_visible(!coin);
+  if (offerCta_) offerCta_->set_label(OfferCtaLabel());
+  if (welcomeFinePrint_) welcomeFinePrint_->set_visible(coin);
+  if (offerFinePrint_) offerFinePrint_->set_visible(coin);
+}
+
+Glib::ustring OnboardingWindow::StartLabel() const {
+  if (crypto_pay::IsCoin(method_)) {
+    return Format(T_("crypto_pay_button", "Pay with {}"), PaymentMethodName(method_).raw());
+  }
+  return PlanPicker::CtaLabel(yearly_);
+}
+
+Glib::ustring OnboardingWindow::OfferCtaLabel() const {
+  if (crypto_pay::IsCoin(method_)) {
+    return Format(T_("crypto_pay_button", "Pay with {}"), PaymentMethodName(method_).raw());
+  }
+  const OfferView& offer = balance_.Offer();
+  return Format(
+      TN_("offer_cta_start_trial_months_free", "Start free trial with {} month free",
+          "Start free trial with {} months free", static_cast<unsigned long>(offer.monthsFree)),
+      offer.monthsFree);
 }
 
 // ---- page 2: your bandwidth
@@ -882,12 +983,30 @@ void OnboardingWindow::BuildOffer() {
   spacer->set_vexpand(true);
   page->append(*spacer);
 
+  // the same method row as the plan page, above this page's CTA
+  offerMethods_ = Gtk::make_managed<PaymentMethodRow>();
+  offerMethods_->set_margin_top(24);
+  offerMethods_->on_select = [this](const std::string& method) {
+    methodPicked_ = true;
+    host_.CryptoInvoice().SetPaymentMethod(method);  // remembered on this device
+    SelectMethod(method);
+  };
+  page->append(*offerMethods_);
+
   offerCta_ = Gtk::make_managed<Gtk::Button>();
   offerCta_->add_css_class("ur-btn-primary");
   offerCta_->add_css_class("pill");
   offerCta_->set_margin_top(24);
   offerCta_->signal_clicked().connect([this] { StartCheckout(true, "final_screen"); });
   page->append(*offerCta_);
+  offerFinePrint_ = MakeLabel(
+      T_("crypto_fine_print_yearly",
+         "A one-time payment for a year of Pro. It doesn't renew, and there's no free trial."),
+      "ur-onb-body");
+  offerFinePrint_->add_css_class("ur-onb-muted");
+  offerFinePrint_->set_margin_top(8);
+  offerFinePrint_->set_visible(false);
+  page->append(*offerFinePrint_);
 
   auto* keepFree = Gtk::make_managed<Gtk::Button>(
       T_("continue_with_free_plan", "Continue with the free plan"));

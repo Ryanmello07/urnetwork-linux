@@ -349,6 +349,9 @@ class MainWindow : public Gtk::ApplicationWindow {
   // The next OpenUpgrade's sheet says when the free data refreshes: set only
   // around the start-connect block's opening (ConnectBlockedByBalance).
   bool nextUpgradeFreeRefresh_ = false;
+  // The crypto invoice's change feed (CryptoInvoiceHost::Subscribe), relayed to
+  // Account's "Payment in progress" row.
+  int cryptoInvoiceSubscription_ = 0;
   // The location/provider chooser behind the Connect page's location row
   // (lazily built); refreshed from the drawer event feed while it is open.
   std::unique_ptr<LocationsSheet> locationsSheet_;
@@ -455,6 +458,10 @@ class MainWindow : public Gtk::ApplicationWindow {
   int64_t balanceCheckFailedAtMillis_ = -1;
   // The upgrade path: guest conversion for a guest, else the upgrade sheet.
   void OpenUpgrade();
+  // Account's "Payment in progress": the upgrade sheet on the saved invoice.
+  void OpenCryptoInvoice();
+  // The invoice's state onto Account's row (CryptoInvoiceHost's feed).
+  void ApplyCryptoInvoiceRow();
   // "About your data" (DataInfoSheet): Account's info button, the Connect
   // page alert's Why?
   void OpenDataInfo();

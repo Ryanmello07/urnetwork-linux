@@ -45,6 +45,8 @@ src/TransportPresentation.cpp
 src/TransportSheet.cpp
 src/Tray.cpp
 src/UpgradeSheet.cpp
+src/PaymentMethodRow.cpp
+src/CryptoInvoiceView.cpp
 src/UsageBar.cpp
 src/DataInfoSheet.cpp
 src/EarningsPage.cpp

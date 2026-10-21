@@ -62,6 +62,7 @@ PlanCardTexts ComposePlanCardTexts(const PriceTierView& tier, const OfferView& o
                                FormatMoney(offer.firstYear, offer.currency));
     texts.yearlySecondary = Format(T_("offer_then_regular_price", "then {}/year"),
                                    FormatMoney(offer.regularYear, offer.currency));
+    texts.yearlySecondaryRenews = true;
   } else {
     texts.yearlyPrice = Format(T_("plan_price_per_year", "{}/year"), yearly);
     texts.yearlySecondary =
@@ -102,6 +103,7 @@ OfferCard::OfferCard(bool compact) : Gtk::Box(Gtk::Orientation::VERTICAL, 8), co
   append(*deadline_);
   if (!compact_) {
     auto* timeline = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
+    timeline_ = timeline;
     timeline->set_margin_top(4);
     Gtk::Label* today = nullptr;
     timeline->append(*MakeTimelineRow(T_("offer_timeline_today", "Today"), today));
@@ -118,6 +120,11 @@ OfferCard::OfferCard(bool compact) : Gtk::Box(Gtk::Orientation::VERTICAL, 8), co
   terms_ = MakeLine("", "ur-onb-muted");
   terms_->set_margin_top(4);
   append(*terms_);
+}
+
+void OfferCard::SetCardTermsShown(bool shown) {
+  if (timeline_) timeline_->set_visible(shown);
+  terms_->set_visible(shown);
 }
 
 void OfferCard::Update(const OfferView& offer, const PriceTierView& tier, int64_t trialDays) {
