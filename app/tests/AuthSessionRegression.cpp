@@ -91,6 +91,7 @@ struct Tracker { bool in = false; void SignedIn() { in=true; } void SignedOut() 
 struct Flow { uint64_t value=0; uint64_t Begin() { return ++value; } uint64_t Latest() const { return value; } bool IsCurrent(uint64_t f) const { return value==f; } };
 struct WalletSession { int state() { return urnet::BittensorWalletStateSigned; } void cancel() {} };
 struct Wallet { std::shared_ptr<WalletSession> bittensorSession() { return {}; } };
+struct CryptoInvoiceHost { int signOuts=0; void SignOut() { ++signOuts; } };
 struct Control { void StopTunnel() {} };
 struct Events { void NewSession() {} };
 namespace signout { enum class Delivery { Delivered }; inline const char* ToString(Delivery) { return "done"; } }
@@ -123,6 +124,7 @@ struct SdkHost {
   std::vector<urnet::AuthNetworkClientCallback> registrations;
   std::vector<std::string> registrationTokens;
   Wallet wallet_;
+  std::unique_ptr<CryptoInvoiceHost> cryptoInvoice_=std::make_unique<CryptoInvoiceHost>();
   Flow walletFlows_;
   std::function<void(AuthResult)> walletAuthDone_,walletCreateDone_;
   std::function<void(WalletSignature)> walletSignDone_;
@@ -271,10 +273,12 @@ int main() {
     }
     {
       Fresh(); SdkHost h; h.Logout(); size_t queued=workerTasks.size(); h.Logout();
+      Check(h.cryptoInvoice_->signOuts==1,"sign-out immediately clears the invoice once, before the worker tail");
       Check(!h.NetworkServerChangeAllowed(),"space switch cannot replace the old logout's local state");
       Check(workerTasks.size()==queued,"duplicate logout joins one tail");
       bool cancelled=false; h.LoginWithCode("A",[&](AuthResult r) { cancelled=!r.ok; }); h.Logout();
       Check(workerTasks.size()==queued,"retiring a new attempt still joins the running tail");
+      Check(h.cryptoInvoice_->signOuts==1,"joining a running logout never clears another invoice");
       h.api_->code.front()(urnet::AuthCodeLoginResult{std::nullopt,"A"},std::nullopt); Drain();
       Check(cancelled && h.signedOut_,"logout while signed out retires a new pending auth attempt");
       Check(h.NetworkServerChangeAllowed(),"space switch can retry after tail settles");
