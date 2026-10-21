@@ -8,6 +8,7 @@
 #include "GuestConversion.hpp"
 
 #include "AppPrefs.hpp"
+#include "CryptoPay.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -54,6 +55,9 @@ void SubscriptionBalanceStore::Start() {
   isLoading_ = false;
   totals_.Reset();
   referral_.Reset();
+  // the coins and the crypto term belong to the network the fetch answers for
+  cryptoAssets_.reset();
+  cryptoTerm_.reset();
 
   // Offline Pro: the jwt's Pro (and GuestMode) claims are readable without a
   // network call — the plan label is right even before the first fetch.
@@ -99,6 +103,8 @@ void SubscriptionBalanceStore::Stop() {
   fetchWaiters_.clear();
   totals_.Reset();
   referral_.Reset();
+  cryptoAssets_.reset();
+  cryptoTerm_.reset();
   purchaseConfirmationTimedOut_ = false;
   Emit();
 }
@@ -231,6 +237,11 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
             if (result->experiments) {
               for (const auto& a : *result->experiments) experiments_.push_back(a);
             }
+            // the enabled coins (omitted when none, and by an older server, so
+            // no crypto method is offered then) and a one-time crypto year
+            // whose grace has not ended
+            cryptoAssets_ = result->crypto_assets;
+            cryptoTerm_ = result->crypto_term;
 
             // The server is the source of truth for Pro: `current_subscription`
             // is non-nil exactly when the network is Pro. The jwt's Pro claim
@@ -295,6 +306,34 @@ void SubscriptionBalanceStore::SetOffer(const urnet::OnboardingOffer& offer) {
                                               : OfferFirstYear(offer_.regularYear, offer_.percentOff);
   if (!offer.currency.empty()) offer_.currency = offer.currency;
   offer_.expiresAt = offer.expires_at;
+}
+
+std::vector<std::string> SubscriptionBalanceStore::PaymentMethods(const std::string& plan) const {
+  std::vector<std::string> methods{crypto_pay::kMethodCard};
+  if (!cryptoAssets_ || cryptoAssets_->empty()) return methods;
+  try {
+    // Card first, then each listed coin that sells the plan, in the fixed order
+    if (const auto answer = urnet::paymentMethods(cryptoAssets_, urnet::StringList{plan})) {
+      methods.assign(answer->begin(), answer->end());
+    }
+  } catch (const std::exception& e) {
+    g_warning("balance: the payment methods could not be read: %s", e.what());
+  }
+  return methods;
+}
+
+bool SubscriptionBalanceStore::CryptoTermNoticeDue() const {
+  if (!cryptoTerm_) return false;
+  try {
+    return urnet::cryptoTermNoticeDue(cryptoTerm_);
+  } catch (const std::exception& e) {
+    g_warning("balance: the crypto term could not be read: %s", e.what());
+    return false;
+  }
+}
+
+std::string SubscriptionBalanceStore::CryptoTermGraceEnd() const {
+  return cryptoTerm_ ? cryptoTerm_->grace_end_time : std::string();
 }
 
 std::string SubscriptionBalanceStore::ExperimentVariant(const std::string& surface) const {

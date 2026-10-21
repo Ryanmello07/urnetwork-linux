@@ -28,6 +28,17 @@
 //     cannot be created at runtime, when the embedded session request fails,
 //     or when the checkout page itself fails to load — a payment path must
 //     never hard-fail.
+//
+// Crypto (mmm/ZCASH-CONTRACT.md §6): the method row (PaymentMethodRow) sits
+// directly above the buy button, after the plan cards, and lists Card and the
+// coins the server enabled. A coin greys monthly out, the button reads "Pay
+// with {method}" over the coin's fine print, and the button starts the
+// signed-in network's invoice (CryptoInvoiceHost) instead of a checkout; the
+// sheet then shows the native invoice as its Invoice state
+// (CryptoInvoiceView). The invoice polls only while it is on screen. Paid
+// does what a confirmed card purchase does: the confirmation poll flips Pro
+// and the sheet shows its success. A payment already going on is what the
+// sheet opens onto (Open, OpenInvoice), never replaced by a second invoice.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -36,6 +47,7 @@
 
 #include <gtkmm.h>
 
+#include "CryptoPay.hpp"
 #include "DataInfoSheet.hpp"
 #include "OfferCard.hpp"
 #include "SdkHost.hpp"
@@ -43,11 +55,14 @@
 
 namespace urnw {
 
+class CryptoInvoiceView;
+class PaymentMethodRow;
 class PlanPicker;
 
 class UpgradeSheet : public Gtk::Window {
  public:
   UpgradeSheet(Gtk::Window& parent, SdkHost& host, SubscriptionBalanceStore& balance);
+  ~UpgradeSheet() override;
 
   // `freeRefresh`: a start connect refused for the balance opened the sheet
   // (data_info::UpgradeShowsFreeRefresh), so it says when the free data
@@ -55,6 +70,13 @@ class UpgradeSheet : public Gtk::Window {
   void Open(bool freeRefresh = false);
   // selects the plan and goes straight to the Stripe checkout (the onboarding's Start free trial)
   void OpenCheckout(bool yearly);
+  // The onboarding's coin: selects it and the yearly plan and starts the
+  // invoice for `plan` (crypto_pay::CoinPlan), or shows the payment already
+  // going on.
+  void OpenCryptoCheckout(const std::string& asset, const std::string& plan);
+  // Account's "Payment in progress": the saved invoice, or the options when
+  // there is none any more.
+  void OpenInvoice();
   // The balance store's tier/offer changed: reprint the plan cards and the
   // read-only offer line (shown while the offer state is active).
   void ApplyPrices();
@@ -68,10 +90,32 @@ class UpgradeSheet : public Gtk::Window {
   std::function<void()> on_guest_sign_in_required;
 
  private:
-  enum class State { Options, Launching, Checkout, Waiting, Success, TimedOut };
+  enum class State { Options, Launching, Checkout, Waiting, Success, TimedOut, Invoice };
 
   void BuildUi();
   void StartCheckout();
+  // ---- crypto ----
+  // The row's segments from the balance; true when they changed.
+  bool RefreshMethods();
+  // Selects `method` (Card when the row does not list it) and follows it.
+  void SelectMethod(const std::string& method);
+  // What the selected method changes: monthly, the trial line, the button,
+  // the fine print, the offer's card terms, "Temporarily unavailable".
+  void ApplyMethod();
+  Glib::ustring JoinLabel() const;
+  // POST /pay/crypto/intent through the invoice controller.
+  void StartCrypto(const std::string& plan);
+  void ShowInvoice();
+  // The invoice controller's change feed (CryptoInvoiceHost::Subscribe).
+  void OnInvoiceChanged();
+  void OnCryptoStartFailed(const crypto_pay::InvoiceView& invoice);
+  void OnCryptoPaid();
+  // The invoice is on screen (its view mapped, the sheet not minimized): the
+  // controller runs.
+  void SetInvoiceViewer(bool visible);
+  // The sheet is minimized (GTK 4.12+ reports it; false before): the app is
+  // in the background, and the invoice stops polling until it is back.
+  bool Suspended();
   // The pay-sheet path: one stripePaymentSheet round trip, then the ur.io pay
   // page in the web view. Any failure before the page rendered continues
   // with the embedded checkout session.
@@ -128,6 +172,24 @@ class UpgradeSheet : public Gtk::Window {
   // waiting-state headline: "complete in the browser" (hosted) vs
   // "processing payment" (embedded, already paid in the webview)
   Gtk::Label* waitingLabel_ = nullptr;
+
+  // ---- crypto ----
+  PaymentMethodRow* methodRow_ = nullptr;
+  Gtk::Label* finePrint_ = nullptr;  // a coin's fine print under the button
+  Gtk::Box* invoiceBox_ = nullptr;   // the Invoice state
+  CryptoInvoiceView* invoiceView_ = nullptr;
+  std::string method_ = crypto_pay::kMethodCard;  // what the button follows
+  bool methodPicked_ = false;  // the user picked a method in this open
+  // the purchase the events describe: its method and, for a coin, its plan
+  std::string purchaseMethod_ = crypto_pay::kMethodCard;
+  std::string purchasePlan_;
+  bool cryptoStarting_ = false;    // this sheet's StartInvoice waits for its quote
+  std::string unavailableAsset_;   // the coin whose start was asset_unavailable
+  int invoiceSubscription_ = 0;    // CryptoInvoiceHost::Subscribe
+  bool invoiceViewer_ = false;     // counted as a visible viewer of the invoice
+  sigc::connection invoiceMapped_;
+  sigc::connection invoiceUnmapped_;
+  gulong suspendedHandler_ = 0;  // notify::suspended on this window
 
 #ifdef UR_HAVE_WEBKIT
   Gtk::Box* checkoutBox_ = nullptr;   // brand header + webview slot

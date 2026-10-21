@@ -55,6 +55,8 @@
 
 namespace urnw {
 
+class CryptoInvoiceHost;
+
 struct AuthResult {
   bool ok = false;
   bool verification_required = false;
@@ -1421,6 +1423,14 @@ class SdkHost {
   // the onboarding optimization loop reads goes through this one facade.
   // Valid after Initialize().
   ClientEventQueue& events() { return *events_; }
+  // The signed-in network's crypto invoice (CryptoInvoiceHost.hpp): the upgrade
+  // sheets and the onboarding start it and show it, the window signs it in and
+  // out. Main loop.
+  CryptoInvoiceHost& CryptoInvoice() { return *cryptoInvoice_; }
+  // Where the crypto invoice controller saves the invoice and the last payment
+  // method: a directory of the GUI's own per network server, under the SDK's
+  // storage root (CryptoInvoiceStorage.hpp). Main loop.
+  std::string CryptoInvoiceStorageDir() const;
   // The sign-up pages' "Periodic product updates" switch, read at submit:
   // the next network create carries product_updates=false when it is off
   // (absent = opted in), and signup.optout_changed records the opt-out.
@@ -1734,6 +1744,13 @@ class SdkHost {
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::Api> api_;
   std::unique_ptr<ClientEventQueue> events_;
+  // After api_, so it closes its controller before the Api goes (~SdkHost).
+  std::unique_ptr<CryptoInvoiceHost> cryptoInvoice_;
+  // The storage root Initialize was given, and the host of the network space
+  // bound now (Initialize, ApplyNetworkServer). Both written and read on the
+  // main loop only, so CryptoInvoiceStorageDir never waits on mutex_.
+  std::string storageRoot_;
+  std::string activeSpaceHost_;
   std::function<void(const std::string& url)> onOnboardingLink_;
   std::function<void(const std::string& url)> onTop200Link_;
   bool productUpdatesOptOut_ = false;  // the next create's product_updates

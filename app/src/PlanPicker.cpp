@@ -4,9 +4,13 @@
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include <graphene.h>
 
+#include "CryptoPay.hpp"  // YearlyCardLines
 #include "I18n.hpp"
 #include "OfferCard.hpp"
 #include "PaneKit.hpp"
@@ -183,16 +187,22 @@ class GoldPlanCard : public Gtk::Overlay {
     if (tick_) remove_tick_callback(tick_);
   }
 
+  // `savingRenews`: the line under the price is the offer's renewal price
+  // ("then $40/year"), not "Save N%".
   void SetTexts(const Glib::ustring& price, const Glib::ustring& saving,
-                const Glib::ustring& equivalent, const Glib::ustring& trial) {
+                const Glib::ustring& equivalent, const Glib::ustring& trial, bool savingRenews) {
     price_.set_text(price);
-    saving_.set_text(saving);
-    saving_.set_visible(!saving.empty());
-    equivalent_.set_text(equivalent);
-    equivalent_.set_visible(!equivalent.empty());
+    savingText_ = saving;
+    savingRenews_ = savingRenews;
+    equivalentText_ = equivalent;
     trial_.set_text(trial);
-    kit::SetAccessibleLabel(*this, PlanCardName({price, saving, equivalent, trial,
-                                                 pill_.get_text()}));
+    Layout();
+  }
+  // Only a card subscription starts with the free trial and renews (CONTRACT
+  // §6.1): for a coin the trial line and the offer's renewal line go.
+  void SetCardTermsShown(bool shown) {
+    cardTerms_ = shown;
+    Layout();
   }
   void SetSelected(bool selected) {
     selected_ = selected;
@@ -216,6 +226,38 @@ class GoldPlanCard : public Gtk::Overlay {
   }
 
  private:
+  // The lines under the price for the selected method
+  // (crypto_pay::YearlyCardLines), filled into the card's rows from the top.
+  // A row left with nothing to say keeps its card text, transparent, as the
+  // trial line does: the card keeps its height and the two cards do not jump
+  // as the method changes. The card's name (its content is decorative) reads
+  // only what shows.
+  void Layout() {
+    saving_.set_visible(!savingText_.empty());
+    equivalent_.set_visible(!equivalentText_.empty());
+    const std::vector<std::string> lines = crypto_pay::YearlyCardLines(
+        savingText_.raw(), savingRenews_, equivalentText_.raw(), !cardTerms_);
+    size_t next = 0;
+    for (const auto& [row, cardText] :
+         {std::pair<Gtk::Label*, const Glib::ustring*>{&saving_, &savingText_},
+          std::pair<Gtk::Label*, const Glib::ustring*>{&equivalent_, &equivalentText_}}) {
+      if (!row->get_visible()) continue;
+      if (next < lines.size()) {
+        row->set_text(lines[next++]);
+        row->set_opacity(1.0);
+      } else {
+        row->set_text(*cardText);
+        row->set_opacity(0.0);
+      }
+    }
+    trial_.set_opacity(cardTerms_ ? 1.0 : 0.0);
+    kit::SetAccessibleLabel(*this, PlanCardName({price_.get_text(),
+                                                 0 < lines.size() ? lines[0] : std::string(),
+                                                 1 < lines.size() ? lines[1] : std::string(),
+                                                 cardTerms_ ? trial_.get_text() : Glib::ustring(),
+                                                 pill_.get_text()}));
+  }
+
   void Draw(const Cairo::RefPtr<Cairo::Context>& cr, double w, double h) {
     const double radius = 12;
     // the breathing halo: rings that follow the card's shape and fade out
@@ -288,6 +330,11 @@ class GoldPlanCard : public Gtk::Overlay {
   Gtk::Label pill_;
   Glib::RefPtr<Gtk::GestureClick> click_;
   bool selected_ = true;
+  // what the card says for the card method (Layout chooses what shows)
+  Glib::ustring savingText_;
+  Glib::ustring equivalentText_;
+  bool savingRenews_ = false;
+  bool cardTerms_ = true;  // a card selection: trial and renewal lines show
   double sweep_ = 0.25;
   double breath_ = 0.5;
   double start_ = 0;
@@ -357,6 +404,14 @@ PlanPicker::PlanPicker() : Gtk::Box(Gtk::Orientation::VERTICAL, 0) {
   monthlyLine_->add_css_class("ur-onb-muted");
   monthlyLine_->set_xalign(0);
   monthlyColumn->append(*monthlyLine_);
+  // while a coin is the payment method: monthly is card only
+  monthlyNote_ = Gtk::make_managed<Gtk::Label>(
+      T_("pay_method_card_only_monthly", "Monthly is card only"));
+  monthlyNote_->add_css_class("ur-onb-body");
+  monthlyNote_->add_css_class("ur-onb-muted");
+  monthlyNote_->set_xalign(0);
+  monthlyNote_->set_visible(false);
+  monthlyColumn->append(*monthlyNote_);
   monthlyReserve->add_overlay(*monthlyColumn);
   monthlyRow->append(*monthlyReserve);
   monthlyCard_->set_child(*monthlyRow);
@@ -377,7 +432,7 @@ void PlanPicker::SetPrices(const PriceTierView& tier, const OfferView& offer) {
 
 void PlanPicker::SetTexts(const PlanCardTexts& texts) {
   yearlyCard_->SetTexts(texts.yearlyPrice, texts.yearlySecondary, texts.yearlyEquivalent,
-                        texts.yearlyTrial);
+                        texts.yearlyTrial, texts.yearlySecondaryRenews);
   // the invisible copy that sizes the monthly card like the yearly one
   if (reservedLines_.size() == 3) {
     reservedLines_[0]->set_text(texts.yearlyPrice);
@@ -387,9 +442,31 @@ void PlanPicker::SetTexts(const PlanCardTexts& texts) {
   }
   monthlyText_->set_text(texts.monthlyPrice);
   monthlyLine_->set_text(texts.monthlyLine);
-  monthlyLine_->set_visible(!texts.monthlyLine.empty());
+  monthlyLine_->set_visible(monthlyAllowed_ && !texts.monthlyLine.empty());
   kit::SetAccessibleLabel(*monthlyCard_, PlanCardName({texts.monthlyPrice, texts.monthlyLine}));
+  // greyed for a coin: the name says why, in place of its card terms
+  // (SetMonthlyAllowed)
+  if (!monthlyAllowed_) {
+    kit::SetAccessibleLabel(*monthlyCard_,
+                            PlanCardName({texts.monthlyPrice, monthlyNote_->get_text()}));
+  }
 }
+
+void PlanPicker::SetMonthlyAllowed(bool allowed) {
+  monthlyAllowed_ = allowed;
+  // insensitive: greyed, out of the tab order, and no click selects it
+  monthlyCard_->set_sensitive(allowed);
+  // For a coin the card says why it is greyed, in place of its card terms:
+  // "Billed monthly · cancel anytime" is renewal wording (CONTRACT §6.1). The
+  // card's height is the reserved copy's, so the swap does not move it.
+  monthlyLine_->set_visible(allowed && !monthlyLine_->get_text().empty());
+  monthlyNote_->set_visible(!allowed);
+  kit::SetAccessibleLabel(*monthlyCard_,
+                          PlanCardName({monthlyText_->get_text(),
+                                        allowed ? monthlyLine_->get_text() : monthlyNote_->get_text()}));
+}
+
+void PlanPicker::SetCardTermsShown(bool shown) { yearlyCard_->SetCardTermsShown(shown); }
 
 void PlanPicker::Select(bool yearly) {
   yearly_ = yearly;

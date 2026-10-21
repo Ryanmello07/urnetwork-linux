@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "UpgradeSheet.hpp"
 
+#include "CryptoInvoiceHost.hpp"
+#include "CryptoInvoiceView.hpp"
+#include "PaymentMethodRow.hpp"
 #include "PlanPicker.hpp"
 
 #include <cstdio>
@@ -116,6 +119,18 @@ UpgradeSheet::UpgradeSheet(Gtk::Window& parent, SdkHost& host, SubscriptionBalan
   set_hide_on_close(true);
   AddEscapeToClose(*this);
   BuildUi();
+  // the invoice controller's changes, on the GTK loop
+  invoiceSubscription_ = host_.CryptoInvoice().Subscribe([this] { OnInvoiceChanged(); });
+}
+
+UpgradeSheet::~UpgradeSheet() {
+  // before any member goes: the feed and the view's map signals call back
+  // into this sheet
+  host_.CryptoInvoice().Unsubscribe(invoiceSubscription_);
+  invoiceMapped_.disconnect();
+  invoiceUnmapped_.disconnect();
+  if (suspendedHandler_) g_signal_handler_disconnect(gobj(), suspendedHandler_);
+  if (invoiceViewer_) host_.CryptoInvoice().RemoveVisibleViewer();
 }
 
 void UpgradeSheet::BuildUi() {
@@ -161,8 +176,10 @@ void UpgradeSheet::BuildUi() {
   // component, so Get Pro and onboarding cannot drift.
   plans_ = Gtk::make_managed<PlanPicker>();
   plans_->set_margin_top(36);  // room for the halo and the Best value pill
-  plans_->on_select = [this](bool yearly) {
-    if (joinLabel_) joinLabel_->set_text(PlanPicker::CtaLabel(yearly));
+  plans_->on_select = [this](bool) {
+    // a coin reads "Pay with {method}" whatever the plan (monthly is greyed
+    // for it anyway)
+    if (joinLabel_) joinLabel_->set_text(JoinLabel());
   };
   optionsBox_->append(*plans_);
 
@@ -173,6 +190,20 @@ void UpgradeSheet::BuildUi() {
   offerLine_->set_margin_top(16);
   offerLine_->set_visible(false);
   optionsBox_->append(*offerLine_);
+
+  // Card · USDC · Zcash · Monero, directly above the button; hidden while the
+  // server lists no coin, so the sheet then looks as it always did
+  methodRow_ = Gtk::make_managed<PaymentMethodRow>();
+  methodRow_->set_margin_top(20);
+  methodRow_->on_select = [this](const std::string& method) {
+    method_ = method;
+    methodPicked_ = true;
+    // the last choice, remembered on this device
+    host_.CryptoInvoice().SetPaymentMethod(method);
+    errorLabel_->set_visible(false);
+    ApplyMethod();
+  };
+  optionsBox_->append(*methodRow_);
 
   joinBtn_ = Gtk::make_managed<Gtk::Button>();
   auto* joinContent = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
@@ -187,8 +218,27 @@ void UpgradeSheet::BuildUi() {
   joinBtn_->add_css_class("suggested-action");
   joinBtn_->add_css_class("pill");
   joinBtn_->set_margin_top(20);
-  joinBtn_->signal_clicked().connect([this] { StartCheckout(); });
+  joinBtn_->signal_clicked().connect([this] {
+    if (crypto_pay::IsCoin(method_)) {
+      // a coin buys the yearly plan, or the welcome offer while it is active
+      StartCrypto(crypto_pay::CoinPlan(balance_.Offer().active));
+    } else {
+      StartCheckout();
+    }
+  });
   optionsBox_->append(*joinBtn_);
+
+  // a coin's terms under its button: one payment, no renewal, no trial
+  finePrint_ = Gtk::make_managed<Gtk::Label>(
+      T_("crypto_fine_print_yearly",
+         "A one-time payment for a year of Pro. It doesn't renew, and there's no free trial."));
+  finePrint_->add_css_class("dim-label");
+  finePrint_->add_css_class("caption");
+  finePrint_->set_wrap(true);
+  finePrint_->set_xalign(0);
+  finePrint_->set_margin_top(8);
+  finePrint_->set_visible(false);
+  optionsBox_->append(*finePrint_);
 
   errorLabel_ = Gtk::make_managed<Gtk::Label>();
   errorLabel_->add_css_class("ur-error-text");
@@ -212,6 +262,46 @@ void UpgradeSheet::BuildUi() {
   optionsBox_->append(*terms);
 
   root->append(*optionsBox_);
+
+  // ---- the crypto invoice (a state of this sheet, CryptoInvoiceView) ---------
+  invoiceBox_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+  invoiceBox_->set_visible(false);
+  // the invoice is taller than the options: it scrolls past a small screen
+  auto* invoiceScroll = Gtk::make_managed<Gtk::ScrolledWindow>();
+  invoiceScroll->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+  invoiceScroll->set_propagate_natural_height(true);
+  invoiceScroll->set_max_content_height(640);
+  invoiceView_ = Gtk::make_managed<CryptoInvoiceView>();
+  invoiceView_->on_refresh = [this] { host_.CryptoInvoice().Requote(); };
+  invoiceView_->on_pay_another_way = [this] {
+    if (!purchaseEmitted_) {
+      EmitPurchase("cancelled");
+      purchaseEmitted_ = true;
+    }
+    // with nothing received the saved invoice goes (the controller's rule)
+    host_.CryptoInvoice().Dismiss();
+    // back to the method row, with Card
+    SelectMethod(crypto_pay::kMethodCard);
+    host_.CryptoInvoice().SetPaymentMethod(crypto_pay::kMethodCard);
+    SetState(State::Options);
+  };
+  // the invoice stays saved: Account's "Payment in progress" opens it again
+  invoiceView_->on_close = [this] { set_visible(false); };
+  // On screen exactly while mapped (the sheet shown in the Invoice state) and
+  // not minimized: the controller polls only then (no background checks).
+  invoiceMapped_ = invoiceView_->signal_map().connect([this] { SetInvoiceViewer(!Suspended()); });
+  invoiceUnmapped_ = invoiceView_->signal_unmap().connect([this] { SetInvoiceViewer(false); });
+#if GTK_CHECK_VERSION(4, 12, 0)
+  suspendedHandler_ = g_signal_connect(
+      gobj(), "notify::suspended", G_CALLBACK(+[](GObject*, GParamSpec*, gpointer data) {
+        auto* self = static_cast<UpgradeSheet*>(data);
+        self->SetInvoiceViewer(self->invoiceView_->get_mapped() && !self->Suspended());
+      }),
+      this);
+#endif
+  invoiceScroll->set_child(*invoiceView_);
+  invoiceBox_->append(*invoiceScroll);
+  root->append(*invoiceBox_);
 
 #ifdef UR_HAVE_WEBKIT
   // ---- embedded checkout (webview swaps in over the options) -----------------
@@ -352,6 +442,7 @@ void UpgradeSheet::SetState(State state) {
   }
   state_ = state;
   optionsBox_->set_visible(state == State::Options || state == State::Launching);
+  invoiceBox_->set_visible(state == State::Invoice);
   waitingBox_->set_visible(state == State::Waiting);
   successBox_->set_visible(state == State::Success);
   timedOutBox_->set_visible(state == State::TimedOut);
@@ -365,6 +456,7 @@ void UpgradeSheet::SetState(State state) {
   }
   joinBtn_->set_sensitive(!launching);
   plans_->set_sensitive(!launching);
+  methodRow_->set_sensitive(!launching);
 }
 
 void UpgradeSheet::ApplyPrices() {
@@ -378,23 +470,34 @@ void UpgradeSheet::ApplyPrices() {
 }
 
 void UpgradeSheet::EmitPurchase(const char* outcome, const std::string& errorClass) {
-  const bool yearly = plans_->Yearly();
+  // A coin's purchase names its market as the store (§6.1: solana, zcash,
+  // monero), buys the yearly plan, and has no trial; the card's is Stripe's.
+  const bool coin = crypto_pay::IsCoin(purchaseMethod_);
+  const bool yearly = coin || plans_->Yearly();
   const PriceTierView& tier = balance_.Tier();
   const OfferView& offer = balance_.Offer();
-  const double price = yearly ? (offer.active ? offer.firstYear : tier.yearly) : tier.monthly;
+  const bool offerPrice = coin ? purchasePlan_ == crypto_pay::kPlanYearlyOnboarding : offer.active;
+  double price = yearly ? (offerPrice ? offer.firstYear : tier.yearly) : tier.monthly;
+  // once a coin's invoice is quoted, the server's price is what it charges
+  if (coin) {
+    const crypto_pay::InvoiceView& invoice = host_.CryptoInvoice().State();
+    if (invoice.asset == purchaseMethod_ && 0 < invoice.priceUsd) price = invoice.priceUsd;
+  }
+  const std::string store = coin ? crypto_pay::EventStore(purchaseMethod_) : kStoreStripe;
+  const bool trial = yearly && !coin;
   const std::string out(outcome);
   ClientEventQueue& events = host_.events();
   if (out == "started") {
-    events.PurchaseStarted(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+    events.PurchaseStarted(store, PlanProduct(yearly), PlanName(yearly), trial, price,
                            tier.currency);
   } else if (out == "completed") {
-    events.PurchaseCompleted(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+    events.PurchaseCompleted(store, PlanProduct(yearly), PlanName(yearly), trial, price,
                              tier.currency);
   } else if (out == "cancelled") {
-    events.PurchaseCancelled(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+    events.PurchaseCancelled(store, PlanProduct(yearly), PlanName(yearly), trial, price,
                              tier.currency);
   } else {
-    events.PurchaseFailed(kStoreStripe, PlanProduct(yearly), PlanName(yearly), yearly, price,
+    events.PurchaseFailed(store, PlanProduct(yearly), PlanName(yearly), trial, price,
                           tier.currency, errorClass);
   }
 }
@@ -422,20 +525,78 @@ void UpgradeSheet::Open(bool freeRefresh) {
     freeRefreshTicker_.Stop();
   }
   errorLabel_->set_visible(false);
+  cryptoStarting_ = false;
+  unavailableAsset_.clear();
+  methodPicked_ = false;
   ApplyPrices();
   plans_->Select(true);
-  joinLabel_->set_text(PlanPicker::CtaLabel(true));
-  // resuming a still-running confirmation poll re-opens onto the waiting state
-  SetState(balance_.IsPolling() ? State::Waiting : State::Options);
+  // the method this device chose last, while the server still offers it
+  RefreshMethods();
+  SelectMethod(host_.CryptoInvoice().PaymentMethod());
+  // resuming a still-running confirmation poll re-opens onto the waiting
+  // state, and a crypto payment going on onto its invoice
+  if (balance_.IsPolling()) {
+    SetState(State::Waiting);
+  } else if (crypto_pay::InvoiceInProgress(host_.CryptoInvoice().State())) {
+    ShowInvoice();
+  } else {
+    SetState(State::Options);
+  }
   present();
 }
 
 void UpgradeSheet::OpenCheckout(bool yearly) {
   ApplyPrices();
+  // the onboarding chose the card
+  RefreshMethods();
+  SelectMethod(crypto_pay::kMethodCard);
   if (plans_) plans_->Select(yearly);
   if (joinLabel_) joinLabel_->set_text(PlanPicker::CtaLabel(yearly));
   present();
   StartCheckout();
+}
+
+void UpgradeSheet::OpenCryptoCheckout(const std::string& asset, const std::string& plan) {
+  ++*epoch_;
+  freeRefreshBox_->set_visible(false);
+  freeRefreshTicker_.Stop();
+  errorLabel_->set_visible(false);
+  cryptoStarting_ = false;
+  unavailableAsset_.clear();
+  methodPicked_ = true;  // the onboarding's row picked it
+  ApplyPrices();
+  plans_->Select(true);
+  RefreshMethods();
+  SelectMethod(asset);
+  present();
+  // a payment already going on is shown, never replaced by a second invoice
+  if (crypto_pay::InvoiceInProgress(host_.CryptoInvoice().State())) {
+    ShowInvoice();
+    return;
+  }
+  SetState(State::Options);
+  // the coin is still offered (else the row fell back to Card and the
+  // options show it)
+  if (crypto_pay::IsCoin(method_)) StartCrypto(plan);
+}
+
+void UpgradeSheet::OpenInvoice() {
+  if (!crypto_pay::InvoiceInProgress(host_.CryptoInvoice().State())) {
+    Open();
+    return;
+  }
+  ++*epoch_;
+  freeRefreshBox_->set_visible(false);
+  freeRefreshTicker_.Stop();
+  errorLabel_->set_visible(false);
+  cryptoStarting_ = false;
+  methodPicked_ = false;
+  ApplyPrices();
+  plans_->Select(true);
+  RefreshMethods();
+  SelectMethod(host_.CryptoInvoice().State().asset);
+  ShowInvoice();
+  present();
 }
 
 void UpgradeSheet::StartCheckout() {
@@ -443,6 +604,8 @@ void UpgradeSheet::StartCheckout() {
   SetState(State::Launching);
   errorLabel_->set_visible(false);
   purchaseEmitted_ = false;
+  purchaseMethod_ = crypto_pay::kMethodCard;
+  purchasePlan_.clear();
   EmitPurchase("started");
 #ifdef UR_HAVE_WEBKIT
   // The inline payment sheet first, then embedded checkout — but only once a
@@ -864,6 +1027,12 @@ void UpgradeSheet::TeardownWebView() {
 #endif  // UR_HAVE_WEBKIT
 
 void UpgradeSheet::OnBalanceChanged() {
+  // The coins the server lists can change with any fetch: the row follows
+  // while the options are what is on screen, keeping a method picked in this
+  // open when it is still offered.
+  if (state_ == State::Options && RefreshMethods()) {
+    SelectMethod(methodPicked_ ? method_ : host_.CryptoInvoice().PaymentMethod());
+  }
   // TimedOut is NOT terminal: a Pro-confirming snapshot can land after the
   // confirmation deadline gave up (the store falls back to the background
   // poll, and every window re-show fetches) — the purchase did go through,
@@ -877,6 +1046,189 @@ void UpgradeSheet::OnBalanceChanged() {
     SetState(State::Success);
   } else if (balance_.PurchaseConfirmationTimedOut()) {
     SetState(State::TimedOut);
+  }
+}
+
+// ---- crypto (mmm/ZCASH-CONTRACT.md §6.1, §6.2) -------------------------------------------
+
+bool UpgradeSheet::RefreshMethods() {
+  return methodRow_->SetMethods(
+      balance_.PaymentMethods(crypto_pay::CoinPlan(balance_.Offer().active)));
+}
+
+void UpgradeSheet::SelectMethod(const std::string& method) {
+  methodRow_->Select(method);
+  method_ = methodRow_->Selected();
+  ApplyMethod();
+}
+
+void UpgradeSheet::ApplyMethod() {
+  const bool coin = crypto_pay::IsCoin(method_);
+  // Monthly is card only: a coin greys it out and buys the yearly plan, once,
+  // with no trial and no renewal (no such wording while it is selected)
+  plans_->SetMonthlyAllowed(!coin);
+  plans_->SetCardTermsShown(!coin);
+  if (coin && !plans_->Yearly()) plans_->Select(true);
+  joinLabel_->set_text(JoinLabel());
+  finePrint_->set_visible(coin);
+  if (offerLine_) offerLine_->SetCardTermsShown(!coin);
+  // a coin that could not be quoted stays selectable for a retry
+  methodRow_->SetUnavailable(coin && method_ == unavailableAsset_);
+}
+
+Glib::ustring UpgradeSheet::JoinLabel() const {
+  if (crypto_pay::IsCoin(method_)) {
+    return Format(T_("crypto_pay_button", "Pay with {}"), PaymentMethodName(method_).raw());
+  }
+  // only the yearly plan carries the trial: the button says what the click does
+  return PlanPicker::CtaLabel(plans_->Yearly());
+}
+
+void UpgradeSheet::StartCrypto(const std::string& plan) {
+  if (state_ == State::Launching) return;
+  // One invoice at a time (CONTRACT §6.2.1): a payment going on is shown,
+  // never replaced by a second invoice the app would lose track of.
+  if (crypto_pay::InvoiceInProgress(host_.CryptoInvoice().State())) {
+    ShowInvoice();
+    return;
+  }
+  SetState(State::Launching);
+  errorLabel_->set_visible(false);
+  purchaseEmitted_ = false;
+  purchaseMethod_ = method_;
+  purchasePlan_ = plan;
+  EmitPurchase("started");
+  // set before the call: the controller reports "starting" at once
+  cryptoStarting_ = true;
+  if (!host_.CryptoInvoice().StartInvoice(method_, plan)) {
+    // no controller (no session to start one with)
+    cryptoStarting_ = false;
+    crypto_pay::InvoiceView failed;
+    failed.phase = crypto_pay::kPhaseFailed;
+    failed.asset = method_;
+    OnCryptoStartFailed(failed);
+  }
+}
+
+void UpgradeSheet::ShowInvoice() {
+  const crypto_pay::InvoiceView& invoice = host_.CryptoInvoice().State();
+  // the purchase the events describe, also for an invoice resumed from an
+  // earlier run: its completion is reported once, when it is paid here
+  purchaseMethod_ = invoice.asset;
+  purchasePlan_ = invoice.plan;
+  purchaseEmitted_ = false;
+  invoiceView_->Render(invoice);
+  SetState(State::Invoice);
+}
+
+void UpgradeSheet::OnInvoiceChanged() {
+  // A hidden sheet waits for its next open, which reads the invoice afresh.
+  // Only the sheet on screen acts on a change, so a payment is completed once.
+  if (!get_visible()) return;
+  const crypto_pay::InvoiceView& invoice = host_.CryptoInvoice().State();
+  const crypto_pay::InvoiceStage stage = crypto_pay::StageOf(invoice);
+  if (state_ == State::Launching && cryptoStarting_) {
+    switch (stage) {
+      case crypto_pay::InvoiceStage::Starting:
+        return;  // the quote is on its way
+      case crypto_pay::InvoiceStage::Open:
+        cryptoStarting_ = false;
+        unavailableAsset_.clear();
+        ShowInvoice();
+        return;
+      case crypto_pay::InvoiceStage::Paid:
+        // the network's open invoice for the same coin and plan, paid already
+        cryptoStarting_ = false;
+        OnCryptoPaid();
+        return;
+      case crypto_pay::InvoiceStage::Failed:
+        cryptoStarting_ = false;
+        OnCryptoStartFailed(invoice);
+        return;
+      case crypto_pay::InvoiceStage::None:
+        cryptoStarting_ = false;
+        SetState(State::Options);
+        return;
+    }
+  }
+  if (state_ != State::Invoice) return;
+  switch (stage) {
+    case crypto_pay::InvoiceStage::Paid:
+      OnCryptoPaid();
+      return;
+    case crypto_pay::InvoiceStage::None:
+      // dismissed (Pay another way) or signed out: back to the options, with Card
+      SelectMethod(crypto_pay::kMethodCard);
+      SetState(State::Options);
+      return;
+    case crypto_pay::InvoiceStage::Starting:
+    case crypto_pay::InvoiceStage::Open:
+    case crypto_pay::InvoiceStage::Failed:
+      invoiceView_->Render(invoice);
+      return;
+  }
+}
+
+void UpgradeSheet::OnCryptoStartFailed(const crypto_pay::InvoiceView& invoice) {
+  switch (crypto_pay::StartRefusalFor(invoice.errorCode, true)) {
+    case crypto_pay::StartRefusal::GuestSignIn:
+      // a legacy guest: the conversion first, like a refused card checkout
+      RefuseForGuest();
+      return;
+    case crypto_pay::StartRefusal::Unavailable:
+      if (!purchaseEmitted_) {
+        EmitPurchase("failed", invoice.errorCode);
+        purchaseEmitted_ = true;
+      }
+      // "Temporarily unavailable" under the row; the coin stays selected
+      unavailableAsset_ = invoice.asset.empty() ? method_ : invoice.asset;
+      SetState(State::Options);
+      ApplyMethod();
+      return;
+    case crypto_pay::StartRefusal::Other:
+    case crypto_pay::StartRefusal::None: {
+      if (!purchaseEmitted_) {
+        EmitPurchase("failed", invoice.errorCode.empty() ? std::string("transport")
+                                                         : invoice.errorCode);
+        purchaseEmitted_ = true;
+      }
+      SetState(State::Options);
+      // rate limited, offer unavailable, start failed, or no answer: the
+      // sheet's own refusal line, with the server's words under it when it
+      // has no line of its own (ServerRefusalText.hpp)
+      const ServerRefusalText refusal = ServerRefusalTextFor(
+          invoice.errorCode, invoice.errorMessage, kUpgradeSheetRefusalLine);
+      errorLabel_->set_text(
+          ServerRefusalDisplay(T_(refusal.line.key, refusal.line.english), refusal));
+      errorLabel_->set_visible(true);
+      return;
+    }
+  }
+}
+
+void UpgradeSheet::OnCryptoPaid() {
+  // What a confirmed card purchase does: the confirmation poll reads the
+  // credited Pro (the window's Pro celebration follows the flip), and the
+  // sheet shows its success, which reports the purchase completed once.
+  balance_.StartConfirmationPolling();
+  SetState(State::Success);
+}
+
+bool UpgradeSheet::Suspended() {
+#if GTK_CHECK_VERSION(4, 12, 0)
+  return gtk_window_is_suspended(gobj());
+#else
+  return false;
+#endif
+}
+
+void UpgradeSheet::SetInvoiceViewer(bool visible) {
+  if (visible == invoiceViewer_) return;
+  invoiceViewer_ = visible;
+  if (visible) {
+    host_.CryptoInvoice().AddVisibleViewer();
+  } else {
+    host_.CryptoInvoice().RemoveVisibleViewer();
   }
 }
 

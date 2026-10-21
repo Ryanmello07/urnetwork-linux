@@ -13,6 +13,14 @@
 // (OnboardingRouting.hpp). The offer.in_app holdout sees the four-page flow
 // with the regular picker and no issue call. Every page transition, the
 // offer surfaces and the decline are client events (ClientEvents.hpp).
+//
+// Both purchase pages carry the payment-method row (mmm/ZCASH-CONTRACT.md
+// §6.3: the onboarding skips the upgrade sheet's options, so the row joins
+// its own plan picker). It is one choice shown twice: picking a coin on
+// either page greys monthly out, drops the card's trial lines, turns the CTA
+// into "Pay with {method}" over the coin's fine print, and the CTA opens the
+// coin's invoice (UpgradeSheet::OpenCryptoCheckout) instead of the card
+// checkout. With an active offer a coin buys the welcome offer.
 #pragma once
 
 #include <cstdint>
@@ -23,8 +31,10 @@
 
 #include <gtkmm.h>
 
+#include "CryptoPay.hpp"
 #include "OfferCard.hpp"
 #include "OnboardingRouting.hpp"
+#include "PaymentMethodRow.hpp"
 #include "PlanPicker.hpp"
 #include "RedeemCodeSheet.hpp"
 #include "SdkHost.hpp"
@@ -79,6 +89,17 @@ class OnboardingWindow : public Gtk::Window {
   void StartCheckout(bool yearly, const char* surface);
   int64_t StepElapsedMs() const;
   void SelectPlan(bool yearly);
+  // ---- the payment method (both purchase pages) ----
+  // The offer as the pages show it (the holdout's picker shows none).
+  bool ShowsOffer() const;
+  // The rows' segments from the balance, for the plan a coin buys here;
+  // a list change re-selects (`remembered`: the device's last method).
+  void ApplyMethods(bool remembered);
+  // What the method changes on both pages.
+  void ApplyMethod();
+  void SelectMethod(const std::string& method);
+  Glib::ustring StartLabel() const;
+  Glib::ustring OfferCtaLabel() const;
   void FlyConnector(bool toHeader);
   void PlaceConnector(double x, double y, double size);
 
@@ -138,6 +159,14 @@ class OnboardingWindow : public Gtk::Window {
   Gtk::Label* offerTrial_ = nullptr;
   OfferCard* offerCard_ = nullptr;
   Gtk::Button* offerCta_ = nullptr;
+
+  // the payment method: one choice, a row on each purchase page
+  std::string method_ = crypto_pay::kMethodCard;
+  bool methodPicked_ = false;  // picked in this open
+  PaymentMethodRow* welcomeMethods_ = nullptr;
+  PaymentMethodRow* offerMethods_ = nullptr;
+  Gtk::Label* welcomeFinePrint_ = nullptr;
+  Gtk::Label* offerFinePrint_ = nullptr;
 };
 
 }  // namespace urnw

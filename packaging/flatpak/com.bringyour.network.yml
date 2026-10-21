@@ -75,7 +75,9 @@ finish-args:
   # bus name, which the SNI spec allows and which needs no ownership.
   - --talk-name=org.kde.StatusNotifierWatcher
 
-  # Opening sign-in / wallet-connect / support links in the user's browser.
+  # Opening sign-in / wallet-connect / support links in the user's browser,
+  # and a crypto invoice's payment uri (monero:, zcash:, solana:) in the
+  # user's wallet app ("Open in wallet").
   - --talk-name=org.freedesktop.portal.OpenURI
 
   # Autostart is requested through the Background portal — the sandboxed

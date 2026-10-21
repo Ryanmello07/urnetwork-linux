@@ -16,6 +16,8 @@
 #include "BittensorWalletFlow.hpp"
 #include "ReferralRoyalty.hpp"
 #include "BrandIcons.hpp"
+#include "CryptoInvoiceHost.hpp"
+#include "CryptoPay.hpp"
 #include "DaemonUnreachableCopy.hpp"
 #include "DisplayText.hpp"
 #include "FailsafeNotice.hpp"
@@ -33,6 +35,15 @@ namespace urnw {
 
 namespace {
 constexpr const char* kOnboardingPendingKey = "onboarding_pending";
+
+// An RFC 3339 time as the locale's date ("10/20/2026"), "" when unreadable:
+// the date a crypto year's renewal notice names.
+std::string LocalDateText(const std::string& rfc3339) {
+  if (rfc3339.empty()) return std::string();
+  const Glib::DateTime when = Glib::DateTime::create_from_iso8601(rfc3339);
+  if (!when) return std::string();
+  return when.to_local().format("%x").raw();
+}
 }  // namespace
 namespace {
 
@@ -289,6 +300,9 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       snapshot.isPro = balance_.IsPro();
       snapshot.guest = balance_.IsGuest();
       snapshot.subscriptionStoreFamily = balance_.SubscriptionStoreFamily();
+      // a one-time crypto year: due for renewal, and by when
+      snapshot.cryptoTermNotice = balance_.CryptoTermNoticeDue();
+      snapshot.cryptoTermRenewBy = LocalDateText(balance_.CryptoTermGraceEnd());
       snapshot.loaded = balance_.HasFetched();
       snapshot.confirming = balance_.IsPolling();
       snapshot.timedOut = balance_.PurchaseConfirmationTimedOut();
@@ -1229,6 +1243,7 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 // screen — a tray app spends most of its life hidden, and a slideshow nobody
 // can see is pure wakeups.
 MainWindow::~MainWindow() {
+  host_.CryptoInvoice().Unsubscribe(cryptoInvoiceSubscription_);
   geometrySave_.disconnect();
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
@@ -1857,6 +1872,10 @@ void MainWindow::BuildHome() {
   };
   accountPage_->sheet_open = [this] { return sheetOpen_; };
   accountPage_->on_sheet_open_changed = [this](bool open) { sheetOpen_ = open; };
+  // "Payment in progress": the saved crypto invoice, in the upgrade sheet
+  accountPage_->on_open_crypto_invoice = [this] { OpenCryptoInvoice(); };
+  // the invoice's changes reach the row on the GTK loop
+  cryptoInvoiceSubscription_ = host_.CryptoInvoice().Subscribe([this] { ApplyCryptoInvoiceRow(); });
   shell_->SetPage("account", *accountPage_);
   // The "Refer and earn" page: a destination without a rail item, reached from
   // Account's Referrals row and left through its own "‹ Account".
@@ -1932,6 +1951,8 @@ void MainWindow::BuildHome() {
     if (tag == "account" && accountPage_) {
       accountPage_->Load();
       balance_.FetchNow();  // the plan pane is painted from the store's snapshot
+      // a crypto payment saved on this device shows as "Payment in progress"
+      host_.CryptoInvoice().Resume();
     }
     if (tag == "referrals" && referralsPage_) {
       referralsPage_->Load();
@@ -2487,6 +2508,9 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     // app start land here
     balance_.SetWindowVisible(windowVisible_);
     balance_.Start();
+    // the network's crypto invoice controller, with the payment this device
+    // saved before a quit (Account's "Payment in progress")
+    host_.CryptoInvoice().SignIn();
     // A new session invalidates every destination's cache; the one currently
     // on screen reloads now, the rest reload when they are next navigated to.
     if (accountPage_) accountPage_->Load();
@@ -2506,6 +2530,10 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     CancelBalanceCheck();
     ClearBalanceRecovery();
     balance_.Stop();
+    // the invoice controller ends with the session. A sign-out has already
+    // cleared what it saved (SdkHost::Logout); a switch to a server this
+    // device is not signed in to keeps the other server's saved invoice.
+    host_.CryptoInvoice().Close();
     // a conversion, and the purchase waiting on it, belong to the session
     // that started it
     guestUpgrade_.Clear();
@@ -2989,6 +3017,26 @@ void MainWindow::OpenUpgrade() {
     };
   }
   upgradeSheet_->Open(nextUpgradeFreeRefresh_);
+}
+
+void MainWindow::OpenCryptoInvoice() {
+  // the saved invoice belongs to this network, guest or not: it always opens
+  if (!upgradeSheet_) {
+    upgradeSheet_ = std::make_unique<UpgradeSheet>(*this, host_, balance_);
+    upgradeSheet_->on_guest_sign_in_required = [this] {
+      DivertGuestToConversion([this] { OpenUpgrade(); });
+    };
+  }
+  upgradeSheet_->OpenInvoice();
+}
+
+void MainWindow::ApplyCryptoInvoiceRow() {
+  if (!accountPage_) return;
+  const crypto_pay::InvoiceView& invoice = host_.CryptoInvoice().State();
+  const crypto_pay::Text network = crypto_pay::NetworkLine(invoice.asset);
+  accountPage_->ApplyCryptoInvoice(
+      crypto_pay::InvoiceInProgress(invoice),
+      network.key ? Glib::ustring(T_(network.key, network.english)) : Glib::ustring());
 }
 
 void MainWindow::OpenLocationChooser() {

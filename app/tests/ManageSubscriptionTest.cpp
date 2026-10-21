@@ -1,6 +1,7 @@
 // The Manage Subscription row's visibility (ManageSubscription.hpp,
 // UPGRADE.md D7): the Stripe customer portal shows only for a Stripe
-// subscription, never for a free network or a store or crypto subscription.
+// subscription, never for a free network or a store or crypto subscription;
+// a crypto year reads "does not renew" instead.
 // The store and the page need GTK and the SDK, so their wiring is read as text.
 //
 // SPDX-License-Identifier: MPL-2.0
@@ -37,6 +38,16 @@ UR_TEST(manageSubscriptionShowsOnlyForStripe) {
   UR_EXPECT_FALSE(ShowsManageSubscription("apple"));
   UR_EXPECT_FALSE(ShowsManageSubscription("google"));
   UR_EXPECT_FALSE(ShowsManageSubscription("other"));
+  // a one-time crypto year (solana, monero, zcash) has nothing to manage
+  UR_EXPECT_FALSE(ShowsManageSubscription("crypto"));
+}
+
+// ...and Account says so instead: "does not renew" for the crypto family
+// (CryptoPay.hpp StoreDoesNotRenew), never the portal.
+UR_TEST(manageSubscriptionCryptoReadsDoesNotRenew) {
+  const std::string page = ReadSource("AccountPage.cpp");
+  UR_EXPECT_TRUE(Has(page, "crypto_pay::StoreDoesNotRenew(balance_.subscriptionStoreFamily)"));
+  UR_EXPECT_TRUE(Has(page, "T_(\"crypto_does_not_renew\", \"Does not renew. Pay again when it ends.\")"));
 }
 
 UR_TEST(manageSubscriptionRowFollowsTheSubscriptionStore) {
