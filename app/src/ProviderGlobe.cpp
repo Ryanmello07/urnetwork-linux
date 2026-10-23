@@ -25,15 +25,19 @@ constexpr Rgba kLand{0xF8 / 255.0, 0xF8 / 255.0, 0xF8 / 255.0, 1.0};      // #F8
 constexpr Rgba kGraticule{0xCC / 255.0, 0xCC / 255.0, 0xCC / 255.0, 0.376};
 // the web's fallback for a provider whose country is unknown
 constexpr Rgba kUnknownCountry{0x00 / 255.0, 0x99 / 255.0, 0xFF / 255.0, 1.0};  // #0099FF
+// An extender ring whose color does not parse still rings, muted, rather than
+// in a hue this app invented: the SDK's color is the color (EXTENDER.md K3).
+constexpr Rgba kExtenderRingFallback = kUrTextMuted;
 
 constexpr double kLandStrokeWidth = 0.3;
 constexpr double kGraticuleStrokeWidth = 0.5;
-constexpr double kDotRadius = 7.0;
+// (the dot's radius is globe::kDotRadius, in GlobeGeometry.hpp beside its rings)
 // the selected provider keeps its solid dot; the ring is an outline sitting
 // kSelectedRingGap outside the dot's edge (radii are stroke centerlines)
 constexpr double kSelectedRingGap = 4.0;
 constexpr double kSelectedRingStroke = 1.5;
-constexpr double kSelectedRingRadius = kDotRadius + kSelectedRingGap + kSelectedRingStroke / 2.0;
+constexpr double kSelectedRingRadius =
+    globe::kDotRadius + kSelectedRingGap + kSelectedRingStroke / 2.0;
 // The selected provider's dot is its own country color darkened toward black.
 // Same factor on every platform (see PROVIDERLOCATIONS.md), so the selection
 // reads the same everywhere.
@@ -48,7 +52,7 @@ Rgba DarkenForSelection(const Rgba& color) {
 // limb, so the globe never paints outside the component. (The web zooms past
 // its frame and crops; here the globe sits fully inside instead.)
 constexpr double kGlobeScale =
-    globe::kCenter - kDotRadius - kSelectedRingGap - kSelectedRingStroke;
+    globe::kCenter - globe::kDotRadius - kSelectedRingGap - kSelectedRingStroke;
 
 // Recentering is a primary interaction here (every selection change recenters),
 // not the web's occasional pointer-leave animation, so it is snappier than the
@@ -197,6 +201,25 @@ std::shared_ptr<const WorldTopology> LoadedTopology() {
 }
 
 }  // namespace
+
+void DrawProviderDot(const Cairo::RefPtr<Cairo::Context>& cr, double cx, double cy,
+                     const Rgba& fill, const extender::Rings& rings) {
+  SetCairoColor(cr, fill);
+  cr->arc(cx, cy, rings.dotRadius, 0, 2 * G_PI);
+  cr->fill();
+  for (const auto& ring : rings.rings) {
+    SetCairoColor(cr, ParseHexColor(ring.colorHex, kExtenderRingFallback));
+    cr->set_line_width(ring.lineWidth);
+    if (ring.dashed) {
+      cr->set_dash(std::vector<double>{rings.dashOn, rings.dashOff}, 0.0);
+    } else {
+      cr->unset_dash();
+    }
+    cr->arc(cx, cy, ring.radius, 0, 2 * G_PI);
+    cr->stroke();
+  }
+  cr->unset_dash();
+}
 
 ProviderGlobe::ProviderGlobe() {
   set_content_height(kDefaultContentHeight);
@@ -495,9 +518,15 @@ void ProviderGlobe::OnDraw(const Cairo::RefPtr<Cairo::Context>& cr, int width, i
   // Provider dots. The selected one is held back and drawn last so it is never
   // covered by a dot that happens to sit on top of it -- providers in one city
   // land on the same pixel.
+  //
+  // A provider reached through extenders carries their rings (EXTENDER.md K9):
+  // the connect grid's geometry at the dot's size in the virtual space, scaled
+  // with everything else, so a dot holds one ring at any globe size and more
+  // extenders than fit collapse into a dashed ring.
   bool hasSelected = false;
   GlobePoint selectedCenter{};
   Rgba selectedColor{};
+  extender::Rings selectedRings;
   for (const auto& row : rows_) {
     if (!row.plottable()) continue;
     const GlobeProjection projection =
@@ -508,22 +537,22 @@ void ProviderGlobe::OnDraw(const Cairo::RefPtr<Cairo::Context>& cr, int width, i
     const Rgba color = (row.countryCode.empty() || !colorResolver_)
                            ? kUnknownCountry
                            : colorResolver_(row.countryCode);
+    extender::Rings rings = globe::DotRings(ExtenderColorHexes(row), unit);
     if (row.clientId == selectedClientId_) {
       hasSelected = true;
       selectedCenter = center;
       selectedColor = color;
+      selectedRings = std::move(rings);
       continue;
     }
-    SetCairoColor(cr, color);
-    cr->arc(center.x, center.y, kDotRadius * unit, 0, 2 * G_PI);
-    cr->fill();
+    DrawProviderDot(cr, center.x, center.y, color, rings);
   }
   if (hasSelected) {
     // a darker core inside its own full-strength ring: the selection reads at
-    // a glance without changing which country color it is
-    SetCairoColor(cr, DarkenForSelection(selectedColor));
-    cr->arc(selectedCenter.x, selectedCenter.y, kDotRadius * unit, 0, 2 * G_PI);
-    cr->fill();
+    // a glance without changing which country color it is. The extender rings
+    // keep their own colors.
+    DrawProviderDot(cr, selectedCenter.x, selectedCenter.y, DarkenForSelection(selectedColor),
+                    selectedRings);
     SetCairoColor(cr, selectedColor);
     cr->arc(selectedCenter.x, selectedCenter.y, kSelectedRingRadius * unit, 0, 2 * G_PI);
     cr->set_line_width(kSelectedRingStroke * unit);

@@ -2,9 +2,10 @@
 // list, plus the pure label/selection helpers over it.
 //
 // Toolkit- and SDK-independent (plain C++17) so the ordering, the label
-// composition, the override-target selection and "Stay on this exit" are unit
-// testable standalone -- see tests/ProviderLocationRowTest.cpp. The sheet maps
-// urnet::ConnectedProviderLocation onto this; nothing here knows about the SDK.
+// composition, the override-target selection, "Stay on this exit" and the
+// extenders' pairing and rings are unit testable standalone -- see
+// tests/ProviderLocationRowTest.cpp. The sheet maps urnet::ConnectedProviderLocation
+// onto this; nothing here knows about the SDK.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -13,7 +14,22 @@
 #include <string>
 #include <vector>
 
+#include "ExtenderRingGeometry.hpp"
+
 namespace urnw {
+
+// One extender on a provider's route: its address, which is the extender's id
+// on the provider rows (connect/EXTENDER.md K9), and its color (K3), paired by
+// the SDK.
+struct ProviderExtender {
+  std::string ip;
+  std::string colorHex;  // the SDK's GetExtenderColorHex(ip), drawn as given
+
+  bool operator==(const ProviderExtender& other) const {
+    return ip == other.ip && colorHex == other.colorHex;
+  }
+  bool operator!=(const ProviderExtender& other) const { return !(*this == other); }
+};
 
 struct ProviderLocationRow {
   std::string clientId;  // the EGRESS provider client id (what is displayed/copied)
@@ -33,17 +49,24 @@ struct ProviderLocationRow {
   // older peer that predates the field; IpFamilyTag reads that as v4, which
   // is what such a provider carries.
   std::string ipFamilyLabel;
+  // The extenders carrying this client's connection to the provider right now
+  // (connect/EXTENDER.md K1), in the SDK's order, which is the order of the
+  // dot's rings from the outside in: none over a direct or p2p route, one
+  // through an extender, briefly two across a transport migration.
+  std::vector<ProviderExtender> extenders;
 
   // Providers with no coordinates are listed but never plotted.
   bool plottable() const { return hasCoordinates; }
 
+  // A transport migration changes only the extenders, so they are part of the
+  // value: an equal row is not re-rendered.
   bool operator==(const ProviderLocationRow& other) const {
     return clientId == other.clientId && country == other.country &&
            countryCode == other.countryCode && region == other.region && city == other.city &&
            hasLocation == other.hasLocation && hasCoordinates == other.hasCoordinates &&
            lat == other.lat && lon == other.lon &&
            connectedSinceMillis == other.connectedSinceMillis &&
-           ipFamilyLabel == other.ipFamilyLabel;
+           ipFamilyLabel == other.ipFamilyLabel && extenders == other.extenders;
   }
   bool operator!=(const ProviderLocationRow& other) const { return !(*this == other); }
 };
@@ -61,6 +84,31 @@ std::string CoordinatesLabel(const ProviderLocationRow& row);
 // this build does not know (or none at all -- an older peer) reads as "v4",
 // so a provider that is carrying traffic is never tagged as carrying nothing.
 std::string IpFamilyTag(const ProviderLocationRow& row);
+
+// ---- extenders --------------------------------------------------------------
+// The SDK carries a provider's extenders on ConnectedProviderLocation as
+// ExtenderIps and ExtenderColorHexes, comma separated in the same order
+// (EXTENDER.md K1, K3).
+
+// Pairs the two lists by index. The SDK keeps them the same length; if they
+// ever differ, the unpaired tail is dropped rather than drawn in a color this
+// app made up. (The connect canvas keeps every ip instead, extender::PairColors,
+// since a grid ring only counts; a row names each extender by its pair.) Empty
+// for a direct or p2p route.
+std::vector<ProviderExtender> PairProviderExtenders(const std::string& ips,
+                                                    const std::string& colorHexes);
+
+// The row's extender colors in the SDK's order, outermost ring first.
+std::vector<std::string> ExtenderColorHexes(const ProviderLocationRow& row);
+
+// The list row's dot, in px: the country-color dot in the sheet's fixed-size
+// column, outside which the selection ring sits.
+inline constexpr double kRowDotDiameter = 20.0;
+
+// The row dot's extender rings (EXTENDER.md K2) at the dot's own size, which
+// holds two; a third extender dashes the second, as a second one dashes the
+// globe dot's only ring (globe::DotRings).
+extender::Rings RowDotRings(const ProviderLocationRow& row);
 
 // The oldest connected provider that has coordinates -- the location-override
 // target. Found by the smallest non-zero connectedSinceMillis, NOT by position:

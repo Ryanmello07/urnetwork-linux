@@ -263,3 +263,141 @@ UR_TEST(providerLocationsSheetStaysOnTheExitThroughTheGatedConnect) {
   UR_EXPECT_TRUE(body.find("location.network_peer = false;") != std::string::npos);
   UR_EXPECT_TRUE(body.find("host_.Connect(location);") != std::string::npos);
 }
+
+// ---- extenders: the SDK's pairs, the row's value, the row dot's rings -------
+// connect/EXTENDER.md K9, apple's ProviderExtenderTests case for case.
+
+namespace {
+
+using urnw::ProviderExtender;
+namespace extender = urnw::extender;
+
+const ProviderExtender kFirstExtender{"203.0.113.7", "AABBCC"};
+const ProviderExtender kSecondExtender{"2001:db8::5", "DDEEFF"};
+const ProviderExtender kThirdExtender{"198.51.100.2", "112233"};
+const ProviderExtender kFourthExtender{"192.0.2.9", "445566"};
+
+ProviderLocationRow ExtendedRow(const std::vector<ProviderExtender>& extenders) {
+  ProviderLocationRow row = Row(kClientId, "Osaka", "", "Japan");
+  row.extenders = extenders;
+  return row;
+}
+
+}  // namespace
+
+// The SDK's two comma-separated lists pair by index, in its order, and each
+// color is the SDK's string as given (K3): nothing here computes one.
+UR_TEST(providerExtendersPairTheSdkListsByIndex) {
+  const std::vector<ProviderExtender> extenders =
+      urnw::PairProviderExtenders("203.0.113.7,2001:db8::5", "AABBCC,DDEEFF");
+  UR_EXPECT_TRUE(extenders == std::vector<ProviderExtender>({kFirstExtender, kSecondExtender}));
+  UR_EXPECT_TRUE(urnw::ExtenderColorHexes(ExtendedRow(extenders)) ==
+                 std::vector<std::string>({"AABBCC", "DDEEFF"}));
+}
+
+// A direct or p2p route carries no extenders: no pairs and a bare dot.
+UR_TEST(aDirectRouteHasNoExtenders) {
+  UR_EXPECT_TRUE(urnw::PairProviderExtenders("", "").empty());
+  const extender::Rings rings = urnw::RowDotRings(ExtendedRow({}));
+  UR_EXPECT_TRUE(rings.empty());
+  UR_EXPECT_NEAR(urnw::kRowDotDiameter / 2.0, rings.dotRadius, 1e-9);
+}
+
+// The SDK keeps the two lists the same length; an unpaired tail on either side
+// is dropped rather than drawn in a made-up color.
+UR_TEST(anUnpairedExtenderTailIsDropped) {
+  UR_EXPECT_TRUE(urnw::PairProviderExtenders("203.0.113.7,198.51.100.2", "AABBCC") ==
+                 std::vector<ProviderExtender>({kFirstExtender}));
+  UR_EXPECT_TRUE(urnw::PairProviderExtenders("203.0.113.7", "AABBCC,DDEEFF") ==
+                 std::vector<ProviderExtender>({kFirstExtender}));
+}
+
+// A transport migration changes only the extenders, so they are part of the
+// row's value: an equal row would not be re-rendered.
+UR_TEST(extendersParticipateInRowEquality) {
+  const ProviderLocationRow extended = ExtendedRow({kFirstExtender});
+  UR_EXPECT_TRUE(ExtendedRow({}) != extended);
+  UR_EXPECT_TRUE(ExtendedRow({kFirstExtender, kSecondExtender}) != extended);
+  UR_EXPECT_TRUE(ExtendedRow({kSecondExtender}) != extended);
+  UR_EXPECT_TRUE(ExtendedRow({kFirstExtender}) == extended);
+}
+
+// The row dot (20 px) has room for two rings at the connect grid's fixed
+// geometry (K2): the outermost ring's outer edge is the dot's edge and each
+// ring costs the fill 4 px of radius. A third extender dashes the second ring
+// instead of eating the dot, as a fourth does.
+UR_TEST(theRowDotHoldsTwoRings) {
+  const double edge = urnw::kRowDotDiameter / 2.0;
+  UR_EXPECT_NEAR(10.0, edge, 1e-9);
+
+  const extender::Rings one = urnw::RowDotRings(ExtendedRow({kFirstExtender}));
+  UR_EXPECT_EQ(1, static_cast<int>(one.rings.size()));
+  if (one.rings.size() != 1) return;
+  UR_EXPECT_FALSE(one.rings[0].dashed);
+  UR_EXPECT_TRUE(one.rings[0].colorHex == kFirstExtender.colorHex);
+  UR_EXPECT_NEAR(extender::kRingStroke, one.rings[0].lineWidth, 1e-9);
+  UR_EXPECT_NEAR(edge, one.rings[0].radius + one.rings[0].lineWidth / 2.0, 1e-9);
+  UR_EXPECT_NEAR(edge - extender::kRingPitch, one.dotRadius, 1e-9);
+
+  const extender::Rings two = urnw::RowDotRings(ExtendedRow({kFirstExtender, kSecondExtender}));
+  UR_EXPECT_EQ(2, static_cast<int>(two.rings.size()));
+  if (two.rings.size() != 2) return;
+  UR_EXPECT_FALSE(two.rings[0].dashed);
+  UR_EXPECT_FALSE(two.rings[1].dashed);
+  UR_EXPECT_TRUE(two.rings[1].colorHex == kSecondExtender.colorHex);
+  UR_EXPECT_NEAR(edge - 2 * extender::kRingPitch, two.dotRadius, 1e-9);
+
+  for (const auto& extenders :
+       {std::vector<ProviderExtender>{kFirstExtender, kSecondExtender, kThirdExtender},
+        std::vector<ProviderExtender>{kFirstExtender, kSecondExtender, kThirdExtender,
+                                      kFourthExtender}}) {
+    const extender::Rings more = urnw::RowDotRings(ExtendedRow(extenders));
+    UR_EXPECT_EQ(2, static_cast<int>(more.rings.size()));
+    if (more.rings.size() != 2) continue;
+    UR_EXPECT_FALSE(more.rings[0].dashed);
+    UR_EXPECT_TRUE(more.rings[1].dashed);
+    UR_EXPECT_TRUE(more.rings[1].colorHex == kSecondExtender.colorHex);
+    UR_EXPECT_EQ(static_cast<int>(extenders.size()) - 2, more.collapsedCount);
+    // the fill still has a visible core
+    UR_EXPECT_NEAR(edge - 2 * extender::kRingPitch, more.dotRadius, 1e-9);
+    UR_EXPECT_TRUE(more.dotRadius > 0);
+  }
+}
+
+// The sheet needs GTK and the SDK, so this reads its sources: the SDK's lists
+// are paired into the rows, the row dot and the globe's dots wear their rings,
+// and each extender's line sits under the connected time and before the "Stay
+// on this exit" offer, copying its address with the store's confirmation.
+UR_TEST(providerLocationsSheetListsTheExtendersUnderTheConnectedTime) {
+  const std::string source = ReadProviderSource("ProviderLocationsSheet.cpp");
+  UR_EXPECT_TRUE(!source.empty());
+  UR_EXPECT_TRUE(source.find("row.extenders = PairProviderExtenders(location.ExtenderIps, "
+                             "location.ExtenderColorHexes);") != std::string::npos);
+  UR_EXPECT_TRUE(source.find("dot->SetRings(RowDotRings(row));") != std::string::npos);
+  UR_EXPECT_TRUE(source.find("DrawProviderDot(cr, cx, cy, color_, rings_);") != std::string::npos);
+
+  const size_t duration = source.find("column->append(*out.duration);");
+  const size_t lines = source.find("for (const ProviderExtender& onRoute : row.extenders) {");
+  const size_t stay = source.find("column->append(*out.stayOffer);");
+  UR_EXPECT_TRUE(duration != std::string::npos && lines != std::string::npos &&
+                 stay != std::string::npos);
+  UR_EXPECT_TRUE(duration < lines && lines < stay);
+  // the address takes the client id's faint color off the selected row
+  UR_EXPECT_TRUE(source.find("for (Gtk::Label* address : rowWidgets_[i].extenderAddresses) {") !=
+                 std::string::npos);
+
+  const size_t copy = source.find("void ProviderLocationsSheet::CopyExtenderAddress(");
+  UR_EXPECT_TRUE(copy != std::string::npos);
+  if (copy == std::string::npos) return;
+  const std::string body = source.substr(copy, source.find("\n}\n", copy) - copy);
+  UR_EXPECT_TRUE(body.find("get_clipboard()->set_text(ip);") != std::string::npos);
+  UR_EXPECT_TRUE(body.find("T_(\"extender_address_copied\", \"Extender address copied\")") !=
+                 std::string::npos);
+
+  const std::string globe = ReadProviderSource("ProviderGlobe.cpp");
+  UR_EXPECT_TRUE(globe.find("globe::DotRings(ExtenderColorHexes(row), unit)") != std::string::npos);
+  UR_EXPECT_TRUE(globe.find("DrawProviderDot(cr, center.x, center.y, color, rings);") !=
+                 std::string::npos);
+  UR_EXPECT_TRUE(globe.find("DrawProviderDot(cr, selectedCenter.x, selectedCenter.y, "
+                            "DarkenForSelection(selectedColor),") != std::string::npos);
+}

@@ -19,6 +19,11 @@
 // The selected row offers "Stay on this exit" (ProviderLocationRow.hpp), which
 // reconnects to that one provider by its client id; the provider the connection
 // already stays on says so instead.
+//
+// A provider reached through extenders wears their rings on its dot, in the
+// list and on the globe, and its row lists each extender under the connected
+// time: a ring in the extender's color and its address, copied on a click
+// (connect/EXTENDER.md K9). A direct or p2p provider shows neither.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -75,6 +80,9 @@ class ProviderLocationsSheet : public Gtk::Window {
     Gtk::Label* place = nullptr;
     Gtk::Label* coordinates = nullptr;
     Gtk::Label* duration = nullptr;
+    // the extender lines' addresses, faint like the client id unless the row
+    // is selected; one per extender, none for a direct or p2p route
+    std::vector<Gtk::Label*> extenderAddresses;
     Gtk::Button* remove = nullptr;
     // "Stay on this exit": the offer (note + button) and the staying line, both
     // built for every row and shown by UpdateSelection
@@ -96,6 +104,7 @@ class ProviderLocationsSheet : public Gtk::Window {
   // Brings the selected row back on screen when it has scrolled out of sight.
   void ScrollSelectedIntoView();
   void CopyClientId(const std::string& clientId);
+  void CopyExtenderAddress(const std::string& ip);
   void RemoveProvider(const std::string& clientId);
   // connect to the row's provider alone (SdkHost::Connect) and close the sheet
   void StayOnExit(const ProviderLocationRow& row);

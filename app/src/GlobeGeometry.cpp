@@ -218,5 +218,10 @@ int NearestWithin(float x, float y, const std::vector<GlobePoint>& points, float
   return best;
 }
 
+extender::Rings DotRings(const std::vector<std::string>& colorHexes, double unit) {
+  return extender::Scaled(
+      extender::RingsFor(2.0 * kDotRadius, colorHexes, extender::Collapse::LastDrawn), unit);
+}
+
 }  // namespace globe
 }  // namespace urnw

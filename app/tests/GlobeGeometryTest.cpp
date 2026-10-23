@@ -337,3 +337,39 @@ UR_TEST(toVirtualInvertsToCanvas) {
     }
   }
 }
+
+// ---- the provider dot's extender rings (EXTENDER.md K9) ----------------------
+// Not in the android port: apple's ProviderExtenderTests.theGlobeDotHoldsOneRing.
+
+// The globe dot is 14 units across in the virtual space: one ring fits, a
+// second extender collapses into a dashed ring in the first one's color, and
+// the whole glyph -- fill, ring, stroke and dash -- scales with the globe.
+UR_TEST(theGlobeDotHoldsOneRingScaledWithTheGlobe) {
+  namespace extender = urnw::extender;
+  const double unit = 0.65;
+  UR_EXPECT_NEAR(7.0, globe::kDotRadius, 1e-9);
+
+  const extender::Rings direct = globe::DotRings({}, unit);
+  UR_EXPECT_TRUE(direct.empty());
+  UR_EXPECT_NEAR(7.0 * unit, direct.dotRadius, 1e-9);
+
+  const extender::Rings one = globe::DotRings({"AABBCC"}, unit);
+  UR_EXPECT_EQ(1, static_cast<int>(one.rings.size()));
+  if (one.rings.size() != 1) return;
+  UR_EXPECT_FALSE(one.rings[0].dashed);
+  UR_EXPECT_TRUE(one.rings[0].colorHex == "AABBCC");
+  UR_EXPECT_NEAR((7.0 - extender::kRingPitch) * unit, one.dotRadius, 1e-9);
+  UR_EXPECT_NEAR(extender::kRingStroke * unit, one.rings[0].lineWidth, 1e-9);
+  // the ring's outer edge is still the dot's edge, at the globe's scale
+  UR_EXPECT_NEAR(7.0 * unit, one.rings[0].radius + one.rings[0].lineWidth / 2.0, 1e-9);
+
+  const extender::Rings migrating = globe::DotRings({"AABBCC", "DDEEFF"}, unit);
+  UR_EXPECT_EQ(1, static_cast<int>(migrating.rings.size()));
+  if (migrating.rings.size() != 1) return;
+  UR_EXPECT_TRUE(migrating.rings[0].dashed);
+  UR_EXPECT_TRUE(migrating.rings[0].colorHex == "AABBCC");
+  UR_EXPECT_EQ(1, migrating.collapsedCount);
+  UR_EXPECT_NEAR((7.0 - extender::kRingPitch) * unit, migrating.dotRadius, 1e-9);
+  UR_EXPECT_NEAR(extender::kCollapsedDashOn * unit, migrating.dashOn, 1e-9);
+  UR_EXPECT_NEAR(extender::kCollapsedDashOff * unit, migrating.dashOff, 1e-9);
+}
