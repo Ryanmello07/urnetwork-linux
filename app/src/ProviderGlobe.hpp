@@ -1,6 +1,7 @@
 // The provider globe: a dark sphere with white land, a graticule, and one dot
 // per plottable provider colored by its country. The selected provider gets a
-// ring, and selecting spins the globe to center that provider.
+// ring, and selecting spins the globe to center that provider. A provider
+// reached through extenders carries their rings on its dot (EXTENDER.md K9).
 //
 // A Cairo port of the android ProviderGlobe.kt, which is itself a port of the
 // d3 orthographic globe on ur.io /ip. All the projection math lives in
@@ -20,11 +21,20 @@
 
 #include <gtkmm.h>
 
+#include "ExtenderRingGeometry.hpp"
 #include "GlobeGeometry.hpp"
 #include "ProviderLocationRow.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
+
+// A provider dot centered on (cx, cy): the fill in `fill`, shrunk inward for
+// its extender rings, then each ring in the SDK's color for its extender
+// (EXTENDER.md K2, K3), sized to its stroke centerline, the collapsed one
+// dashed. The globe's dots and the provider list's row dots both draw through
+// it, so a provider wears one glyph in both places.
+void DrawProviderDot(const Cairo::RefPtr<Cairo::Context>& cr, double cx, double cy,
+                     const Rgba& fill, const extender::Rings& rings);
 
 // The rotation the globe is animating toward, identified by the provider it
 // belongs to. Comparing the coordinates as well as the id is what makes a

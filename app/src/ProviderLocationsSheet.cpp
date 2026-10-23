@@ -3,17 +3,21 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 #include "I18n.hpp"
+#include "PaneKit.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
 namespace {
 
-// Row dot geometry, in px. The box is sized for the ring so the column width
-// never changes with selection, and the ring sits kDotRingGap outside the solid
-// dot's edge (radii are stroke centerlines).
-constexpr double kDotDiameter = 20.0;
+// Row dot geometry, in px. The dot's diameter is ProviderLocationRow.hpp's,
+// beside the extender rings drawn inside it. The box is sized for the selection
+// ring so the column width never changes with selection, and the ring sits
+// kDotRingGap outside the solid dot's edge (radii are stroke centerlines).
+constexpr double kDotDiameter = kRowDotDiameter;
 constexpr double kDotRingGap = 4.0;
 constexpr double kDotRingStroke = 1.5;
 constexpr int kDotBox = static_cast<int>(kDotDiameter + 2 * (kDotRingGap + kDotRingStroke));
@@ -22,6 +26,11 @@ constexpr int kDotBox = static_cast<int>(kDotDiameter + 2 * (kDotRingGap + kDotR
 constexpr int kRowPadding = 16;
 // the web globe's fallback for a provider whose country is unknown
 constexpr Rgba kUnknownCountry{0x00 / 255.0, 0x99 / 255.0, 0xFF / 255.0, 1.0};
+// The ring that leads an extender line (EXTENDER.md K9): hollow, in the dot
+// rings' stroke, 10 px as on the apple rows. A color that does not parse rings
+// muted rather than in a hue this app invented.
+constexpr int kExtenderLineRing = 10;
+constexpr Rgba kExtenderRingFallback = kUrTextMuted;
 
 // The country color for a provider, from the SDK's shared palette (the same one
 // the locations chooser uses). getColorHex wants the lowercased ISO-2 code.
@@ -34,7 +43,7 @@ Rgba ProviderColor(const std::string& countryCode) {
 }
 
 // One provider's dot: a fixed-size box with the solid country-color dot at the
-// top, plus the selection ring.
+// top, its extender rings, plus the selection ring.
 class ProviderDotArea : public Gtk::DrawingArea {
  public:
   ProviderDotArea() {
@@ -48,6 +57,12 @@ class ProviderDotArea : public Gtk::DrawingArea {
     color_ = color;
     queue_draw();
   }
+  // The dot's extender rings (RowDotRings): they grow inward from the dot's
+  // edge, so a ringed dot keeps its footprint and the selection ring stays put.
+  void SetRings(extender::Rings rings) {
+    rings_ = std::move(rings);
+    queue_draw();
+  }
   void SetSelected(bool selected) {
     if (selected_ == selected) return;
     selected_ = selected;
@@ -58,10 +73,10 @@ class ProviderDotArea : public Gtk::DrawingArea {
   void OnDraw(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {
     const double cx = width / 2.0;
     const double cy = height / 2.0;
-    cr->set_source_rgba(color_.r, color_.g, color_.b, color_.a);
-    cr->arc(cx, cy, kDotDiameter / 2.0, 0, 2 * G_PI);
-    cr->fill();
+    // the globe's glyph (ProviderGlobe.hpp), at the row dot's size
+    DrawProviderDot(cr, cx, cy, color_, rings_);
     if (selected_) {
+      cr->set_source_rgba(color_.r, color_.g, color_.b, color_.a);
       cr->arc(cx, cy, kDotDiameter / 2.0 + kDotRingGap + kDotRingStroke / 2.0, 0, 2 * G_PI);
       cr->set_line_width(kDotRingStroke);
       cr->stroke();
@@ -69,8 +84,31 @@ class ProviderDotArea : public Gtk::DrawingArea {
   }
 
   Rgba color_{0.5, 0.5, 0.5, 1.0};
+  // a bare dot until SetRings
+  extender::Rings rings_ = extender::RingsFor(kDotDiameter, {});
   bool selected_ = false;
 };
+
+// The small hollow ring that leads an extender line, in the extender's color.
+// Decorative: the line's button carries the extender's name.
+Gtk::DrawingArea* MakeExtenderLineRing(const std::string& colorHex) {
+  auto* ring = Gtk::make_managed<Gtk::DrawingArea>();
+  ring->set_content_width(kExtenderLineRing);
+  ring->set_content_height(kExtenderLineRing);
+  ring->set_valign(Gtk::Align::CENTER);
+  const Rgba color = ParseHexColor(colorHex, kExtenderRingFallback);
+  ring->set_draw_func([color](const Cairo::RefPtr<Cairo::Context>& cr, int w, int h) {
+    const double stroke = extender::kRingStroke;
+    const double radius = std::min(w, h) / 2.0 - stroke / 2.0;
+    if (radius <= 0) return;
+    cr->set_source_rgba(color.r, color.g, color.b, color.a);
+    cr->set_line_width(stroke);
+    cr->arc(w / 2.0, h / 2.0, radius, 0, 2 * G_PI);
+    cr->stroke();
+  });
+  kit::MarkDecorative(*ring);
+  return ring;
+}
 
 std::string FormatConnectedDuration(int64_t connectedSinceMillis, int64_t nowMillis) {
   if (connectedSinceMillis <= 0) return std::string();
@@ -122,6 +160,7 @@ std::vector<ProviderLocationRow> MapConnectedProviderLocations(
     }
     row.connectedSinceMillis = location.ConnectedSinceMillis;
     row.ipFamilyLabel = location.IpFamilyLabel;
+    row.extenders = PairProviderExtenders(location.ExtenderIps, location.ExtenderColorHexes);
     rows.push_back(std::move(row));
   }
   return rows;
@@ -415,6 +454,9 @@ Gtk::Widget* ProviderLocationsSheet::BuildRow(size_t index, RowWidgets& out) {
 
   auto* dot = Gtk::make_managed<ProviderDotArea>();
   dot->SetColor(ProviderColor(row.countryCode));
+  // a provider reached through extenders wears their rings, the same glyph as
+  // on the connect grid (EXTENDER.md K2)
+  dot->SetRings(RowDotRings(row));
   out.dot = dot;
   rowBox->append(*dot);
 
@@ -476,6 +518,29 @@ Gtk::Widget* ProviderLocationsSheet::BuildRow(size_t index, RowWidgets& out) {
   out.duration->add_css_class("dim-label");
   out.duration->add_css_class("ur-caption-11");
   column->append(*out.duration);
+
+  // the extenders carrying the connection to this provider (EXTENDER.md K9),
+  // one line each: a ring in its color, then its address, which is the
+  // extender's id here, in the client id's style and copied the same way.
+  // Usually none, one through an extender, briefly two across a transport
+  // migration.
+  for (const ProviderExtender& onRoute : row.extenders) {
+    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
+    line->set_margin_top(2);
+    line->append(*MakeExtenderLineRing(onRoute.colorHex));
+    auto* address = Gtk::make_managed<Gtk::Label>(onRoute.ip);
+    address->add_css_class("ur-mono-11");
+    address->set_xalign(0);
+    address->set_ellipsize(Pango::EllipsizeMode::MIDDLE);
+    const std::string ip = onRoute.ip;
+    auto* copy = MakeCopyTextButton(*address, T_("copy_extender_address", "Copy extender address"),
+                                    [this, ip] { CopyExtenderAddress(ip); });
+    // named for what the address is, not by the bare address
+    kit::SetAccessibleLabel(*copy, Format(T_("extender_address_label", "Extender {}"), ip));
+    line->append(*copy);
+    out.extenderAddresses.push_back(address);
+    column->append(*line);
+  }
 
   // "Stay on this exit": the offer under the selected row, and the line on the
   // provider the connection already stays on. Built hidden; UpdateSelection
@@ -552,6 +617,10 @@ void ProviderLocationsSheet::UpdateSelection() {
     if (rowWidgets_[i].clientId != nullptr) {
       rowWidgets_[i].clientId->remove_css_class("ur-label-faint");
       if (!selected) rowWidgets_[i].clientId->add_css_class("ur-label-faint");
+    }
+    for (Gtk::Label* address : rowWidgets_[i].extenderAddresses) {
+      address->remove_css_class("ur-label-faint");
+      if (!selected) address->add_css_class("ur-label-faint");
     }
     const StayOnExitState stay =
         StayOnExitStateFor(rows_[i], selectedClientId_, stayingClientId_);
@@ -631,6 +700,13 @@ void ProviderLocationsSheet::CopyClientId(const std::string& clientId) {
   get_clipboard()->set_text(clientId);
   adw_toast_overlay_add_toast(toastOverlay_,
                               adw_toast_new(T_("client_id_copied", "Client ID copied")));
+}
+
+void ProviderLocationsSheet::CopyExtenderAddress(const std::string& ip) {
+  if (ip.empty()) return;
+  get_clipboard()->set_text(ip);
+  adw_toast_overlay_add_toast(
+      toastOverlay_, adw_toast_new(T_("extender_address_copied", "Extender address copied")));
 }
 
 void ProviderLocationsSheet::StayOnExit(const ProviderLocationRow& row) {

@@ -28,7 +28,9 @@
 // COLLAPSE. At most three rings are drawn. Four or more extenders collapse the
 // third ring into a DASHED ring in the third extender's color, so "several"
 // stays visually distinct from "exactly three" without the dot disappearing
-// under stroke.
+// under stroke. A dot too small for three rings draws the ones it has room
+// for; under Collapse::LastDrawn (the provider details sheet's dots, K9) the
+// last of them is dashed for the extenders left over, as a full set's third is.
 //
 // The color is the SDK's: GetExtenderColorHex(ip) computes it once (FNV-1a of
 // the canonical ip, hue = hash % 360, 70% saturation, 55% lightness) and every
@@ -57,9 +59,9 @@ inline constexpr double kCollapsedDashOn = 3.0;
 inline constexpr double kCollapsedDashOff = 3.0;
 
 struct Ring {
-  double radius = 0;      // CENTERLINE radius in px, at full (unanimated) size
+  double radius = 0;      // CENTERLINE radius in px, at full (unanimated) size unless Scaled
   double lineWidth = 0;   // stroke width in px
-  bool dashed = false;    // the collapsed "4 or more" ring
+  bool dashed = false;    // the collapsed "and more" ring
   std::string colorHex;   // the SDK's color for this extender; "" when unknown
 };
 
@@ -69,10 +71,25 @@ struct Rings {
   // Outermost first (see RING ORDER above).
   std::vector<Ring> rings;
   // Extenders folded into the dashed ring beyond the one it is drawn for:
-  // 0 unless four or more extenders were given AND three rings fit.
+  // 0 unless a ring is dashed.
   int collapsedCount = 0;
+  // The dashed ring's pattern along its circumference, in the radii's space:
+  // the collapsed dash at full size, multiplied with everything else by Scaled.
+  double dashOn = kCollapsedDashOn;
+  double dashOff = kCollapsedDashOff;
 
   bool empty() const { return rings.empty(); }
+};
+
+// What a dot does with extenders it has no ring for.
+enum class Collapse {
+  // Only a full three-ring set collapses (see RingsFor): the connect canvas,
+  // whose 16 px cell holds one ring.
+  FullSet,
+  // The last ring the dot has room for is dashed whenever extenders are left
+  // over: the provider details sheet's dots (EXTENDER.md K9), where a globe
+  // dot holds one ring and a second extender dashes it.
+  LastDrawn,
 };
 
 // Splits one of the SDK's comma-separated grid-point fields
@@ -125,12 +142,14 @@ inline int RingCapacity(double cellSize) {
 }
 
 // The rings for one provider dot. `cellSize` is the dot's full diameter (the
-// grid cell); `colorHexes` is PairColors' output, in the SDK's ip order.
+// grid cell); `colorHexes` are the extenders' colors in the SDK's ip order
+// (PairColors' output on the connect canvas).
 //
 // The returned radii are at FULL size: an animating dot multiplies both
 // dotRadius and every ring radius by its own grow-in scale, so the rings
 // arrive and leave with the dot rather than popping in around it.
-inline Rings RingsFor(double cellSize, const std::vector<std::string>& colorHexes) {
+inline Rings RingsFor(double cellSize, const std::vector<std::string>& colorHexes,
+                      Collapse collapseRule = Collapse::FullSet) {
   Rings out;
   if (!(cellSize > 0)) return out;
   out.dotRadius = cellSize / 2.0;
@@ -141,10 +160,12 @@ inline Rings RingsFor(double cellSize, const std::vector<std::string>& colorHexe
 
   const int wanted = static_cast<int>(colorHexes.size());
   const int drawn = std::min(wanted, capacity);
-  // Only a FULL three-ring set collapses. With room for one or two rings the
-  // third extender is simply not drawn — dashing a second ring would claim a
-  // count the geometry never had space to show.
-  const bool collapse = wanted > drawn && drawn == kMaxRings;
+  // Under FullSet only a FULL three-ring set collapses. With room for one or
+  // two rings the third extender is simply not drawn — dashing a second ring
+  // would claim a count the geometry never had space to show. LastDrawn
+  // dashes whichever ring is last instead, so a dot of any size says "and more".
+  const bool collapse =
+      wanted > drawn && (drawn == kMaxRings || collapseRule == Collapse::LastDrawn);
 
   out.rings.reserve(static_cast<size_t>(drawn));
   for (int i = 0; i < drawn; ++i) {
@@ -152,13 +173,28 @@ inline Rings RingsFor(double cellSize, const std::vector<std::string>& colorHexe
     // outer edge of ring i = cell/2 - i*pitch; centerline is half a stroke in
     ring.radius = cellSize / 2.0 - static_cast<double>(i) * kRingPitch - kRingStroke / 2.0;
     ring.lineWidth = kRingStroke;
-    ring.dashed = collapse && i == kMaxRings - 1;
+    ring.dashed = collapse && i == drawn - 1;
     ring.colorHex = colorHexes[static_cast<size_t>(i)];
     out.rings.push_back(std::move(ring));
   }
-  out.collapsedCount = collapse ? wanted - kMaxRings : 0;
+  out.collapsedCount = collapse ? wanted - drawn : 0;
   out.dotRadius = cellSize / 2.0 - static_cast<double>(drawn) * kRingPitch;
   return out;
+}
+
+// The same glyph at `scale`, for a dot drawn in a space other than px (the
+// provider globe's 600-unit one, fit to its box): every radius, stroke and
+// dash length scales together, so the rings keep their proportion to the dot
+// instead of crowding out a small one.
+inline Rings Scaled(Rings rings, double scale) {
+  rings.dotRadius *= scale;
+  for (Ring& ring : rings.rings) {
+    ring.radius *= scale;
+    ring.lineWidth *= scale;
+  }
+  rings.dashOn *= scale;
+  rings.dashOff *= scale;
+  return rings;
 }
 
 }  // namespace urnw::extender

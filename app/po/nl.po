@@ -1899,6 +1899,11 @@ msgctxt "copy_client_id"
 msgid "Copy client ID"
 msgstr "Client-ID kopiëren"
 
+#. Context menu item on a provider row in the provider details sheet that copies the address of the extender carrying it (EXTENDER.md K9).
+msgctxt "copy_extender_address"
+msgid "Copy extender address"
+msgstr "Extender-adres kopiëren"
+
 #. Button on the share screen: copy the text form of the code.
 msgctxt "copy_share_text"
 msgid "Copy share text"
@@ -4619,6 +4624,16 @@ msgstr "Activering geweigerd: {}"
 msgctxt "extender_active"
 msgid "Active · {}"
 msgstr "Actief · {}"
+
+#. Snackbar after tapping an extender address on a provider row in the provider details sheet (EXTENDER.md K9).
+msgctxt "extender_address_copied"
+msgid "Extender address copied"
+msgstr "Extender-adres gekopieerd"
+
+#. Spoken label of the extender line on a provider row in the provider details sheet: the word Extender followed by the extender's IP address (EXTENDER.md K9).
+msgctxt "extender_address_label"
+msgid "Extender {}"
+msgstr "Extender {}"
 
 #. Placeholder shown in an empty extender settings field, naming the default value that applies.
 msgctxt "extender_default_value"
@@ -8987,6 +9002,11 @@ msgctxt "stay_on_this_exit"
 msgid "Stay on this exit"
 msgstr "Bij deze exit blijven"
 
+#. Muted note under a selected provider row reached through an extender, in the Provider Locations sheet, above Stay on this exit: staying pins the extender as well as the exit (EXTENDER.md K10).
+msgctxt "stay_on_this_exit_extender_note"
+msgid "Keeps this provider's IP address and extender until either goes offline."
+msgstr "Houdt het IP-adres van deze provider en de extender aan totdat een van beide offline gaat."
+
 #. Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.
 msgctxt "stay_on_this_exit_note"
 msgid "Keeps this provider's IP address until it goes offline."
@@ -9006,6 +9026,11 @@ msgstr "Blijf volledig privé en anoniem met URnetwork"
 msgctxt "staying_on_this_exit"
 msgid "Staying on this exit. If it goes offline, choose another location."
 msgstr "Je blijft bij deze exit. Als die offline gaat, kies dan een andere locatie."
+
+#. Muted line on the provider the connection stays on through a pinned extender (after Stay on this exit on a row reached through one), in the Provider Locations sheet. The placeholder is the extender's IP address (EXTENDER.md K10).
+msgctxt "staying_on_this_exit_through_extender"
+msgid "Staying on this exit through extender {}. If either goes offline, choose another location."
+msgstr "Je blijft bij deze exit via extender {}. Als een van beide offline gaat, kies dan een andere locatie."
 
 #. Login initial
 msgctxt "step_in"
@@ -10310,6 +10335,11 @@ msgstr "Wachten op vernieuwing"
 msgctxt "waiting_for_approval"
 msgid "Waiting for approval"
 msgstr "Wachten op goedkeuring"
+
+#. Shown in the Provider Locations sheet when the connection stays on an exit through a pinned extender and that exit is not connected right now. The placeholder is the extender's IP address (EXTENDER.md K10).
+msgctxt "waiting_for_this_exit_through_extender"
+msgid "Waiting for this exit through extender {}."
+msgstr "Wachten op deze exit via extender {}."
 
 #. A message displayed when waiting for a wallet signature.
 msgctxt "waiting_for_wallet_signature"

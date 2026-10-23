@@ -16,7 +16,10 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <vector>
+
+#include "ExtenderRingGeometry.hpp"
 
 namespace urnw {
 
@@ -48,6 +51,10 @@ namespace globe {
 
 inline constexpr float kVirtualSize = 600.0f;
 inline constexpr float kCenter = 300.0f;
+// A provider dot's radius in the virtual space, the /ip globe's. Here rather
+// than with the globe's other visual constants because its extender rings are
+// worked out at this size (DotRings).
+inline constexpr double kDotRadius = 7.0;
 
 // Projects (lon, lat) under rotation (rotLambda, rotPhi) at the given scale
 // (globe radius in virtual px; the web starts at 300). `visible` is false for
@@ -127,6 +134,14 @@ GlobePoint ToVirtual(float x, float y, float canvasWidth, float canvasHeight);
 // Index of the point nearest to (x, y) within `radius` (inclusive, in virtual
 // px), or -1 if none is in range. Ties keep the earliest index.
 int NearestWithin(float x, float y, const std::vector<GlobePoint>& points, float radius);
+
+// A provider dot and its extender rings in canvas px: the connect grid's
+// geometry (connect/EXTENDER.md K2) at the dot's size in the virtual space,
+// scaled by `unit` (UnitFor) with everything else the globe draws, so the
+// rings shrink with the globe instead of crowding out a small dot (K9). The dot
+// holds one ring, and a second extender dashes it. `colorHexes` are the
+// provider's extender colors in the SDK's order, outermost first.
+extender::Rings DotRings(const std::vector<std::string>& colorHexes, double unit);
 
 }  // namespace globe
 }  // namespace urnw

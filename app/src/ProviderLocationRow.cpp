@@ -31,6 +31,32 @@ std::string IpFamilyTag(const ProviderLocationRow& row) {
   return "v4";
 }
 
+std::vector<ProviderExtender> PairProviderExtenders(const std::string& ips,
+                                                    const std::string& colorHexes) {
+  const std::vector<std::string> ipList = extender::SplitList(ips);
+  const std::vector<std::string> colorList = extender::SplitList(colorHexes);
+  // by index, as far as both lists go: an unpaired tail has no color of its own
+  const size_t paired = std::min(ipList.size(), colorList.size());
+  std::vector<ProviderExtender> extenders;
+  extenders.reserve(paired);
+  for (size_t i = 0; i < paired; ++i) {
+    extenders.push_back(ProviderExtender{ipList[i], colorList[i]});
+  }
+  return extenders;
+}
+
+std::vector<std::string> ExtenderColorHexes(const ProviderLocationRow& row) {
+  std::vector<std::string> colorHexes;
+  colorHexes.reserve(row.extenders.size());
+  for (const ProviderExtender& onRoute : row.extenders) colorHexes.push_back(onRoute.colorHex);
+  return colorHexes;
+}
+
+extender::Rings RowDotRings(const ProviderLocationRow& row) {
+  return extender::RingsFor(kRowDotDiameter, ExtenderColorHexes(row),
+                            extender::Collapse::LastDrawn);
+}
+
 namespace {
 
 // ASCII case-insensitive equality: client ids are canonical lowercase uuids,

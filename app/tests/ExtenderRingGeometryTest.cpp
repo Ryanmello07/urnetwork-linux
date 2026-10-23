@@ -8,12 +8,16 @@
 
 #include "ExtenderRingGeometry.hpp"
 
+using urnw::extender::Collapse;
+using urnw::extender::kCollapsedDashOff;
+using urnw::extender::kCollapsedDashOn;
 using urnw::extender::kMaxRings;
 using urnw::extender::kRingStroke;
 using urnw::extender::PairColors;
 using urnw::extender::RingCapacity;
 using urnw::extender::Rings;
 using urnw::extender::RingsFor;
+using urnw::extender::Scaled;
 using urnw::extender::SplitList;
 
 namespace {
@@ -151,6 +155,60 @@ UR_TEST(ExtenderRings_SmallCellsDropTheRingsThatDoNotFit) {
   UR_EXPECT_FALSE(tight.rings[0].dashed);
   UR_EXPECT_EQ(0, tight.collapsedCount);
   UR_EXPECT_NEAR(kCell / 2.0 - 4.0, tight.dotRadius, 1e-9);
+}
+
+// The provider details sheet's dots (Collapse::LastDrawn, EXTENDER.md K9) dash
+// the last ring they have room for whenever extenders are left over, where the
+// canvas's rule keeps a lone ring solid.
+UR_TEST(ExtenderRings_LastDrawnDashesTheLastRingThatFits) {
+  const Rings canvas = RingsFor(kCell, Colors({"a1a1a1", "b2b2b2"}));
+  UR_EXPECT_FALSE(canvas.rings[0].dashed);
+
+  const Rings lone = RingsFor(kCell, Colors({"a1a1a1", "b2b2b2"}), Collapse::LastDrawn);
+  UR_EXPECT_EQ(1, static_cast<int>(lone.rings.size()));
+  UR_EXPECT_TRUE(lone.rings[0].dashed);
+  UR_EXPECT_TRUE(lone.rings[0].colorHex == "a1a1a1");
+  UR_EXPECT_EQ(1, lone.collapsedCount);
+  // the dot gives up one ring's worth, never two
+  UR_EXPECT_NEAR(kCell / 2.0 - 4.0, lone.dotRadius, 1e-9);
+
+  const Rings second = RingsFor(24.0, Colors({"a1a1a1", "b2b2b2", "c3c3c3"}), Collapse::LastDrawn);
+  UR_EXPECT_EQ(2, static_cast<int>(second.rings.size()));
+  UR_EXPECT_FALSE(second.rings[0].dashed);
+  UR_EXPECT_TRUE(second.rings[1].dashed);
+  UR_EXPECT_TRUE(second.rings[1].colorHex == "b2b2b2");
+  UR_EXPECT_EQ(1, second.collapsedCount);
+
+  // a full set collapses as under the canvas's rule, and rings that all fit
+  // stay solid
+  const Rings five = RingsFor(kWideCell, Colors({"a1a1a1", "b2b2b2", "c3c3c3", "d4d4d4", "e5e5e5"}),
+                              Collapse::LastDrawn);
+  UR_EXPECT_EQ(kMaxRings, static_cast<int>(five.rings.size()));
+  UR_EXPECT_FALSE(five.rings[1].dashed);
+  UR_EXPECT_TRUE(five.rings[2].dashed);
+  UR_EXPECT_EQ(2, five.collapsedCount);
+  const Rings fits = RingsFor(kWideCell, Colors({"a1a1a1", "b2b2b2"}), Collapse::LastDrawn);
+  UR_EXPECT_FALSE(fits.rings[0].dashed);
+  UR_EXPECT_FALSE(fits.rings[1].dashed);
+  UR_EXPECT_EQ(0, fits.collapsedCount);
+}
+
+// Scaled takes the dot, its rings, their strokes and the dash together, so a
+// glyph drawn in another space (the provider globe's) keeps its proportions.
+UR_TEST(ExtenderRings_ScaledScalesTheWholeGlyph) {
+  const Rings full = RingsFor(kWideCell, Colors({"a1a1a1", "b2b2b2", "c3c3c3", "d4d4d4"}));
+  const Rings half = Scaled(full, 0.5);
+  UR_EXPECT_NEAR(full.dotRadius * 0.5, half.dotRadius, 1e-9);
+  UR_EXPECT_EQ(static_cast<int>(full.rings.size()), static_cast<int>(half.rings.size()));
+  for (size_t i = 0; i < full.rings.size() && i < half.rings.size(); ++i) {
+    UR_EXPECT_NEAR_MSG("radius", full.rings[i].radius * 0.5, half.rings[i].radius, 1e-9);
+    UR_EXPECT_NEAR_MSG("stroke", full.rings[i].lineWidth * 0.5, half.rings[i].lineWidth, 1e-9);
+    UR_EXPECT_TRUE(full.rings[i].dashed == half.rings[i].dashed);
+    UR_EXPECT_TRUE(full.rings[i].colorHex == half.rings[i].colorHex);
+  }
+  UR_EXPECT_NEAR(kCollapsedDashOn * 0.5, half.dashOn, 1e-9);
+  UR_EXPECT_NEAR(kCollapsedDashOff * 0.5, half.dashOff, 1e-9);
+  UR_EXPECT_EQ(full.collapsedCount, half.collapsedCount);
 }
 
 // No cell at all (a grid that has not arrived) draws nothing rather than a

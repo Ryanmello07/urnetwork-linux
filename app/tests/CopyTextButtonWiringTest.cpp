@@ -1,9 +1,9 @@
 // Click-to-copy text is a button (Ui.cpp MakeCopyTextButton): the contracts
-// sheet's client ids, the provider locations sheet's client ids and the
-// provider identities' key hashes and client ids. Each was a label with a
-// click gesture, which a keyboard could not reach and a screen reader read
-// as plain text. The sheets need GTK and the SDK, so this reads their
-// sources with the comments blanked.
+// sheet's client ids, the provider locations sheet's client ids and extender
+// addresses, and the provider identities' key hashes and client ids. Each was
+// a label with a click gesture, which a keyboard could not reach and a screen
+// reader read as plain text. The sheets need GTK and the SDK, so this reads
+// their sources with the comments blanked.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
@@ -91,18 +91,26 @@ UR_TEST(CopyTextButtonWiring_TheButtonIsNamedByItsText) {
 
 // Every click-to-copy text in the three sheets is one of those buttons, and
 // none is a label with a gesture any more. The provider locations sheet keeps
-// the one gesture that selects its row.
+// the one gesture that selects its row, and its second button is an extender
+// line's, whose hint says what it copies.
 UR_TEST(CopyTextButtonWiring_EveryCopyTextIsAButton) {
-  const std::pair<const char*, size_t> sheets[] = {
-      {"ContractsSheet.cpp", 1}, {"ProviderLocationsSheet.cpp", 1}, {"PostQuantumIdentity.cpp", 1}};
-  for (const auto& [file, copies] : sheets) {
-    const std::string source = ReadCopySource(file);
+  struct CopySheet {
+    const char* file;
+    size_t copies;     // copy button builders
+    size_t clipboard;  // of them, the ones hinted "Copy to Clipboard"
+  };
+  const CopySheet sheets[] = {{"ContractsSheet.cpp", 1, 1},
+                              {"ProviderLocationsSheet.cpp", 2, 1},
+                              {"PostQuantumIdentity.cpp", 1, 1}};
+  for (const CopySheet& sheet : sheets) {
+    const std::string source = ReadCopySource(sheet.file);
     UR_EXPECT_TRUE(!source.empty());
-    if (CopyCount(source, "MakeCopyTextButton(") != copies) {
-      UR_FAIL(std::string(file) + ": expected " + std::to_string(copies) + " copy button builder");
+    if (CopyCount(source, "MakeCopyTextButton(") != sheet.copies) {
+      UR_FAIL(std::string(sheet.file) + ": expected " + std::to_string(sheet.copies) +
+              " copy button builder");
     }
-    if (CopyCount(source, "T_(\"copy_to_clipboard\", \"Copy to Clipboard\")") != copies) {
-      UR_FAIL(std::string(file) + ": the copy hint is not the store's");
+    if (CopyCount(source, "T_(\"copy_to_clipboard\", \"Copy to Clipboard\")") != sheet.clipboard) {
+      UR_FAIL(std::string(sheet.file) + ": the copy hint is not the store's");
     }
   }
   UR_EXPECT_TRUE(ReadCopySource("ContractsSheet.cpp").find("GestureClick") == std::string::npos);
@@ -114,6 +122,14 @@ UR_TEST(CopyTextButtonWiring_EveryCopyTextIsAButton) {
   UR_EXPECT_TRUE(CopyCount(provider, "GestureClick::create()") == 1);
   UR_EXPECT_TRUE(CopyInOrder(provider, {"auto gesture = Gtk::GestureClick::create();",
                                         "[this, clientId](int, double, double) { Select(clientId); });"}));
+  // an extender line (EXTENDER.md K9) copies its address through the same
+  // button, named "Extender <address>" rather than by the bare address
+  UR_EXPECT_TRUE(CopyInOrder(
+      provider,
+      {"MakeCopyTextButton(*address, T_(\"copy_extender_address\", \"Copy extender address\"),",
+       "[this, ip] { CopyExtenderAddress(ip); });",
+       "kit::SetAccessibleLabel(*copy, "
+       "Format(T_(\"extender_address_label\", \"Extender {}\"), ip));"}));
   // the identities sheet copies both its hash and its client id through it
   const std::string identities = ReadCopySource("PostQuantumIdentity.cpp");
   UR_EXPECT_TRUE(CopyInOrder(identities, {"column->append(*copyable(hashLabel, row.hash, /*isHash=*/true));",
