@@ -756,6 +756,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/MainReadTest.cpp',
     'tests/CryptoPayTest.cpp',
     'tests/CryptoPayWiringTest.cpp',
+    'tests/BittensorManualSheetWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -881,6 +882,8 @@ urnetwork_tests = executable('urnetwork-tests',
               # invoice and its host, the upgrade sheet, the onboarding, the
               # Account plan pane, the window, meson.build and the Flatpak
               # manifest the same way.
+              # BittensorManualSheetWiringTest reads the manual proof sheet's
+              # message box the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

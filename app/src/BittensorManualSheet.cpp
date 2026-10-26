@@ -16,6 +16,9 @@ namespace urnw {
 namespace {
 
 constexpr int kSheetMinWidth = 480;
+// the message's box: a sign-in challenge takes its three lines, a payout
+// consent (about 2 KB of JSON) scrolls inside it
+constexpr int kMessageMaxHeight = 240;
 
 Gtk::Label* MakeWrappedNote(const Glib::ustring& text, const char* cssClass) {
   auto* label = Gtk::make_managed<Gtk::Label>(text);
@@ -97,7 +100,15 @@ BittensorManualSheet::BittensorManualSheet(Gtk::Window& parent, SdkHost& host,
   message->set_wrap(true);
   message->set_wrap_mode(Pango::WrapMode::CHAR);
   message->add_css_class("monospace");
-  column->append(*message);
+  // the sheet takes its content's height, and a payout consent laid out in full
+  // is taller than a laptop screen, which puts Copy, the fields and Continue past
+  // its edge: the message scrolls in its box instead
+  auto* messageScroller = Gtk::make_managed<Gtk::ScrolledWindow>();
+  messageScroller->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+  messageScroller->set_propagate_natural_height(true);
+  messageScroller->set_max_content_height(kMessageMaxHeight);
+  messageScroller->set_child(*message);
+  column->append(*messageScroller);
   auto* copy = Gtk::make_managed<Gtk::Button>(T_("copy", "Copy"));
   copy->set_halign(Gtk::Align::START);
   copy->signal_clicked().connect(
