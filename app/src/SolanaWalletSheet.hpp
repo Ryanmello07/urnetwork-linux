@@ -6,8 +6,8 @@
 //
 // Two ways in, on one modal window: Phantom or Solflare through the ur.io
 // wallet bridge (SdkHost::ConnectSolanaWallet hands back the wallet's public
-// key; nothing is signed), or an address entered by hand (checked locally for
-// its base58 shape, then by POST /wallet/validate-address for SOL). Either way
+// key; nothing is signed), or an address entered by hand (checked locally by
+// the server's rule, then by POST /wallet/validate-address for SOL). Either way
 // the wallet is created with POST /account/wallet {SOL, address, USDC}; the
 // page then makes it the payout wallet when the server did not.
 //

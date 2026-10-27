@@ -235,8 +235,8 @@ void SolanaWalletSheet::OnAddressChanged() {
       kValidateDebounceMs);
 }
 
-// The shape first, locally, before ANY network call; then the server. A check
-// may run while the browser round trip is out without ending it.
+// The server's rule first, locally, before any network call; then the server.
+// A check may run while the browser round trip is out without ending it.
 void SolanaWalletSheet::ValidateAddress() {
   const std::string address = solana::Trim(entry_->get_text().raw());
   if (address.empty()) return;  // nothing typed: silent
