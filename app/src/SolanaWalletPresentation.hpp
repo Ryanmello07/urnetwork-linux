@@ -8,7 +8,7 @@
 // (the payments neither completed nor canceled) and the wallet that receives
 // it, and the connect sheet links one -- through the ur.io wallet bridge
 // (Phantom / Solflare hand back the public key; nothing is signed) or by
-// address, checked here for its base58 shape and then by the server. The
+// address, checked here by the server's own rule and then by the server. The
 // bridge page's own failure codes read in this app's words (BridgeErrorTextFor),
 // on the sheet and in a wallet sign-in alike.
 //
@@ -40,21 +40,53 @@ inline std::string Trim(std::string text) {
 inline constexpr const char* kBase58Alphabet =
     "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 // A Solana public key is 32 bytes, which base58 writes in 32 to 44 characters.
+inline constexpr size_t kPublicKeyBytes = 32;
 inline constexpr size_t kMinAddressLength = 32;
 inline constexpr size_t kMaxAddressLength = 44;
+// The USDC token mint: the token itself, never a wallet.
+inline constexpr const char* kUsdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
-// The local check before any network call: the SHAPE of a Solana address, not
-// proof of one. A failure is shown at once and nothing is sent; a pass still
-// goes to the server's validate call. A key the bridge hands back is not
-// checked here at all -- the server validates it when the wallet is created.
+// The bytes base58 `text` stands for, as the server decodes them: a zero byte
+// for each leading '1', then the number the rest spells in as few bytes as it
+// takes. Nothing when a character is not in the alphabet.
+inline std::optional<std::vector<uint8_t>> DecodeBase58(std::string_view text) {
+  const std::string_view alphabet = kBase58Alphabet;
+  size_t zeros = 0;
+  while (zeros < text.size() && text[zeros] == alphabet[0]) ++zeros;
+  std::vector<uint8_t> number;  // least significant byte first
+  for (const char c : text) {
+    const size_t digit = alphabet.find(c);
+    if (digit == std::string_view::npos) return std::nullopt;
+    uint32_t carry = static_cast<uint32_t>(digit);
+    for (uint8_t& byte : number) {
+      carry += 58u * byte;
+      byte = static_cast<uint8_t>(carry & 0xff);
+      carry >>= 8;
+    }
+    for (; carry != 0; carry >>= 8) number.push_back(static_cast<uint8_t>(carry & 0xff));
+  }
+  std::vector<uint8_t> bytes(zeros, 0);
+  bytes.insert(bytes.end(), number.rbegin(), number.rend());
+  return bytes;
+}
+
+// The local check before any network call, the server's rule for a SOL
+// address (POST /wallet/validate-address and POST /account/wallet): base58 of
+// exactly 32 bytes, not all zero (the system program) and not the USDC mint.
+// A failure is shown at once and nothing is sent; a pass still goes to the
+// server's validate call. A key the bridge hands back is not checked here at
+// all -- the server validates it when the wallet is created.
 inline bool LooksLikeSolanaAddress(const std::string& text) {
   const std::string address = Trim(text);
+  // no other length decodes to 32 bytes, and the bound keeps the decode short
   if (address.size() < kMinAddressLength || address.size() > kMaxAddressLength) return false;
-  const std::string alphabet = kBase58Alphabet;
-  for (const char c : address) {
-    if (alphabet.find(c) == std::string::npos) return false;
+  if (address == kUsdcMint) return false;
+  const auto bytes = DecodeBase58(address);
+  if (!bytes || bytes->size() != kPublicKeyBytes) return false;
+  for (const uint8_t byte : *bytes) {
+    if (byte != 0) return true;
   }
-  return true;
+  return false;
 }
 
 // "7Xk9…3fQa": the first and last four characters. Nine or fewer characters
