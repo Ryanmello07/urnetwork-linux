@@ -9841,6 +9841,21 @@ msgctxt "site_sub_other_platform"
 msgid "another platform"
 msgstr "otra plataforma"
 
+#. ur.io Manage subscription: the past-due notice under its title. Stripe retries the failed renewal for about two weeks, then cancels the subscription. The notice's two actions are "Update payment method" and "Pay invoice" (the failing invoice, paid with another card). Keep UR Pro and Pro (the plan's name) unchanged.
+msgctxt "site_sub_past_due_body"
+msgid "We couldn't renew UR Pro with your payment method. Update your payment method, or pay the invoice with another card, to keep Pro."
+msgstr "No hemos podido renovar UR Pro con tu método de pago. Actualiza tu método de pago o paga la factura con otra tarjeta para mantener Pro."
+
+#. ur.io Manage subscription: title of the notice shown while a Stripe renewal's payment has failed (a declined card, for example) and Stripe is retrying it. Didn't go through = failed.
+msgctxt "site_sub_past_due_title"
+msgid "Your payment didn't go through"
+msgstr "Tu pago no se ha completado"
+
+#. ur.io Manage subscription: button on the past-due notice that opens the failing renewal's invoice on Stripe's own page, where it can be paid at once with another card.
+msgctxt "site_sub_pay_invoice"
+msgid "Pay invoice"
+msgstr "Pagar factura"
+
 #. Subscription: other-platform body ({platform})
 msgctxt "site_sub_platform_body"
 msgid "Your Pro subscription is billed through {platform}. To change or cancel it, manage your subscriptions in {platform}."
