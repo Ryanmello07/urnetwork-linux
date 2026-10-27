@@ -86,7 +86,7 @@ UR_TEST(ConnectionRegionWiring_SignInFailuresReportCantReach) {
   UR_EXPECT_TRUE(Has(note, "onApiUnreachable_(*err)"));
 }
 
-// The window shows the prompt (login screen) or a toast (signed in), both
+// The window shows the prompt (login screen) or a toast (any other page), both
 // opening the picker, and never sets the region.
 UR_TEST(ConnectionRegionWiring_ThePromptOpensThePickerAndSetsNothing) {
   const std::string window = Source("MainWindow.cpp");
@@ -98,6 +98,20 @@ UR_TEST(ConnectionRegionWiring_ThePromptOpensThePickerAndSetsNothing) {
   UR_EXPECT_TRUE(Has(unreachable, "[this] { OpenConnectionRegion(); }"));
   UR_EXPECT_FALSE(Has(unreachable, "SetIngressCountryCode"));
   UR_EXPECT_TRUE(Has(window, "cantReachBtn_->signal_clicked().connect([this] { OpenConnectionRegion(); });"));
+}
+
+// Support inbox 8050: the window places a raised prompt by the page the user
+// is on (ConnectionRegion.hpp PlaceCantReachPrompt). Gated on the signed-in
+// page, the toast never reached a sign-in step past the login page, whose
+// failure then showed only on the login page's line, out of sight.
+UR_TEST(ConnectionRegionWiring_ThePromptIsPlacedByTheVisiblePage) {
+  const std::string unreachable = Body(Source("MainWindow.cpp"), "void MainWindow::OnApiUnreachable(");
+  UR_EXPECT_TRUE(Has(unreachable, "region::PlaceCantReachPrompt(stack_.get_visible_child_name().raw())"));
+  UR_EXPECT_TRUE(Has(unreachable, "if (placement.loginLine) cantReachBtn_->set_visible(true);"));
+  UR_EXPECT_FALSE(Has(unreachable, "!= \"home\""));
+  const size_t gate = unreachable.find("if (!placement.toast) return;");
+  const size_t toast = unreachable.find("cantReachToast_.Show(stack_");
+  UR_EXPECT_TRUE(gate != std::string::npos && toast != std::string::npos && gate < toast);
 }
 
 // Both doors open ConnectionRegionSheet over SdkHost, the one store.

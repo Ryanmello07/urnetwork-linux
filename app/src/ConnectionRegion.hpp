@@ -174,5 +174,26 @@ class CantReachPrompt {
   bool visible_ = false;
 };
 
+// Where the window shows a raised prompt, by the page of its stack the user is
+// on (MainWindow's stack_ child names). The login page carries the prompt
+// under its error line, where it waits for a user who steps back to it until
+// the picker opens or the user signs in, so it is set for every signed-out
+// page. Only the login page can show that line, though: a sign-in step past it
+// (password, seedphrase, instant, create, verify, reset) shows the failure in
+// its own error line, and the signed-in home has no such line, so every page
+// but the login page also gets a toast over the stack that opens the picker,
+// as android and apple raise the prompt over every page.
+struct CantReachPlacement {
+  bool loginLine = false;  // the login page's own prompt
+  bool toast = false;      // a toast over the page stack
+};
+
+inline CantReachPlacement PlaceCantReachPrompt(const std::string& visiblePage) {
+  CantReachPlacement placement;
+  placement.loginLine = visiblePage != "home";
+  placement.toast = visiblePage != "login";
+  return placement;
+}
+
 }  // namespace region
 }  // namespace urnw

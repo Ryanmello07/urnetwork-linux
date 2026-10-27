@@ -1400,10 +1400,13 @@ void MainWindow::OnApiUnreachable(const std::string& error) {
   if (!cantReach_.visible()) return;
   const Glib::ustring prompt = T_("cant_reach_urnetwork_choose_region",
                                   "Can't reach URnetwork — choose where you're connecting from");
-  if (stack_.get_visible_child_name() != "home") {
-    cantReachBtn_->set_visible(true);
-    return;
-  }
+  // The login page's line alone left a sign-in step past it (the password or
+  // seedphrase page) showing the bare failure, with the prompt on a page the
+  // user could not see (ConnectionRegion.hpp PlaceCantReachPrompt).
+  const region::CantReachPlacement placement =
+      region::PlaceCantReachPrompt(stack_.get_visible_child_name().raw());
+  if (placement.loginLine) cantReachBtn_->set_visible(true);
+  if (!placement.toast) return;
   cantReachToast_.Show(stack_, prompt, T_("connection_region", "Connection region"),
                        [this] { OpenConnectionRegion(); });
 }
