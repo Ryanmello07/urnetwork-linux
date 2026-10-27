@@ -145,3 +145,24 @@ UR_TEST(ConnectionRegion_ThePromptShowsOnlyForCantReachAndNeverChangesTheRegion)
   UR_EXPECT_EQ(0, store.sets);
   UR_EXPECT_TRUE(store.value == "tr");
 }
+
+// Support inbox 8050: a sign-in step past the login page that got no answer
+// (the password or seedphrase page) showed the bare failure in its own error
+// line, while the prompt went to the login page's line, on a page the user
+// could not see. Every page but the login page gets the toast, and every
+// signed-out page keeps the login line for a user who steps back to it.
+UR_TEST(ConnectionRegion_ThePromptReachesThePageTheUserIsOn) {
+  using urnw::region::CantReachPlacement;
+  using urnw::region::PlaceCantReachPrompt;
+  const CantReachPlacement login = PlaceCantReachPrompt("login");
+  UR_EXPECT_TRUE(login.loginLine);
+  UR_EXPECT_FALSE(login.toast);
+  for (const char* page : {"password", "seedphrase", "instant", "create", "verify", "reset"}) {
+    const CantReachPlacement step = PlaceCantReachPrompt(page);
+    UR_EXPECT_TRUE_MSG(std::string(page) + " toast", step.toast);
+    UR_EXPECT_TRUE_MSG(std::string(page) + " login line", step.loginLine);
+  }
+  const CantReachPlacement home = PlaceCantReachPrompt("home");
+  UR_EXPECT_TRUE(home.toast);
+  UR_EXPECT_FALSE(home.loginLine);
+}
