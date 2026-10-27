@@ -9,6 +9,7 @@
 
 #include "AppPrefs.hpp"
 #include "CryptoPay.hpp"
+#include "PaymentPastDue.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -55,9 +56,11 @@ void SubscriptionBalanceStore::Start() {
   isLoading_ = false;
   totals_.Reset();
   referral_.Reset();
-  // the coins and the crypto term belong to the network the fetch answers for
+  // the coins, the crypto term and a failing renewal belong to the network the
+  // fetch answers for
   cryptoAssets_.reset();
   cryptoTerm_.reset();
+  paymentPastDue_ = false;
 
   // Offline Pro: the jwt's Pro (and GuestMode) claims are readable without a
   // network call — the plan label is right even before the first fetch.
@@ -105,6 +108,7 @@ void SubscriptionBalanceStore::Stop() {
   referral_.Reset();
   cryptoAssets_.reset();
   cryptoTerm_.reset();
+  paymentPastDue_ = false;
   purchaseConfirmationTimedOut_ = false;
   Emit();
 }
@@ -242,6 +246,9 @@ void SubscriptionBalanceStore::FetchSubscriptionBalance() {
             // whose grace has not ended
             cryptoAssets_ = result->crypto_assets;
             cryptoTerm_ = result->crypto_term;
+            // a renewal the store is still retrying after its payment did not
+            // go through (left out by an older server): the past-due notice
+            paymentPastDue_ = past_due::NoticeShows(*result);
 
             // The server is the source of truth for Pro: `current_subscription`
             // is non-nil exactly when the network is Pro. The jwt's Pro claim

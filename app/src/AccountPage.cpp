@@ -29,6 +29,7 @@
 #include "I18n.hpp"
 #include "ManageSubscription.hpp"
 #include "PaneKit.hpp"
+#include "PaymentPastDue.hpp"
 #include "RuntimePaths.hpp"
 #include "ServerRefusalText.hpp"
 #include "Ui.hpp"
@@ -1599,6 +1600,7 @@ AccountPage::~AccountPage() {
   resetFlow_.Abandon();
   portalFlow_.Abandon();
   removeFlow_.Abandon();
+  updatePaymentFlow_.Abandon();
   resetRateLimitTick_.disconnect();
 }
 
@@ -1686,11 +1688,16 @@ void AccountPage::ReleaseInFlight() {
   resetFlow_.Abandon();
   portalFlow_.Abandon();
   removeFlow_.Abandon();
+  // an auth code still being created belongs to the session that asked: no
+  // browser opens for it
+  updatePaymentFlow_.Abandon();
   savingName_ = false;
   sendingReset_ = false;
   openingPortal_ = false;
+  openingUpdatePayment_ = false;
   removingAuth_ = false;
   portalRow_->set_sensitive(true);
+  updatePaymentButton_->set_sensitive(true);
   // saveNameButton_ and sendResetButton_ are re-gated by the ApplyAccountState
   // that every caller of this runs next, and they read these flags — which is
   // exactly why the flags have to be false BEFORE that gate runs.
@@ -1774,6 +1781,11 @@ void AccountPage::ApplyBalance(const AccountBalance& snapshot) {
   // the Stripe customer portal only manages a Stripe subscription: a free
   // network, or a store or crypto subscription, got the portal's raw error
   if (portalRow_) portalRow_->set_visible(ShowsManageSubscription(balance_.subscriptionStoreFamily));
+
+  // A renewal whose payment did not go through, which its store is still
+  // retrying (past_due::NoticeShows): the notice with "Update payment method"
+  // shows exactly while the latest balance carries payment_past_due.
+  if (paymentPastDueRow_) paymentPastDueRow_->set_visible(balance_.paymentPastDue);
 
   // A one-time crypto year never renews (mmm/ZCASH-CONTRACT.md §6.2): once its paid term
   // has ended and until its grace does, the notice with Renew; before that,
@@ -1902,6 +1914,30 @@ void AccountPage::BuildPlanPane() {
     });
     planValue_->add_controller(planTap);
     row.content->append(*planValue_);
+    content->append(*row.root);
+  }
+
+  // 1a. a renewal whose payment did not go through (ApplyBalance): the
+  //     past-due notice with "Update payment method", which opens ur.io's
+  //     Manage Subscription signed in (OpenUpdatePayment)
+  {
+    auto row = MakePaddedRow(kProsePadY);
+    auto* line = Gtk::make_managed<Gtk::Label>(
+        T_("payment_past_due_notice",
+           "Your UR Pro payment didn't go through. Update your payment method to keep Pro."));
+    line->add_css_class("ur-caption");
+    line->set_xalign(0);
+    line->set_wrap(true);
+    row.content->append(*line);
+    updatePaymentButton_ = Gtk::make_managed<Gtk::Button>(
+        T_("payment_past_due_update_payment", "Update payment method"));
+    updatePaymentButton_->add_css_class("ur-pane-primary");
+    updatePaymentButton_->set_halign(Gtk::Align::START);
+    updatePaymentButton_->set_margin_top(8);
+    updatePaymentButton_->signal_clicked().connect([this] { OpenUpdatePayment(); });
+    row.content->append(*updatePaymentButton_);
+    paymentPastDueRow_ = row.root;
+    paymentPastDueRow_->set_visible(false);
     content->append(*row.root);
   }
 
@@ -2150,6 +2186,71 @@ void AccountPage::OpenCustomerPortal() {
           g_clear_error(&launchError);
         });
       });
+}
+
+void AccountPage::OpenUpdatePayment() {
+  if (openingUpdatePayment_) return;
+  // CanCallApi(), as the portal: the preview harness must not mint a sign-in
+  // code for whatever account's jwt happens to be on disk
+  if (!CanCallApi()) {
+    Snack(T_("please_login_to_urnetwork", "Please login to URnetwork"), true);
+    return;
+  }
+  openingUpdatePayment_ = true;
+  updatePaymentButton_->set_sensitive(false);
+
+  // one use, five minutes: ur.io spends it as the page opens
+  urnet::AuthCodeCreateArgs args{};
+  args.duration_minutes = kAuthCodeMinutes;
+  args.uses = kAuthCodeUses;
+  auto epoch = epoch_;
+  const uint64_t seen = *epoch_;
+  // a code that never comes is a code that could not be created: the page
+  // opens without one and asks the user to sign in
+  const uint32_t flow =
+      updatePaymentFlow_.Begin(kApiTimeoutMs, [this] { FinishUpdatePayment(std::string()); });
+  host_.api().authCodeCreate(
+      std::optional<urnet::AuthCodeCreateArgs>(args),
+      [this, epoch, seen, flow](std::optional<urnet::AuthCodeCreateResult> result,
+                                std::optional<std::string> err) {
+        PostToMain([this, epoch, seen, flow, result = std::move(result),
+                    err = std::move(err)] {
+          if (*epoch != seen) return;
+          if (!updatePaymentFlow_.Settle(flow, "update payment auth code")) return;
+          // an error or a blank code opens the page without one
+          const std::string code = result && !err && !result->error
+                                       ? result->auth_code.value_or(std::string())
+                                       : std::string();
+          if (code.empty()) {
+            // the server's words or the transport's; a code is never logged,
+            // it signs the network in
+            const std::string message = FirstMessage(
+                result && result->error ? result->error->message.value_or(std::string())
+                                        : std::string(),
+                err);
+            g_warning("account: no auth code for Manage Subscription: %s",
+                      message.empty() ? "(no code returned)" : message.c_str());
+          }
+          FinishUpdatePayment(code);
+        });
+      });
+}
+
+void AccountPage::FinishUpdatePayment(const std::string& authCode) {
+  openingUpdatePayment_ = false;
+  updatePaymentButton_->set_sensitive(true);  // on EVERY path
+  const std::string url = past_due::UpdatePaymentUrl(authCode);
+  g_message("account: opening Manage Subscription %s",
+            url == past_due::kManageSubscriptionUrl ? "without a sign-in code"
+                                                    : "with a sign-in code");
+  // OBSERVE the launch verdict, as the portal does
+  GError* launchError = nullptr;
+  if (!g_app_info_launch_default_for_uri(url.c_str(), nullptr, &launchError)) {
+    g_warning("account: Manage Subscription launch failed: %s",
+              launchError ? launchError->message : "(no error text)");
+    Snack(T_("something_went_wrong", "Something went wrong."), true);
+  }
+  g_clear_error(&launchError);
 }
 
 // ---- PANE B: ACCOUNT (star) --------------------------------------------------
