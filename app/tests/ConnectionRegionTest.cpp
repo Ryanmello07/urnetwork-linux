@@ -107,6 +107,19 @@ UR_TEST(ConnectionRegion_NetworkFailuresAreCantReach) {
   UR_EXPECT_TRUE(IsCantReachError("context deadline exceeded"));
 }
 
+// What the sdk's api calls answer when nothing reached URnetwork (support inbox
+// 8050): connect ends a request whose attempts all failed -- a lookup a censor
+// drops, a dial to a blackholed address, a timeout -- with its
+// HttpRequestExhaustedError, whose text names none of those causes
+// (net_http_exhaustion.go). A sign-in from such a network fails with exactly
+// this text, and it must offer the connection region like any no-answer error.
+UR_TEST(ConnectionRegion_AnExhaustedApiRequestIsCantReach) {
+  UR_EXPECT_TRUE(IsCantReachError("http request attempts exhausted"));
+  CantReachPrompt prompt;
+  prompt.OnFailure("http request attempts exhausted");
+  UR_EXPECT_TRUE(prompt.visible());
+}
+
 UR_TEST(ConnectionRegion_RefusalsAreNotCantReach) {
   UR_EXPECT_FALSE(IsCantReachError(""));
   UR_EXPECT_FALSE(IsCantReachError("401 Unauthorized: {\"message\":\"timeout awaiting response headers\"}"));

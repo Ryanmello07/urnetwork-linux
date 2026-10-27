@@ -121,8 +121,10 @@ class Picker {
 
 // Whether a failed call to URnetwork failed at the network level: the request
 // got no answer (lookup, dial, tls or timeout), as against an answer that
-// refused it (an http status, an auth or validation message). The transport's
-// errors are Go's net and http errors; a server answer reads as
+// refused it (an http status, an auth or validation message). An api call that
+// no route answered fails as "http request attempts exhausted" (connect
+// HttpRequestExhaustedError), whose text names none of its causes; the other
+// transport errors are Go's net and http errors. A server answer reads as
 // "<status code> <status>: <body>" (connect HttpStatusError) or the server's
 // own message.
 inline bool IsCantReachError(const std::string& error) {
@@ -135,6 +137,7 @@ inline bool IsCantReachError(const std::string& error) {
   }
   const std::string lower = Lowercased(error);
   static const char* const kMarkers[] = {
+      "http request attempts exhausted",
       "no such host",
       "could not resolve",
       "server misbehaving",
