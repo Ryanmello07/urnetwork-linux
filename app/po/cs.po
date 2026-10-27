@@ -6371,6 +6371,16 @@ msgctxt "payment_not_completed"
 msgid "Your payment could not be completed."
 msgstr "Platbu se nepodařilo dokončit."
 
+#. In-app notice while the renewal payment of a UR Pro subscription has failed (a declined card, for example) and the store is still retrying it. If no payment goes through before the retries end, the subscription is cancelled. Keep UR Pro and Pro (the plan's name) unchanged. Didn't go through = failed.
+msgctxt "payment_past_due_notice"
+msgid "Your UR Pro payment didn't go through. Update your payment method to keep Pro."
+msgstr "Platba za UR Pro neproběhla. Aktualizujte způsob platby, abyste si Pro ponechali."
+
+#. Button on the notice that a UR Pro payment didn't go through: opens the subscription page on ur.io in the browser, where the payment method (a card, for example) is updated.
+msgctxt "payment_past_due_update_payment"
+msgid "Update payment method"
+msgstr "Aktualizovat způsob platby"
+
 #. Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.
 msgctxt "payment_problem"
 msgid "Payment problem"
