@@ -2586,8 +2586,9 @@ void AccountPage::LoadAccount() {
           }
           const urnet::NetworkUser& user = *result->network_user;
           userAuth_ = user.user_auth.value_or(std::string());
-          passwordResetUserAuth_ =
-              urnw::account::PasswordResetUserAuth(user.user_auth, user.auth_type, user.auth_types);
+          passwordResetUserAuth_ = urnw::account::PasswordResetUserAuth(
+              user.user_auth, user.auth_type, user.auth_types,
+              urnw::account::PasswordSignIns(user.user_auths));
           userAuthVerified_ = user.verified;
           needsNameClaim_ = ComputeNeedsNameClaim(user);
           ApplyNetworkName(user.network_name);
