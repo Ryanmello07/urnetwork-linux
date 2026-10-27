@@ -126,6 +126,9 @@ struct AccountBalance {
   // the local date its grace ends, which the notice names.
   bool cryptoTermNotice = false;
   std::string cryptoTermRenewBy;
+  // The store is retrying a renewal whose payment did not go through
+  // (PaymentPastDue): the past-due notice with "Update payment method".
+  bool paymentPastDue = false;
   bool loaded = false;      // HasFetched: a snapshot has landed at least once
   bool confirming = false;  // IsPolling: the post-checkout confirmation poll
   bool timedOut = false;    // PurchaseConfirmationTimedOut (relayed for parity)
@@ -251,6 +254,12 @@ class AccountPage : public Gtk::Box {
   void SendPasswordReset();
   void ApplyResetRateLimit();
   void OpenCustomerPortal();
+  // The past-due notice's "Update payment method": a one-time auth code, then
+  // ur.io's Manage Subscription signed in with it (past_due::UpdatePaymentUrl).
+  void OpenUpdatePayment();
+  // Opens the page in the browser with `authCode`, or without a code when it
+  // is empty (it could not be created), and re-enables the action.
+  void FinishUpdatePayment(const std::string& authCode);
   void ConfirmRemoveAuth(const std::string& authType, const Glib::ustring& label);
   void RemoveAuth(const std::string& authType);
 
@@ -310,6 +319,10 @@ class AccountPage : public Gtk::Box {
   Gtk::Label* planValue_ = nullptr;
   AccountUsageBar* usageBar_ = nullptr;
   Gtk::Button* upgradeButton_ = nullptr;
+  // a renewal whose payment did not go through: the past-due notice and its
+  // "Update payment method" (disabled while its auth code is in flight)
+  Gtk::Widget* paymentPastDueRow_ = nullptr;
+  Gtk::Button* updatePaymentButton_ = nullptr;
   // a one-time crypto year: the renewal notice with Renew, or "does not renew"
   Gtk::Widget* cryptoTermRow_ = nullptr;
   Gtk::Label* cryptoTermLine_ = nullptr;
@@ -383,6 +396,7 @@ class AccountPage : public Gtk::Box {
   AccountFlow resetFlow_;
   AccountFlow portalFlow_;
   AccountFlow removeFlow_;
+  AccountFlow updatePaymentFlow_;  // the past-due notice's auth code
 
   // re-entry flags (§7): a button disabled in flight, re-enabled on EVERY path
   bool savingName_ = false;
@@ -391,6 +405,7 @@ class AccountPage : public Gtk::Box {
   ResendCooldown resetRateLimit_;
   sigc::connection resetRateLimitTick_;
   bool openingPortal_ = false;
+  bool openingUpdatePayment_ = false;
   bool removingAuth_ = false;
   bool editingName_ = false;
   bool previewMode_ = false;

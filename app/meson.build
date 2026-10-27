@@ -757,6 +757,7 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/CryptoPayTest.cpp',
     'tests/CryptoPayWiringTest.cpp',
     'tests/BittensorManualSheetWiringTest.cpp',
+    'tests/PaymentPastDueTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -884,6 +885,9 @@ urnetwork_tests = executable('urnetwork-tests',
               # manifest the same way.
               # BittensorManualSheetWiringTest reads the manual proof sheet's
               # message box the same way.
+              # PaymentPastDueTest reads the balance store, the window and the
+              # Account plan pane the same way, and every source for the wire's
+              # update_payment_url.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

@@ -157,6 +157,10 @@ class SubscriptionBalanceStore {
   // (RFC 3339, "" without a term).
   bool CryptoTermNoticeDue() const;
   std::string CryptoTermGraceEnd() const;
+  // A renewal of the subscription did not go through and its store is still
+  // retrying it: the latest balance carried payment_past_due
+  // (past_due::NoticeShows). False before the first fetch.
+  bool PaymentPastDue() const { return paymentPastDue_; }
 
   void SetChangedHandler(ChangedHandler h) { onChanged_ = std::move(h); }
   // Fired on the GTK main loop when the referral poll observes new referrals
@@ -227,6 +231,8 @@ class SubscriptionBalanceStore {
   // the balance result's crypto payment fields, as the server sent them
   std::optional<urnet::CryptoPaymentAssetList> cryptoAssets_;
   std::optional<urnet::CryptoTerm> cryptoTerm_;
+  // the latest balance result carried payment_past_due
+  bool paymentPastDue_ = false;
 
   // polling (mac: backgroundPollingTimer / pollingTimer / pollingDeadline).
   // The gate holds whether a confirmation runs and its budget, which only

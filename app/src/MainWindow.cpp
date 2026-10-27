@@ -303,6 +303,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
       // a one-time crypto year: due for renewal, and by when
       snapshot.cryptoTermNotice = balance_.CryptoTermNoticeDue();
       snapshot.cryptoTermRenewBy = LocalDateText(balance_.CryptoTermGraceEnd());
+      // a renewal whose payment did not go through, still being retried
+      snapshot.paymentPastDue = balance_.PaymentPastDue();
       snapshot.loaded = balance_.HasFetched();
       snapshot.confirming = balance_.IsPolling();
       snapshot.timedOut = balance_.PurchaseConfirmationTimedOut();
