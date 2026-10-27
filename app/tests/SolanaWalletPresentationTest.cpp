@@ -1,6 +1,6 @@
-// The Solana payout wallet's rules: the address shape and its short form, which
-// wallet the card shows, the held USDC figure, what the page shows from the
-// three legacy reads, and every transition of the connect sheet.
+// The Solana payout wallet's rules: the local address check and the short form,
+// which wallet the card shows, the held USDC figure, what the page shows from
+// the three legacy reads, and every transition of the connect sheet.
 // SPDX-License-Identifier: MPL-2.0
 #include "TestHarness.hpp"
 
@@ -33,8 +33,15 @@ using urnw::solana::ShortAddress;
 
 namespace {
 
-// 44 characters, base58 only (no 0/O/I/l), short form "7Xk9…3fQa".
+// 44 characters, base58 only (no 0/O/I/l), short form "7Xk9…3fQa"; decodes to
+// 32 bytes.
 constexpr const char* kSample = "7Xk9SAMPLEsampeSAMPLEsampeSAMPLEsampeSAM3fQa";
+// 31 zero bytes and a one: each leading '1' is a zero byte.
+constexpr const char* kLeadingZerosKey = "11111111111111111111111111111112";
+// 32 0xff bytes, the largest key.
+constexpr const char* kLargestKey = "JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFG";
+// not synthetic: the rule names this public token address
+constexpr const char* kUsdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 // every read answered
 const LegacyReads kAllReads{true, true, true};
@@ -74,12 +81,43 @@ ConnectMachine CheckedAddress() {
 UR_TEST(SolanaWallet_AddressShapeIsBase58Of32To44) {
   UR_EXPECT_TRUE(LooksLikeSolanaAddress(kSample));
   UR_EXPECT_EQ(44, static_cast<int>(std::string(kSample).size()));
-  // the shortest real key: the system program, 32 ones
-  UR_EXPECT_TRUE(LooksLikeSolanaAddress(std::string(32, '1')));
+  // the shortest key
+  UR_EXPECT_TRUE(LooksLikeSolanaAddress(kLeadingZerosKey));
+  UR_EXPECT_EQ(32, static_cast<int>(std::string(kLeadingZerosKey).size()));
   UR_EXPECT_FALSE(LooksLikeSolanaAddress(std::string(31, '1')));  // too short
   UR_EXPECT_FALSE(LooksLikeSolanaAddress(std::string(45, '1')));  // too long
   UR_EXPECT_FALSE(LooksLikeSolanaAddress(""));
   UR_EXPECT_FALSE(LooksLikeSolanaAddress("   "));
+}
+
+// The server's rule, applied before any request: 32 to 44 base58 characters
+// are not always 32 bytes. Each leading '1' is a zero byte and the rest one
+// number, which may need fewer bytes or more.
+UR_TEST(SolanaWallet_AddressMustDecodeToExactly32Bytes) {
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress(std::string(44, 'z')));  // 33 bytes
+  UR_EXPECT_TRUE(LooksLikeSolanaAddress(std::string(43, 'z')));   // 32 bytes
+  // the largest key, and one past it: 2^256, 33 bytes
+  UR_EXPECT_TRUE(LooksLikeSolanaAddress(kLargestKey));
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress("JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFH"));
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress(std::string(33, '1')));        // 33 zero bytes
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress(std::string(32, 'z')));        // 24 bytes
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress("2" + std::string(31, '1')));  // 23 bytes
+}
+
+// 32 '1's are 32 zero bytes, the system program's address and no wallet.
+UR_TEST(SolanaWallet_AddressRefusesTheAllZeroKey) {
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress(std::string(32, '1')));
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress("\t" + std::string(32, '1') + " "));
+  // one bit set is not all zero
+  UR_EXPECT_TRUE(LooksLikeSolanaAddress(kLeadingZerosKey));
+}
+
+// The USDC mint is the token, not a wallet. The mint is refused, not its form:
+// the key one past it passes.
+UR_TEST(SolanaWallet_AddressRefusesTheUsdcMint) {
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress(kUsdcMint));
+  UR_EXPECT_FALSE(LooksLikeSolanaAddress(std::string(" ") + kUsdcMint + "\n"));
+  UR_EXPECT_TRUE(LooksLikeSolanaAddress("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1w"));
 }
 
 UR_TEST(SolanaWallet_AddressRejectsCharactersBase58Lacks) {
@@ -571,6 +609,41 @@ UR_TEST(SolanaWallet_MalformedAddressSendsNothing) {
   UR_EXPECT_FALSE(m.Verdict("7Xk9", AddressVerdict::Valid));  // nothing went out to answer
 }
 
+namespace {
+
+// The sheet's debounced step (SolanaWalletSheet::ValidateAddress): the local
+// check, then Malformed or Check. True when the validate call goes out.
+bool DebouncedCheck(ConnectMachine& m, const std::string& address) {
+  if (!LooksLikeSolanaAddress(address)) {
+    m.Malformed(address);
+    return false;
+  }
+  return m.Check(address);
+}
+
+}  // namespace
+
+// What the server would refuse is refused at once, and the validate call never
+// goes out for it; a key the server takes still goes to the server.
+UR_TEST(SolanaWallet_ALocallyRefusedAddressNeverReachesTheValidateCall) {
+  for (const std::string& address : {std::string(kUsdcMint), std::string(32, '1'),
+                                     std::string(44, 'z')}) {
+    ConnectMachine m;
+    m.Typed();
+    UR_EXPECT_TRUE_MSG(address, !DebouncedCheck(m, address));
+    UR_EXPECT_TRUE_MSG(address, m.state == ConnectState::Idle);
+    UR_EXPECT_TRUE_MSG(address, m.check == AddressCheck::Invalid);
+    UR_EXPECT_TRUE_MSG(address, !m.ConnectAllowed());
+    // nothing went out to answer
+    UR_EXPECT_TRUE_MSG(address, !m.Verdict(address, AddressVerdict::Valid));
+  }
+  ConnectMachine m;
+  m.Typed();
+  UR_EXPECT_TRUE(DebouncedCheck(m, kSample));
+  UR_EXPECT_TRUE(m.state == ConnectState::Checking);
+  UR_EXPECT_TRUE(m.check == AddressCheck::Checking);
+}
+
 // Typing forgets the verdict, and an answer for the old text is dropped.
 UR_TEST(SolanaWallet_TypingResetsTheVerdict) {
   ConnectMachine ready = CheckedAddress();
@@ -591,7 +664,7 @@ UR_TEST(SolanaWallet_TypingResetsTheVerdict) {
 // The text changed and was checked again while the first check was out: only
 // the verdict for the text in the field lands.
 UR_TEST(SolanaWallet_VerdictForOtherTextIsDropped) {
-  const std::string other(32, '1');
+  const std::string other(kLeadingZerosKey);
   ConnectMachine m;
   m.Typed();
   m.Check(kSample);

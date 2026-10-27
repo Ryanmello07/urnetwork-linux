@@ -23,8 +23,9 @@
 > (accessible name "Wallet options") sits right of "Connect Bittensor wallet" and, with a coldkey
 > attached, right of "Change"; its one item, "Connect Solana wallet", opens `SolanaWalletSheet`:
 > Phantom or Solflare through the wallet bridge (`SdkHost::ConnectSolanaWallet`, connect only —
-> the public key comes back and nothing is signed), or an address entered by hand (base58 shape
-> checked locally, then `POST /wallet/validate-address` for `SOL`). The wallet is created with
+> the public key comes back and nothing is signed), or an address entered by hand (checked
+> locally by the server's `SOL` rule: base58 of exactly 32 bytes, not all zero and not the USDC
+> mint; then `POST /wallet/validate-address` for `SOL`). The wallet is created with
 > `POST /account/wallet {SOL, address, USDC}` and made the payout wallet with
 > `POST /account/payout-wallet` unless a fresh `getPayoutWallet` shows it already is; while that
 > switch or a removal is out, "Connect Solana wallet" waits. Under the Bittensor block a card
