@@ -10651,6 +10651,16 @@ msgctxt "widget_open_to_set_up"
 msgid "Open URnetwork to set up"
 msgstr "Otevřete URnetwork a nastavte ji"
 
+#. Description of the overview widget in the widget gallery, on Android (the home screen, the lock screen and Samsung's cover screen) and on the iPhone, iPad and Mac home screen: one large widget that shows the connection with the quick connect toggle, the connected providers on a globe, the transfer balance, today's traffic and the open contracts.
+msgctxt "widget_overview_description"
+msgid "Connection, providers on the globe, balance, today's traffic and contracts in one widget, with quick connect."
+msgstr "Připojení, poskytovatelé na glóbu, zůstatek, dnešní provoz a kontrakty v jednom widgetu, s rychlým připojením."
+
+#. Name of the overview widget in the widget gallery on iPhone, iPad and Mac, shown under the app's name: one large widget that shows the connection with the quick connect toggle, the connected providers on a globe, the transfer balance, today's traffic and the open contracts. One or two words.
+msgctxt "widget_overview_name"
+msgid "Overview"
+msgstr "Přehled"
+
 #. Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.
 msgctxt "widget_peak_rate"
 msgid "{} peak"
@@ -10709,6 +10719,11 @@ msgstr "Obnovit widgety URnetwork"
 msgctxt "widget_toggle_intent_title"
 msgid "Toggle URnetwork VPN"
 msgstr "Zapnout/vypnout VPN URnetwork"
+
+#. Title of a small tile in the overview widget (on Android's home screen, lock screen and Samsung's cover screen, and on the iPhone, iPad and Mac home screen) above the amount of data this device sent and received through URnetwork since midnight, for example 42 MB, with a small bar chart of each hour. Keep it short: the tile is narrow.
+msgctxt "widget_traffic_today"
+msgid "Traffic today"
+msgstr "Provoz dnes"
 
 #. Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.
 msgctxt "widget_updated_ago"
@@ -10826,6 +10841,11 @@ msgstr "Váš přítel získá 30 GiB/měsíc na celý život"
 msgctxt "your_friend_gets_3_gib_day_for"
 msgid "Your friend gets 3 GiB/day for life"
 msgstr "Váš přítel získá 3 GiB/den navždy"
+
+#. Heading of the panel beside the leaderboard on wide screens (an unfolded foldable phone, a tablet, a wide window). The panel shows the user's own URnetwork network: its current ranking, the data it provided, its points, its longest streak and the switch that shows it on the leaderboard. "Network" is the user's URnetwork account (the network they named), not a Wi-Fi or mobile network. A short heading: two or three words.
+msgctxt "your_network"
+msgid "Your network"
+msgstr "Vaše síť"
 
 #. Used in Shared/Views/UpgradeSubscriptionSheet.swift.
 msgctxt "your_purchase_needs_to_be_approved_before_it_can"
