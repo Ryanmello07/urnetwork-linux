@@ -139,6 +139,9 @@ class SettingsPage : public Gtk::Box {
   // deliberately fixes by emitting to the window-level bar). error=true is the
   // persistent treatment (Warning/Error stay until dismissed).
   std::function<void(const Glib::ustring& message, bool error)> on_snackbar;
+  // "Notify me when my internet is slow" changed (already saved): the window
+  // applies it to the notification at once.
+  std::function<void(bool on)> on_slow_internet_notify;
 
  private:
   // ---- construction --------------------------------------------------------
@@ -243,6 +246,8 @@ class SettingsPage : public Gtk::Box {
   // ---- Pane A: Connections -------------------------------------------------
   // Local preference (prefs::kConnectOnLaunchKey), no echo guard: sole writer.
   Gtk::Switch* connectOnLaunch_ = nullptr;
+  // Local preference (slow_internet::kNotifyPrefKey), the same: sole writer.
+  Gtk::Switch* slowInternetNotify_ = nullptr;
   Gtk::Switch* killSwitch_ = nullptr;
   bool applyingKillSwitch_ = false;  // echo guard
   // What is REALLY in force (SdkHost::KillSwitchStatus), rendered under the

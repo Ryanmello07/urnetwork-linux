@@ -24,6 +24,7 @@
 #include "PaneKit.hpp"
 #include "PostQuantumIdentity.hpp"  // ProviderIdentitiesSheet (reused as-is)
 #include "SettingsFold.hpp"
+#include "SlowInternet.hpp"
 #include "SplitRulesSheet.hpp"      // reused as-is (the split-rule editor)
 #include "SupportContact.hpp"
 #include "Ui.hpp"
@@ -1335,6 +1336,21 @@ void SettingsPage::BuildConnectionsSection(Gtk::Box& host) {
     // autostart and the .desktop autostart template, which decide whether the
     // app RUNS, not what it does once it has.
     prefs::Set(prefs::kConnectOnLaunchKey, connectOnLaunch_->get_active());
+  });
+
+  // The slow-internet notification (SlowInternet.hpp), on by default: a LOCAL
+  // preference like the row above, with this toggle its only writer. Off
+  // withdraws a notification showing now and posts none; the Connect page's
+  // pill and the tray's icon stay, being no notification.
+  {
+    const slow_internet::Copy copy = slow_internet::NotifyToggleCopy();
+    slowInternetNotify_ = AddToggleRow(host, T_(copy.key, copy.english), {});
+  }
+  slowInternetNotify_->set_active(prefs::Get<bool>(slow_internet::kNotifyPrefKey, true));
+  slowInternetNotify_->property_active().signal_changed().connect([this] {
+    const bool on = slowInternetNotify_->get_active();
+    prefs::Set(slow_internet::kNotifyPrefKey, on);
+    if (on_slow_internet_notify) on_slow_internet_notify(on);
   });
 
   // Row 1 — the kill switch. The shipped store key site_app_kill_switch_note

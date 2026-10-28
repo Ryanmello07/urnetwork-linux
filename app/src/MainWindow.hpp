@@ -43,6 +43,7 @@
 #include "SdkHost.hpp"
 #include "SeedphraseSheet.hpp"
 #include "SessionsPage.hpp"
+#include "SlowInternet.hpp"
 #include "ProCelebration.hpp"
 #include "GuestConversionSheet.hpp"
 #include "SubscriptionBalance.hpp"
@@ -98,6 +99,15 @@ class MainWindow : public Gtk::ApplicationWindow {
   // daemon's tunnel, and turn the kill switch off.
   void ForceTunnelOff();
   void LiftKillSwitch();
+  // The tray's slow-internet icon level (1 to 4, 0 for none) and its tooltip
+  // line ("Slow internet"), on change (Tray::SetSlow).
+  std::function<void(int level, const std::string& text)> on_tray_slow;
+  // Settings' "Notify me when my internet is slow": off withdraws the
+  // notification at once and posts none.
+  void SetSlowInternetNotify(bool on);
+  // The app is ending: the slow-internet notification goes with it, and none
+  // is posted after.
+  void WithdrawSlowInternetNotice();
 
  private:
   void BuildChrome();         // 48px title bar: 20px app icon + PP NeueBit wordmark
@@ -418,6 +428,40 @@ class MainWindow : public Gtk::ApplicationWindow {
   // fed from the connect reading and the balance store.
   balance_notice::Tracker balanceNotice_;
   void UpdateBalanceNotice();
+
+  // ---- the slow-internet indicator (SlowInternet.hpp) -----------------------
+  // The device's transport delay as SdkHost last published it. Its feed is
+  // NOT gated on visibility: the tray and the notification follow it while
+  // the window is hidden.
+  slow_internet::Reading slowReading_;
+  // The reading every surface shows: SdkHost's, and only while a session is
+  // up in this window's reading (signed in, a destination selected, the
+  // tunnel bound to the current daemon session).
+  slow_internet::Reading SlowShown() const;
+  void ApplyTransportDelay(const slow_internet::Reading& reading);
+  // Every surface from the reading: the Connect page's pill follows the level
+  // as it comes, the notification and the tray through their dwell.
+  void ApplySlowInternet();
+  // The notification's episode and the tray's slow state, both through the
+  // dwell; the dwell moves with time too, so the timer observes again at the
+  // earlier deadline.
+  void ObserveSlowNotice();
+  // Tells the tray its slow state when it changed.
+  void PushTraySlow();
+  // While slow, reads the numbers again: the SDK tells a level change only.
+  // Every kPillRefreshSeconds while the window is up, where the pill shows
+  // them, else every kRefreshSeconds; the window showing or hiding re-arms it.
+  void ScheduleSlowRefresh();
+  sigc::connection slowRefreshTimer_;
+  unsigned slowRefreshSeconds_ = 0;  // the period the timer was armed with
+  slow_internet::NoticeTracker slowNotice_;
+  slow_internet::TraySlowTracker traySlow_;
+  sigc::connection slowNoticeTimer_;
+  bool slowNotifyEnabled_ = true;
+  // what the tray was last told
+  bool traySlowPushed_ = false;
+  int traySlowLevel_ = 0;
+  std::string traySlowText_;
   // The last known out-of-balance state, kept across the user's Disconnect
   // (the SDK clears the contract status with the destination).
   balance_notice::OutOfBalanceLatch outOfBalance_;

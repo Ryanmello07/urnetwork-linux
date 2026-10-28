@@ -33,6 +33,10 @@ class Tray {
   // out): the menu then offers neither Connect nor Disconnect
   // (tray_policy::ConnectItemFor).
   void SetState(bool sessionUp, bool proven, const std::string& status, bool hasStatus);
+  // The slow-internet indicator (SlowInternet.hpp): while `level` (1 to 4) is
+  // above 0 the icon is the tunnel at that level and the tooltip adds `text`
+  // ("Slow internet"); 0 and "" for none.
+  void SetSlow(int level, const std::string& text);
   // Which recovery items the menu offers (failsafe_notice::TrayRecovery).
   void SetRecovery(bool forceTunnelOff, bool liftKillSwitch);
   // A StatusNotifierWatcher has taken the icon and says a host is registered
@@ -51,7 +55,9 @@ class Tray {
   bool sessionUp() const { return session_up_; }
   bool hasStatus() const { return has_status_; }
   bool provenForIcon() const { return proven_; }
+  int slowLevelForIcon() const { return slow_level_; }
   const std::string& statusForToolTip() const { return status_; }
+  const std::string& slowForToolTip() const { return slow_text_; }
   guint menuRevision() const { return menu_revision_; }
   bool offersForceTunnelOff() const { return force_tunnel_off_; }
   bool offersLiftKillSwitch() const { return lift_kill_switch_; }
@@ -76,6 +82,8 @@ class Tray {
   void OnNameLost(GDBusConnection* conn);
   // Bumps the revision and tells the host to fetch the menu again.
   void EmitMenuLayoutUpdated();
+  // Tells the host the icon and the tooltip changed.
+  void EmitIconAndToolTip();
 
   GDBusConnection* conn_ = nullptr;
   guint owner_id_ = 0;
@@ -98,6 +106,8 @@ class Tray {
   bool has_status_ = false;
   bool proven_ = false;
   std::string status_;
+  int slow_level_ = 0;
+  std::string slow_text_;
   bool force_tunnel_off_ = false;
   bool lift_kill_switch_ = false;
 

@@ -8684,6 +8684,71 @@ msgctxt "skip"
 msgid "Skip"
 msgstr "Pomiń"
 
+#. Status label while the user's own network is slowing traffic (URnetwork measured a high upload or download delay). Shown in the amber pill at the top of the connect screen (also the Mac toolbar and menu bar, and the Windows and Linux connect page), as the title of the details sheet that pill opens, as the Live Activity title on the iPhone Lock Screen and expanded Dynamic Island, and as the Android VPN notification title. It describes the user's internet connection, not a URnetwork fault. Keep it short: it sits in a small pill beside an icon.
+msgctxt "slow_internet"
+msgid "Slow internet"
+msgstr "Wolny internet"
+
+#. Label for the measured download delay (for example 640 ms or 1.2 s, with the download rate when it is limited) in the slow-internet details sheet, the expanded Dynamic Island and Lock Screen Live Activity, the Android VPN notification, and the Windows and Linux tray and notification. Download = traffic this device receives. Keep it short: it labels a number in a small box.
+msgctxt "slow_internet_download_delay"
+msgid "Download delay"
+msgstr "Opóźnienie pobierania"
+
+#. Replaces "Slow internet" in the connect-screen pill when URnetwork itself is the reason traffic is slower: it switched to a slower fallback (backup) connection because its usual connection is blocked or unavailable on this network. Keep it short: it sits in a small pill beside an icon.
+msgctxt "slow_internet_fallback"
+msgid "Fallback connection"
+msgstr "Połączenie zapasowe"
+
+#. Body text of the slow-internet details sheet (a flyout on Windows and Linux) while URnetwork is on a slower fallback (backup) connection. Its usual connection = the way URnetwork normally connects, which this network blocks or does not support.
+msgctxt "slow_internet_fallback_body"
+msgid "URnetwork is using a slower fallback connection because its usual connection isn't available on this network."
+msgstr "URnetwork korzysta z wolniejszego połączenia zapasowego, ponieważ zwykłe połączenie jest niedostępne w tej sieci."
+
+#. Replaces "Poor signal" in the small pill at the top right of the connect screen on iPhone, iPad, Mac, Android, Windows and Linux while URnetwork carries the traffic over a slower fallback (backup) connection, because its usual connection is blocked or unavailable on this network. A status tag beside a small tunnel icon and the delay numbers: one short word, two at most.
+msgctxt "slow_internet_fallback_short"
+msgid "Fallback"
+msgstr "Tryb zapasowy"
+
+#. Title of the slow-internet details sheet, the iPhone Live Activity and the Android VPN notification while URnetwork is on a slower fallback (backup) connection because its usual connection isn't available on the current network. Replaces "Slow internet" in that case.
+msgctxt "slow_internet_fallback_title"
+msgid "Using a slower fallback connection"
+msgstr "Używane jest wolniejsze połączenie zapasowe"
+
+#. Settings switch on Windows (Settings > General), Linux, and iPhone (in Settings): when on (the default), the app shows a notification, once per episode, when the user's internet becomes slow.
+msgctxt "slow_internet_notify_toggle"
+msgid "Notify me when my internet is slow"
+msgstr "Powiadamiaj mnie, gdy mój internet działa wolno"
+
+#. Label in the small pill at the top right of the connect screen on iPhone, iPad, Mac, Android, Windows and Linux, shown while the user's own internet connection is slow or congested: URnetwork measured a long upload or download delay. It sits in amber beside a small tunnel icon and the delay numbers (for example ↑ 800 ms ↓ 1.9 s). It describes the user's network, Wi-Fi, cellular or wired alike, not a URnetwork fault. Use your language's usual short phrase for a poor connection signal, one or two words: the pill has very little room.
+msgctxt "slow_internet_poor_signal"
+msgid "Poor signal"
+msgstr "Słaby sygnał"
+
+#. Title shown for about 3 seconds when a slow-internet episode ends, just before the indicator goes away: in the iPhone Live Activity (Lock Screen and Dynamic Island), the Android VPN notification, and the Windows and Linux notification.
+msgctxt "slow_internet_recovered"
+msgid "Internet back to normal"
+msgstr "Internet znów działa normalnie"
+
+#. Subtitle under "Internet back to normal" in the brief recovered state at the end of a slow-internet episode: the upload and download delays URnetwork measured are gone.
+msgctxt "slow_internet_recovered_detail"
+msgid "Delays cleared"
+msgstr "Opóźnienia ustąpiły"
+
+#. The one-word form of "Slow internet" in the iPhone Dynamic Island's compact view (trailing side, beside the small tunnel icon, in amber). There is room for only a few characters, so use the shortest natural word for slow.
+msgctxt "slow_internet_short"
+msgid "Slow"
+msgstr "Wolny"
+
+#. Subtitle under the slow-internet title in the iPhone Live Activity and the Android VPN notification: reassures the user that the VPN has not dropped even though traffic is slow.
+msgctxt "slow_internet_still_connected"
+msgid "URnetwork is still connected"
+msgstr "URnetwork jest nadal połączony"
+
+#. Label for the measured upload delay (for example 640 ms or 1.2 s, with the upload rate when it is limited) in the slow-internet details sheet, the expanded Dynamic Island and Lock Screen Live Activity, the Android VPN notification, and the Windows and Linux tray and notification. Upload = traffic this device sends. Keep it short: it labels a number in a small box.
+msgctxt "slow_internet_upload_delay"
+msgid "Upload delay"
+msgstr "Opóźnienie wysyłania"
+
 #. The subnet alpha token symbol.
 msgctxt "sn_alpha_symbol"
 msgid "SN25α"

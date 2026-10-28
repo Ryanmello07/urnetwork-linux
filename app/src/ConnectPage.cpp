@@ -24,6 +24,7 @@
 #include "LocationsSheet.hpp"  // PeerDisplayName — shared with the chooser
 #include "ProvideLine.hpp"
 #include "ProvideModeGlyph.hpp"
+#include "SlowInternetPill.hpp"
 #include "Ui.hpp"
 
 namespace urnw {
@@ -451,6 +452,9 @@ ConnectPage::ConnectPage(SdkHost& host)
   paneCRule_ = kit::MakePaneVRule();
   append(*paneCRule_);
   BuildPaneC();
+  // the slow-internet pill: pane A's header until the fold says otherwise
+  slowPill_ = Gtk::make_managed<SlowInternetPill>();
+  paneA_.header->append(*slowPill_);
   ApplyConnectStatus();
   ApplyMoreOptionsVisibility();
   // Seed every pane B/C surface at build time: a page that has never had a
@@ -3880,6 +3884,7 @@ void ConnectPage::ApplyFold(bool force) {
   paneBRule_->set_visible(two);
   paneC_.root->set_visible(three);
   paneCRule_->set_visible(three);
+  PlaceSlowPill(panes);
   // exactly one set of doors to pane C's sheets: its own, or pane A's
   if (foldDoorsHost_) foldDoorsHost_->set_visible(connect_fold::FoldDoorsShown(panes));
   if (two) {
@@ -3915,6 +3920,22 @@ void ConnectPage::ApplyFold(bool force) {
         },
         *this));
   }
+}
+
+void ConnectPage::PlaceSlowPill(int panes) {
+  if (!slowPill_) return;
+  Gtk::Box* header = panes == 3 ? paneC_.header : panes == 2 ? paneB_.header : paneA_.header;
+  if (!header || slowPill_->get_parent() == header) return;
+  // held across the move: the header it leaves would otherwise drop the last
+  // reference (MainWindow::ApplyLoginBreakpoint moves the carousel the same way)
+  g_object_ref(slowPill_->gobj());
+  if (auto* from = dynamic_cast<Gtk::Box*>(slowPill_->get_parent())) from->remove(*slowPill_);
+  header->append(*slowPill_);
+  g_object_unref(slowPill_->gobj());
+}
+
+void ConnectPage::ApplySlowInternet(const slow_internet::Reading& reading) {
+  if (slowPill_) slowPill_->Apply(reading);
 }
 
 void ConnectPage::SetPresentationActive(bool active) {

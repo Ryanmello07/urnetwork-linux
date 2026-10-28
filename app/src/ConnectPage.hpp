@@ -48,6 +48,7 @@
 #include "PaneKit.hpp"
 #include "QuickAction.hpp"
 #include "SdkHost.hpp"
+#include "SlowInternet.hpp"
 #include "SplitRulesSheet.hpp"
 #include "ConnectTap.hpp"
 #include "TapSequenceGate.hpp"
@@ -57,6 +58,8 @@
 #include "Ui.hpp"
 
 namespace urnw {
+
+class SlowInternetPill;
 
 class ConnectPage : public Gtk::Box {
  public:
@@ -98,6 +101,10 @@ class ConnectPage : public Gtk::Box {
   // under it "You'll be reconnected when data is available again." with, for
   // a refused start, Cancel.
   void ApplyBalanceRecovery(const balance_notice::RecoveryLines& lines, int64_t reservedByteCount);
+  // The slow-internet pill at the top right (SlowInternetPill.hpp), from the
+  // reading MainWindow has gated on the session. Applied whether or not the
+  // window shows: it moves only while it is on screen.
+  void ApplySlowInternet(const slow_internet::Reading& reading);
   // The drawer's change feed (SdkHost::DrawerEvent), dispatched per group:
   // every case re-reads through the SdkHost accessors on the GTK thread and
   // re-applies ONE surface.
@@ -405,6 +412,11 @@ class ConnectPage : public Gtk::Box {
   void PollFeeds();
   // the fold decision, taken on the width the PANES share (not the toplevel)
   void ApplyFold(bool force);
+  // The slow-internet pill to the right end of the rightmost pane's header:
+  // pane A's with one pane (Simple Mode, or a narrow Advanced one), pane B's
+  // with two, pane C's with three. Moved, never rebuilt, so a fade in flight
+  // goes with it.
+  void PlaceSlowPill(int panes);
   // the 100ms clock runs only while presenting AND this page is the mapped
   // destination (§5: "skip if window not visible", and a page nobody is
   // looking at must not wake the process ten times a second)
@@ -519,6 +531,9 @@ class ConnectPage : public Gtk::Box {
   uint64_t peersSig_ = ~0ull;
   uint64_t locationSig_ = ~0ull;
   uint64_t profileSig_ = ~0ull;
+
+  // the slow-internet pill, in one pane header at a time (PlaceSlowPill)
+  SlowInternetPill* slowPill_ = nullptr;
 
   // ---- pane A ---------------------------------------------------------------
   kit::Pane paneA_;
