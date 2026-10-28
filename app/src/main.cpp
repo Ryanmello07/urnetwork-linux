@@ -158,6 +158,8 @@ int main(int argc, char** argv) {
     // for it to end, then starts.
     urnw::instance::BeginExiting();
     if (window) window->SaveGeometry();  // a quit with the window up never closed it
+    // a "Slow internet" notification must not outlive the app that posted it
+    if (window) window->WithdrawSlowInternetNotice();
     // nothing connects behind the ending; a disconnect still queued runs
     host->RefuseConnects();
     Glib::signal_timeout().connect_once([&] { applyQuitStep(quit.OnAnswerCap()); },
@@ -272,6 +274,10 @@ int main(int argc, char** argv) {
     window->on_tray_state = [&](bool sessionUp, bool proven, const std::string& status,
                                 bool hasStatus) {
       if (tray) tray->SetState(sessionUp, proven, status, hasStatus);
+    };
+    // the slow-internet tunnel in the tray, and its line in the tooltip
+    window->on_tray_slow = [&](int level, const std::string& text) {
+      if (tray) tray->SetSlow(level, text);
     };
     // The recovery items, for when the window holds no session
     // (failsafe_notice::TrayRecovery).

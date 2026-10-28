@@ -13,6 +13,8 @@
 //   "window_width", "window_height", "window_maximized"
 //                             int, int, bool   the window's size across runs
 //                                    (WindowGeometry.hpp)
+//   "slow_internet_notify"    bool   the slow-internet notification, DEFAULT
+//                                    TRUE (SlowInternet.hpp kNotifyPrefKey)
 // Header-only; nlohmann + glib only.
 // SPDX-License-Identifier: MPL-2.0
 #pragma once

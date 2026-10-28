@@ -159,14 +159,20 @@ UR_TEST(ConnectionHealthWiring_TheTrayIconMeansProven) {
   UR_EXPECT_TRUE(HealthWiringHas(ReadHealthWiringSource("main.cpp"),
                                  "if (tray) tray->SetState(sessionUp, proven, status, hasStatus);"));
   const std::string tray = ReadHealthWiringSource("Tray.cpp");
-  UR_EXPECT_TRUE(HealthWiringHas(tray, "self->provenForIcon() ? \"urnetwork-tray-connected\""));
+  // the icon and the tooltip are tray_policy's (TrayPolicyTest checks that
+  // connected means proven, and that the tooltip leads with the status words)
+  UR_EXPECT_TRUE(HealthWiringHas(
+      tray, "tray_policy::IconNameFor(self->provenForIcon(), self->slowLevelForIcon())"));
   UR_EXPECT_TRUE(HealthWiringHas(tray, "ConnectLabel(self->sessionUp())"));
   UR_EXPECT_TRUE(HealthWiringHas(tray, "<property name=\"ToolTip\" type=\"(sa(iiay)ss)\""));
-  UR_EXPECT_TRUE(HealthWiringHas(tray, "self->statusForToolTip().c_str()"));
+  UR_EXPECT_TRUE(HealthWiringHas(
+      tray, "tray_policy::ToolTipFor(self->statusForToolTip(), self->slowForToolTip())"));
   UR_EXPECT_TRUE(HealthWiringInOrder(
       HealthWiringBody(tray, "void Tray::SetState(bool sessionUp, bool proven, "
                              "const std::string& status, bool hasStatus) {"),
-      {"\"NewIcon\"", "\"NewToolTip\"", "EmitMenuLayoutUpdated();"}));
+      {"EmitIconAndToolTip();", "EmitMenuLayoutUpdated();"}));
+  UR_EXPECT_TRUE(HealthWiringInOrder(HealthWiringBody(tray, "void Tray::EmitIconAndToolTip() {"),
+                                     {"\"NewIcon\"", "\"NewToolTip\""}));
   UR_EXPECT_TRUE(HealthWiringHas(HealthWiringBody(tray, "void Tray::EmitMenuLayoutUpdated() {"),
                                  "\"LayoutUpdated\""));
 }

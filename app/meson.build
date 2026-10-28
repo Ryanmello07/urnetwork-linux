@@ -232,6 +232,9 @@ executable('urnetwork-gui',
     'src/GuestConversionSheet.cpp',
     'src/LogTailClient.cpp',
     'src/Tray.cpp',
+    # the slow-internet tunnel and the Connect page's pill around it
+    'src/TunnelIndicator.cpp',
+    'src/SlowInternetPill.cpp',
     'src/Ui.cpp',
     'src/Formatters.cpp',
     'src/TransferChart.cpp',
@@ -492,10 +495,16 @@ install_data('packaging/85-urnetwork-unmanaged.rules',
              install_dir : '/etc/udev/rules.d')
 endif
 
-# tray art (the SNI tray resolves these from the pkgdatadir)
+# tray art (the SNI tray resolves these from the pkgdatadir). slow-1..4 are
+# the slow-internet tunnel at each level (TunnelGeometry.hpp at 32 px, white
+# on transparent like the rest; tray_policy::IconNameFor picks them).
 install_data('assets/urnetwork-tray-disconnected.png',
              'assets/urnetwork-tray-connected.png',
              'assets/urnetwork-tray-provide.png',
+             'assets/urnetwork-tray-slow-1.png',
+             'assets/urnetwork-tray-slow-2.png',
+             'assets/urnetwork-tray-slow-3.png',
+             'assets/urnetwork-tray-slow-4.png',
              install_dir : get_option('datadir') / 'urnetwork/icons')
 
 # Natural Earth 110m land outlines (quantized TopoJSON, public domain), decoded
@@ -758,6 +767,8 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/CryptoPayWiringTest.cpp',
     'tests/BittensorManualSheetWiringTest.cpp',
     'tests/PaymentPastDueTest.cpp',
+    'tests/SlowInternetTest.cpp',
+    'tests/SlowInternetWiringTest.cpp',
     'src/GlobeGeometry.cpp',
     'src/WorldTopology.cpp',
     'src/ProviderLocationRow.cpp',
@@ -888,6 +899,9 @@ urnetwork_tests = executable('urnetwork-tests',
               # PaymentPastDueTest reads the balance store, the window and the
               # Account plan pane the same way, and every source for the wire's
               # update_payment_url.
+              # SlowInternetWiringTest reads the slow-internet feed's host, window,
+              # tray, Connect page and Settings call sites, meson.build and the
+              # tray art the same way.
               '-DUR_SRC_DIR="' + meson.project_source_root() / 'src' + '"'] +
              exhaustive_switch_args,
   install : false)

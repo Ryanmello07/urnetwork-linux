@@ -147,9 +147,11 @@ static GVariant* SniGetProp(GDBusConnection*, const gchar*, const gchar*, const 
   // Title is the product name (the store never translates it), not UI copy.
   if (g_strcmp0(prop, "Title") == 0) return g_variant_new_string("URnetwork");
   if (g_strcmp0(prop, "Status") == 0) return g_variant_new_string("Active");
-  if (g_strcmp0(prop, "IconName") == 0)
-    return g_variant_new_string(self->provenForIcon() ? "urnetwork-tray-connected"
-                                                      : "urnetwork-tray-disconnected");
+  // the slow-internet tunnel while the connection is slow, else connected or not
+  if (g_strcmp0(prop, "IconName") == 0) {
+    return g_variant_new_string(
+        tray_policy::IconNameFor(self->provenForIcon(), self->slowLevelForIcon()).c_str());
+  }
   // Where our tray PNGs actually live. IconName above is a bare name, so
   // without this the host can only resolve it from the icon THEME -- and our
   // art is installed to <pkgdatadir>/icons, not into hicolor, so the tray
@@ -161,11 +163,13 @@ static GVariant* SniGetProp(GDBusConnection*, const gchar*, const gchar*, const 
   }
   if (g_strcmp0(prop, "Menu") == 0) return g_variant_new_object_path("/MenuBar");
   if (g_strcmp0(prop, "ItemIsMenu") == 0) return g_variant_new_boolean(FALSE);
-  // (icon name, icon pixmaps, title, text): the product and the state's words
+  // (icon name, icon pixmaps, title, text): the product and the state's words,
+  // with the slow line after them while there is one
   if (g_strcmp0(prop, "ToolTip") == 0) {
     GVariant* noPixmaps = g_variant_new_array(G_VARIANT_TYPE("(iiay)"), nullptr, 0);
-    return g_variant_new("(s@a(iiay)ss)", "", noPixmaps, "URnetwork",
-                         self->statusForToolTip().c_str());
+    const std::string text =
+        tray_policy::ToolTipFor(self->statusForToolTip(), self->slowForToolTip());
+    return g_variant_new("(s@a(iiay)ss)", "", noPixmaps, "URnetwork", text.c_str());
   }
   return nullptr;
 }
@@ -460,11 +464,24 @@ void Tray::SetState(bool sessionUp, bool proven, const std::string& status, bool
   if (!conn_) return;
   // Tell the host the icon and the tooltip changed, and bump the menu so
   // "Connect"/"Disconnect" refreshes.
+  EmitIconAndToolTip();
+  EmitMenuLayoutUpdated();
+}
+
+void Tray::SetSlow(int level, const std::string& text) {
+  if (level == slow_level_ && text == slow_text_) return;
+  slow_level_ = level;
+  slow_text_ = text;
+  // the menu does not change: only the icon and the tooltip
+  EmitIconAndToolTip();
+}
+
+void Tray::EmitIconAndToolTip() {
+  if (!conn_) return;
   g_dbus_connection_emit_signal(conn_, nullptr, "/StatusNotifierItem",
                                 "org.kde.StatusNotifierItem", "NewIcon", nullptr, nullptr);
   g_dbus_connection_emit_signal(conn_, nullptr, "/StatusNotifierItem",
                                 "org.kde.StatusNotifierItem", "NewToolTip", nullptr, nullptr);
-  EmitMenuLayoutUpdated();
 }
 
 void Tray::SetRecovery(bool forceTunnelOff, bool liftKillSwitch) {

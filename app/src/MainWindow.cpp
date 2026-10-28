@@ -250,6 +250,8 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     // the Sessions controller's foreground (its visibility is the page's map)
     if (sessionsPage_) sessionsPage_->SetPresentationActive(windowVisible_);
     if (developerPage_) developerPage_->SetPresenting(windowVisible_);
+    // the slow numbers are read sooner while the window shows the pill's
+    ScheduleSlowRefresh();
     if (windowVisible_) {
       // The reading is RE-READ, never replayed, but not here: the queued
       // SetPresentationActive(true) above hands on the reading its own
@@ -386,6 +388,12 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
   // independently.
   host_.SetConnectReadingHandler([this](ConnectReading reading) {
     PostToMain([this, reading] { ApplyConnectReading(reading); });
+  });
+  // The slow-internet feed, ungated for the same reason: the tray and the
+  // desktop notification follow it while the window sits in the tray.
+  slowNotifyEnabled_ = prefs::Get<bool>(slow_internet::kNotifyPrefKey, true);
+  host_.SetTransportDelayHandler([this](slow_internet::Reading reading) {
+    PostToMain([this, reading] { ApplyTransportDelay(reading); });
   });
   // The command queue settled: a tap's held state ends with the device's own
   // reading, taken on the worker after the last command (already on the main
@@ -1247,6 +1255,8 @@ void MainWindow::ApplyPageBreakpoint(int widthDip) {
 MainWindow::~MainWindow() {
   host_.CryptoInvoice().Unsubscribe(cryptoInvoiceSubscription_);
   geometrySave_.disconnect();
+  slowNoticeTimer_.disconnect();
+  slowRefreshTimer_.disconnect();
   UntrackAppFocus();
   host_.SetConnectGate(nullptr);  // the gate reads this window
   host_.SetRowConnect(nullptr);   // and so does the row's start path
@@ -1937,6 +1947,7 @@ void MainWindow::BuildHome() {
                                              : kit::Snackbar::Severity::Success);
     }
   };
+  settingsPage_->on_slow_internet_notify = [this](bool on) { SetSlowInternetNotify(on); };
   shell_->SetPage("settings", *settingsPage_);
   // the windows tag->load mapping: each destination loads on selection (and
   // again on auth change, through ApplyAuthState)
@@ -2720,6 +2731,8 @@ void MainWindow::ApplyConnectReading(const ConnectReading& reading) {
     trayHasStatus_ = signedIn_;
     on_tray_state(connected_, proven, status, signedIn_);
   }
+  // the slow-internet indicator shows only over a session that is up
+  ApplySlowInternet();
 }
 
 void MainWindow::NoteTap(connect_tap::Pending pending) {
@@ -2850,6 +2863,136 @@ void MainWindow::UpdateBalanceNotice() {
 void MainWindow::DisconnectFromBalanceNotice() {
   // the user's own Disconnect path, disconnect only
   ToggleConnect(/*disconnect=*/true);
+}
+
+// ---- the slow-internet indicator (SlowInternet.hpp) ---------------------------
+
+// One fixed id, so a post replaces the episode's notification and a withdraw
+// always finds it.
+constexpr const char* kSlowNoticeId = "slow-internet";
+
+namespace {
+// The slow-internet notification's GApplication half; the tracker decides.
+// With no default action a click activates the app, which shows the window
+// and its pill.
+struct SlowNoticeSink {
+  void Post(const slow_internet::Notice& notice) {
+    auto app = NotifyingApp();
+    if (!app) return;
+    const slow_internet::NoticeText text =
+        slow_internet::ComposeNotice(notice, [](const slow_internet::Copy& copy) {
+          return std::string(T_(copy.key, copy.english));
+        });
+    auto notification = Gio::Notification::create(text.title);
+    notification->set_body(text.body);
+    app->send_notification(kSlowNoticeId, notification);
+  }
+  void Withdraw() {
+    if (auto app = NotifyingApp()) app->withdraw_notification(kSlowNoticeId);
+  }
+};
+}  // namespace
+
+slow_internet::Reading MainWindow::SlowShown() const {
+  slow_internet::Reading shown = slowReading_;
+  // A level the session that measured it no longer stands behind is never
+  // shown: signed in, a destination selected and the tunnel bound to the
+  // current daemon session, as every other session surface reads it.
+  shown.available = slowReading_.available && signedIn_ &&
+                    health::SessionUp(reading_.ToSignals(/*disconnectRequested=*/false));
+  if (!shown.available) shown.delay = slow_internet::Delay{};
+  return shown;
+}
+
+void MainWindow::ApplyTransportDelay(const slow_internet::Reading& reading) {
+  // SdkHost's order: a reading marshaled late behind a newer one changes nothing
+  if (reading.serial <= slowReading_.serial) return;
+  slowReading_ = reading;
+  ApplySlowInternet();
+}
+
+void MainWindow::ApplySlowInternet() {
+  const slow_internet::Reading shown = SlowShown();
+  // the pill keeps its state while the window is hidden, and moves only on screen
+  if (connectPage_) connectPage_->ApplySlowInternet(shown);
+  ObserveSlowNotice();
+  ScheduleSlowRefresh();
+}
+
+void MainWindow::ObserveSlowNotice() {
+  slowNoticeTimer_.disconnect();
+  const int64_t nowMillis = g_get_monotonic_time() / 1000;
+  const slow_internet::Reading shown = SlowShown();
+  SlowNoticeSink sink;
+  slowNotice_.Observe(shown, slowNotifyEnabled_, nowMillis, sink);
+  // the tray is outside the app too: the same dwell, whatever the setting
+  traySlow_.Observe(shown, nowMillis);
+  PushTraySlow();
+  // the dwell moves with time too: observe again at the earlier deadline
+  int64_t deadline = slowNotice_.NextDeadlineMillis();
+  const int64_t trayDeadline = traySlow_.NextDeadlineMillis();
+  if (deadline < 0 || (0 <= trayDeadline && trayDeadline < deadline)) deadline = trayDeadline;
+  if (deadline < 0) return;
+  const int64_t wait = std::max<int64_t>(0, deadline - nowMillis) + 1;
+  slowNoticeTimer_ = Glib::signal_timeout().connect(
+      [this]() -> bool {
+        // a one-shot that removes itself by returning false: its handle is
+        // dropped, never disconnected from inside its own slot
+        slowNoticeTimer_ = sigc::connection();
+        ObserveSlowNotice();
+        return false;
+      },
+      static_cast<unsigned>(wait));
+}
+
+void MainWindow::ScheduleSlowRefresh() {
+  if (slow_internet::Level(SlowShown()) <= 0) {
+    slowRefreshTimer_.disconnect();
+    return;
+  }
+  // While slow the pill shows the numbers (it follows the level): with the
+  // window up they are read sooner; behind it, for the notification.
+  const unsigned seconds =
+      windowVisible_ ? slow_internet::kPillRefreshSeconds : slow_internet::kRefreshSeconds;
+  if (slowRefreshTimer_.connected() && seconds == slowRefreshSeconds_) return;
+  slowRefreshTimer_.disconnect();
+  slowRefreshSeconds_ = seconds;
+  slowRefreshTimer_ = Glib::signal_timeout().connect_seconds(
+      [this]() -> bool {
+        // a one-shot that removes itself by returning false: its handle is
+        // dropped, never disconnected from inside its own slot. A changed
+        // reading comes back through the handler on a later turn.
+        slowRefreshTimer_ = sigc::connection();
+        host_.RefreshTransportDelay();
+        ScheduleSlowRefresh();
+        return false;
+      },
+      seconds);
+}
+
+void MainWindow::PushTraySlow() {
+  const slow_internet::TraySlowTracker::View& view = traySlow_.view();
+  const int level = view.level;
+  std::string text;
+  if (view.line) text = T_(view.line->key, view.line->english);
+  if (on_tray_slow &&
+      (!traySlowPushed_ || level != traySlowLevel_ || text != traySlowText_)) {
+    traySlowPushed_ = true;
+    traySlowLevel_ = level;
+    traySlowText_ = text;
+    on_tray_slow(level, text);
+  }
+}
+
+void MainWindow::SetSlowInternetNotify(bool on) {
+  slowNotifyEnabled_ = on;
+  ObserveSlowNotice();
+}
+
+void MainWindow::WithdrawSlowInternetNotice() {
+  // the app is ending: nothing posts from here on
+  slowNotifyEnabled_ = false;
+  ObserveSlowNotice();
 }
 
 namespace {

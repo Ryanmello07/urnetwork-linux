@@ -72,3 +72,4 @@ src/ReferralsPage.cpp
 src/SessionsPage.cpp
 src/TransferChart.cpp
 src/WalletConnect.cpp
+src/SlowInternetPill.cpp

@@ -22,6 +22,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <string>
+
 namespace urnw::tray_policy {
 
 inline constexpr int kNoTrayGraceMillis = 5000;
@@ -59,6 +61,24 @@ enum class ConnectItem {
 constexpr ConnectItem ConnectItemFor(bool hasStatus, bool sessionUp) {
   if (!hasStatus) return ConnectItem::None;
   return sessionUp ? ConnectItem::Disconnect : ConnectItem::Connect;
+}
+
+// The icon (a bare name the host resolves under IconThemePath). While the
+// connection is slow it is the slow-internet tunnel at that level, 1 to 4
+// (slow_internet::Level, apple/DELAY.md §2.1 rendered at 32 px), the way the
+// Connect page's pill shows it; otherwise connected means a provider is
+// proven.
+inline std::string IconNameFor(bool proven, int slowLevel) {
+  if (0 < slowLevel) return "urnetwork-tray-slow-" + std::to_string(slowLevel < 4 ? slowLevel : 4);
+  return proven ? "urnetwork-tray-connected" : "urnetwork-tray-disconnected";
+}
+
+// The tooltip's text: the state's words, then the slow line when there is one
+// ("Connected · Slow internet").
+inline std::string ToolTipFor(const std::string& status, const std::string& slow) {
+  if (slow.empty()) return status;
+  if (status.empty()) return slow;
+  return status + " · " + slow;
 }
 
 }  // namespace urnw::tray_policy

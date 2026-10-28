@@ -3171,6 +3171,9 @@ TunnelStartResult SdkHost::BindRemoteDeviceLocked(const std::string& clientJwt,
     // hold one field from this instant beside another from a previous one.
     subs_.push_back(device_->addConnectLocationChangeListener(
         [this](std::optional<urnet::ConnectLocation>) { PublishConnectReading(); }));
+    // The slow-internet feed, kept alive for the tray and the desktop
+    // notification the same way: they follow it while the window is hidden.
+    BindTransportDelayLocked();
     if (presentationActive_) {
       SubscribeStats();
       SubscribeDrawer();
@@ -3247,6 +3250,121 @@ std::string SdkHost::RpcHostPort() {
   return ReadOnMain<std::string>("RpcHostPort", [&]() -> std::string {
     return rpcHostPort_;
   });
+}
+
+// ---- the slow-internet feed (SlowInternet.hpp) ------------------------------
+// The device's transport delay (connect/DELAY.md §10), gated on its remote:
+// while the remote is disconnected the last level is stale, and the sync that
+// reconnects it replays the current one (DeviceLocalRpc SyncReverse). The
+// listeners run on SDK threads and take only delayMutex_, never mutex_.
+namespace {
+
+// The SDK's TransportDelay, out of the SDK's type; none reads as zero.
+slow_internet::Delay ToSlowInternetDelay(const std::optional<urnet::TransportDelay>& delay) {
+  slow_internet::Delay out;
+  if (!delay) return out;
+  out.upQuality = delay->UpQuality;
+  out.downQuality = delay->DownQuality;
+  out.upBitsPerSecond = delay->UpBitsPerSecond;
+  out.downBitsPerSecond = delay->DownBitsPerSecond;
+  out.upQueueDelayMillis = delay->UpQueueDelayMillis;
+  out.downQueueDelayMillis = delay->DownQueueDelayMillis;
+  out.fallback = delay->Fallback;
+  return out;
+}
+
+}  // namespace
+
+void SdkHost::BindTransportDelayLocked() {
+  uint64_t generation = 0;
+  uint64_t delayRevision = 0;
+  uint64_t remoteRevision = 0;
+  {
+    std::scoped_lock lock(delayMutex_);
+    generation = delayFeed_.Bind();
+    delayRevision = delayFeed_.DelayRevision();
+    remoteRevision = delayFeed_.RemoteRevision();
+    PublishTransportDelayLocked();
+  }
+  // Both stamped with this device's generation: a late call from a device
+  // torn down since changes nothing (slow_internet::Feed). The indicator is
+  // never a reason to fail the start it rides on: a throw leaves it
+  // unavailable, which is what it shows without a feed anyway.
+  try {
+    subs_.push_back(device_->addRemoteChangeListener([this, generation](bool connected) {
+      std::scoped_lock lock(delayMutex_);
+      if (delayFeed_.NoteRemote(generation, connected)) PublishTransportDelayLocked();
+    }));
+    subs_.push_back(device_->addTransportDelayChangeListener(
+        [this, generation](std::optional<urnet::TransportDelay> delay) {
+          std::scoped_lock lock(delayMutex_);
+          if (delayFeed_.NoteDelay(generation, ToSlowInternetDelay(delay))) {
+            PublishTransportDelayLocked();
+          }
+        }));
+  } catch (const std::exception& e) {
+    g_warning("sdkhost: the transport delay listeners could not be added: %s", e.what());
+    return;
+  }
+  // Registration replays nothing, so both are read once, AFTER registering: a
+  // change between the read and the registration cannot be lost, and a push
+  // that lands meanwhile is newer than the read and wins (Feed::Seed*).
+  const bool connected = ReadGuarded<bool>(
+      "getRemoteConnected", [&] { return device_->getRemoteConnected(); }, false);
+  const slow_internet::Delay delay =
+      ToSlowInternetDelay(ReadGuarded<std::optional<urnet::TransportDelay>>(
+          "getTransportDelay", [&] { return device_->getTransportDelay(); }, std::nullopt));
+  std::scoped_lock lock(delayMutex_);
+  bool changed = delayFeed_.SeedRemote(generation, remoteRevision, connected);
+  changed = delayFeed_.SeedDelay(generation, delayRevision, delay) || changed;
+  if (changed) PublishTransportDelayLocked();
+}
+
+void SdkHost::RefreshTransportDelay() {
+  // The feed's revision is taken under mutex_ with the read, so an answer the
+  // main loop kept from an earlier refresh (ReadOnMain) carries its own
+  // revision, and any push since makes it lose.
+  struct Refresh {
+    bool read = false;
+    uint64_t generation = 0;
+    uint64_t revision = 0;
+    std::optional<urnet::TransportDelay> delay;
+  };
+  const Refresh refresh = ReadOnMain<Refresh>("RefreshTransportDelay", [&]() -> Refresh {
+    Refresh out;
+    if (!device_) return out;
+    {
+      std::scoped_lock lock(delayMutex_);
+      out.generation = delayFeed_.Generation();
+      out.revision = delayFeed_.DelayRevision();
+    }
+    try {
+      out.delay = device_->getTransportDelay();
+      out.read = true;
+    } catch (const std::exception& e) {
+      g_warning("sdkhost: getTransportDelay: %s", e.what());
+    }
+    return out;
+  });
+  if (!refresh.read) return;
+  std::scoped_lock lock(delayMutex_);
+  if (delayFeed_.SeedDelay(refresh.generation, refresh.revision, ToSlowInternetDelay(refresh.delay))) {
+    PublishTransportDelayLocked();
+  }
+}
+
+void SdkHost::ClearTransportDelay() {
+  std::scoped_lock lock(delayMutex_);
+  delayFeed_.Clear();
+  PublishTransportDelayLocked();
+}
+
+void SdkHost::PublishTransportDelayLocked() {
+  const slow_internet::Reading reading = delayFeed_.Current();
+  if (delaySerial_ != 0 && reading.SameAs(delayPublished_)) return;
+  delayPublished_ = reading;
+  delayPublished_.serial = ++delaySerial_;
+  if (onTransportDelay_) onTransportDelay_(delayPublished_);
 }
 
 // ---- live stats (macOS parity: listener-push, not polling) ----------------
@@ -3379,6 +3497,8 @@ void SdkHost::PublishStats() {
 // {DESTINATION_SET, DISCONNECTED}. See Health.hpp.
 void SdkHost::NoteDaemonTunnelGone() {
   daemonTunnelGone_.store(true);
+  // the delay the gone tunnel measured is no one's any more
+  ClearTransportDelay();
   PublishConnectReading();
 }
 
@@ -5902,6 +6022,8 @@ void SdkHost::TeardownDeviceLocked() {
   unsavedSession_.reset();
   ClosePresentationLocked();
   subs_.clear();
+  // the slow-internet feed goes with its device: nothing shows until another binds
+  ClearTransportDelay();
   // close() actually stops the remote's rpc connection, sync loop and view
   // controllers; reset() alone only releases the handle (urnet_release),
   // leaking them on every logout. The daemon's DeviceLocal, tun and IoLoop

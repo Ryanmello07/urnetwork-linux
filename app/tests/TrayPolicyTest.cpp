@@ -84,6 +84,27 @@ UR_TEST(TrayPolicy_CloseHidesOnlyToATray) {
   UR_EXPECT_TRUE(urnw::tray_policy::OnClose(/*trayAvailable=*/false) == CloseAction::Minimize);
 }
 
+// The icon: connected means a provider is proven, and while the connection is
+// slow the slow-internet tunnel at its level stands in for either (its art
+// ships one file per level, 1 to 4). The tooltip leads with the state's words.
+UR_TEST(TrayPolicy_TheIconFollowsProofAndTheSlowLevel) {
+  using urnw::tray_policy::IconNameFor;
+  UR_EXPECT_TRUE(IconNameFor(/*proven=*/true, /*slowLevel=*/0) == "urnetwork-tray-connected");
+  UR_EXPECT_TRUE(IconNameFor(false, 0) == "urnetwork-tray-disconnected");
+  UR_EXPECT_TRUE(IconNameFor(true, 1) == "urnetwork-tray-slow-1");
+  UR_EXPECT_TRUE(IconNameFor(false, 2) == "urnetwork-tray-slow-2");
+  UR_EXPECT_TRUE(IconNameFor(true, 3) == "urnetwork-tray-slow-3");
+  UR_EXPECT_TRUE(IconNameFor(true, 4) == "urnetwork-tray-slow-4");
+  // past the art's last level, its last file; below 0, none
+  UR_EXPECT_TRUE(IconNameFor(true, 9) == "urnetwork-tray-slow-4");
+  UR_EXPECT_TRUE(IconNameFor(true, -1) == "urnetwork-tray-connected");
+
+  using urnw::tray_policy::ToolTipFor;
+  UR_EXPECT_TRUE(ToolTipFor("Connected", "") == "Connected");
+  UR_EXPECT_TRUE(ToolTipFor("Connected", "Slow internet") == "Connected · Slow internet");
+  UR_EXPECT_TRUE(ToolTipFor("", "Slow internet") == "Slow internet");
+}
+
 // Hidden with no tray is the one state with no way back.
 UR_TEST(TrayPolicy_OnlyAHiddenWindowWithNoTraySurfaces) {
   UR_EXPECT_TRUE(urnw::tray_policy::MustSurface(/*windowVisible=*/false, /*trayAvailable=*/false));

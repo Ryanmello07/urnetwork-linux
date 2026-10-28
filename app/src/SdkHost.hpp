@@ -46,6 +46,7 @@
 #include "RowConnectCoalescer.hpp"
 #include "RpcSession.hpp"
 #include "SignOut.hpp"
+#include "SlowInternet.hpp"
 #include "VerifySendNotice.hpp"
 #include "AddSignInFlow.hpp"
 #include "AuthLogout.hpp"
@@ -417,6 +418,9 @@ class SdkHost {
   using ConnectReadingHandler = std::function<void(ConnectReading reading)>;
   using StatsHandler = std::function<void(const LiveStats& stats)>;
   using DrawerEventHandler = std::function<void(DrawerEvent event)>;
+  // The slow-internet feed (SlowInternet.hpp): the device's transport delay,
+  // available only while its remote is connected.
+  using TransportDelayHandler = std::function<void(slow_internet::Reading reading)>;
 
   bool Initialize(const std::string& storageDir, const std::string& logDir);
   // Why the last Initialize failed, as the SDK said it; empty after a success.
@@ -985,6 +989,19 @@ class SdkHost {
   // Connect drawer change feed. The handler may be invoked while the SdkHost
   // lock is held — it must only marshal, never call back into SdkHost.
   void SetDrawerEventHandler(DrawerEventHandler h) { onDrawerEvent_ = std::move(h); }
+  // The slow-internet feed. Device-lifetime, like the connect location's
+  // listener: the tray and the desktop notification follow it while the
+  // window is hidden, so its consumer must not gate it on visibility. Every
+  // reading is whole; unavailable while no device is bound, its remote is
+  // disconnected, or the daemon reported its tunnel gone. Fired on SDK
+  // threads and on the command queue's worker, under the feed's own lock and
+  // in the order the readings were taken (each carries its serial): the
+  // handler must only marshal, never call back into SdkHost.
+  void SetTransportDelayHandler(TransportDelayHandler h) { onTransportDelay_ = std::move(h); }
+  // Reads the delay again: the SDK tells a level change only, and the numbers
+  // move within a level. A changed reading goes out through the handler. A
+  // push since the read wins, and a read that fails changes nothing. Main loop.
+  void RefreshTransportDelay();
 
   // ---- connect drawer accessors (all locked; graceful with no device) ------
   // The device (remote) exists only while a tunnel session runs. Reads fall
@@ -1992,6 +2009,24 @@ class SdkHost {
   // NEVER-listening socket on 127.0.0.1:<ctl::kDeviceRpcPort>. -1 = not held.
   int deviceRpcDefaultPortFd_ = -1;
   bool presentationActive_ = false;
+  // ---- the slow-internet feed (SlowInternet.hpp) ----------------------------
+  // Its own lock, never mutex_: the device's listeners call in on SDK threads,
+  // and a DeviceRemote tells some of them from inside a write the GTK thread
+  // makes holding mutex_. Nothing else is taken under it. Declared before
+  // subs_, whose listeners call in, so they close first.
+  std::mutex delayMutex_;
+  slow_internet::Feed delayFeed_;          // guarded by delayMutex_
+  slow_internet::Reading delayPublished_;  // guarded by delayMutex_: the last one handed on
+  uint64_t delaySerial_ = 0;               // guarded by delayMutex_
+  TransportDelayHandler onTransportDelay_;
+  // Registers the device's transport delay and remote listeners in subs_ (a
+  // device-lifetime feed) and reads both values once after registering.
+  // Requires mutex_ and a device.
+  void BindTransportDelayLocked();
+  // The bound device is gone, or its daemon's tunnel is: unavailable.
+  void ClearTransportDelay();
+  // Hands on the feed's reading when it changed. Requires delayMutex_.
+  void PublishTransportDelayLocked();
   std::vector<urnet::Sub> subs_;
   std::vector<urnet::Sub> presentationSubs_;
 
