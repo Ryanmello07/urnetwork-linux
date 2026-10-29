@@ -17,6 +17,22 @@
 > (`URNETWORK_PREVIEW_WALLET`, `URNETWORK_PREVIEW_CLAIM`, `URNETWORK_PREVIEW_GAS=low`,
 > `URNETWORK_PREVIEW_MANUAL`, `URNETWORK_PREVIEW_TOP200=bound` extend the sample).
 >
+> **2026-10-29 — the Protocol leaderboard (apple/LEADERTOP.md, owner decision 2026-10-29).** The
+> Leaderboard tab has three boards: **Protocol** (first and the default), Points and Data. Protocol
+> is the SN25-aligned board (`GET /sn/top`, the top 400 paged 50 at a time, with the Top 200 line,
+> UID badges, dimmed unmeasurable rows, the caller's row with "You" and its label, and a claimed
+> row's detail sheet) and the caller's own place (`GET /sn/top/me`): the status banner, the
+> own-status card (position, margin, trend, label chip, the 90-day progress chart, why this
+> score, the claim prompt) and the explainer, in pane C beside the list, or on top of it while
+> pane C is folded away (`ProtocolBoard.{hpp,cpp}`, rules in `ProtocolBoardPresentation.hpp`,
+> requests in `ProtocolBoardBinding.hpp`). The Top 200 tile in pane A now reads `GET /sn/top/me`
+> instead of `GET /sn/head`: it shows for a network projected inside the top 200 or claimed, with
+> "Claiming opens soon" in place of "Claim your spot" and no "Sign fleet binding" while binding is
+> closed. `URNETWORK_PREVIEW_PROTOCOL=<closed|open|unmeasurable|claimed|stale|empty|failed>`
+> replaces `URNETWORK_PREVIEW_TOP200=bound` (`claimed` is the tile's bound state), with
+> `URNETWORK_PREVIEW_PROTOCOL_LINE=1` (scrolled to the Top 200 line) and
+> `URNETWORK_PREVIEW_PROTOCOL_DETAIL=1` (a claimed row's sheet).
+>
 > **2026-09-14 — the Solana payout wallet is back.** USDC payouts continue until the migration to
 > Bittensor completes, and a network whose payouts are held for want of a wallet is emailed
 > "N USDC waiting", so pane A reaches the Solana payout wallet again. A three-dot overflow

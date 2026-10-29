@@ -4315,6 +4315,31 @@ msgctxt "earnings_status_column"
 msgid "Status"
 msgstr "ステータス"
 
+#. Earnings Top 200 tile: the explanation under the projected position, replacing top200_detail ("ranks about #N of 200 head spots"). The ranking is the Protocol leaderboard's, done the way the SN25 validator picks its Top 200 head miners, who earn SN25α every tempo (about every 72 minutes).
+msgctxt "earnings_top200_body"
+msgid "Ranked like the SN25 validator's Top 200, by the distinct IP prefixes your devices provide from. Head miners earn SN25α every tempo."
+msgstr "SN25 のバリデーターのトップ 200 と同じく、お使いのデバイスが提供に使う異なる IP プレフィックスで順位を付けています。上位のマイナーは tempo ごとに SN25α を獲得します。"
+
+#. Earnings Top 200 tile: the note that replaces the Claim your spot button (claim_your_spot) while claiming a Top 200 spot isn't open on mainnet.
+msgctxt "earnings_top200_claiming_soon"
+msgid "Claiming opens soon"
+msgstr "まもなく枠の確保が可能になります"
+
+#. Earnings Top 200 tile: under earnings_top200_claiming_soon while claiming isn't open. The second sentence is the claim warning (leaderboard_protocol_claim_warning): a fleet that claimed a spot but ranks 201st or lower earns nothing.
+msgctxt "earnings_top200_claiming_soon_body"
+msgid "We'll let you know when you can claim your spot. A claimed fleet that ranks 201 or lower earns nothing."
+msgstr "枠を確保できるようになったらお知らせします。枠を確保したフリートでも、201 位以下なら報酬はゼロです。"
+
+#. Earnings Top 200 tile: the line under the network's projected position ("#173"), the same projection the Protocol leaderboard shows. {margin} is the margin to the Top 200 line, already formatted by the app with its sign and percent sign ("+12%" above the line, "−8%" below), inserted as is.
+msgctxt "earnings_top200_projected"
+msgid "projected · {}"
+msgstr "予測 · {}"
+
+#. Earnings Top 200 tile: link to the Protocol leaderboard (Leaderboard > Protocol). Names the tab (leaderboard_tab_protocol) and the leaderboard (leaderboard) in their own words.
+msgctxt "earnings_top200_see_board"
+msgid "See the Protocol leaderboard"
+msgstr "プロトコルのリーダーボードを見る"
+
 #. Link that opens a claim transaction in the block explorer.
 msgctxt "earnings_view_transaction"
 msgid "View transaction"
@@ -5470,6 +5495,241 @@ msgstr "リーダーボードは過去4回の支払いの合計です。支払�
 msgctxt "leaderboard_position_indicator"
 msgid "Leaderboard position"
 msgstr "リーダーボードの位置"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, how far the network's projected score is above the Top 200 line (the score at position 200, the cutoff for a head spot). {percent} is the margin, already formatted by the app with its percent sign ("12%"), inserted as is.
+msgctxt "leaderboard_protocol_above_line"
+msgid "{} above the Top 200 line"
+msgstr "トップ 200 ラインより {} 上"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the neutral one-line banner on top of the tab while claiming a Top 200 spot (binding a fleet to a miner UID on SN25) isn't open on mainnet. The board still shows where the network would rank if it claimed now.
+msgctxt "leaderboard_protocol_banner_closed"
+msgid "Claiming isn't open yet. You can see where you'd rank now."
+msgstr "枠の確保はまだ受け付けていません。今の予想順位はここで確認できます。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): banner on top of the tab when the rankings are stale, last computed more than 3 tempos (about 3.5 hours) ago. {time} is when they were computed, already formatted by the app, a relative time ("4h ago") or a date ("Oct 29"), inserted as is, so the wording must read with either.
+msgctxt "leaderboard_protocol_banner_stale"
+msgid "Rankings last updated {}."
+msgstr "ランキングの最終更新: {}"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, how far the network's projected score is below the Top 200 line (the score at position 200, the cutoff for a head spot). {percent} is the margin, already formatted by the app with its percent sign ("8%"), inserted as is.
+msgctxt "leaderboard_protocol_below_line"
+msgid "{} below the Top 200 line"
+msgstr "トップ 200 ラインより {} 下"
+
+#. Protocol leaderboard (Leaderboard > Protocol): accessibility summary of the progress chart, read by VoiceOver and TalkBack. {rank} is today's projected position, a number, inserted as is.
+msgctxt "leaderboard_protocol_chart_a11y"
+msgid "Projected rank over 90 days, now {}"
+msgstr "90 日間の予測順位、現在 {} 位"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, label of the horizontal line drawn across the progress chart at position 200, the cutoff for a Top 200 head spot.
+msgctxt "leaderboard_protocol_chart_line"
+msgid "Top 200 line"
+msgstr "トップ 200 ライン"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, title of the progress chart: the network's projected position each day over the last 90 days.
+msgctxt "leaderboard_protocol_chart_title"
+msgid "Projected rank, last 90 days"
+msgstr "予測順位（過去 90 日間）"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, added to the claim prompt when the network is within 20% of the Top 200 line. The rankings are recomputed once per tempo (about every 72 minutes).
+msgctxt "leaderboard_protocol_claim_borderline"
+msgid "You're close to the line, and rankings change every tempo."
+msgstr "ラインに近く、順位は tempo ごとに変わります。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, the claim prompt's primary button once claiming is open. It opens the Earnings page (earnings) at its Top 200 tile, where the user claims the spot (claim_your_spot), so it names that page in the page's own words.
+msgctxt "leaderboard_protocol_claim_button"
+msgid "Claim on Earnings"
+msgstr "収益で枠を確保"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, the claim prompt for a measurable network projected inside the top 200. While claiming isn't open, leaderboard_protocol_claim_soon follows; once it opens, the Claim on Earnings button.
+msgctxt "leaderboard_protocol_claim_inside"
+msgid "You're projected in the top 200."
+msgstr "トップ 200 に入る見込みです。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, after "You're projected in the top 200." while claiming isn't open on mainnet. Names the Earnings page (earnings) in the page's own words. Nothing invites registering early.
+msgctxt "leaderboard_protocol_claim_soon"
+msgid "Claiming opens soon on the Earnings page."
+msgstr "まもなく収益ページで枠を確保できるようになります。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the warning every claim prompt carries: a fleet that claimed a Top 200 spot but is ranked 201st or lower by the SN25 validator earns nothing (its devices leave the regular payout pool either way). The Earnings Top 200 tile repeats it (earnings_top200_claiming_soon_body).
+msgctxt "leaderboard_protocol_claim_warning"
+msgid "A claimed fleet that ranks 201 or lower earns nothing."
+msgstr "枠を確保したフリートでも、201 位以下なら報酬はゼロです。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the sheet that opens from a row whose network has claimed a Top 200 spot: the state next to the fleet's UID ("UID 81 · claimed"). Lowercase where the language allows.
+msgctxt "leaderboard_protocol_detail_claimed"
+msgid "claimed"
+msgstr "確保済み"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, the value of Claim valid until. {epoch} is the settlement epoch number, inserted as is. Apple reads this English from the epoch_row_title entry ("Epoch %lld", one catalog entry per English text), so this key is not tagged apple.
+msgctxt "leaderboard_protocol_detail_epoch"
+msgid "Epoch {}"
+msgstr "エポック {}"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, label of the generation of the fleet's binding: a number that goes up each time the fleet binds again.
+msgctxt "leaderboard_protocol_detail_generation"
+msgid "Generation"
+msgstr "世代"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, label of the fleet UID's incentive as read from the SN25 metagraph on chain (Bittensor's incentive value, which the chain pays it by).
+msgctxt "leaderboard_protocol_detail_incentive"
+msgid "On-chain incentive"
+msgstr "オンチェーンのインセンティブ"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, note under the on-chain incentive: the chain's incentive reflects the validator's ranking one or two tempos later.
+msgctxt "leaderboard_protocol_detail_incentive_note"
+msgid "On-chain incentive lags the validator's ranking."
+msgstr "オンチェーンのインセンティブは、バリデーターの順位より遅れて反映されます。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet: the SN25 validator did not select the fleet for a head spot in the last tempo (it was not in the validator's Top 200).
+msgctxt "leaderboard_protocol_detail_not_selected"
+msgid "Not selected"
+msgstr "選出外"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, label of the network's projected position on the board.
+msgctxt "leaderboard_protocol_detail_projected_rank"
+msgid "Projected rank"
+msgstr "予測順位"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, label of the fleet's score as the board computes it with an exact replica of the SN25 validator's scoring, from the same measurements. Shown next to the validator's own score.
+msgctxt "leaderboard_protocol_detail_replica_score"
+msgid "Board replica score"
+msgstr "ボードのレプリカスコア"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet: the SN25 validator selected the fleet for a head spot in the last tempo (it was in the validator's Top 200).
+msgctxt "leaderboard_protocol_detail_selected"
+msgid "Selected"
+msgstr "選出済み"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, shown next to the on-chain incentive when the value read from chain is out of date. Lowercase where the language allows.
+msgctxt "leaderboard_protocol_detail_stale"
+msgid "stale"
+msgstr "古いデータ"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, label of the last settlement epoch the fleet's claim (its binding) is valid for. The value is leaderboard_protocol_detail_epoch ("Epoch 1234").
+msgctxt "leaderboard_protocol_detail_valid_until"
+msgid "Claim valid until"
+msgstr "確保の有効期限"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, label of where the SN25 validator itself ranked the fleet last tempo (the value is leaderboard_protocol_detail_validator_rank_value).
+msgctxt "leaderboard_protocol_detail_validator_rank"
+msgid "Validator rank"
+msgstr "バリデーター順位"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, the value of Validator rank: where the SN25 validator ranked this fleet among the claimed fleets it scored last tempo. {rank} is the position and {count} the number of claimed fleets, both numbers inserted as is, so the wording must read with any number.
+msgctxt "leaderboard_protocol_detail_validator_rank_value"
+msgid "#{0} of {1} claimed"
+msgstr "確保済み {1} 件中 #{0}"
+
+#. Protocol leaderboard (Leaderboard > Protocol): claimed row sheet, label of the fleet's score as the SN25 validator itself computed it last tempo.
+msgctxt "leaderboard_protocol_detail_validator_score"
+msgid "Validator score"
+msgstr "バリデータースコア"
+
+#. Protocol leaderboard (Leaderboard > Protocol): shown in place of the ranked list while there are no rankings yet. The board updates once per tempo, about every 72 minutes.
+msgctxt "leaderboard_protocol_empty"
+msgid "Rankings will appear after the next update."
+msgstr "次回の更新後にランキングが表示されます。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the paragraph under the own-status card (in the second pane on wide screens) that explains the ranking. The SN25 validator picks its Top 200 head miners by distinct IP prefixes; a prefix several networks provide from is split between them. The board updates once per tempo, about every 72 minutes.
+msgctxt "leaderboard_protocol_explainer"
+msgid "Ranked the way the SN25 validator picks its Top 200: by how many distinct IP prefixes your devices provide from, with shared prefixes split between the networks on them. Updated about every 72 minutes. These are projections until you claim."
+msgstr "SN25 のバリデーターがトップ 200 を選ぶのと同じ基準で順位を付けています。お使いのデバイスが提供に使う異なる IP プレフィックスの数で決まり、共有されているプレフィックスは、それを使うネットワークの間で分け合います。約 72 分ごとに更新されます。枠を確保するまでは予測値です。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): label chip (own-status card and own row) once the board is accurate enough: the network's projected score is within 20% of the Top 200 line, above or below it.
+msgctxt "leaderboard_protocol_label_borderline"
+msgid "Borderline"
+msgstr "ボーダーライン"
+
+#. Protocol leaderboard (Leaderboard > Protocol): label chip on the own-status card and the user's own row, shown until the board's measured accuracy against the validator's real picks reaches 90%: the position is only an estimate. The other chips are Likely, Borderline, Unlikely and Not measurable.
+msgctxt "leaderboard_protocol_label_estimate"
+msgid "Estimate"
+msgstr "推定"
+
+#. Protocol leaderboard (Leaderboard > Protocol): label chip (own-status card and own row) once the board is accurate enough: the network is at least 20% above the Top 200 line and was measurable in at least 3 of the last 4 tempos, so the validator will likely rank it in its Top 200.
+msgctxt "leaderboard_protocol_label_likely"
+msgid "Likely"
+msgstr "見込みあり"
+
+#. Protocol leaderboard (Leaderboard > Protocol): label chip (own-status card and own row): the SN25 validator can't measure the network yet, so it can't score it whatever the projection says. The card says why (leaderboard_protocol_not_measurable_cohort, _shared, _providing).
+msgctxt "leaderboard_protocol_label_not_measurable"
+msgid "Not measurable"
+msgstr "測定不可"
+
+#. Protocol leaderboard (Leaderboard > Protocol): label chip (own-status card and own row) once the board is accurate enough: the network is at least 20% below the Top 200 line.
+msgctxt "leaderboard_protocol_label_unlikely"
+msgid "Unlikely"
+msgstr "見込み薄"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the divider in the ranked list between positions 200 and 201. {score} is position 200's projected score (the cutoff for a head spot), already formatted by the app ("41.2"), inserted as is.
+msgctxt "leaderboard_protocol_line"
+msgid "Top 200 line · score {}"
+msgstr "トップ 200 ライン · スコア {}"
+
+#. Protocol leaderboard (Leaderboard > Protocol): what VoiceOver and TalkBack read for the divider between positions 200 and 201 (leaderboard_protocol_line). {score} is position 200's projected score, already formatted by the app ("41.2"), inserted as is.
+msgctxt "leaderboard_protocol_line_a11y"
+msgid "Top 200 line, score {}"
+msgstr "トップ 200 ライン、スコア {}"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, why the network is not measurable: none of its devices is in the set the SN25 validator measures yet, so the validator can't score it. Shown instead of a claim prompt.
+msgctxt "leaderboard_protocol_not_measurable_cohort"
+msgid "Your devices aren't measured by the validator yet."
+msgstr "お使いのデバイスはまだバリデーターに測定されていません。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, why the network is not measurable: none of its devices is providing. Shown instead of a claim prompt.
+msgctxt "leaderboard_protocol_not_measurable_providing"
+msgid "Turn on providing to be ranked."
+msgstr "ランキングに載るには、提供をオンにしてください。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, why the network is not measurable: its devices provide from an IP address another network also provides from, so the validator can't tell the two apart. Shown instead of a claim prompt.
+msgctxt "leaderboard_protocol_not_measurable_shared"
+msgid "Your devices share an IP with another network."
+msgstr "お使いのデバイスは他のネットワークと IP を共有しています。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, under "#173 projected": how many networks the board ranks. {count} is that number (hundreds or thousands), inserted as is, so the wording must read with any number.
+msgctxt "leaderboard_protocol_of_ranked"
+msgid "of {} ranked networks"
+msgstr "ランキング対象 {} ネットワーク中"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, the word after the network's position, "#173 projected": the position is a projection of where the SN25 validator would rank the network if it claimed, not a final rank. It qualifies the number before it; lowercase where the language allows.
+msgctxt "leaderboard_protocol_projected"
+msgid "projected"
+msgstr "予測"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, why this score: the score the network would have today if it claimed a Top 200 spot and no other network sharing its IP prefixes claimed. {score} is that score, already formatted by the app ("41.2"), inserted as is.
+msgctxt "leaderboard_protocol_solo"
+msgid "If you claimed alone today: {}."
+msgstr "今日あなただけが枠を確保した場合: {}"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, next to the trend arrow after the margin to the Top 200 line: how many positions the network moved down since the previous update (once per tempo, about every 72 minutes). {count} is the number of positions, inserted as is, so the wording must read with any number. Lowercase in English: it continues the margin line.
+msgctxt "leaderboard_protocol_trend_down"
+msgid "down {} since the last update"
+msgstr "前回の更新から {} 位下降"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, next to the trend arrow after the margin to the Top 200 line: how many positions the network moved up since the previous update (once per tempo, about every 72 minutes). {count} is the number of positions, inserted as is, so the wording must read with any number. Lowercase in English: it continues the margin line.
+msgctxt "leaderboard_protocol_trend_up"
+msgid "up {} since the last update"
+msgstr "前回の更新から {} 位上昇"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the badge on a row whose network has claimed a Top 200 spot, and the name shown for an anonymous network that has. {uid} is the fleet's miner UID on SN25, a number, inserted as is. UID is the Bittensor term and stays as is.
+msgctxt "leaderboard_protocol_uid"
+msgid "UID {}"
+msgstr "UID {}"
+
+#. Protocol leaderboard (Leaderboard > Protocol): own-status card, why this score: how many distinct IP prefixes the network's devices provide from, and how many of those other networks provide from too (a shared prefix's credit is split between the networks on it). {prefixes} and {shared} are counts, each after its label and a colon, so the line reads with any number, 0 and 1 included. Counts only, never addresses.
+msgctxt "leaderboard_protocol_why"
+msgid "Distinct IP prefixes: {0}. Shared with other networks: {1}."
+msgstr "異なる IP プレフィックス: {0}。他のネットワークと共有: {1}。"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the marker on the signed-in network's own row in the ranked list. Apple reads this English from the route_you entry ("You", one catalog entry per English text), so this key is not tagged apple.
+msgctxt "leaderboard_protocol_you"
+msgid "You"
+msgstr "あなた"
+
+#. Protocol leaderboard (Leaderboard > Protocol): the tab's label, the first of the leaderboard's three tabs (then Points, the points key, and Data, the data key). The tab ranks networks the way the SN25 validator picks its Top 200 head miners.
+msgctxt "leaderboard_tab_protocol"
+msgid "Protocol"
+msgstr "プロトコル"
 
 #. Points leaderboard scroll indicator: the tier line for ranks below the top 50%.
 msgctxt "leaderboard_tier_rest"
