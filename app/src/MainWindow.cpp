@@ -530,6 +530,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
     if (accountPage_) accountPage_->SetPreviewMode(true);
     if (referralsPage_) referralsPage_->SetPreviewMode(true);
     if (sessionsPage_) sessionsPage_->SetPreviewMode(true);
+    if (apiKeysPage_) apiKeysPage_->SetPreviewMode(true);
     // DEFERRED to idle, and guarded: a destination's Load() runs API/SDK
     // reads, and in preview there is no session — an exception escaping the
     // WINDOW CONSTRUCTOR would take the process down before anything renders
@@ -546,6 +547,7 @@ MainWindow::MainWindow(SdkHost& host) : host_(host), balance_(host) {
         if (tag == "account" && accountPage_) accountPage_->ShowPreviewState();
         if (tag == "referrals" && referralsPage_) referralsPage_->ShowPreviewState();
         if (tag == "sessions" && sessionsPage_) sessionsPage_->ShowPreviewState();
+        if (tag == "api_keys" && apiKeysPage_) apiKeysPage_->ShowPreviewState();
         if (tag == "wallet" && earningsPage_) shell_->Navigate("earnings");
         if ((tag == "earnings" || tag == "wallet") && earningsPage_) {
           // ORDER MATTERS: the empty settle is what a no-session preview looks
@@ -1930,6 +1932,24 @@ void MainWindow::BuildHome() {
   shell_->SetPage("sessions", *sessionsPage_);
   // the window may already be presenting: the page's foreground starts there
   sessionsPage_->SetPresentationActive(windowVisible_);
+  // Account -> API keys: a destination without a rail item too, reached from
+  // Account's API keys row and left through its own "‹ Account".
+  apiKeysPage_ = Gtk::make_managed<ApiKeysPage>(host_);
+  apiKeysPage_->on_snackbar = [this](const Glib::ustring& message, bool error) {
+    if (shell_) {
+      shell_->snackbar().Show(message, error ? kit::Snackbar::Severity::Error
+                                             : kit::Snackbar::Severity::Success);
+    }
+  };
+  apiKeysPage_->sheet_open = [this] { return sheetOpen_; };
+  apiKeysPage_->on_sheet_open_changed = [this](bool open) { sheetOpen_ = open; };
+  apiKeysPage_->on_back = [this] {
+    if (shell_) shell_->Navigate("account");
+  };
+  accountPage_->on_open_api_keys = [this] {
+    if (shell_) shell_->Navigate("api_keys");
+  };
+  shell_->SetPage("api_keys", *apiKeysPage_);
   supportPage_ = Gtk::make_managed<SupportPage>(host_);
   supportPage_->on_snackbar = [this](const Glib::ustring& message, bool error) {
     if (shell_) {
@@ -1975,6 +1995,7 @@ void MainWindow::BuildHome() {
       balance_.FetchNow();  // the card is painted from the store's referral figures
     }
     if (tag == "sessions" && sessionsPage_) sessionsPage_->Load();
+    if (tag == "api_keys" && apiKeysPage_) apiKeysPage_->Load();
     // Settings owns the account-subject sheets too, so it loads for both tags.
     if ((tag == "settings" || tag == "account") && settingsPage_) settingsPage_->Load();
     if (developerPage_) {
@@ -2564,6 +2585,8 @@ void MainWindow::ApplyAuthState(bool loggedIn) {
     if (referralsPage_) referralsPage_->ResetForSignOut();
     // the departed account's sessions and their controller
     if (sessionsPage_) sessionsPage_->ResetForSignOut();
+    // the departed account's API keys, and a key the create sheet still shows
+    if (apiKeysPage_) apiKeysPage_->ResetForSignOut();
     // Home's activity view starts fresh too: its filters, search and selection
     if (connectPage_) connectPage_->ResetForSignOut();
     // The post-sign-up onboarding belongs to the network just created here: a

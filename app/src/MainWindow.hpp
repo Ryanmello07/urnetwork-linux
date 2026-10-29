@@ -13,6 +13,7 @@
 
 #include <gtkmm.h>
 
+#include "ApiKeysPage.hpp"
 #include "AuthLogout.hpp"
 #include "AuthViews.hpp"
 #include "BittensorManualSheet.hpp"
@@ -348,6 +349,7 @@ class MainWindow : public Gtk::ApplicationWindow {
   AccountPage* accountPage_ = nullptr;
   ReferralsPage* referralsPage_ = nullptr;  // reached from Account's Referrals row
   SessionsPage* sessionsPage_ = nullptr;    // reached from Account's Sessions row
+  ApiKeysPage* apiKeysPage_ = nullptr;      // reached from Account's API keys row
   // The in-app updater (UpdateChecker.hpp): built after the pages, bound to
   // Settings (the notice + the auto-check toggle) and Developer (the manual
   // check), then started. Its worker is joined when the window goes.

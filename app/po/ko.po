@@ -687,6 +687,106 @@ msgctxt "api_error_contact"
 msgid "If the problem persists, contact us at {0} or join our {1} for direct support."
 msgstr "문제가 계속되면 {0}로 문의하거나 직접 지원을 위해 저희 {1}에 참여하세요."
 
+#. API keys screen (Account > API keys): shown briefly in place of Copy key (api_keys_copy) after the key was copied. Apple reads this English from the crypto_invoice_copied entry (one catalog entry per English text), so this key is not tagged apple.
+msgctxt "api_keys_copied"
+msgid "Copied"
+msgstr "복사됨"
+
+#. API keys screen (Account > API keys): the button on the sheet that shows a newly created key; it puts the key on the clipboard.
+msgctxt "api_keys_copy"
+msgid "Copy key"
+msgstr "키 복사"
+
+#. API keys screen (Account > API keys): the action that creates a new API key: the screen's button, and the title or confirm button of the form that asks for the key's name.
+msgctxt "api_keys_create"
+msgid "Create API key"
+msgstr "API 키 생성"
+
+#. API keys screen (Account > API keys): shown when creating a new key failed.
+msgctxt "api_keys_create_failed"
+msgid "Couldn't create the API key. Try again."
+msgstr "API 키를 생성할 수 없습니다. 다시 시도하세요."
+
+#. API keys screen (Account > API keys): a key's row, the line under its name. {date} is the date the key was created, already formatted by the app ("Oct 29, 2026"), inserted as is, so no case ending or preposition can attach to it.
+msgctxt "api_keys_created_at"
+msgid "Created {}"
+msgstr "생성일: {}"
+
+#. API keys screen (Account > API keys): title of the sheet that shows a newly created key in full. This is the only time the key is ever shown.
+msgctxt "api_keys_created_title"
+msgid "Your new API key"
+msgstr "새 API 키"
+
+#. API keys screen (Account > API keys): the warning on the sheet that shows a newly created key. The key is shown only this once, and anyone who has it has full access to the account.
+msgctxt "api_keys_created_warning"
+msgid "Copy this key now. It won't be shown again, and anyone who has it can use your account."
+msgstr "지금 이 키를 복사하세요. 다시 표시되지 않으며, 키를 가진 사람은 누구나 계정을 사용할 수 있습니다."
+
+#. API keys screen (Account > API keys): the action on a key's row that deletes the key, and the destructive button of the confirmation that follows. Apple reads this English from the delete entry (one catalog entry per English text), so this key is not tagged apple.
+msgctxt "api_keys_delete"
+msgid "Delete"
+msgstr "삭제"
+
+#. API keys screen (Account > API keys): body of the confirmation before a key is deleted. {name} is the key's name as the user gave it ("home server"), or api_keys_unnamed ("Unnamed key") for a key without one, inserted as is between quotes, so no case ending or article can attach to it, and the sentence must read with either.
+msgctxt "api_keys_delete_confirm_body"
+msgid "\"{}\" will stop working right away, and anything using it will lose access."
+msgstr "‘{}’의 작동이 즉시 중지되며, 이 키를 사용하는 모든 항목의 액세스 권한이 사라집니다."
+
+#. API keys screen (Account > API keys): title of the confirmation before a key is deleted.
+msgctxt "api_keys_delete_confirm_title"
+msgid "Delete this API key?"
+msgstr "이 API 키를 삭제할까요?"
+
+#. API keys screen (Account > API keys): shown when deleting a key failed.
+msgctxt "api_keys_delete_failed"
+msgid "Couldn't delete the API key. Try again."
+msgstr "API 키를 삭제할 수 없습니다. 다시 시도하세요."
+
+#. API keys screen (Account > API keys): a link under the explanation that opens the documentation on using API keys with the API.
+msgctxt "api_keys_docs_link"
+msgid "How to use API keys"
+msgstr "API 키 사용 방법"
+
+#. API keys screen (Account > API keys): shown in place of the list when the account has no API keys.
+msgctxt "api_keys_empty"
+msgid "You don't have any API keys."
+msgstr "API 키가 없습니다."
+
+#. API keys screen (Account > API keys): a key's row, the line with the key's ID, shown so the user can use the ID with the API. {id} is the ID as is. Apple reads this English from the sessions_id entry ("ID %@", one catalog entry per English text), so this key is not tagged apple.
+msgctxt "api_keys_id"
+msgid "ID {}"
+msgstr "ID {}"
+
+#. API keys screen (Account > API keys): the explanation at the top of the screen. It must keep both points: a key lets the user's own tools and scripts use the account through the API, and anyone who has a key has full access to the account until the key is deleted.
+msgctxt "api_keys_intro"
+msgid "API keys let your own tools and scripts use your URnetwork account through the API. Anyone with a key has full access to your account until you delete it."
+msgstr "API 키를 사용하면 직접 만든 도구와 스크립트에서 API를 통해 URnetwork 계정을 사용할 수 있습니다. 키를 가진 사람은 누구나 키를 삭제할 때까지 계정에 대한 전체 액세스 권한을 갖습니다."
+
+#. API keys screen (Account > API keys): shown when the list of keys failed to load, above the retry button.
+msgctxt "api_keys_load_failed"
+msgid "Couldn't load your API keys. Try again."
+msgstr "API 키를 불러올 수 없습니다. 다시 시도하세요."
+
+#. API keys screen (Account > API keys): label of the name field in the form that creates a key. The name only helps the user tell keys apart ("home server"). Not plain "Name": apple has one catalog entry per English text, and name_label's "Name" reads as a person's name in several languages.
+msgctxt "api_keys_name_label"
+msgid "Key name"
+msgstr "키 이름"
+
+#. API keys screen (Account > API keys): placeholder in the empty name field of the form that creates a key, suggesting a name that says where the key will be used.
+msgctxt "api_keys_name_placeholder"
+msgid "For example, home server"
+msgstr "예: 홈 서버"
+
+#. API keys screen (Account > API keys): the screen's title, and the label of the Account row that opens it. The screen lists the account's API keys, which let the user's own tools and scripts use the account through the API, and creates and deletes them.
+msgctxt "api_keys_title"
+msgid "API keys"
+msgstr "API 키"
+
+#. API keys screen (Account > API keys): the row title of a key that has no name (a key created through the API may have an empty name), and the {name} of api_keys_delete_confirm_body for such a key, where it appears between quotes.
+msgctxt "api_keys_unnamed"
+msgid "Unnamed key"
+msgstr "이름 없는 키"
+
 #. transfer stats and split rules
 msgctxt "app_excluded_toast"
 msgid "{} will bypass the VPN"

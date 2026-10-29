@@ -42,10 +42,11 @@ namespace urnw {
 namespace shell {
 
 // The rail item a page lights. A page reached FROM a destination has no item
-// of its own and keeps that destination's lit: "referrals" (Refer and earn)
-// and "sessions" (Account -> Sessions) belong to Account.
+// of its own and keeps that destination's lit: "referrals" (Refer and earn),
+// "sessions" (Account -> Sessions) and "api_keys" (Account -> API keys)
+// belong to Account.
 inline std::string RailTagFor(const std::string& pageTag) {
-  if (pageTag == "referrals" || pageTag == "sessions") return "account";
+  if (pageTag == "referrals" || pageTag == "sessions" || pageTag == "api_keys") return "account";
   return pageTag;
 }
 

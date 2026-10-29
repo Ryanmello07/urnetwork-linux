@@ -28,12 +28,16 @@ UR_TEST(SessionsWiring_TheAccountRowFollowsTheProfile) {
       "kit::MakePaneTwoLineRowButton(T_(\"sessions_title\", \"Sessions\"), {}, kRowTall,\n"
       "                                             RowIcon(MdiGlyph::SessionFace));";
   UR_EXPECT_TRUE_MSG("the Sessions row with the face profile glyph", Contains(profile, row));
-  // the last row of the profile group, right after Update password, and the
-  // profile group comes first on the pane
-  UR_EXPECT_TRUE(Before(profile, "T_(\"update_password\", \"Update password\")",
-                        "T_(\"sessions_title\", \"Sessions\")"));
-  UR_EXPECT_EQ(std::string::npos,
-               profile.find("kit::Make", profile.find("T_(\"sessions_title\", \"Sessions\")") + 1));
+  // right after Update password (the one row built between them is its own),
+  // and the profile group comes first on the pane; the API keys row follows
+  // it (ApiKeysWiringTest)
+  const size_t update = profile.find("T_(\"update_password\", \"Update password\")");
+  const size_t sessions = profile.find("T_(\"sessions_title\", \"Sessions\")");
+  UR_EXPECT_TRUE(update != std::string::npos && sessions != std::string::npos && update < sessions);
+  if (update != std::string::npos && sessions != std::string::npos && update < sessions) {
+    UR_EXPECT_EQ(1u, urnw::testing::wiring::CountOf(profile.substr(update, sessions - update),
+                                                    "kit::Make"));
+  }
   const std::string pane = FunctionBody(page, "void AccountPage::BuildAccountPane()");
   UR_EXPECT_TRUE(Before(pane, "BuildProfileGroup(", "BuildSecurityGroup("));
   UR_EXPECT_TRUE(Contains(profile, "if (on_open_sessions) {"));

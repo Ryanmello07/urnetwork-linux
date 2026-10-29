@@ -9,7 +9,8 @@
 //     session rows' device logos, REVOKE-UI-FINAL.md §8, verbatim;
 //   - the Account pane's row icons (AccountPage.cpp), each the MDI glyph
 //     closest to the meaning of its row (Android's and Apple's icon where those
-//     apps have the row): Profile's account circle, Referrals' heart;
+//     apps have the row): Profile's account circle, Referrals' heart, API
+//     keys' "API";
 //   - the Sessions page's refresh and copy commands.
 //
 // Pure C++17: tests/GlyphPathTest.cpp reads every path here.
@@ -34,6 +35,7 @@ enum class MdiGlyph {
   // the Account pane's rows
   AccountCircle,  // Profile (the network name)
   LockReset,      // Update password
+  Api,            // API keys
   Key,            // a login method
   Login,          // Login methods (Add)
   Barcode,        // Auth code (the login stack's auth-code glyph is a barcode too)
@@ -154,6 +156,11 @@ inline constexpr MdiGlyphData kMdiGlyphs[] = {
      "11.29,6.46 12.81,6.46C14.34,6.46 15.59,7.7 15.59,9.23V10.24M12.81,7.86C12.06,7.86 11.44,"
      "8.47 11.44,9.23V10.24H14.19V9.23C14.19,8.47 13.57,7.86 12.81,7.86Z",
      "lock-reset"},
+    // api
+    {MdiGlyph::Api,
+     "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 "
+     "0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
+     "api"},
     // key-outline
     {MdiGlyph::Key,
      "M21 18H15V15H13.3C12.2 17.4 9.7 19 7 19C3.1 19 0 15.9 0 12S3.1 5 7 5C9.7 5 12.2 6.6 "
