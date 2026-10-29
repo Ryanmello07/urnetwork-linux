@@ -10416,6 +10416,11 @@ msgctxt "vless_user_id"
 msgid "User ID (UUID)"
 msgstr "ID de usuario (UUID)"
 
+#. Title of the Android VPN notification while the VPN is connected. Samsung's Flip cover screen, the lock screen and other small screens show it in a narrow row and cut off what does not fit, so keep it short and keep the status first: a narrow screen then loses the end of the place, never the status. "Protected" means this device's internet traffic goes through URnetwork, the same word as the "Protected" row of the desktop apps' connection inspector. {location} is where the connection goes: a country, region or city name (for example Germany), or "Best available provider".
+msgctxt "vpn_notification_protected"
+msgid "Protected · {}"
+msgstr "Protegido · {}"
+
 #. Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.
 msgctxt "wait_for_refresh"
 msgid "Wait for refresh"
