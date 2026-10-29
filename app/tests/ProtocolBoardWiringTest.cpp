@@ -149,6 +149,10 @@ UR_TEST(ProtocolBoardWiring_TheTop200TileReadsTheOwnPlace) {
       tile,
       "protocol_board::TileFor(protocol_->Mine(), protocol_->SignedIn(), ProtocolBoardWords());"));
   UR_EXPECT_TRUE(Before(tile, "if (!tile.bindingOpen) {", "MakeGoldButton(tile.claimText);"));
+  // no error state on the tile: a 404 or a failure hides it (TileFor)
+  UR_EXPECT_TRUE(Before(tile, "top200Card_->set_visible(show);", "if (!show) return;"));
+  UR_EXPECT_FALSE(Contains(tile, "something_went_wrong"));
+  UR_EXPECT_FALSE(Contains(tile, "loadFailed"));
   UR_EXPECT_TRUE(Contains(tile, "soon->append(*MakeSizedLabel(tile.soonTitle, 14, \"ur-value\"));"));
   UR_EXPECT_TRUE(Contains(tile, "see->signal_clicked().connect([this] { ShowProtocolBoard(); });"));
   // the tile renders again when the own place answers

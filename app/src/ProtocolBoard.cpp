@@ -443,7 +443,6 @@ class SampleService final : public pb::Service {
     row.sharedPrefixes = position % 5;
     row.measurable = position % 7 != 4;
     row.label = Label(row, BindingOpen());
-    row.claimPrompt = row.measurable && position <= pb::kHeadSeats;
     if (position % 9 == 1) {
       pb::Fleet fleet;
       fleet.uid = 80 + position % 170;
@@ -463,7 +462,8 @@ class SampleService final : public pb::Service {
     if (row.isMe && state_ != "unmeasurable") row.measurable = true;
     if (row.isMe) row.label = Label(row, BindingOpen() && state_ != "claimed");
     if (row.isMe && state_ == "open") row.label = "borderline";
-    if (row.isMe) row.claimPrompt = row.measurable && position <= pb::kHeadSeats;
+    // the server's flag: measurable, inside the top 200, no active claimed fleet
+    row.claimPrompt = row.measurable && position <= pb::kHeadSeats && row.fleets.empty();
     return row;
   }
 

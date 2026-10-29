@@ -375,6 +375,24 @@ UR_TEST(ProtocolBoardBinding_TheOwnPlaceIsKeptOverAFailedRefresh) {
   UR_EXPECT_FALSE(f.binding.Mine().me.has_value());
 }
 
+// A 404 (the route not deployed yet) or any failure of the own place, first
+// time: no place and nothing loaded, which the Earnings tile reads as nothing
+// to show; the tile still hears it, so it renders (hidden) again.
+UR_TEST(ProtocolBoardBinding_AFailedOwnPlaceIsNoPlace) {
+  Fixture f;
+  int mine = 0;
+  f.binding.on_mine_changed = [&mine] { ++mine; };
+  UR_EXPECT_TRUE(f.binding.RefreshMe());
+  f.calls->mes.back()(p::MeAnswer{});  // ok == false: a 404 or an error
+  const p::MeState& state = f.binding.Mine();
+  UR_EXPECT_FALSE(state.loaded);
+  UR_EXPECT_TRUE(state.loadFailed);
+  UR_EXPECT_FALSE(state.loading);
+  UR_EXPECT_FALSE(state.me.has_value());
+  UR_EXPECT_FALSE(state.snapshot.has_value());
+  UR_EXPECT_EQ(1, mine);
+}
+
 // The list's own `me` row (the caller wherever it ranks) is kept with the
 // first page.
 UR_TEST(ProtocolBoardBinding_TheListsOwnRowIsKept) {
