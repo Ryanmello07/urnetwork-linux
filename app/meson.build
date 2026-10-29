@@ -225,6 +225,7 @@ executable('urnetwork-gui',
     'src/LicensesSheet.cpp',
     'src/DeveloperPage.cpp',
     'src/EarningsPage.cpp',
+    'src/ProtocolBoard.cpp',
     'src/SolanaWalletSheet.cpp',
     'src/BittensorManualSheet.cpp',
     'src/Top200SignSheet.cpp',
@@ -760,6 +761,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/ApiKeysPresentationTest.cpp',
     'tests/ApiKeysBindingTest.cpp',
     'tests/ApiKeysWiringTest.cpp',
+    'tests/ProtocolBoardPresentationTest.cpp',
+    'tests/ProtocolBoardBindingTest.cpp',
+    'tests/ProtocolBoardWiringTest.cpp',
     'tests/Top200BindingTest.cpp',
     'tests/ConnectCommandQueueTest.cpp',
     'tests/ConnectTapStateTest.cpp',
@@ -897,6 +901,10 @@ urnetwork_tests = executable('urnetwork-tests',
               # ApiKeysWiringTest reads the API keys page, its Account row, the
               # window's navigation and the rail the same way;
               # ApiKeysPresentationTest reads po/en.po.
+              # ProtocolBoardWiringTest reads the Protocol board, the Earnings
+              # page's tabs, panes, Top 200 tile and shared switch, and the
+              # stylesheet the same way; ProtocolBoardPresentationTest reads
+              # po/en.po.
               # CryptoPayWiringTest reads the payment-method row, the crypto
               # invoice and its host, the upgrade sheet, the onboarding, the
               # Account plan pane, the window, meson.build and the Flatpak

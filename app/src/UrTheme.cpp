@@ -231,6 +231,51 @@ button.ur-earn-gold-button:active { background-color: #E0A52E; }
 button.ur-earn-gold-button:disabled { opacity: 0.38; }
 /* the wallet address in the bit face */
 .ur-earn-address { font-family: "PP NeueBit"; font-size: 18px; font-weight: bold; color: #F8F8F8; }
+/* ---- the Protocol board (ProtocolBoard.cpp, apple/LEADERTOP.md) --------
+   The primary blue (#638BFC) marks the Top 200 line, the tint of the rows
+   inside it, a rise, "You" and the claim button; amber (#F5C242) marks a
+   fall and "close to the line". The banner is the neutral style, never the
+   error style. */
+.ur-protocol-banner {
+  background-color: alpha(#638BFC, .10); border: 1px solid alpha(#638BFC, .35);
+  border-radius: 8px; padding: 8px 10px;
+}
+.ur-protocol-banner-icon { color: #638BFC; }
+.ur-protocol-banner-text { font-family: "PP Neue Montreal"; font-size: 13px; color: #D6E6F4; }
+.ur-protocol-inside { background-color: alpha(#638BFC, .06); }
+button.ur-pane-row.ur-protocol-inside { background-color: alpha(#638BFC, .06); }
+button.ur-pane-row.ur-protocol-inside:hover { background-color: mix(#101010, #638BFC, .14); }
+button.ur-pane-row.ur-earn-own-row { background-color: #1C1C1C; }
+button.ur-pane-row.ur-earn-own-row:hover { background-color: #2A2A2A; }
+/* a claimed row is a button: its text keeps the list's weight */
+button.ur-protocol-row { font-weight: normal; }
+.ur-protocol-dimmed { opacity: .55; }
+.ur-protocol-rule { border-top: 2px dashed #638BFC; min-height: 0; }
+.ur-protocol-line { font-family: "PP Neue Montreal"; font-size: 12px; font-weight: 600; color: #638BFC; }
+.ur-protocol-chip {
+  border: 1px solid alpha(#ffffff, .30); border-radius: 999px; padding: 1px 8px;
+  font-family: "PP Neue Montreal"; font-size: 11px; font-weight: 600; color: #F8F8F8;
+}
+.ur-protocol-chip.ur-protocol-chip-likely { color: #87FB67; border-color: alpha(#87FB67, .45); }
+.ur-protocol-chip.ur-protocol-chip-borderline {
+  color: #F5C242; border-color: alpha(#F5C242, .50); background-color: alpha(#F5C242, .10);
+}
+.ur-protocol-chip.ur-protocol-chip-muted { color: #989898; border-color: alpha(#ffffff, .18); }
+.ur-protocol-uid {
+  background-color: alpha(#638BFC, .18); border-radius: 6px; padding: 1px 6px;
+  font-family: "PP Neue Montreal"; font-size: 11px; font-weight: 600; color: #C4D3FE;
+}
+.ur-protocol-you { font-family: "PP Neue Montreal"; font-size: 12px; font-weight: 700; color: #638BFC; }
+.ur-protocol-arrow { font-size: 9px; color: #5A5A5A; }
+.ur-protocol-arrow.ur-protocol-trend-up, .ur-key.ur-protocol-trend-up { color: #638BFC; }
+.ur-protocol-arrow.ur-protocol-trend-down, .ur-key.ur-protocol-trend-down { color: #F5C242; }
+.ur-protocol-borderline { font-family: "PP Neue Montreal"; font-size: 12px; color: #F5C242; }
+.ur-protocol-prompt {
+  background-color: #151515; border: 1px solid alpha(#ffffff, .12);
+  border-radius: 8px; padding: 10px;
+}
+.ur-protocol-prompt button.ur-pane-primary,
+.ur-protocol-prompt button.ur-pane-secondary { margin: 4px 0 0 0; }
 .ur-col-header {
   font-family: "PP Neue Montreal"; font-size: 11px;
   letter-spacing: 0.7px; color: #5A5A5A;

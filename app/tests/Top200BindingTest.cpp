@@ -384,10 +384,16 @@ UR_TEST(top200SignIsWiredEndToEnd) {
   UR_EXPECT_TRUE(rebuild != std::string::npos && rebuildEnd != std::string::npos);
   if (rebuild == std::string::npos || rebuildEnd == std::string::npos) return;
   const std::string block = earnings.substr(rebuild, rebuildEnd - rebuild);
-  // the button in both the bound card and the eligible tile
+  // the button in both the bound card and the eligible tile, once binding is
+  // open (ProtocolBoardPresentation.hpp TileFor's showSign; LEADERTOP: it
+  // stays hidden while binding is closed)
   UR_EXPECT_TRUE(Top200SourceHas(block, "OpenTop200SignSheet(std::nullopt, false)"));
-  UR_EXPECT_TRUE(Top200SourceHas(block, "card->append(*signButton());"));
-  UR_EXPECT_TRUE(Top200SourceHas(block, "tile->append(*signButton());"));
+  size_t signs = 0;
+  const std::string sign = "if (tile.showSign) card->append(*signButton());";
+  for (size_t at = block.find(sign); at != std::string::npos; at = block.find(sign, at + 1)) {
+    ++signs;
+  }
+  UR_EXPECT_EQ(2u, signs);
 
   const std::string host = ReadTop200Source("SdkHost.cpp");
   UR_EXPECT_TRUE(Top200SourceHas(host, "url.rfind(\"urnetwork://top200/\", 0) == 0"));

@@ -53,7 +53,6 @@ constexpr double kMultiplierHighlight = 2.0;   // a country multiplier goes lime
 // claim's (snledger::kClaimGasTao).
 constexpr double kMinGasTao = 0.015;           // below this the SDK refuses a claim
 constexpr double kSuggestedGasTao = 0.02;      // the top-up the dialog suggests
-constexpr double kHeadDemotionMargin = 1.10;   // a score within 10% of the floor is warned
 // The one untranslatable string on this surface (store key sn_alpha_symbol,
 // translatable: false, so it is not in the catalog).
 constexpr const char* kAlphaSymbol = "SN25α";
@@ -812,30 +811,6 @@ void FetchWallet(SdkHost& host, const std::string& clientId, WalletDone done) {
       chosen = ToWalletInfo(*result->wallet);
     }
     done(true, std::move(chosen), std::string());
-  });
-}
-
-using HeadDone = std::function<void(std::optional<SnHeadInfo> head, std::string err)>;
-void FetchHead(SdkHost& host, HeadDone done) {
-  host.api().snHead([done](std::optional<urnet::SnHeadResult> result,
-                           std::optional<std::string> err) {
-    if (err || !result || result->error) {
-      done(std::nullopt, ErrorText(result ? result->error : std::nullopt, err, "no result"));
-      return;
-    }
-    SnHeadInfo head;
-    head.eligible = result->eligible;
-    head.score = result->score;
-    head.floor = result->floor;
-    head.rankEstimate = result->rank_estimate;
-    head.cutoff = result->cutoff > 0 ? result->cutoff : 200;
-    head.bound = result->bound;
-    head.hotkey = result->hotkey.value_or(std::string());
-    head.uid = result->uid.value_or(0);
-    head.rank = result->rank.value_or(0);
-    head.epoch = result->epoch;
-    head.source = result->source;
-    done(std::move(head), std::string());
   });
 }
 
@@ -1846,23 +1821,44 @@ EarningsPage::EarningsPage(SdkHost& host)
                              "earnings.connect-solana");
   solanaCardMenu_ = Gio::Menu::create();
   solanaCardMenu_->append(T_("remove_wallet", "Remove wallet"), "earnings.remove-solana");
+  // the Protocol board, before the panes that hold its two halves
+  protocol_ = std::make_unique<ProtocolBoard>(host_);
+  protocol_->can_call_api = [this] { return CanCallApi(); };
+  protocol_->on_claim = [this] { OnProtocolClaim(); };
+  protocol_->on_public = [this](bool requested) { RequestPointsPublic(requested); };
+  protocol_->on_mine_changed = [this] {
+    RebuildTop200();
+    ApplyProtocolPublic();
+  };
+  protocol_->on_list_changed = [this] {
+    if (paneB_.meta != nullptr) ApplyLedgerMeta();
+  };
+  protocol_->sheet_busy = [this] { return sheet_ != nullptr || (sheet_open && sheet_open()); };
+  protocol_->present_sheet = [this](const std::shared_ptr<Gtk::Window>& sheet) {
+    PresentSheet(sheet);
+  };
   BuildEarningsPane();
   append(*paneA_.root);
   ruleB_ = kit::MakePaneVRule();
   append(*ruleB_);
 
   BuildLedgerPane();
+  protocol_->SetScroller(paneB_.scroller);
   // the points board's position indicator floats over the pane's scroller
   paneBOverlay_ = Gtk::make_managed<Gtk::Overlay>();
   paneBOverlay_->set_hexpand(true);
   paneBOverlay_->set_child(*paneB_.root);
   BuildPointsIndicator();
+  // ...and the Protocol board's, over its positions 1 to 400
+  protocol_->AttachIndicator(*paneBOverlay_);
+  protocol_->on_indicator_changed = [this] { ApplyPaneBScrollPolicy(); };
   append(*paneBOverlay_);
   ruleC_ = kit::MakePaneVRule();
   append(*ruleC_);
 
   BuildNetworkPane();
   append(*paneC_.root);
+  OnBoardTabChanged();  // the default board's halves in pane B and pane C
   // the statistics groups settle on what the host has now (nothing before a
   // session); the drawer feed keeps them current from there
   ApplyExtenderProvideState();
@@ -1901,6 +1897,7 @@ EarningsPage::~EarningsPage() {
   // page's widgets, so nothing here may touch them (issue #13: rebuilding
   // the rows on a disposed Gtk::Box segfaulted every quit)
   ReleasePointsBoard(/*deviceAlive=*/true);
+  if (protocol_) protocol_->Release();
   rankingFlow_.timer.disconnect();
   legacyFlow_.timer.disconnect();
   removeSolanaFlow_.timer.disconnect();
@@ -2007,10 +2004,12 @@ void EarningsPage::Load() {
   LoadEarnings();
   LoadLegacyWallets();  // the Solana payout wallet: its own reads, never chained
   // the leaderboard is a one-shot per LOOK, never per PROCESS
+  protocol_->ForgetList();
   if (leaderboardTab_ != nullptr && leaderboardTab_->get_active()) {
     leaderboardRequested_ = true;
     LoadLeaderboard();
     if (pointsBoardShowing_) EnsurePointsBoard();
+    if (protocolBoardShowing_) protocol_->LoadList();
   } else {
     leaderboardRequested_ = false;
   }
@@ -2042,6 +2041,9 @@ void EarningsPage::ResetForSignOut() {
   // the public leaderboard switch: ApplyRanking writes it only with a ranking
   rankingPublic_ = false;
   SetRankingToggle(false);
+  // the Protocol board's requests, board and own place were the departed
+  // account's
+  protocol_->ResetForSignOut();
   Load();
 }
 
@@ -2054,6 +2056,11 @@ void EarningsPage::ApplyBreakpoint(int widthDip) {
   ruleB_->set_visible(lanes >= 2);
   paneC_.root->set_visible(lanes >= 3);
   ruleC_->set_visible(lanes >= 3);
+  // the Protocol board's banner, card and explainer: beside the list in pane
+  // C, else on top of it (the phone layout's order); its "Claim on Earnings"
+  // is the primary button only while pane A's Top 200 tile is off screen
+  protocol_->SetCompact(lanes < 3);
+  protocol_->SetClaimPrimary(lanes < 2);
 }
 
 void EarningsPage::SetBalanceState(bool isPro, bool guest) {
@@ -2061,7 +2068,10 @@ void EarningsPage::SetBalanceState(bool isPro, bool guest) {
   isGuest_ = guest;
 }
 
-void EarningsPage::SetPreviewMode(bool on) { previewMode_ = on; }
+void EarningsPage::SetPreviewMode(bool on) {
+  previewMode_ = on;
+  protocol_->SetPreviewMode(on);
+}
 
 void EarningsPage::ShowPreviewState() { SettleAllEmpty(); }
 
@@ -2078,7 +2088,12 @@ void EarningsPage::SettleAllEmpty() {
   ApplySnWallet(std::nullopt, Fetch::Ready);
   ApplyClaims(std::vector<SnClaimRow>{}, 0, Fetch::Ready);
   ApplyGas(std::nullopt);
-  ApplyHead(std::nullopt, Fetch::Ready);
+  // the Protocol board signed out: its own place goes, the tile hides
+  if (previewMode_) {
+    protocol_->ShowPreviewState();
+  } else {
+    protocol_->LoadMine();
+  }
   ApplyReliability(std::nullopt, Fetch::Ready);
   ApplyRanking(std::nullopt, false);
   // no session: nothing is known about any network's Solana payout wallet, and
@@ -2395,7 +2410,8 @@ void EarningsPage::BuildEarningsPane() {
     content->append(*row.root);
   }
 
-  // 5. Top 200: the head-spot tile or the bound status
+  // 5. Top 200: this network's projected place on the Protocol board (GET
+  // /sn/top/me) with the claim prompt, or a claimed fleet's status
   {
     auto row = MakePaddedRow(10);
     top200Card_ = row.root;
@@ -2444,8 +2460,9 @@ void EarningsPage::BuildLedgerPane() {
   historyHost_->append(*historyStatus_);
   paneB_.content->append(*historyHost_);
 
-  // Two boards behind one more switch: Data (the last-4-payments board) and
-  // Points (the all-time points board, android/POINTSLEADERBOARD.md).
+  // Three boards behind one more switch: Protocol (the SN25 top board, first
+  // and the default, apple/LEADERTOP.md), Points (the all-time points board,
+  // android/POINTSLEADERBOARD.md) and Data (the last-4-payments board).
   leaderboardHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   leaderboardHost_->set_vexpand(true);
   leaderboardHost_->set_visible(false);
@@ -2457,11 +2474,14 @@ void EarningsPage::BuildLedgerPane() {
     boards->set_margin_end(12);
     boards->set_margin_top(6);
     boards->set_margin_bottom(6);
-    dataBoardTab_ = Gtk::make_managed<Gtk::ToggleButton>(T_("data", "Data"));
+    protocolBoardTab_ =
+        Gtk::make_managed<Gtk::ToggleButton>(T_("leaderboard_tab_protocol", "Protocol"));
     pointsBoardTab_ = Gtk::make_managed<Gtk::ToggleButton>(T_("points", "Points"));
-    pointsBoardTab_->set_group(*dataBoardTab_);
-    dataBoardTab_->set_active(true);  // Data is the default board
-    for (Gtk::ToggleButton* tab : {dataBoardTab_, pointsBoardTab_}) {
+    dataBoardTab_ = Gtk::make_managed<Gtk::ToggleButton>(T_("data", "Data"));
+    pointsBoardTab_->set_group(*protocolBoardTab_);
+    dataBoardTab_->set_group(*protocolBoardTab_);
+    protocolBoardTab_->set_active(true);  // Protocol is the first board and the default (Q14)
+    for (Gtk::ToggleButton* tab : {protocolBoardTab_, pointsBoardTab_, dataBoardTab_}) {
       boards->append(*tab);
       tab->signal_toggled().connect([this, tab] {
         if (tab->get_active()) OnBoardTabChanged();
@@ -2475,8 +2495,12 @@ void EarningsPage::BuildLedgerPane() {
     }
     leaderboardHost_->append(*boards);
   }
+  // the Protocol board's list (with its side block on top of it while pane C
+  // is folded away)
+  leaderboardHost_->append(protocol_->ListHost());
   leaderboardDataHost_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   leaderboardDataHost_->set_vexpand(true);
+  leaderboardDataHost_->set_visible(false);
   leaderboardRows_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
   leaderboardDataHost_->append(*leaderboardRows_);
   leaderboardStatus_ = kit::MakePaneEmptyLine(T_("loading", "Loading..."));
@@ -2551,6 +2575,9 @@ void EarningsPage::BuildNetworkPane() {
 
   // 4b. the points board's block, in the data block's place while that board shows
   BuildPointsNetworkBlock();
+  // 4c. the Protocol board's banner, own-status card and explainer, in the data
+  // block's place while that board shows (the default)
+  content->append(protocol_->WideSide());
 
   // 5. the network pane's snackbar surface
   leaderboardInfo_.root().set_margin_top(8);
@@ -2788,7 +2815,6 @@ void EarningsPage::LoadEarnings() {
   ApplyEpochs(std::nullopt, Fetch::Loading);
   ApplySnWallet(std::nullopt, Fetch::Loading);
   ApplyReliability(std::nullopt, Fetch::Loading);
-  headState_ = Fetch::Loading;
 
   auto epoch = epoch_;
   const uint64_t seen = *epoch_;
@@ -2842,19 +2868,10 @@ void EarningsPage::LoadEarnings() {
   // 4b. the payout consent: the status, whatever the wallet above
   consent_.Load();
 
-  // 5. the head-spot eligibility
-  sn::FetchHead(host_, [this, epoch, seen](std::optional<SnHeadInfo> head, std::string err) {
-    PostToMain([this, epoch, seen, head = std::move(head), err = std::move(err)] {
-      if (*epoch != seen) return;
-      if (!head) {
-        // the tile simply does not show: a failure here must not shout
-        g_warning("earnings: sn head failed: %s", err.c_str());
-        ApplyHead(std::nullopt, Fetch::Failed);
-        return;
-      }
-      ApplyHead(std::move(head), Fetch::Ready);
-    });
-  });
+  // 5. the Top 200 tile and the Protocol card: this network's own place on
+  // the board (GET /sn/top/me). A failure only hides the tile: it must not
+  // shout; the card says it and offers a retry.
+  protocol_->LoadMine();
 
   // 6. the reliability window
   host_.api().getNetworkReliability(
@@ -3103,12 +3120,6 @@ void EarningsPage::ApplyLedger(snledger::Load load, std::vector<snledger::Accoun
   ledgerAccounts_ = std::move(accounts);
   ledgerConfigured_ = claimConfigured;
   RebuildLedgerTile();
-}
-
-void EarningsPage::ApplyHead(std::optional<SnHeadInfo> head, Fetch state) {
-  headState_ = state;
-  head_ = state == Fetch::Ready ? std::move(head) : std::nullopt;
-  RebuildTop200();
 }
 
 void EarningsPage::ApplyReliability(std::optional<urnet::ReliabilityWindow> window,
@@ -3372,73 +3383,94 @@ void EarningsPage::RebuildWalletBlock() {
 void EarningsPage::RebuildTop200() {
   if (top200Panel_ == nullptr) return;
   RemoveAllChildren(*top200Panel_);
-  const bool show = headState_ == Fetch::Ready && head_ && (head_->eligible || head_->bound);
+  top200ClaimButton_ = nullptr;
+  // the tile reads this network's place on the Protocol board (GET /sn/top/me),
+  // so it shows the projected position, margin and label the board does
+  const protocol_board::Tile tile =
+      protocol_board::TileFor(protocol_->Mine(), protocol_->SignedIn(), ProtocolBoardWords());
+  const bool show = tile.kind != protocol_board::TileKind::Hidden;
   top200Card_->set_visible(show);
   if (!show) return;
-  // Sign fleet binding, in both states: bindings renew per epoch window and
-  // new devices join the fleet after the spot is bound
-  const auto signButton = [this] {
-    auto* sign = Gtk::make_managed<Gtk::Button>(T_("top200_sign_binding", "Sign fleet binding"));
+  const bool claimed = tile.kind == protocol_board::TileKind::Claimed;
+  // Sign fleet binding, once binding is open: bindings renew per epoch window
+  // and new devices join the fleet after the spot is bound
+  const auto signButton = [this, &tile] {
+    auto* sign = Gtk::make_managed<Gtk::Button>(tile.signText);
     sign->add_css_class("ur-btn-secondary");
     sign->set_halign(Gtk::Align::START);
     sign->set_margin_top(4);
     sign->signal_clicked().connect([this] { OpenTop200SignSheet(std::nullopt, false); });
     return sign;
   };
-  if (head_->bound) {
-    // the status row: this network holds a head spot
-    auto* card = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
-    auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-    auto* title = MakeGoldLabel(T_("top200", "Top 200"), 14);
-    title->set_hexpand(true);
-    line->append(*title);
-    auto* status = MakeSizedLabel(
-        Format(T_("top200_bound_status", "UID {0} · rank #{1}"), head_->uid, head_->rank), 13,
-        "ur-value");
-    status->set_wrap(false);
-    line->append(*status);
-    card->append(*line);
-    if (!head_->hotkey.empty()) {
-      auto* hotkey = MakeSizedLabel(ShortSs58(head_->hotkey), 12, "ur-caption");
-      hotkey->set_tooltip_text(head_->hotkey);
-      card->append(*hotkey);
-    }
-    card->append(*MakeWrappedNote(
-        T_("top200_bound_detail",
-           "Emission is paid to your coldkey directly. Bindings renew per epoch."),
-        "ur-row-note"));
-    if (head_->floor > 0 && head_->score < head_->floor * kHeadDemotionMargin) {
-      card->append(*MakeWrappedNote(
-          T_("top200_demotion_warning",
-             "Your score is close to the eviction floor. Add routable IPs to keep the spot."),
-          "ur-danger-text"));
-    }
-    card->append(*signButton());
-    top200Panel_->append(*card);
-    return;
-  }
-  // the gold tile: eligible, not yet bound — the spot is claimed on ur.io
-  auto* tile = MakeGoldTile();
+  // the gold tile while the spot is to be claimed; the status card once bound
+  auto* card = claimed ? Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 6) : MakeGoldTile();
   auto* line = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-  auto* title = MakeGoldLabel(T_("top200", "Top 200"), 14);
+  auto* title = MakeGoldLabel(tile.title, 14);
   title->set_hexpand(true);
   line->append(*title);
-  auto* qualify = MakeSizedLabel(T_("top200_you_qualify", "You qualify"), 13, "ur-value");
-  qualify->set_wrap(false);
-  line->append(*qualify);
-  tile->append(*line);
-  tile->append(*MakeWrappedNote(
-      Format(T_("top200_detail",
-                "Your network's routable IP breadth ranks about #{0} of {1} head spots. Head "
-                "miners earn SN25α natively, every tempo."),
-             head_->rankEstimate, head_->cutoff),
-      "ur-key"));
-  auto* button = MakeGoldButton(T_("claim_your_spot", "Claim your spot"));
-  button->set_margin_top(4);
-  button->signal_clicked().connect([this] { OpenLink(kTop200Url); });
-  tile->append(*button);
-  tile->append(*signButton());
-  top200Panel_->append(*tile);
+  line->append(*MakeProtocolLabelChip(tile.label, tile.labelText));
+  card->append(*line);
+  // "#173" and "projected · 12% above the Top 200 line"
+  auto* place = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+  auto* position = MakeCondensedValue(tile.position, 30);
+  position->set_valign(Gtk::Align::END);
+  place->append(*position);
+  auto* projected = MakeSizedLabel(tile.projectedLine, 13, "ur-key");
+  projected->set_hexpand(true);
+  projected->set_max_width_chars(40);
+  projected->set_valign(Gtk::Align::END);
+  projected->set_margin_bottom(3);
+  place->append(*projected);
+  kit::SetAccessibleLabel(*place, tile.position + " " + tile.projectedLine);
+  kit::MarkDecorative(*position);
+  kit::MarkDecorative(*projected);
+  card->append(*place);
+  if (claimed) {
+    // each bound fleet: its UID, the validator's rank and its selection
+    for (const protocol_board::TileFleet& fleet : tile.fleets) {
+      auto* status = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+      auto* text = MakeSizedLabel(fleet.status, 13, "ur-value");
+      text->set_hexpand(true);
+      status->append(*text);
+      if (!fleet.selection.empty()) {
+        status->append(*MakeProtocolLabelChip(fleet.selected ? protocol_board::Label::Likely
+                                                              : protocol_board::Label::Unlikely,
+                                              fleet.selection));
+      }
+      card->append(*status);
+    }
+    card->append(*MakeWrappedNote(tile.boundDetail, "ur-row-note"));
+    if (!tile.demotion.empty()) card->append(*MakeWrappedNote(tile.demotion, "ur-danger-text"));
+    if (tile.showSign) card->append(*signButton());
+  } else {
+    card->append(*MakeWrappedNote(tile.body, "ur-key"));
+    if (!tile.bindingOpen) {
+      // the note in the claim button's place: nothing invites registering early
+      auto* soon = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+      soon->add_css_class("ur-protocol-prompt");
+      soon->append(*MakeSizedLabel(tile.soonTitle, 14, "ur-value"));
+      soon->append(*MakeWrappedNote(tile.soonBody, "ur-row-note"));
+      card->append(*soon);
+    } else {
+      // the claim flow the tile always had, with the prompt's warnings
+      auto* button = MakeGoldButton(tile.claimText);
+      button->set_margin_top(4);
+      button->signal_clicked().connect([this] { OpenLink(kTop200Url); });
+      top200ClaimButton_ = button;
+      card->append(*button);
+      if (tile.showSign) card->append(*signButton());
+      if (!tile.borderline.empty()) {
+        card->append(*MakeWrappedNote(tile.borderline, "ur-protocol-borderline"));
+      }
+      if (!tile.warning.empty()) card->append(*MakeWrappedNote(tile.warning, "ur-row-note"));
+    }
+  }
+  auto* see = Gtk::make_managed<Gtk::Button>(tile.seeBoard);
+  see->add_css_class("flat");
+  see->set_halign(Gtk::Align::START);
+  see->signal_clicked().connect([this] { ShowProtocolBoard(); });
+  card->append(*see);
+  top200Panel_->append(*card);
 }
 
 void EarningsPage::RebuildHistory() {
@@ -3629,8 +3661,9 @@ void EarningsPage::RebuildReliabilityCard() {
 }
 
 void EarningsPage::ApplyLedgerMeta() {
-  const int boardCount =
-      pointsBoardShowing_ ? static_cast<int>(pointsRowsUi_.size()) : leaderboardCount_;
+  const int boardCount = protocolBoardShowing_ ? static_cast<int>(protocol_->List().rows.size())
+                         : pointsBoardShowing_ ? static_cast<int>(pointsRowsUi_.size())
+                                               : leaderboardCount_;
   const int count = (leaderboardTab_ != nullptr && leaderboardTab_->get_active())
                         ? boardCount
                         : static_cast<int>(epochs_.size());
@@ -3648,6 +3681,8 @@ void EarningsPage::OnLedgerTabChanged() {
     LoadLeaderboard();
   }
   if (!history && pointsBoardShowing_) EnsurePointsBoard();
+  if (!history && protocolBoardShowing_ && !protocol_->ListRequested()) protocol_->LoadList();
+  protocol_->SetShowing(!history && protocolBoardShowing_);
   UpdatePointsIndicator();
 }
 
@@ -5077,23 +5112,6 @@ void EarningsPage::ApplyPreviewSample() {
   ranking.net_mib_count = 786432.f;
   ranking.leaderboard_public = true;
 
-  SnHeadInfo head;
-  head.eligible = true;
-  head.score = 0.84;
-  head.floor = 0.61;
-  head.rankEstimate = 118;
-  head.cutoff = 200;
-  head.epoch = 42;
-  head.source = "server";
-  if (const char* top200 = g_getenv("URNETWORK_PREVIEW_TOP200");
-      top200 && std::string(top200) == "bound") {
-    head.bound = true;
-    head.uid = 143;
-    head.rank = 118;
-    head.hotkey = "5DqSAMPLEsampleSAMPLEsampleSAMPLEsampleSAMP9n";
-    head.score = 0.64;  // within the margin: shows the demotion warning
-  }
-
   ApplyPoints(samplePoints, Fetch::Ready);
   // URNETWORK_PREVIEW_POINTS=1: the Leaderboard tab on its Points board, so
   // the position indicator can be looked at (ApplyPointsBoardSample)
@@ -5105,8 +5123,13 @@ void EarningsPage::ApplyPreviewSample() {
   ApplyReliability(window, Fetch::Ready);
   ApplyRanking(ranking, true);
   ApplyLeaderboard(sampleEarners, Fetch::Ready);
-  ApplyHead(head, Fetch::Ready);
   leaderboardRequested_ = true;  // the sample IS the leaderboard answer
+  // the Protocol board's sample board and own place, which the Top 200 tile
+  // reads; URNETWORK_PREVIEW_PROTOCOL opens the Leaderboard tab on it
+  protocol_->ApplyPreviewSample();
+  if (g_getenv("URNETWORK_PREVIEW_PROTOCOL") != nullptr && leaderboardTab_ != nullptr) {
+    leaderboardTab_->set_active(true);
+  }
 
   // URNETWORK_PREVIEW_SOLANA=1: a Solana payout wallet with 3.87 USDC waiting
   // (the card); URNETWORK_PREVIEW_USDC_WAITING=1: the same figure with no payout
@@ -5434,14 +5457,62 @@ void EarningsPage::BuildPointsNetworkBlock() {
 
 void EarningsPage::OnBoardTabChanged() {
   const bool points = pointsBoardTab_ != nullptr && pointsBoardTab_->get_active();
+  const bool protocol = protocolBoardTab_ != nullptr && protocolBoardTab_->get_active();
+  const bool data = !points && !protocol;
   pointsBoardShowing_ = points;
-  if (leaderboardDataHost_ != nullptr) leaderboardDataHost_->set_visible(!points);
+  protocolBoardShowing_ = protocol;
+  if (leaderboardDataHost_ != nullptr) leaderboardDataHost_->set_visible(data);
   if (pointsHost_ != nullptr) pointsHost_->set_visible(points);
-  for (Gtk::Widget* widget : dataRankingWidgets_) widget->set_visible(!points);
+  protocol_->ListHost().set_visible(protocol);
+  protocol_->WideSide().set_visible(protocol);
+  for (Gtk::Widget* widget : dataRankingWidgets_) widget->set_visible(data);
   if (pointsGroup_ != nullptr) pointsGroup_->set_visible(points);
+  const bool looking = leaderboardTab_ != nullptr && leaderboardTab_->get_active();
+  protocol_->SetShowing(looking && protocol);
   ApplyLedgerMeta();
   if (points) EnsurePointsBoard();
+  // the Protocol list is asked the first time it is looked at in a load
+  if (protocol && looking && !protocol_->ListRequested()) protocol_->LoadList();
   UpdatePointsIndicator();
+}
+
+// "Claim on Earnings" (binding open): the Top 200 tile in pane A, scrolled to
+// and its claim button focused. With pane A folded away (a narrow window) the
+// tile cannot show, and its claim link is the same next step.
+void EarningsPage::OnProtocolClaim() {
+  const bool tileShowing = paneA_.root != nullptr && paneA_.root->get_visible() &&
+                           top200Card_ != nullptr && top200Card_->get_visible();
+  if (!tileShowing || paneA_.scroller == nullptr || paneA_.content == nullptr) {
+    OpenLink(kTop200Url);
+    return;
+  }
+  graphene_rect_t bounds;
+  if (gtk_widget_compute_bounds(GTK_WIDGET(top200Card_->gobj()),
+                                GTK_WIDGET(paneA_.content->gobj()), &bounds)) {
+    auto adjustment = paneA_.scroller->get_vadjustment();
+    adjustment->set_value(std::max(adjustment->get_lower(),
+                                   static_cast<double>(bounds.origin.y) - 12.0));
+  }
+  if (top200ClaimButton_ != nullptr) top200ClaimButton_->grab_focus();
+}
+
+// The tile's "See the Protocol leaderboard": the Leaderboard tab on its
+// Protocol board, from the top.
+void EarningsPage::ShowProtocolBoard() {
+  if (leaderboardTab_ != nullptr) leaderboardTab_->set_active(true);
+  if (protocolBoardTab_ != nullptr) protocolBoardTab_->set_active(true);
+  ResetBoardList(/*pointsBoard=*/false);
+}
+
+// The shared "Show my network name" switch, before the Points board's `me`
+// (which reads the setting itself) or the user's own change: the Protocol
+// board's own place carries the name exactly when the setting is on (Q12).
+void EarningsPage::ApplyProtocolPublic() {
+  if (pointsVc_ || ownFlagsEditedAt_ != 0 || settingPointsPublic_) return;
+  const std::optional<bool> shown = protocol_->PublicName();
+  if (!shown || *shown == pointsPublic_) return;
+  pointsPublic_ = *shown;
+  RenderPointsHeader();
 }
 
 void EarningsPage::EnsurePointsBoard() {
@@ -5947,6 +6018,19 @@ void EarningsPage::RefreshPointsPosition() {
   UpdatePointsIndicator();
 }
 
+// Pane B's own scrollbar steps aside while a board's position indicator shows
+// (the Points board's or the Protocol board's): the indicator is the list's
+// scrollbar then. One owner, so neither board's indicator hiding brings the
+// scrollbar back under the other's.
+void EarningsPage::ApplyPaneBScrollPolicy() {
+  Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content);
+  if (scroller == nullptr) return;
+  const bool indicator = (pointsIndicator_ != nullptr && pointsIndicator_->get_visible()) ||
+                         (protocol_ && protocol_->IndicatorShowing());
+  scroller->set_policy(Gtk::PolicyType::NEVER,
+                       indicator ? Gtk::PolicyType::EXTERNAL : Gtk::PolicyType::AUTOMATIC);
+}
+
 void EarningsPage::UpdatePointsIndicator() {
   if (pointsIndicator_ == nullptr) return;
   const bool boardShowing = pointsBoardShowing_ && leaderboardTab_ != nullptr &&
@@ -5959,10 +6043,7 @@ void EarningsPage::UpdatePointsIndicator() {
     pointsIndicator_->set_visible(show);
     // the indicator is the list's scrollbar while it shows, and the table
     // steps in from under its strip
-    if (Gtk::ScrolledWindow* scroller = PaneScroller(paneB_.content)) {
-      scroller->set_policy(Gtk::PolicyType::NEVER,
-                           show ? Gtk::PolicyType::EXTERNAL : Gtk::PolicyType::AUTOMATIC);
-    }
+    ApplyPaneBScrollPolicy();
     if (pointsHost_ != nullptr) {
       pointsHost_->set_margin_end(show ? static_cast<int>(kIndicatorWidth) : 0);
     }
@@ -6319,6 +6400,8 @@ void EarningsPage::OnPointsRetry() {
 }
 
 void EarningsPage::SetPointsToggle(bool on) {
+  // the Protocol card carries the same switch (one setting, Q12)
+  if (protocol_) protocol_->SetPublic(on, !settingPointsPublic_);
   if (pointsPublicToggle_ == nullptr) return;
   // THE ECHO GUARD: the handler cannot tell a user flip from the programmatic
   // render of the server's answer, so every programmatic write goes here
@@ -6329,7 +6412,10 @@ void EarningsPage::SetPointsToggle(bool on) {
 
 void EarningsPage::OnPointsPublicToggled() {
   if (applyingPointsToggle_) return;
-  const bool requested = pointsPublicToggle_->get_active();
+  RequestPointsPublic(pointsPublicToggle_->get_active());
+}
+
+void EarningsPage::RequestPointsPublic(bool requested) {
   if (requested == pointsPublic_) return;
   if (settingPointsPublic_) {
     SetPointsToggle(pointsPublic_);  // one in flight: snap back
@@ -6341,7 +6427,12 @@ void EarningsPage::OnPointsPublicToggled() {
     return;
   }
   settingPointsPublic_ = true;
+  // both switches show the request while it is out, neither can be flipped
+  applyingPointsToggle_ = true;
+  pointsPublicToggle_->set_active(requested);
+  applyingPointsToggle_ = false;
   pointsPublicToggle_->set_sensitive(false);
+  protocol_->SetPublic(requested, false);
   const uint32_t generation = BeginFlow(pointsPublicFlow_, kApiTimeoutMs, [this] {
     settingPointsPublic_ = false;
     pointsPublicToggle_->set_sensitive(true);
@@ -6390,6 +6481,8 @@ void EarningsPage::ApplyPointsPublicResult(uint32_t generation, bool ok, bool re
     ownFlagsAppliedAt_ = ++ownFlagsClock_;
     pointsVc_->refresh();
   }
+  // the Protocol board's own row and place show or hide the name too
+  protocol_->Reload();
 }
 
 void EarningsPage::OnEditEmoji() {

@@ -40,13 +40,20 @@
 // block (connect through the bridge, or
 // enter an address manually — validated locally and then against
 // /sn/wallet/validate before anything is sent — and still sign it), the Solana
-// payout wallet card (only with a payout wallet), and the Top 200 head-spot
-// tile / bound status.
+// payout wallet card (only with a payout wallet), and the Top 200 tile: the
+// projected place from GET /sn/top/me (the Protocol board's own place) for a
+// network projected inside the top 200 or claimed, with "Claiming opens soon"
+// while binding is closed (ProtocolBoardPresentation.hpp TileFor).
 //
 // Pane B (history): a two-item tab switch over the per-epoch history and the
 // leaderboard. The leaderboard is fetched the FIRST time its tab is looked at.
+// It has three boards: Protocol (the first and the default, ProtocolBoard.hpp),
+// Points and Data.
 //
-// Pane C (network): own ranking, the public-leaderboard switch (echo-guarded),
+// Pane C (network): the board's own block (the Protocol board's banner,
+// own-status card and explainer, which sit on top of its list when pane C is
+// folded away; the Points board's block; or the Data board's own ranking and
+// the public-leaderboard switch, echo-guarded),
 // the reliability window, and under it the extender statistics and the
 // provider statistics with the provide mode row and the read-only extender row
 // (EXTENDER.md N7, O5, O8). Under the provide mode row, one line says why an
@@ -78,6 +85,7 @@
 #include "LeaderboardIndicator.hpp"
 #include "NetworkConsent.hpp"
 #include "PaneKit.hpp"
+#include "ProtocolBoard.hpp"
 #include "ProviderStatusPresentation.hpp"
 #include "SdkHost.hpp"
 #include "SnLedgerPresentation.hpp"
@@ -125,20 +133,6 @@ struct SnGasInfo {
   std::string mirrorSs58;  // fund it by sending TAO here
   bool balanceKnown = false;
   double tao = 0;
-};
-
-struct SnHeadInfo {
-  bool eligible = false;
-  double score = 0;
-  double floor = 0;
-  int64_t rankEstimate = 0;
-  int64_t cutoff = 200;
-  bool bound = false;
-  std::string hotkey;
-  int64_t uid = 0;
-  int64_t rank = 0;
-  int64_t epoch = 0;
-  std::string source;
 };
 
 struct SnWalletCheck {
@@ -238,7 +232,9 @@ class EarningsPage : public Gtk::Box {
   // URNETWORK_PREVIEW_SAMPLE=1 (a SECOND gate): obviously-synthetic rows pushed
   // through the SAME Apply* functions. URNETWORK_PREVIEW_WALLET=1 adds the
   // attached-wallet layer (claims, gas key, alpha column, the v2 tile);
-  // URNETWORK_PREVIEW_TOP200=bound renders the bound head-spot status;
+  // URNETWORK_PREVIEW_PROTOCOL=<state> opens the Leaderboard on its Protocol
+  // board with a sample board in that state (ProtocolBoard::ApplyPreviewSample;
+  // "claimed" is the Top 200 tile's claimed state);
   // URNETWORK_PREVIEW_MANUAL=1 opens the manual entry on a "new wallet" verdict;
   // URNETWORK_PREVIEW_GAS=low puts the claim dialog in its needs-gas state;
   // URNETWORK_PREVIEW_SOLANA=1 adds a Solana payout wallet with 3.87 USDC
@@ -283,9 +279,21 @@ class EarningsPage : public Gtk::Box {
   void BuildLedgerPane();
   void BuildNetworkPane();
 
+  // ---- the Protocol board (apple/LEADERTOP.md) ------------------------------
+  // "Claim on Earnings": pane A's Top 200 tile, scrolled to and focused; with
+  // pane A folded away, the tile's own claim link.
+  void OnProtocolClaim();
+  // The Top 200 tile's "See the Protocol leaderboard": the Leaderboard tab on
+  // its Protocol board, at the top.
+  void ShowProtocolBoard();
+  // The shared "Show my network name" switch seeded from the Protocol board's
+  // own place, until the user or the Points board's `me` says otherwise.
+  void ApplyProtocolPublic();
+
   // ---- the points board (android/POINTSLEADERBOARD.md) ----------------------
-  // The leaderboard is two boards behind one switch: Data (the last-4-payments
-  // board) and Points (the all-time points board). The Points board is the
+  // The leaderboard is three boards behind one switch: Protocol (the SN25 top
+  // board, first and the default), Points (the all-time points board) and Data
+  // (the last-4-payments board, frozen). The Points board is the
   // SDK's PointsLeaderboardViewController rendered as it is: rows, ranks, sort
   // and pages all come from the controller; nothing here sorts, ranks or
   // pages. The controller is opened the first time the Points board shows and
@@ -319,6 +327,8 @@ class EarningsPage : public Gtk::Box {
   urnw::leaderboard::Thumb PointsThumb(double& trackTop, double& trackHeight) const;
   void RefreshPointsPosition();  // the first row in view, from the scroller
   void UpdatePointsIndicator();  // visibility, the slider value, a redraw
+  // the pane's scrollbar, aside while either board's indicator shows
+  void ApplyPaneBScrollPolicy();
   void OnPointsDragBegin(double x, double y, const Glib::RefPtr<Gtk::GestureDrag>& drag);
   void OnPointsDragUpdate(double dy);
   void OnPointsDragEnd(double dy);
@@ -335,6 +345,9 @@ class EarningsPage : public Gtk::Box {
   void ApplyPointsBoardSample();          // preview rows for the indicator (URNETWORK_PREVIEW_SAMPLE)
   void OnPointsRetry();
   void OnPointsPublicToggled();
+  // The "Show my network name" switch flipped, on the Points block or on the
+  // Protocol card: one setting (points_leaderboard_public, Q12), one request.
+  void RequestPointsPublic(bool requested);
   void SetPointsToggle(bool on);
   void ApplyPointsPublicResult(uint32_t generation, bool ok, bool requested,
                                const std::string& serverError);
@@ -362,7 +375,6 @@ class EarningsPage : public Gtk::Box {
   // v2 vault, read with them
   void ApplyLedger(snledger::Load load, std::vector<snledger::Account> accounts,
                    bool claimConfigured);
-  void ApplyHead(std::optional<SnHeadInfo> head, Fetch state);
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
   void ApplyRanking(std::optional<urnet::NetworkRanking> ranking, bool ok);
   void ApplyLeaderboard(std::optional<urnet::LeaderboardEarnersList> earners, Fetch state);
@@ -591,8 +603,10 @@ class EarningsPage : public Gtk::Box {
   Gtk::Box* leaderboardRows_ = nullptr;
   Gtk::Label* leaderboardStatus_ = nullptr;
   // the points board (pane B)
+  Gtk::ToggleButton* protocolBoardTab_ = nullptr;
   Gtk::ToggleButton* dataBoardTab_ = nullptr;
   Gtk::ToggleButton* pointsBoardTab_ = nullptr;
+  bool protocolBoardShowing_ = true;  // the Protocol board is the default
   Gtk::Box* leaderboardDataHost_ = nullptr;  // the data board's rows + status
   Gtk::Box* pointsHost_ = nullptr;
   Gtk::ToggleButton* pointsSortTabs_[3] = {nullptr, nullptr, nullptr};  // points, blocks, streak
@@ -693,8 +707,6 @@ class EarningsPage : public Gtk::Box {
   snledger::Load ledgerLoad_ = snledger::Load::Loading;
   bool ledgerConfigured_ = false;  // the chain settings name the v2 vault: v2 Claim shows
   std::optional<SnGasInfo> gas_;
-  std::optional<SnHeadInfo> head_;
-  Fetch headState_ = Fetch::Loading;
   std::optional<urnet::ReliabilityWindow> reliability_;
   Fetch reliabilityState_ = Fetch::Loading;
   urnet::LeaderboardEarnersList leaderboard_;
@@ -797,6 +809,12 @@ class EarningsPage : public Gtk::Box {
   std::weak_ptr<ClaimAlphaSheet> claimSheet_;
   std::weak_ptr<LedgerClaimSheet> ledgerClaimSheet_;
   std::weak_ptr<Top200SignSheet> top200SignSheet_;
+
+  // the Protocol board: its list in pane B, its own block in pane C (or on top
+  // of its list), its own place behind the Top 200 tile; created before the
+  // panes that hold its halves
+  std::unique_ptr<ProtocolBoard> protocol_;
+  Gtk::Button* top200ClaimButton_ = nullptr;  // the tile's claim button, while it shows
 };
 
 }  // namespace urnw
