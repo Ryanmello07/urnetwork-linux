@@ -553,19 +553,41 @@ UR_TEST(ProtocolBoard_WithBindingOpenTheClaimPromptIsTheButton) {
   UR_EXPECT_TEXT("A claimed fleet that ranks 201 or lower earns nothing.", prompt.warning);
 }
 
-UR_TEST(ProtocolBoard_TheClaimPromptIsOnlyForMeasurableNetworksInside) {
+// The server's claim_prompt alone decides (CONTRACT, amended 2026-10-29): it
+// is false for a network that already has an active claimed fleet, and the
+// app never puts its own measurable-and-inside arithmetic in its place.
+UR_TEST(ProtocolBoard_TheServersFlagAloneDecidesTheClaimPrompt) {
   const p::Words words = EnglishWords();
-  p::Row row = RowAt(173);
-  row.measurable = false;
-  UR_EXPECT_FALSE(p::ClaimPromptFor(row, SnapshotOf(true), words).show);
-  row = RowAt(201);
-  row.claimPrompt = true;  // a flag that disagrees with the position is not trusted
-  UR_EXPECT_FALSE(p::ClaimPromptFor(row, SnapshotOf(true), words).show);
-  row = RowAt(150);
-  row.claimPrompt = false;
-  UR_EXPECT_FALSE(p::ClaimPromptFor(row, SnapshotOf(true), words).show);
-  const p::ClaimPrompt none = p::ClaimPromptFor(row, SnapshotOf(true), words);
+  // a claimed network inside the top 200, as the server sends it: no prompt,
+  // in the card or on the tile, which shows the claim instead
+  p::Row claimed = RowAt(10);
+  claimed.fleets = {FleetOf(90)};
+  claimed.claimPrompt = false;
+  UR_EXPECT_FALSE(p::ClaimPromptFor(claimed, SnapshotOf(true), words).show);
+  const p::MeState state = MeStateOf(claimed, /*bindingOpen=*/true);
+  const p::Card card = p::CardFor(state, std::nullopt, true, words);
+  UR_EXPECT_TRUE(card.body == p::CardBody::Ranked);
+  UR_EXPECT_FALSE(card.claim.show);
+  UR_EXPECT_FALSE(card.claim.button);
+  const p::Tile tile = p::TileFor(state, true, words);
+  UR_EXPECT_TRUE(tile.kind == p::TileKind::Claimed);
+  UR_EXPECT_FALSE(tile.showClaim);
+  // an unclaimed network inside the top 200 the server does not prompt
+  p::Row unprompted = RowAt(150);
+  unprompted.claimPrompt = false;
+  const p::ClaimPrompt none = p::ClaimPromptFor(unprompted, SnapshotOf(true), words);
+  UR_EXPECT_FALSE(none.show);
   UR_EXPECT_TRUE(none.headline.empty() && none.warning.empty() && !none.button);
+  UR_EXPECT_TRUE(p::TileFor(MeStateOf(unprompted, true), true, words).kind == p::TileKind::Hidden);
+  // the flag set where the app's own arithmetic would have said no: the
+  // server's call stands
+  p::Row past = RowAt(201);
+  past.claimPrompt = true;
+  UR_EXPECT_TRUE(p::ClaimPromptFor(past, SnapshotOf(true), words).show);
+  p::Row unmeasured = RowAt(150);
+  unmeasured.measurable = false;
+  unmeasured.claimPrompt = true;
+  UR_EXPECT_TRUE(p::ClaimPromptFor(unmeasured, SnapshotOf(false), words).show);
 }
 
 UR_TEST(ProtocolBoard_TheCardSaysWhyANetworkIsNotMeasurable) {
@@ -733,9 +755,10 @@ UR_TEST(ProtocolBoard_TheTileHidesUntilThereIsAPromptOrAClaim) {
   // outside the top 200 and unclaimed: no tile
   state = MeStateOf(RowAt(250), false);
   UR_EXPECT_TRUE(p::TileFor(state, true, words).kind == p::TileKind::Hidden);
-  // inside but not measurable: no prompt, no tile
+  // inside but not measurable: the server prompts nobody it cannot measure
   p::Row row = RowAt(150);
   row.measurable = false;
+  row.claimPrompt = false;
   state = MeStateOf(row, true);
   UR_EXPECT_TRUE(p::TileFor(state, true, words).kind == p::TileKind::Hidden);
   // a failed load that never landed: no tile
@@ -817,6 +840,44 @@ UR_TEST(ProtocolBoard_AClaimedTileShowsTheFleetsUidRankAndSelection) {
   row.fleets = {FleetOf(7)};
   UR_EXPECT_TRUE(p::TileFor(MeStateOf(row, false), true, words).kind == p::TileKind::Claimed);
   UR_EXPECT_FALSE(p::TileFor(MeStateOf(row, false), true, words).showSign);
+}
+
+// A 404 or any error from GET /sn/top/me (before the route is deployed, or a
+// bad moment) leaves the tile hidden, or as the last answer left it: the tile
+// has no error state, and nothing on it says something went wrong. The card is
+// where the failure shows, with its retry.
+UR_TEST(ProtocolBoard_AFailedOwnPlaceLeavesTheTileHiddenOrAsItWas) {
+  const p::Words words = EnglishWords();
+  // the first answer failed (the binding's state after a 404): hidden
+  p::MeState failed;
+  failed.loadFailed = true;
+  UR_EXPECT_TRUE(p::TileFor(failed, true, words).kind == p::TileKind::Hidden);
+  // its retry out: still hidden, never a placeholder or an error
+  failed.loading = true;
+  UR_EXPECT_TRUE(p::TileFor(failed, true, words).kind == p::TileKind::Hidden);
+  // answered, with no place on the board: hidden
+  p::MeState unranked;
+  unranked.loaded = true;
+  UR_EXPECT_TRUE(p::TileFor(unranked, true, words).kind == p::TileKind::Hidden);
+  // a refresh that failed after an answer: the last answer, as it was
+  p::MeState kept = MeStateOf(RowAt(173), /*bindingOpen=*/false);
+  kept.loadFailed = true;
+  const p::Tile tile = p::TileFor(kept, true, words);
+  UR_EXPECT_TRUE(tile.kind == p::TileKind::Unclaimed);
+  UR_EXPECT_TEXT("#173", tile.position);
+  UR_EXPECT_TEXT("Claiming opens soon", tile.soonTitle);
+  const std::string wrong = p::kSomethingWentWrongText.english;
+  for (const std::string& text :
+       {tile.title, tile.labelText, tile.position, tile.projectedLine, tile.body, tile.soonTitle,
+        tile.soonBody, tile.claimText, tile.signText, tile.borderline, tile.warning,
+        tile.boundDetail, tile.demotion, tile.seeBoard}) {
+    UR_EXPECT_TRUE_MSG(text, text != wrong);
+  }
+  // the card, by contrast, says the first load failed and offers a retry
+  failed.loading = false;
+  const p::Card card = p::CardFor(failed, std::nullopt, true, words);
+  UR_EXPECT_TRUE(card.body == p::CardBody::LoadFailed);
+  UR_EXPECT_TEXT(wrong, card.bodyText);
 }
 
 // ---- every word is the catalog's ----------------------------------------------------

@@ -84,7 +84,9 @@ struct Row {
   int64_t sharedPrefixes = 0;
   std::string label;  // the server's word: estimate | likely | borderline | unlikely | not_measurable
   bool measurable = false;
-  bool claimPrompt = false;  // measurable and projected inside the top 200
+  // the server's call (CONTRACT, amended 2026-10-29): measurable, projected
+  // inside the top 200, and no active claimed fleet; never the app's own
+  bool claimPrompt = false;
   bool isMe = false;
   std::vector<Fleet> fleets;  // empty when unclaimed
 };
@@ -714,7 +716,7 @@ enum class CardBody {
   Ranked,       // the card
 };
 
-// The claim prompt: only for a measurable network projected inside the top 200.
+// The claim prompt: for the networks the server prompts to claim.
 struct ClaimPrompt {
   bool show = false;
   std::string headline;    // "You're projected in the top 200."
@@ -728,11 +730,10 @@ struct ClaimPrompt {
 inline ClaimPrompt ClaimPromptFor(const Row& row, const std::optional<Snapshot>& snapshot,
                                   const Words& words) {
   ClaimPrompt prompt;
-  // the server's flag, and never for a network the validator cannot measure or
-  // one outside the head seats, whatever the flag says
-  if (!row.claimPrompt || !row.measurable || row.position < 1 || row.position > kHeadSeats) {
-    return prompt;
-  }
+  // the server's flag alone decides (CONTRACT, amended 2026-10-29): it is set
+  // for a measurable network projected inside the top 200 that has no active
+  // claimed fleet, so a network that already claimed is not prompted to claim
+  if (!row.claimPrompt) return prompt;
   prompt.show = true;
   prompt.headline = words.lookup(kClaimInsideText);
   // binding is closed until the snapshot says it is open: nothing invites
@@ -962,11 +963,13 @@ struct Tile {
 };
 
 // The tile reads GET /sn/top/me, so it shows the same projected position,
-// margin and label as the Protocol tab. It shows for a network projected
-// inside the top 200 (the claim prompt) and for a claimed one; while binding
-// is closed "Claim your spot" becomes the note "Claiming opens soon" and "Sign
-// fleet binding" stays hidden; once binding opens the claim flow is the one
-// the tile always had.
+// margin and label as the Protocol tab. It shows for a network the server
+// prompts to claim and for a claimed one; while binding is closed "Claim your
+// spot" becomes the note "Claiming opens soon" and "Sign fleet binding" stays
+// hidden; once binding opens the claim flow is the one the tile always had.
+// The tile has no error state: a 404 or a failure of GET /sn/top/me (before
+// the route is deployed, or a bad moment) leaves it hidden, or as the last
+// answer left it; the Protocol card is where a failure says so.
 inline Tile TileFor(const MeState& state, bool signedIn, const Words& words) {
   Tile tile;
   if (!signedIn || !state.loaded || !state.me) return tile;
