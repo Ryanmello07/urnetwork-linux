@@ -168,7 +168,8 @@ void HomeShell::Navigate(const std::string& tag) {
 
 void HomeShell::PaintSelection() {
   // pages reached FROM a destination (no rail item of their own) keep that
-  // destination's item lit: "referrals" and "sessions" belong to Account
+  // destination's item lit: "referrals", "sessions" and "api_keys" belong to
+  // Account
   const std::string railTag = shell::RailTagFor(currentTag_);
   for (auto& item : items_) {
     const bool selected = (item.tag == railTag);

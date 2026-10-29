@@ -208,6 +208,7 @@ executable('urnetwork-gui',
     'src/ReferralPanel.cpp',
     'src/ReferralsPage.cpp',
     'src/SessionsPage.cpp',
+    'src/ApiKeysPage.cpp',
     'src/HomeShell.cpp',
     'src/UrMotion.cpp',
     'src/LoginCarousel.cpp',
@@ -756,6 +757,9 @@ urnetwork_tests = executable('urnetwork-tests',
     'tests/SessionsPresentationTest.cpp',
     'tests/SessionsBindingTest.cpp',
     'tests/SessionsWiringTest.cpp',
+    'tests/ApiKeysPresentationTest.cpp',
+    'tests/ApiKeysBindingTest.cpp',
+    'tests/ApiKeysWiringTest.cpp',
     'tests/Top200BindingTest.cpp',
     'tests/ConnectCommandQueueTest.cpp',
     'tests/ConnectTapStateTest.cpp',
@@ -890,6 +894,9 @@ urnetwork_tests = executable('urnetwork-tests',
               # RelativeTimeSpanTest reads RelativeTime's words the same way, and
               # SessionsWiringTest the Sessions page, its Account row, the window's
               # navigation and the rail; SessionsPresentationTest reads po/en.po.
+              # ApiKeysWiringTest reads the API keys page, its Account row, the
+              # window's navigation and the rail the same way;
+              # ApiKeysPresentationTest reads po/en.po.
               # CryptoPayWiringTest reads the payment-method row, the crypto
               # invoice and its host, the upgrade sheet, the onboarding, the
               # Account plan pane, the window, meson.build and the Flatpak

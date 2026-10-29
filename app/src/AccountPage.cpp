@@ -2383,6 +2383,22 @@ void AccountPage::BuildProfileGroup(Gtk::Box& host) {
     });
     host.append(*row.root);
   }
+
+  // 7. API keys: the account's API keys, on a page of their own, right after
+  //    Sessions (the other credentials that reach this account), with MDI's
+  //    "api" glyph. It always shows and asks the server nothing.
+  {
+    auto row = kit::MakePaneTwoLineRowButton(T_("api_keys_title", "API keys"), {}, kRowTall,
+                                             RowIcon(MdiGlyph::Api));
+    row.root->signal_clicked().connect([this] {
+      if (on_open_api_keys) {
+        on_open_api_keys();
+        return;
+      }
+      g_warning("account: api keys route unbound; the row opened nothing");
+    });
+    host.append(*row.root);
+  }
 }
 
 void AccountPage::BuildSecurityGroup(Gtk::Box& host) {
