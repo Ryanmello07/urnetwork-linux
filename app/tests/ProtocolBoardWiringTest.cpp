@@ -114,6 +114,15 @@ UR_TEST(ProtocolBoardWiring_TheRequestsAreTheGuiApisAndTheirAnswersOnlyPost) {
   }
   // an answer without its snapshot is a failure, not an empty board
   UR_EXPECT_EQ(2u, CountOf(board, "result->snapshot.has_value();"));
+  // a refused page's status reaches the binding (410: reload from the top),
+  // and an expiry reload takes the view back to the top of the list
+  UR_EXPECT_TRUE(Contains(board, "if (err) answer.status = pb::HttpStatusOf(*err);"));
+  UR_EXPECT_TRUE(Contains(board, "binding_.on_expired = [this] { ScrollToTop(); };"));
+  UR_EXPECT_TRUE(Contains(FunctionBody(board, "void ProtocolBoard::Release()"),
+                          "binding_.on_expired = nullptr;"));
+  // no rankings yet is a line in the card's place, like signed out
+  UR_EXPECT_TRUE(Contains(FunctionBody(board, "void ProtocolSide::Render("),
+                          "card.body == pb::CardBody::Empty"));
 }
 
 // No session: no service and no request, and the departed account's place goes.

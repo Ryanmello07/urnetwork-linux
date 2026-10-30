@@ -197,8 +197,9 @@ class ProtocolBoard {
   void ShowPreviewState();
   // URNETWORK_PREVIEW_SAMPLE: obviously synthetic rows, answered through the
   // same binding and rendering. URNETWORK_PREVIEW_PROTOCOL=open|unmeasurable|
-  // claimed|stale|empty|failed picks the state (default: claiming closed,
-  // #173); URNETWORK_PREVIEW_PROTOCOL_LINE=1 scrolls to the Top 200 line;
+  // unranked|claimed|stale|empty|failed picks the state (default: claiming
+  // closed, #173; empty is the board before its first snapshot);
+  // URNETWORK_PREVIEW_PROTOCOL_LINE=1 scrolls to the Top 200 line;
   // URNETWORK_PREVIEW_PROTOCOL_DETAIL=1 opens a claimed row's sheet.
   void ApplyPreviewSample();
   // A seek: the list pages a screenful past `position` (so that row can sit

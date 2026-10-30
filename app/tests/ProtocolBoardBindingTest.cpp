@@ -295,6 +295,140 @@ UR_TEST(ProtocolBoardBinding_APageFromANewSnapshotStartsOver) {
   UR_EXPECT_TRUE(f.binding.List().loading);
 }
 
+// The sdk renders a refused request as "<status>: <body>"; the binding reads
+// the status off its head, and a next page whose snapshot is gone is a 410
+// (expired) or a 404 (unknown).
+UR_TEST(ProtocolBoardBinding_TheStatusIsReadOffTheSdksError) {
+  UR_EXPECT_EQ(410, p::HttpStatusOf("410 Gone: The snapshot expired. Reload from the top."));
+  UR_EXPECT_EQ(404, p::HttpStatusOf("404 Not Found: Unknown snapshot."));
+  UR_EXPECT_EQ(410, p::HttpStatusOf("410"));
+  UR_EXPECT_EQ(410, p::HttpStatusOf("410: gone"));
+  UR_EXPECT_EQ(0, p::HttpStatusOf("context deadline exceeded"));
+  UR_EXPECT_EQ(0, p::HttpStatusOf("41"));
+  UR_EXPECT_EQ(0, p::HttpStatusOf("4100 not a status"));
+  UR_EXPECT_EQ(0, p::HttpStatusOf("Post \"https://api\": 410"));
+  UR_EXPECT_EQ(0, p::HttpStatusOf(""));
+  p::TopAnswer answer;
+  answer.status = 410;
+  UR_EXPECT_TRUE(p::SnapshotGone(answer));
+  answer.status = 404;
+  UR_EXPECT_TRUE(p::SnapshotGone(answer));
+  answer.status = 500;
+  UR_EXPECT_FALSE(p::SnapshotGone(answer));
+  answer.status = 0;  // a give-up or a transport failure
+  UR_EXPECT_FALSE(p::SnapshotGone(answer));
+  answer.ok = true;
+  answer.status = 410;
+  UR_EXPECT_FALSE(p::SnapshotGone(answer));
+}
+
+// A failed next page with an HTTP status, as the sdk adapter reads it.
+static p::TopAnswer Gone(int status) {
+  p::TopAnswer answer;
+  answer.status = status;
+  return answer;
+}
+
+// A next page whose cursor's snapshot expired (410, snapshots are kept 7
+// days) reloads the board from the newest snapshot's first page, never the
+// same cursor again (which would fail forever), and says so once.
+UR_TEST(ProtocolBoardBinding_AnExpiredCursorReloadsFromTheNewestSnapshot) {
+  Fixture f;
+  int expired = 0;
+  f.binding.on_expired = [&expired] { ++expired; };
+  LoadFirst(f);
+  UR_EXPECT_TRUE(f.binding.LoadMore());
+  const size_t before = f.calls->tops.size();
+  f.calls->tops.back().second(Gone(410));
+  UR_EXPECT_EQ(1, expired);
+  // a first page is out: no cursor, no snapshot id (the newest snapshot)
+  UR_EXPECT_EQ(before + 1, f.calls->tops.size());
+  UR_EXPECT_TRUE(f.calls->tops.back().first.cursor.empty());
+  UR_EXPECT_TRUE(f.calls->tops.back().first.snapshot.empty());
+  UR_EXPECT_TRUE(f.binding.List().loading);
+  UR_EXPECT_FALSE(f.binding.List().moreFailed);
+  // the rows shown stay until the newest snapshot's first page lands
+  UR_EXPECT_EQ(50u, f.binding.List().rows.size());
+  f.calls->tops.back().second(Page("s2", RowsFrom(1, 50), "d50"));
+  UR_EXPECT_TRUE(f.binding.List().snapshot->id == "s2");
+  UR_EXPECT_FALSE(f.binding.List().loadFailed);
+  // and the next page follows the new snapshot's cursor
+  UR_EXPECT_TRUE(f.binding.LoadMore());
+  UR_EXPECT_TRUE(f.calls->tops.back().first.cursor == "d50");
+  UR_EXPECT_TRUE(f.calls->tops.back().first.snapshot == "s2");
+}
+
+// A 404 on a next page (its snapshot unknown) reloads from the top too.
+UR_TEST(ProtocolBoardBinding_AnUnknownSnapshotOnANextPageReloadsToo) {
+  Fixture f;
+  LoadFirst(f);
+  f.binding.LoadMore();
+  f.calls->tops.back().second(Gone(404));
+  UR_EXPECT_TRUE(f.calls->tops.back().first.cursor.empty());
+  UR_EXPECT_TRUE(f.binding.List().loading);
+}
+
+// Gone again right after the reload (no page served in between): the list
+// stops with the footer's retry rather than reload in a loop, and that retry
+// reloads from the top instead of sending the refused cursor.
+UR_TEST(ProtocolBoardBinding_GoneTwiceStopsAndTheRetryReloads) {
+  Fixture f;
+  int expired = 0;
+  f.binding.on_expired = [&expired] { ++expired; };
+  LoadFirst(f);
+  f.binding.LoadMore();
+  f.calls->tops.back().second(Gone(410));
+  f.calls->tops.back().second(Page("s2", RowsFrom(1, 50), "d50"));
+  f.binding.LoadMore();
+  const size_t before = f.calls->tops.size();
+  f.calls->tops.back().second(Gone(410));
+  UR_EXPECT_EQ(1, expired);
+  UR_EXPECT_EQ(before, f.calls->tops.size());  // nothing sent on its own
+  UR_EXPECT_TRUE(f.binding.List().moreFailed);
+  UR_EXPECT_FALSE(f.binding.List().loading);
+  // the retry: the newest snapshot's first page, not "d50"
+  UR_EXPECT_TRUE(f.binding.LoadMore());
+  UR_EXPECT_TRUE(f.calls->tops.back().first.cursor.empty());
+  UR_EXPECT_TRUE(f.binding.List().loading);
+}
+
+// Once a page of the reloaded snapshot has been served, a later expiry (days
+// on) reloads again.
+UR_TEST(ProtocolBoardBinding_AServedPageArmsTheReloadAgain) {
+  Fixture f;
+  int expired = 0;
+  f.binding.on_expired = [&expired] { ++expired; };
+  LoadFirst(f);
+  f.binding.LoadMore();
+  f.calls->tops.back().second(Gone(410));
+  f.calls->tops.back().second(Page("s2", RowsFrom(1, 50), "d50"));
+  f.binding.LoadMore();
+  f.calls->tops.back().second(Page("s2", RowsFrom(51, 100), "d100"));
+  f.binding.LoadMore();
+  f.calls->tops.back().second(Gone(410));
+  UR_EXPECT_EQ(2, expired);
+  UR_EXPECT_TRUE(f.calls->tops.back().first.cursor.empty());
+  UR_EXPECT_TRUE(f.binding.List().loading);
+}
+
+// Any other failure of a next page keeps its cursor: the retry asks the same
+// page again (a server error or a give-up is not an expired snapshot).
+UR_TEST(ProtocolBoardBinding_OtherPageFailuresKeepTheirCursor) {
+  Fixture f;
+  int expired = 0;
+  f.binding.on_expired = [&expired] { ++expired; };
+  LoadFirst(f);
+  for (const int status : {500, 0}) {
+    UR_EXPECT_TRUE(f.binding.LoadMore());
+    f.calls->tops.back().second(Gone(status));
+    UR_EXPECT_TRUE(f.binding.List().moreFailed);
+    UR_EXPECT_FALSE(f.binding.List().loading);
+  }
+  UR_EXPECT_EQ(0, expired);
+  UR_EXPECT_TRUE(f.binding.LoadMore());
+  UR_EXPECT_TRUE(f.calls->tops.back().first.cursor == "c50");
+}
+
 // A refresh drops a next page still on its way: it belongs to the list being
 // replaced.
 UR_TEST(ProtocolBoardBinding_ARefreshDropsThePageOut) {
