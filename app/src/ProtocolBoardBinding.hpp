@@ -16,6 +16,13 @@
 //     another snapshot means the board moved on: the list starts over.
 //     LoadThrough keeps paging until a position is loaded (the position
 //     indicator's seek, the "You" row's jump) and says when it is.
+//   - A cursor whose snapshot is gone (snapshots are kept 7 days) is refused
+//     with HTTP 410 ("The snapshot expired. Reload from the top."); sending it
+//     again fails forever, so the list reloads from the newest snapshot's
+//     first page instead, once (on_expired). A page that is gone again right
+//     after that stops with its retry, and the retry reloads from the top. A
+//     404 on a next page (its snapshot unknown) is the same: the cursor's
+//     snapshot cannot be served.
 //   - RefreshMe asks the caller's own place (GET /sn/top/me), unless that is
 //     out already; a failure keeps the last answer.
 //   - Every request is given up on after Settings::requestTimeoutMs: the sdk
@@ -34,6 +41,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -75,11 +83,30 @@ struct TopArgs {
 // transport error nor the server's error.
 struct TopAnswer {
   bool ok = false;
+  int status = 0;  // a failed answer's HTTP status (HttpStatusOf); 0 when it had none
   std::optional<Snapshot> snapshot;
   std::vector<Row> rows;
   std::optional<Row> me;  // the caller's row wherever it ranks; nullopt signed out or unranked
   std::string next;       // the next page's cursor; "" at the end
 };
+
+// The HTTP status at the head of an sdk error: the transport renders a refused
+// request as "<status>: <body>", "410 Gone: The snapshot expired. Reload from
+// the top."; 0 when the error does not open with one.
+inline int HttpStatusOf(const std::string& error) {
+  if (error.size() < 3) return 0;
+  for (size_t i = 0; i < 3; ++i) {
+    if (!std::isdigit(static_cast<unsigned char>(error[i]))) return 0;
+  }
+  if (error.size() > 3 && error[3] != ' ' && error[3] != ':') return 0;
+  return (error[0] - '0') * 100 + (error[1] - '0') * 10 + (error[2] - '0');
+}
+
+// A next page's cursor names a snapshot the server can no longer serve: 410
+// (expired), or 404 (unknown).
+inline bool SnapshotGone(const TopAnswer& answer) {
+  return !answer.ok && (answer.status == 410 || answer.status == 404);
+}
 
 struct MeAnswer {
   bool ok = false;
@@ -116,6 +143,9 @@ class Binding {
   // The caller's own place answered (or was given up on): the Earnings page's
   // Top 200 tile, which reads only that, renders again. After on_changed.
   std::function<void()> on_mine_changed;
+  // A next page's snapshot was gone, and the list is reloading from the
+  // newest snapshot's first page: the page goes back to the top of the list.
+  std::function<void()> on_expired;
 
   // `source` names what the service calls (the Api's handle): a different one
   // later is a different Api, which needs a service of its own. A service
@@ -138,6 +168,8 @@ class Binding {
     pageToken_ = 0;
     meToken_ = 0;
     through_ = 0;
+    expiryReloads_ = 0;
+    pageExpired_ = false;
     list_ = ListState{};
     listMe_.reset();
     me_ = MeState{};
@@ -154,25 +186,17 @@ class Binding {
   // first page is out already (its answer is new enough).
   bool Refresh() {
     if (!service_ || listToken_ != 0) return false;
-    const uint64_t token = ++tokens_;
-    listToken_ = token;
-    // the list being replaced takes its next page and its seek with it
-    pageToken_ = 0;
-    through_ = 0;
-    list_.loadingMore = false;
-    list_.moreFailed = false;
-    list_.loading = true;
-    Changed();
-    TopArgs args;
-    args.limit = settings_.pageSize;
-    service_->Top(args, [this, token](TopAnswer answer) { OnTop(token, std::move(answer)); });
-    GiveUpLater([this, token] { OnTop(token, TopAnswer{}); });
-    return true;
+    expiryReloads_ = 0;
+    pageExpired_ = false;
+    return StartFirstPage();
   }
 
   // Asks the next page. False when nothing was sent: no service, no list yet,
-  // a first page or a page out, the server's end, or the top 400 loaded.
+  // a first page or a page out, the server's end, or the top 400 loaded. After
+  // a page whose snapshot was gone, it reloads from the top instead: the
+  // cursor would be refused again.
   bool LoadMore() {
+    if (pageExpired_) return Refresh();
     if (!CanLoadMore()) return false;
     const uint64_t token = ++tokens_;
     pageToken_ = token;
@@ -223,6 +247,27 @@ class Binding {
   int64_t LastPosition() const { return list_.rows.empty() ? 0 : list_.rows.back().position; }
 
  private:
+  // The first page of the newest snapshot (no cursor, no snapshot id): a
+  // refresh, a board that moved on between pages, or a cursor whose snapshot
+  // is gone.
+  bool StartFirstPage() {
+    if (!service_ || listToken_ != 0) return false;
+    const uint64_t token = ++tokens_;
+    listToken_ = token;
+    // the list being replaced takes its next page and its seek with it
+    pageToken_ = 0;
+    through_ = 0;
+    list_.loadingMore = false;
+    list_.moreFailed = false;
+    list_.loading = true;
+    Changed();
+    TopArgs args;
+    args.limit = settings_.pageSize;
+    service_->Top(args, [this, token](TopAnswer answer) { OnTop(token, std::move(answer)); });
+    GiveUpLater([this, token] { OnTop(token, TopAnswer{}); });
+    return true;
+  }
+
   bool Loaded(int64_t position) const { return LastPosition() >= position; }
 
   bool CanLoadMore() const {
@@ -286,17 +331,32 @@ class Binding {
     pageToken_ = 0;
     list_.loadingMore = false;
     if (!answer.ok) {
-      list_.moreFailed = true;
       through_ = 0;  // a seek that cannot be served is dropped
+      if (SnapshotGone(answer)) {
+        if (expiryReloads_ == 0) {
+          // the cursor's snapshot is gone: the newest snapshot's first page,
+          // never the same cursor again
+          ++expiryReloads_;
+          if (on_expired) on_expired();
+          Changed();
+          StartFirstPage();
+          return;
+        }
+        // gone again right after that reload: stop, and let the retry reload
+        pageExpired_ = true;
+      }
+      list_.moreFailed = true;
       Changed();
       return;
     }
+    // the snapshot served a page: a later expiry may reload again
+    expiryReloads_ = 0;
     const bool moved = answer.snapshot && list_.snapshot && !answer.snapshot->id.empty() &&
                        !list_.snapshot->id.empty() && answer.snapshot->id != list_.snapshot->id;
     if (moved) {
       // the board was recomputed between the pages: start over from its top
       Changed();
-      Refresh();
+      StartFirstPage();
       return;
     }
     std::vector<Row> added = Accept(std::move(answer.rows), LastPosition());
@@ -344,6 +404,8 @@ class Binding {
   uint64_t pageToken_ = 0;  // the next page out, or 0
   uint64_t meToken_ = 0;    // the own place out, or 0
   int64_t through_ = 0;     // the position a LoadThrough pages to, or 0
+  int expiryReloads_ = 0;   // reloads from the top since a page last landed
+  bool pageExpired_ = false;  // the last page's snapshot was gone: LoadMore reloads
 };
 
 }  // namespace urnw::protocol_board

@@ -28,7 +28,7 @@
 > requests in `ProtocolBoardBinding.hpp`). The Top 200 tile in pane A now reads `GET /sn/top/me`
 > instead of `GET /sn/head`: it shows for a network projected inside the top 200 or claimed, with
 > "Claiming opens soon" in place of "Claim your spot" and no "Sign fleet binding" while binding is
-> closed. `URNETWORK_PREVIEW_PROTOCOL=<closed|open|unmeasurable|claimed|stale|empty|failed>`
+> closed. `URNETWORK_PREVIEW_PROTOCOL=<closed|open|unmeasurable|unranked|claimed|stale|empty|failed>`
 > replaces `URNETWORK_PREVIEW_TOP200=bound` (`claimed` is the tile's bound state), with
 > `URNETWORK_PREVIEW_PROTOCOL_LINE=1` (scrolled to the Top 200 line) and
 > `URNETWORK_PREVIEW_PROTOCOL_DETAIL=1` (a claimed row's sheet).

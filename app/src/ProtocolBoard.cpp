@@ -244,6 +244,9 @@ pb::TopAnswer TopAnswerOf(const std::optional<urnet::SnTopResult>& result,
   answer.ok = result.has_value() && !err.has_value() && !result->error.has_value() &&
               result->snapshot.has_value();
   if (!answer.ok) {
+    // a refused request reads "<status>: <body>" ("410 Gone: The snapshot
+    // expired. Reload from the top."): the binding acts on the status
+    if (err) answer.status = pb::HttpStatusOf(*err);
     g_warning("protocol board: GET /sn/top failed: %s",
               err ? err->c_str()
                   : result && result->error ? result->error->message.c_str() : "no snapshot");
@@ -354,7 +357,8 @@ class SampleService final : public pb::Service {
       answer.rows.push_back(RowAt(position));
     }
     if (to < total) answer.next = "p" + std::to_string(to);
-    answer.me = MeRow();
+    // the list's own row only for a ranked network
+    if (MePosition() > 0) answer.me = MeRow();
     done(answer);
   }
 
@@ -368,6 +372,13 @@ class SampleService final : public pb::Service {
     answer.snapshot = Snapshot();
     pb::Me me;
     me.row = MeRow();
+    if (me.row.position <= 0) {
+      // not ranked: the server's reason when the network has no board row
+      me.notMeasurableReason = "not_providing";
+      answer.me = me;
+      done(answer);
+      return;
+    }
     me.soloScore = me.row.projectedScore * 1.18;
     me.distinctPrefixes = 18;
     me.sharedPrefixes = 3;
@@ -403,7 +414,8 @@ class SampleService final : public pb::Service {
 
   pb::Snapshot Snapshot() const {
     pb::Snapshot snapshot;
-    snapshot.id = "sample";
+    // before the board's first snapshot the id is empty: no rankings yet
+    snapshot.id = state_ == "empty" ? std::string() : "sample";
     snapshot.tempoIndex = 4821;
     snapshot.totalRanked = state_ == "empty" ? 0 : 41230;
     snapshot.projectedCutoff = 41.2;
@@ -416,6 +428,7 @@ class SampleService final : public pb::Service {
   int64_t MePosition() const {
     if (state_ == "open") return 196;
     if (state_ == "unmeasurable") return 4210;
+    if (state_ == "unranked" || state_ == "empty") return 0;
     if (state_ == "claimed") return 10;
     return 173;
   }
@@ -468,6 +481,15 @@ class SampleService final : public pb::Service {
   }
 
   pb::Row MeRow() const {
+    if (MePosition() == 0) {
+      // the server's row for a network that is not ranked: position 0, the
+      // not_measurable label, the network's own tag
+      pb::Row row;
+      row.label = "not_measurable";
+      row.isMe = true;
+      row.tag = "\xF0\x9F\x90\xB8";
+      return row;
+    }
     pb::Row row = RowAt(MePosition());
     if (state_ == "unmeasurable") {
       row.name.clear();
@@ -967,7 +989,7 @@ void ProtocolSide::Render(const std::vector<std::string>& banner, const pb::Card
     kit::SetAccessibleLabel(*placeholderRow_, ProtocolBoardLookup(pb::kLoadingText));
   }
   const bool line = card.body == pb::CardBody::SignIn || card.body == pb::CardBody::LoadFailed ||
-                    card.body == pb::CardBody::NotRanked;
+                    card.body == pb::CardBody::Empty || card.body == pb::CardBody::NotRanked;
   lineRow_->set_visible(line);
   lineText_->set_text(card.bodyText);
   retry_->set_visible(card.body == pb::CardBody::LoadFailed);
@@ -1076,6 +1098,9 @@ ProtocolBoard::ProtocolBoard(SdkHost& host)
   };
   // a seek's pages have landed: its row to the top (the end, when the list
   // ends before it)
+  // a next page's snapshot expired: the list reloads from the newest
+  // snapshot's top, and so does the view
+  binding_.on_expired = [this] { ScrollToTop(); };
   binding_.on_loaded_through = [this](int64_t reached) {
     ScrollToPosition(seekTarget_ ? std::min(*seekTarget_, reached) : reached);
     seekTarget_.reset();
@@ -1094,6 +1119,7 @@ void ProtocolBoard::Release() {
   binding_.on_changed = nullptr;
   binding_.on_mine_changed = nullptr;
   binding_.on_loaded_through = nullptr;
+  binding_.on_expired = nullptr;
   binding_.Release();
 }
 

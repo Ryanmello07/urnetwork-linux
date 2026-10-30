@@ -679,6 +679,79 @@ UR_TEST(ProtocolBoard_AnAnonymousOrUnmeasurableCard) {
   UR_EXPECT_TEXT("of 50,000 ranked networks", p::CardFor(state, list, true, words).ofRanked);
 }
 
+// GET /sn/top/me always answers with `me`: a network that is not ranked has
+// row.position 0, the not_measurable label and a reason ("not_providing"
+// when it has no row on the board). The card says why it is not ranked, by
+// that reason, and the Earnings tile has nothing to show.
+UR_TEST(ProtocolBoard_AnUnrankedNetworkSaysWhyAndHasNoTile) {
+  const p::Words words = EnglishWords();
+  p::Row row;  // the server's unranked row: position 0
+  row.label = "not_measurable";
+  row.isMe = true;
+  p::MeState state = MeStateOf(row, /*bindingOpen=*/true);
+  const std::vector<std::pair<std::string, std::string>> reasons{
+      {"not_providing", "Turn on providing to be ranked."},
+      {"not_in_cohort", "Your devices aren't measured by the validator yet."},
+      {"shared_egress", "Your devices share an IP with another network."},
+      {"", "Turn on providing to be ranked."},  // no reason given: no board row
+  };
+  for (const auto& [reason, text] : reasons) {
+    state.me->notMeasurableReason = reason;
+    const p::Card card = p::CardFor(state, std::nullopt, true, words);
+    UR_EXPECT_TRUE_MSG(reason, card.body == p::CardBody::NotRanked);
+    UR_EXPECT_TEXT(text, card.bodyText);
+    UR_EXPECT_FALSE(card.claim.show);
+    UR_EXPECT_TRUE_MSG(reason, p::TileFor(state, true, words).kind == p::TileKind::Hidden);
+  }
+  // not ranked with a fleet still bound: nothing on the tile either
+  state.me->row.fleets = {FleetOf(90)};
+  UR_EXPECT_TRUE(p::TileFor(state, true, words).kind == p::TileKind::Hidden);
+}
+
+// An empty snapshot id is the board before its first snapshot: no rankings
+// yet. The list and the card show the empty state, and the tile nothing.
+UR_TEST(ProtocolBoard_AnEmptySnapshotIdIsNoRankingsYet) {
+  const p::Words words = EnglishWords();
+  p::ListState list;
+  list.loaded = true;
+  list.snapshot = SnapshotOf(false);
+  list.snapshot->id.clear();
+  p::ListScreen screen = p::ListScreenFor(list, true);
+  UR_EXPECT_TRUE(screen.body == p::ListBody::Empty);
+  UR_EXPECT_TEXT("Rankings will appear after the next update.",
+                 p::ListBodyText(screen.body)->english);
+  // rows that came with it do not make it a board
+  list.rows.push_back(RowAt(1));
+  UR_EXPECT_TRUE(p::ListScreenFor(list, true).body == p::ListBody::Empty);
+  UR_EXPECT_FALSE(p::ListScreenFor(list, true).canLoadMore);
+  // the own place came with the empty snapshot: the server's unranked row
+  p::Row row;
+  row.label = "not_measurable";
+  p::MeState state = MeStateOf(row, false);
+  state.snapshot->id.clear();
+  state.me->notMeasurableReason = "not_providing";
+  const p::Card card = p::CardFor(state, std::nullopt, true, words);
+  UR_EXPECT_TRUE(card.body == p::CardBody::Empty);
+  UR_EXPECT_TEXT("Rankings will appear after the next update.", card.bodyText);
+  UR_EXPECT_TRUE(p::TileFor(state, true, words).kind == p::TileKind::Hidden);
+}
+
+// The history comes in any order and is drawn by day.
+UR_TEST(ProtocolBoard_TheChartDrawsTheHistoryByDay) {
+  const p::Words words = EnglishWords();
+  const p::Chart chart = p::ChartFor({{"2026-10-29", 173, 0},
+                                      {"2026-08-01", 412, 0},
+                                      {"2026-10-01", 220, 0},
+                                      {"2026-09-15", 260, 0}},
+                                     173, words);
+  std::vector<int64_t> ranks;
+  for (const p::ChartPoint& point : chart.points) ranks.push_back(point.rank);
+  UR_EXPECT_TRUE(ranks == (std::vector<int64_t>{412, 260, 220, 173}));
+  for (size_t i = 1; i < chart.points.size(); ++i) {
+    UR_EXPECT_TRUE(chart.points[i - 1].x < chart.points[i].x);
+  }
+}
+
 // ---- the claimed detail sheet ---------------------------------------------------------------
 
 UR_TEST(ProtocolBoard_TheDetailSheetListsEachFleet) {

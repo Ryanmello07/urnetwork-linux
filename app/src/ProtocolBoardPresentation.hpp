@@ -42,7 +42,7 @@ struct Text {
 
 // The snapshot every row and `me` were computed in.
 struct Snapshot {
-  std::string id;
+  std::string id;  // "" before the board's first snapshot: no rankings yet
   int64_t tempoIndex = 0;
   int64_t computedAtUnixSeconds = 0;  // 0 when the time did not read
   int64_t settlementEpoch = 0;
@@ -98,7 +98,9 @@ struct HistoryPoint {
   double score = 0;
 };
 
-// The caller's network in detail (GET /sn/top/me).
+// The caller's network in detail (GET /sn/top/me). The server always sends
+// one; a network that is not ranked has row.position 0, the not_measurable
+// label and a reason ("not_providing" when it has no row on the board).
 struct Me {
   Row row;
   double soloScore = 0;  // the score if nobody sharing its prefixes claimed
@@ -560,7 +562,9 @@ inline ListScreen ListScreenFor(const ListState& list, bool signedIn) {
     }
     return screen;
   }
-  screen.body = list.rows.empty() ? ListBody::Empty : ListBody::Rows;
+  // an empty snapshot id is the board before its first snapshot: no rankings yet
+  const bool none = list.rows.empty() || (list.snapshot && list.snapshot->id.empty());
+  screen.body = none ? ListBody::Empty : ListBody::Rows;
   screen.refreshing = list.loading;
   screen.refreshFailed = list.loadFailed && !list.loading;
   if (screen.body == ListBody::Rows) {
@@ -712,7 +716,8 @@ enum class CardBody {
   SignIn,       // signed out: a sign-in prompt in the card's place
   Placeholder,  // never loaded: placeholders of the card's size
   LoadFailed,   // the first load failed: the retry row
-  NotRanked,    // loaded, and the network is not on the board
+  Empty,        // no rankings yet (the snapshot id is empty): "Rankings will appear..."
+  NotRanked,    // loaded, and the network is not ranked: why, by its reason
   Ranked,       // the card
 };
 
@@ -805,10 +810,18 @@ inline Card CardFor(const MeState& state, const std::optional<Snapshot>& snapsho
     if (card.body == CardBody::LoadFailed) card.bodyText = words.lookup(kSomethingWentWrongText);
     return card;
   }
-  if (!state.me) {
-    // on no board: nothing the network provides is ranked
+  if (state.snapshot && state.snapshot->id.empty()) {
+    // the board before its first snapshot: nobody is ranked yet
+    card.body = CardBody::Empty;
+    card.bodyText = words.lookup(kEmptyText);
+    return card;
+  }
+  if (!state.me || state.me->row.position <= 0) {
+    // not ranked (position 0): why, by the server's reason; "not_providing"
+    // when the network has no row on the board, and so when none is given
     card.body = CardBody::NotRanked;
-    card.bodyText = words.lookup(kNotMeasurableProvidingText);
+    const std::string why = state.me ? NotMeasurableText(*state.me, words) : std::string();
+    card.bodyText = why.empty() ? words.lookup(kNotMeasurableProvidingText) : why;
     return card;
   }
   const Me& me = *state.me;
@@ -974,6 +987,9 @@ inline Tile TileFor(const MeState& state, bool signedIn, const Words& words) {
   Tile tile;
   if (!signedIn || !state.loaded || !state.me) return tile;
   const Row& row = state.me->row;
+  // a network that is not ranked (position 0), or a board with no rankings yet,
+  // has no place to show
+  if (row.position <= 0 || (state.snapshot && state.snapshot->id.empty())) return tile;
   const bool claimed = !row.fleets.empty();
   const ClaimPrompt prompt = ClaimPromptFor(row, state.snapshot, words);
   if (!claimed && !prompt.show) return tile;
